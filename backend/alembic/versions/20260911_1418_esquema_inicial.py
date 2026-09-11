@@ -20,7 +20,6 @@ branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
 
-
 # ---------------------------------------------------------------------------
 #  PARCHE_MIGRACION_INICIAL_APLICADO
 #
@@ -145,6 +144,7 @@ CREATE TRIGGER cita_historial_sin_modificacion
   BEFORE UPDATE OR DELETE ON cita_historial
   FOR EACH ROW EXECUTE FUNCTION tabla_solo_insercion();
 """
+
 
 def upgrade() -> None:
     # =======================================================================
@@ -1874,9 +1874,7 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     # Se deshace primero lo anadido a mano, en orden inverso.
-    op.execute(
-        "DROP TRIGGER IF EXISTS cita_historial_sin_modificacion ON cita_historial"
-    )
+    op.execute("DROP TRIGGER IF EXISTS cita_historial_sin_modificacion ON cita_historial")
     op.execute("DROP TRIGGER IF EXISTS auditoria_sin_modificacion ON auditoria")
     op.execute("DROP FUNCTION IF EXISTS tabla_solo_insercion()")
     # Las restricciones de exclusion no se sueltan aqui: las elimina el

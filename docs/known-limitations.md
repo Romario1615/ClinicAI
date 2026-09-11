@@ -33,6 +33,7 @@ Estas no desaparecen al terminar las fases. Son propiedades del alcance acordado
 | E‑7 | La auditoría es inalterable **desde la aplicación**, no frente a un superusuario de base de datos | Límite del alcance del repositorio | Mitigarlo exige separación de funciones en infraestructura |
 | E‑8 | El cifrado en reposo del volumen depende del despliegue | Fuera del repositorio | Debe resolverlo el entorno de producción |
 | E‑9 | La calidad de recuperación con embeddings locales pequeños es inferior a la de modelos comerciales grandes | ADR‑0007 | Se medirá y publicará. Si no alcanza el umbral, la decisión se revisa |
+| E‑10 | **La verificación TOTP usa el reloj de pared del servidor, no el reloj inyectado** (ADR‑0010) | Un código TOTP se calcula contra la hora real del teléfono del usuario; validarlo contra un reloj de pruebas lo invalidaría en producción | Es la única excepción consciente a ADR‑0010, y está acotada a `verificar_codigo_totp`. Consecuencia operativa: **el servidor necesita sincronización horaria (NTP)**; con más de ~30 s de desfase el personal con 2FA obligatorio no podrá entrar. Se comprueba en la Fase 10 |
 
 ---
 
@@ -69,14 +70,14 @@ No son defectos. Se listan para que no se «arreglen» por error.
 | Fase | Estado | Limitaciones abiertas |
 |---|---|---|
 | 0 · Análisis | **cerrada** | F0‑2 |
-| 0b · Infraestructura | en curso | — |
+| 0b · Infraestructura | **cerrada** | D‑3 |
 | 1 · Prototipo visual | pendiente | — |
-| 2 · Backend y seguridad | pendiente | — |
-| 3 · Agenda | pendiente | — |
+| 2 · Backend y seguridad | en curso | Modelo de datos, migraciones, autenticación, RBAC con ámbito y auditoría implementados y probados. **Falta la capa HTTP**: rutas, límite de tasa y OpenAPI |
+| 3 · Agenda | en curso | Motor de disponibilidad, servicios de reserva y anti doble‑reserva verificados bajo concurrencia real. **Faltan las rutas HTTP** y el barrido de expiración de `HELD` |
 | 4 · WhatsApp y calendarios | pendiente | E‑1 |
 | 5 · Lista de espera | pendiente | — |
 | 6 · Conocimiento y RAG | pendiente | E‑3, E‑9 |
 | 7 · Historia clínica y medicamentos | pendiente | — |
 | 8 · Dashboard y predicciones | pendiente | E‑4, E‑5 |
 | 9 · Pagos | pendiente | — |
-| 10 · Producción | pendiente | E‑2, D‑4 |
+| 10 · Producción | pendiente | E‑2, E‑10, D‑4 |
