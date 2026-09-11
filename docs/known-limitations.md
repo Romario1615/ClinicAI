@@ -73,8 +73,8 @@ No son defectos. Se listan para que no se «arreglen» por error.
 | 0 · Análisis | **cerrada** | F0‑2 |
 | 0b · Infraestructura | **cerrada** | D‑3 |
 | 1 · Prototipo visual | pendiente | — |
-| 2 · Backend y seguridad | en curso | Modelo de datos, migraciones, autenticación, RBAC con ámbito y auditoría implementados y probados. **Falta la capa HTTP**: rutas, límite de tasa y OpenAPI |
-| 3 · Agenda | en curso | Motor de disponibilidad, servicios de reserva y anti doble‑reserva verificados bajo concurrencia real. **Faltan las rutas HTTP** y el barrido de expiración de `HELD` |
+| 2 · Backend y seguridad | en curso | Modelo de datos, migraciones, autenticación, RBAC con ámbito, auditoría, capa HTTP, límite de tasa y OpenAPI implementados y probados. **Faltan los endpoints de pacientes y de administración de usuarios** |
+| 3 · Agenda | en curso | Motor de disponibilidad, servicios, rutas HTTP y anti doble‑reserva verificados, incluida la concurrencia real. **Falta el barrido automático de expiración de `HELD`**: la lógica existe (`expirar_bloqueos_vencidos`) pero todavía no hay worker que la ejecute, así que un bloqueo vencido sigue ocupando el turno hasta que alguien lo toca |
 | 4 · WhatsApp y calendarios | pendiente | E‑1 |
 | 5 · Lista de espera | pendiente | — |
 | 6 · Conocimiento y RAG | pendiente | E‑3, E‑9 |

@@ -31,7 +31,7 @@ hacer la suite dependiente del estado de un contenedor compartido.
 from __future__ import annotations
 
 import uuid
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Sequence
 from typing import Any
 
 import pytest
@@ -42,9 +42,18 @@ from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from app.main import PREFIJO_API, crear_aplicacion
-from app.modulos.organizacion.modelos import Clinica
-from app.modulos.usuarios.modelos import Permiso, Rol, RolPermiso, Usuario, UsuarioRol
-from app.nucleo.autorizacion import CATALOGO_PERMISOS
+from app.modulos.organizacion.modelos import Clinica, Especialidad, Sede, Servicio
+from app.modulos.pacientes.modelos import Paciente
+from app.modulos.profesionales.modelos import Profesional
+from app.modulos.usuarios.modelos import (
+    AmbitoAsignacion,
+    Permiso,
+    Rol,
+    RolPermiso,
+    Usuario,
+    UsuarioRol,
+)
+from app.nucleo.autorizacion import CATALOGO_PERMISOS, TipoAmbito
 from app.nucleo.bd import GestorBaseDatos
 from app.nucleo.configuracion import Configuracion
 from app.nucleo.dependencias import obtener_sesion
@@ -180,6 +189,12 @@ def configuracion_rol_con_2fa(configuracion: Configuracion) -> str:
 
 
 @pytest.fixture
+def configuracion_minutos_bloqueo(configuracion: Configuracion) -> int:
+    """Minutos que vive un bloqueo temporal, segun la configuracion vigente."""
+    return configuracion.minutos_expiracion_held
+
+
+@pytest.fixture
 def redis_falso() -> RedisEnMemoria:
     return RedisEnMemoria()
 
@@ -263,18 +278,139 @@ async def usuario(sesion: AsyncSession, clinica: Clinica, sufijo: str) -> Usuari
     return registro
 
 
+@pytest_asyncio.fixture
+async def sede(sesion: AsyncSession, clinica: Clinica, sufijo: str) -> Sede:
+    registro = Sede(
+        clinica_id=clinica.id,
+        nombre=f"Sede de Prueba {sufijo}",
+        direccion="Calle Ficticia 123",
+    )
+    sesion.add(registro)
+    await sesion.flush()
+    await _horario_amplio(sesion, registro.id)
+    return registro
+
+
+@pytest_asyncio.fixture
+async def otra_sede(sesion: AsyncSession, clinica: Clinica, sufijo: str) -> Sede:
+    """Segunda sede de la MISMA clinica.
+
+    Es la que hace falta para probar el IDOR de verdad: el ambito se concede
+    por sede, no por clinica, asi que el caso interesante es el de un
+    recepcionista que ve una sede y no la otra dentro de su propia
+    organizacion.
+    """
+    registro = Sede(
+        clinica_id=clinica.id,
+        nombre=f"Sede Ajena {sufijo}",
+        direccion="Avenida Ficticia 456",
+    )
+    sesion.add(registro)
+    await sesion.flush()
+    await _horario_amplio(sesion, registro.id)
+    return registro
+
+
+@pytest_asyncio.fixture
+async def especialidad(sesion: AsyncSession, clinica: Clinica, sufijo: str) -> Especialidad:
+    registro = Especialidad(clinica_id=clinica.id, nombre=f"Especialidad {sufijo}")
+    sesion.add(registro)
+    await sesion.flush()
+    return registro
+
+
+@pytest_asyncio.fixture
+async def servicio(
+    sesion: AsyncSession, clinica: Clinica, especialidad: Especialidad, sufijo: str
+) -> Servicio:
+    registro = Servicio(
+        clinica_id=clinica.id,
+        especialidad_id=especialidad.id,
+        nombre=f"Servicio {sufijo}",
+        duracion_minutos=30,
+        minutos_preparacion=15,
+    )
+    sesion.add(registro)
+    await sesion.flush()
+    return registro
+
+
+@pytest_asyncio.fixture
+async def profesional(
+    sesion: AsyncSession,
+    clinica: Clinica,
+    especialidad: Especialidad,
+    usuario: Usuario,
+    sufijo: str,
+) -> Profesional:
+    registro = Profesional(
+        clinica_id=clinica.id,
+        usuario_id=usuario.id,
+        especialidad_id=especialidad.id,
+        nombre="Profesional",
+        apellido="De Prueba",
+        numero_registro_profesional=f"REG-{sufijo}",
+    )
+    sesion.add(registro)
+    await sesion.flush()
+    return registro
+
+
+@pytest_asyncio.fixture
+async def paciente(sesion: AsyncSession, clinica: Clinica, sufijo: str) -> Paciente:
+    registro = Paciente(
+        clinica_id=clinica.id,
+        tipo_documento="CEDULA",
+        # Documento sintetico: no corresponde a ninguna cedula real.
+        numero_documento=f"9{sufijo[:9]}",
+        nombre="Paciente",
+        apellido="De Prueba",
+    )
+    sesion.add(registro)
+    await sesion.flush()
+    return registro
+
+
+async def _horario_amplio(sesion: AsyncSession, sede_id: uuid.UUID) -> None:
+    """Horario de atencion de lunes a domingo, todo el dia.
+
+    Las reglas de horario ya tienen sus propias pruebas en el motor de
+    disponibilidad; aqui solo hace falta que existan turnos, sin que el
+    resultado dependa de acertar con el dia de la semana.
+    """
+    for dia in range(1, 8):
+        await sesion.execute(
+            sa.text(
+                "INSERT INTO horario_atencion (propietario_tipo, propietario_id, "
+                "dia_semana, hora_inicio, hora_fin, granularidad_minutos) "
+                "VALUES ('SEDE', :sede, :dia, '00:00', '23:59', 15)"
+            ),
+            {"sede": sede_id, "dia": dia},
+        )
+    await sesion.flush()
+
+
 async def conceder_permisos(
     sesion: AsyncSession,
     usuario: Usuario,
     clinica: Clinica,
     *codigos: str,
     codigo_rol: str | None = None,
+    sedes: Sequence[uuid.UUID] = (),
+    todas_las_sedes: bool = False,
+    todos_los_profesionales: bool = True,
+    todos_los_pacientes: bool = True,
 ) -> Rol:
-    """Crea un rol con esos permisos y se lo asigna al usuario.
+    """Crea un rol con esos permisos y su ambito, y se lo asigna al usuario.
 
     Los permisos salen de `CATALOGO_PERMISOS`, no de literales: una prueba que
     inventa un codigo de permiso pasa aunque el catalogo real ya no lo tenga,
     y entonces deja de probar nada.
+
+    El ambito hay que concederlo de forma explicita. Es deliberado y refleja
+    como funciona el sistema: un rol sin asignaciones de ambito tiene el
+    conjunto vacio, y vacio significa ningun acceso. Una prueba que solo
+    concede permisos y espera ver datos esta comprobando precisamente eso.
     """
     rol = Rol(
         clinica_id=clinica.id,
@@ -301,7 +437,38 @@ async def conceder_permisos(
             await sesion.flush()
         sesion.add(RolPermiso(rol_id=rol.id, permiso_id=existente.id))
 
-    sesion.add(UsuarioRol(usuario_id=usuario.id, rol_id=rol.id))
+    asignacion = UsuarioRol(usuario_id=usuario.id, rol_id=rol.id)
+    sesion.add(asignacion)
+    await sesion.flush()
+
+    ambitos: list[AmbitoAsignacion] = []
+    if todas_las_sedes:
+        ambitos.append(
+            AmbitoAsignacion(
+                usuario_rol_id=asignacion.id, tipo=TipoAmbito.SEDE.value, valor_id=None
+            )
+        )
+    ambitos.extend(
+        AmbitoAsignacion(usuario_rol_id=asignacion.id, tipo=TipoAmbito.SEDE.value, valor_id=sede_id)
+        for sede_id in sedes
+    )
+    if todos_los_profesionales:
+        ambitos.append(
+            AmbitoAsignacion(
+                usuario_rol_id=asignacion.id,
+                tipo=TipoAmbito.PROFESIONAL.value,
+                valor_id=None,
+            )
+        )
+    if todos_los_pacientes:
+        ambitos.append(
+            AmbitoAsignacion(
+                usuario_rol_id=asignacion.id,
+                tipo=TipoAmbito.PACIENTE.value,
+                valor_id=None,
+            )
+        )
+    sesion.add_all(ambitos)
     await sesion.flush()
     return rol
 

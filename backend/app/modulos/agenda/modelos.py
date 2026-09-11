@@ -38,6 +38,7 @@ from sqlalchemy import (
     Boolean,
     CheckConstraint,
     Computed,
+    FetchedValue,
     ForeignKey,
     Index,
     SmallInteger,
@@ -196,7 +197,15 @@ class Cita(Base, MezclaIdentificador, MezclaAuditoria):
     #  Lo que importa es que el calculo sigue estando en el motor: un camino
     #  de codigo que olvidara el buffer de preparacion no puede producir un
     #  `rango` incorrecto, porque el disparador lo sobrescribe.
-    fin: Mapped[datetime] = mapped_column()
+    #
+    #  `FetchedValue` le dice a SQLAlchemy que el valor lo pone la base de
+    #  datos. Sin el, tras insertar la fila el objeto en memoria conserva
+    #  `fin = None`: la fila en PostgreSQL esta bien, pero cualquier codigo
+    #  que lea `cita.fin` justo despues de crearla -- serializar la respuesta
+    #  HTTP, componer un recordatorio, exportar al calendario -- ve None.
+    #  Combinado con `eager_defaults`, SQLAlchemy lo recupera con RETURNING
+    #  en la misma sentencia, sin una consulta extra.
+    fin: Mapped[datetime] = mapped_column(FetchedValue())
 
     #  `rango` SI puede ser columna generada: `tstzrange(timestamptz,
     #  timestamptz, text)` es inmutable.  Deriva de `inicio` y `fin`, que a su
@@ -235,6 +244,15 @@ class Cita(Base, MezclaIdentificador, MezclaAuditoria):
     notas_recepcion: Mapped[str | None] = mapped_column(Text, default=None)
 
     historial: Mapped[list[CitaHistorial]] = relationship(back_populates="cita", lazy="raise")
+
+    # Recupera con RETURNING los valores que pone la base de datos -- `fin`,
+    # `rango`, `creado_en` -- en la misma sentencia del INSERT.
+    #
+    # En codigo asincrono esto no es una optimizacion, es un requisito: sin
+    # ello SQLAlchemy los cargaria de forma perezosa al acceder al atributo, y
+    # una carga perezosa dentro de una corrutina lanza MissingGreenlet en
+    # lugar de devolver el valor.
+    __mapper_args__ = {"eager_defaults": True}  # noqa: RUF012
 
     __table_args__ = (
         # =====================================================================

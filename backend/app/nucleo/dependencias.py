@@ -30,6 +30,8 @@ from typing import Annotated, Any
 from fastapi import Depends, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.modulos.agenda.repositorio import RepositorioAgenda
+from app.modulos.agenda.servicios import ServicioAgenda
 from app.modulos.auditoria.repositorio import RepositorioAuditoria
 from app.modulos.usuarios.servicios import ServicioAutenticacion
 from app.nucleo.auditoria import AccionAuditada, ResultadoAuditoria, construir_entrada
@@ -122,7 +124,27 @@ def obtener_repositorio_auditoria(sesion: Sesion) -> RepositorioAuditoria:
     return RepositorioAuditoria(sesion)
 
 
+def obtener_repositorio_agenda(sesion: Sesion) -> RepositorioAgenda:
+    return RepositorioAgenda(sesion)
+
+
+def obtener_servicio_agenda(
+    sesion: Sesion,
+    reloj: RelojActual,
+    repositorio: Annotated[RepositorioAgenda, Depends(obtener_repositorio_agenda)],
+    configuracion: ConfiguracionActual,
+) -> ServicioAgenda:
+    return ServicioAgenda(
+        sesion,
+        repositorio,
+        reloj,
+        minutos_expiracion_held=configuracion.minutos_expiracion_held,
+    )
+
+
 ServicioAuth = Annotated[ServicioAutenticacion, Depends(obtener_servicio_autenticacion)]
+RepoAgenda = Annotated[RepositorioAgenda, Depends(obtener_repositorio_agenda)]
+ServicioDeAgenda = Annotated[ServicioAgenda, Depends(obtener_servicio_agenda)]
 Auditor = Annotated[RepositorioAuditoria, Depends(obtener_repositorio_auditoria)]
 
 
@@ -281,7 +303,9 @@ __all__ = [
     "Limitador",
     "PrincipalActual",
     "RelojActual",
+    "RepoAgenda",
     "ServicioAuth",
+    "ServicioDeAgenda",
     "Sesion",
     "exige_permiso",
     "extraer_token",
@@ -291,7 +315,9 @@ __all__ = [
     "obtener_limitador",
     "obtener_principal",
     "obtener_reloj",
+    "obtener_repositorio_agenda",
     "obtener_repositorio_auditoria",
+    "obtener_servicio_agenda",
     "obtener_servicio_autenticacion",
     "obtener_sesion",
 ]

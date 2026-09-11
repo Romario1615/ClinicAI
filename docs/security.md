@@ -97,6 +97,16 @@ IDOR.
 | `POST /api/v1/autenticacion/cierre` | — (lo autoriza el propio refresco) | No exige token de acceso válido: cerrar sesión debe funcionar con el de acceso ya caducado |
 | `GET /api/v1/autenticacion/yo` | — (solo autenticación) | Devuelve permisos y ámbito **leídos de la base**, no del token |
 | `GET /salud/vivo` · `GET /salud/listo` | — (público) | No revelan versión, configuración ni datos; `listo` solo nombra extensiones de PostgreSQL ausentes |
+| `GET /api/v1/agenda/disponibilidad` | `agenda.leer` | Es una lectura y aun así exige permiso: la disponibilidad revela la carga de trabajo y las ausencias del profesional. Sede fuera de ámbito → **404** |
+| `GET /api/v1/agenda/citas` | `agenda.leer` | El filtro de ámbito va en el `WHERE`; el total se cuenta con los mismos filtros que el listado |
+| `GET /api/v1/agenda/citas/{id}` | `agenda.leer` | Cita fuera de ámbito → **404**, indistinguible de una inexistente |
+| `POST /api/v1/agenda/citas` | `cita.crear` | Acepta `Idempotency-Key`. El `origen` lo fija el servidor, no el cliente |
+| `POST /api/v1/agenda/citas/bloqueos` | `cita.crear` | Crea un `HELD` con caducidad obligatoria |
+| `POST /api/v1/agenda/citas/{id}/confirmacion` | `cita.crear` | Un bloqueo vencido no se confirma: 409 |
+| `POST /api/v1/agenda/citas/{id}/cancelacion` | `cita.cancelar` | Motivo obligatorio, exigido también por la base de datos |
+| `POST /api/v1/agenda/citas/{id}/reprogramacion` | `cita.reprogramar` | Conserva el identificador de la cita; el horario anterior queda en `cita_historial` |
+| `POST /api/v1/agenda/citas/{id}/completado` | `cita.completar` | |
+| `POST /api/v1/agenda/citas/{id}/inasistencia` | `cita.marcar_inasistencia` | Estado propio, no una cancelación: alimenta la predicción de ausentismo |
 
 ### Acceso de emergencia
 
@@ -131,7 +141,7 @@ desapercibido.
 | Control | Implementación | Estado |
 |---|---|---|
 | Autorización | permiso por endpoint (`exige_permiso`) + filtro de ámbito en repositorio | permiso **implementado y probado**; el filtro de ámbito por repositorio, pendiente en los endpoints aún no escritos |
-| Protección IDOR | 404 para recursos fuera de ámbito; nunca 403 | Fase 2 |
+| Protección IDOR | 404 para recursos fuera de ámbito; nunca 403 | **implementado y probado** en la agenda: hay una prueba por cada transición de estado, porque basta con que una olvide el filtro |
 | Inyección SQL | SQLAlchemy con parámetros enlazados; prohibido componer SQL por cadenas | Fase 2 |
 | Validación de entrada | Pydantic v2 estricto; rechazo de campos no declarados; el valor rechazado **no** vuelve en la respuesta | **implementado y probado** |
 | XSS | Angular escapa por defecto; `innerHTML` prohibido por lint; CSP sin `unsafe-inline` | Fase 1‑2 |

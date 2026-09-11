@@ -186,13 +186,30 @@ class RepositorioAgenda:
         principal: Principal,
         desde: datetime | None = None,
         hasta: datetime | None = None,
+        profesional_id: uuid.UUID | None = None,
+        paciente_id: uuid.UUID | None = None,
+        sede_id: uuid.UUID | None = None,
         estados: Sequence[str] | None = None,
     ) -> int:
+        """Cuenta las citas que `listar_citas` devolveria con esos mismos filtros.
+
+        Acepta exactamente los mismos filtros que `listar_citas`, y no un
+        subconjunto. Con un subconjunto, un listado paginado de las citas de
+        un profesional mostraria como total el de toda la clinica: el usuario
+        veria "1 de 340" en una pagina con tres filas y la paginacion pediria
+        paginas que siempre vuelven vacias.
+        """
         consulta = select(func.count()).select_from(Cita)
         if desde is not None:
             consulta = consulta.where(Cita.inicio >= desde)
         if hasta is not None:
             consulta = consulta.where(Cita.inicio < hasta)
+        if profesional_id is not None:
+            consulta = consulta.where(Cita.profesional_id == profesional_id)
+        if paciente_id is not None:
+            consulta = consulta.where(Cita.paciente_id == paciente_id)
+        if sede_id is not None:
+            consulta = consulta.where(Cita.sede_id == sede_id)
         if estados:
             consulta = consulta.where(Cita.estado.in_(estados))
         consulta = self._filtrar_por_ambito(consulta, principal)
