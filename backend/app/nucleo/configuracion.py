@@ -79,7 +79,10 @@ class Configuracion(BaseSettings):
     idioma_por_defecto: str = "es"
 
     # --- Base de datos ----------------------------------------------------
-    postgres_host: str = "localhost"
+    # 127.0.0.1 y no "localhost": en Windows este ultimo resuelve primero a
+    # ::1 y el reenvio IPv6 de WSL2 no relaya los puertos de los
+    # contenedores, con lo que la conexion se cuelga en lugar de fallar.
+    postgres_host: str = "127.0.0.1"
     postgres_puerto: int = 5432
     postgres_bd: str = "clinica"
     postgres_usuario: str = "clinica"
@@ -90,7 +93,7 @@ class Configuracion(BaseSettings):
     postgres_bd_pruebas: str = "clinica_pruebas"
 
     # --- Redis ------------------------------------------------------------
-    redis_host: str = "localhost"
+    redis_host: str = "127.0.0.1"
     redis_puerto: int = 6379
     redis_bd: Annotated[int, Field(ge=0, le=15)] = 0
     redis_contrasena: SecretStr = SecretStr("")

@@ -40,8 +40,14 @@ services:
       POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale-provider=icu --icu-locale=es-ES --locale=C.UTF-8"
       TZ: UTC
     ports:
-      # Solo en la interfaz local: la base de datos no se expone a la red
-      - "127.0.0.1:5432:5432"
+      # Se publica en todas las interfaces DE LA DISTRIBUCION WSL, no del
+      # equipo.  Es necesario porque el reenvio de localhost de WSL2 solo
+      # relaya los puertos que escuchan en 0.0.0.0 dentro de la maquina
+      # virtual; con 127.0.0.1 el servicio queda inalcanzable desde
+      # Windows.  En modo NAT la distribucion esta detras de un conmutador
+      # privado, asi que el alcance real sigue siendo este equipo.
+      # Ver la nota de red en infra/wsl/wslconfig.ejemplo.
+      - "5432:5432"
     volumes:
       # Volumen nombrado, dentro del sistema de archivos ext4 de WSL.
       # No se usa un montaje de /mnt/d a proposito: el rendimiento de
@@ -98,7 +104,7 @@ services:
     container_name: clinica-redis
     restart: unless-stopped
     ports:
-      - "127.0.0.1:6379:6379"
+      - "6379:6379"
     volumes:
       - redisdata:/data
     command:

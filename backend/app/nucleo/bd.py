@@ -143,6 +143,14 @@ class GestorBaseDatos:
             # en la primera consulta tras un periodo de calma.
             "pool_pre_ping": True,
             "connect_args": {
+                # Tiempo limite de conexion explicito.
+                #
+                # Sin el, un host inalcanzable no produce un error: el intento
+                # se queda colgado de forma indefinida y el proceso parece
+                # arrancar sin terminar nunca.  Es exactamente lo que ocurria
+                # al resolver "localhost" a ::1 en Windows.  Un fallo visible
+                # en 10 segundos es mucho mejor que un bloqueo silencioso.
+                "timeout": 10,
                 # Desactiva la cache de sentencias preparadas de asyncpg.
                 # Es necesario si alguna vez se pone un pooler en modo
                 # transaccion delante; con ella, las sentencias preparadas se

@@ -16,6 +16,22 @@ from app.nucleo.reloj import RelojFijo
 # razonable sin tener que ajustar cada prueba.
 INSTANTE_REFERENCIA = datetime(2026, 4, 15, 14, 0, 0, tzinfo=UTC)
 
+# Prefijos de variables de entorno que se ocultan a las pruebas unitarias.
+_PREFIJOS_AISLADOS = (
+    "ENTORNO",
+    "POSTGRES_",
+    "REDIS_",
+    "CLAVE_",
+    "PROVEEDOR_",
+    "MODO_",
+    "WHATSAPP_",
+    "GOOGLE_",
+    "ANTHROPIC_",
+    "RAG_",
+    "DEPURACION",
+    "FRONTEND_",
+)
+
 
 @pytest.fixture
 def reloj() -> RelojFijo:
@@ -24,32 +40,27 @@ def reloj() -> RelojFijo:
 
 
 @pytest.fixture(autouse=True)
-def _entorno_de_pruebas(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
-    """Aisla las pruebas del archivo .env y del entorno del desarrollador.
+def _entorno_de_pruebas(
+    request: pytest.FixtureRequest, monkeypatch: pytest.MonkeyPatch
+) -> Iterator[None]:
+    """Aisla las pruebas unitarias del .env y del entorno del desarrollador.
 
-    Sin este aislamiento, una prueba de configuracion pasaria o fallaria
-    segun lo que el desarrollador tenga en su .env, y el resultado en CI no
+    Sin este aislamiento, una prueba de configuracion pasaria o fallaria segun
+    lo que el desarrollador tenga en su `.env`, y el resultado en CI no
     coincidiria con el local.
-    """
-    for clave in list(os.environ):
-        if clave.startswith(
-            (
-                "ENTORNO",
-                "POSTGRES_",
-                "REDIS_",
-                "CLAVE_",
-                "PROVEEDOR_",
-                "MODO_",
-                "WHATSAPP_",
-                "GOOGLE_",
-                "ANTHROPIC_",
-                "RAG_",
-                "DEPURACION",
-                "FRONTEND_",
-            )
-        ):
-            monkeypatch.delenv(clave, raising=False)
 
-    # Evita que pydantic-settings lea el .env del proyecto.
-    monkeypatch.setenv("ENTORNO", "local")
+    **No se aplica a las pruebas que necesitan infraestructura real.**  Las de
+    integracion, API, concurrencia y RAG se conectan a PostgreSQL y a Redis, y
+    para eso necesitan precisamente la configuracion del entorno.  Ocultarsela
+    las haria fallar con errores de conexion desconcertantes.
+    """
+    marcadores = {marca.name for marca in request.node.iter_markers()}
+    necesita_infraestructura = bool(marcadores & {"integracion", "api", "concurrencia", "rag"})
+
+    if not necesita_infraestructura:
+        for clave in list(os.environ):
+            if clave.startswith(_PREFIJOS_AISLADOS):
+                monkeypatch.delenv(clave, raising=False)
+        monkeypatch.setenv("ENTORNO", "local")
+
     yield

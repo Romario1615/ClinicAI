@@ -5,9 +5,15 @@ calendarios, lista de espera inteligente, historia clínica versionada, recetas 
 seguimiento de adherencia, base de conocimiento con RAG, pagos asistidos, dashboard y
 auditoría.
 
-> **Estado actual: Fase 0 — análisis y fundación del repositorio.**
-> No hay funcionalidad operativa todavía. Lo que está implementado y lo que no se
-> declara en [`docs/production-readiness.md`](docs/production-readiness.md) y
+> **Estado actual: Fase 2 en curso — modelo de datos y núcleo del backend.**
+>
+> Implementado y verificado: infraestructura local (PostgreSQL 16 + pgvector, Redis),
+> 39 tablas migradas con `upgrade`/`downgrade` comprobados, el núcleo de seguridad y
+> autorización, y la **protección anti doble‑reserva a nivel de motor de base de datos**.
+> Todavía no hay API ni interfaz.
+>
+> Lo que está implementado y lo que no se declara en
+> [`docs/production-readiness.md`](docs/production-readiness.md) y
 > [`docs/known-limitations.md`](docs/known-limitations.md), con evidencia de pruebas.
 > Este sistema **no está aprobado para uso con datos de pacientes reales**.
 
@@ -79,13 +85,18 @@ Copy-Item .env.example .env
 #    python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
 
 # 2. Infraestructura de datos (PostgreSQL + pgvector + Redis)
-.\infra\wsl\aprovisionar.ps1          # solo la primera vez
+.\infra\wsl\aprovisionar.ps1                     # solo la primera vez
+#    Anclar la distribución: sin esto WSL se apaga entre comandos y reinicia
+#    los contenedores, con fallos de conexión aparentemente aleatorios.
+#    Explicación en docs/deployment.md
+.\infra\scripts\mantener-wsl.ps1 -SegundoPlano
 .\infra\scripts\infra-arriba.ps1
 
 # 3. Backend
 cd backend
 python -m venv .venv; .\.venv\Scripts\Activate.ps1
 pip install uv; uv sync
+uv run python -m herramientas.esperar_bd            # espera a que la BD responda
 uv run alembic upgrade head
 uv run python -m app.semillas.cargar_sinteticos     # datos sintéticos
 uv run uvicorn app.main:aplicacion --reload

@@ -8,6 +8,10 @@
 # explicito, WSL2 reclama hasta el 50 % de la memoria fisica y deja el
 # escritorio inservible mientras corren los contenedores.
 #
+# IMPORTANTE: las rutas de Windows llevan la barra invertida DUPLICADA.  Con
+# una sola, WSL la interpreta como secuencia de escape y se niega a arrancar
+# con "Caracter de escape no valido".
+#
 # Aplicar con:  wsl --shutdown
 
 [wsl2]
@@ -18,6 +22,46 @@ swap=2GB
 # El archivo de intercambio va en D: para no consumir el escaso espacio
 # libre de C: (ADR-0003).
 swapFile=D:\\wsl\\swap.vhdx
+
+# ---------------------------------------------------------------------------
+#  Apagado por inactividad DESACTIVADO
+# ---------------------------------------------------------------------------
+# Por defecto WSL2 apaga la maquina virtual poco despues de que termine el
+# ultimo proceso conectado.  Con comandos cortos (`wsl -d clinica -- docker
+# ps`) eso significa que la distribucion se apaga entre invocacion e
+# invocacion, y al volver a llamarla los contenedores arrancan de nuevo.
+#
+# El sintoma es desconcertante: el proxy de Docker acepta la conexion TCP en
+# cuanto el contenedor existe, pero PostgreSQL aun se esta inicializando y no
+# responde al protocolo.  El cliente se queda esperando y falla por tiempo
+# limite, de forma aparentemente aleatoria.  Parecia un problema de red de
+# WSL y no lo era.
+#
+# -1 significa "nunca": la distribucion sigue en marcha y los contenedores
+# conservan su estado entre comandos.
+vmIdleTimeout=-1
+
+# ---------------------------------------------------------------------------
+#  Red: se mantiene el modo NAT por defecto
+# ---------------------------------------------------------------------------
+# Se probo `networkingMode=mirrored` para que el enlace a 127.0.0.1 dentro de
+# WSL fuera alcanzable desde Windows, y se descarto por dos motivos:
+#
+#   1. En modo espejo WSL comparte las interfaces del host: la distribucion
+#      adopta la IP de la red local del equipo.  Publicar un contenedor en
+#      0.0.0.0 expondria entonces PostgreSQL a toda la red local, no solo a
+#      este equipo.
+#   2. Con el modo espejo activo, los puertos que Docker publica mediante
+#      DNAT tampoco resultaron alcanzables desde Windows.
+#
+# Con el modo NAT (el de por defecto) la distribucion queda detras de un
+# conmutador virtual privado y el reenvio de localhost de WSL2 lleva
+# localhost:5432 de Windows hasta el contenedor.  El alcance efectivo es este
+# equipo, que es lo que se busca.
+#
+# Por eso los ficheros compose publican en 0.0.0.0 DENTRO de WSL: es lo que
+# el reenvio de localhost sabe relayar, y en modo NAT no implica exposicion
+# fuera de la maquina.
 
 [experimental]
 # Devuelve al sistema la memoria que los contenedores dejan de usar, en vez

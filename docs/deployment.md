@@ -63,10 +63,13 @@ python -c "import secrets; print(secrets.token_urlsafe(64))"                    
 python -c "import secrets; print(secrets.token_urlsafe(24))"                     # POSTGRES_CONTRASENA
 python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"  # CLAVE_CIFRADO_DATOS
 
-# 4. Infraestructura de datos
+# 4. Anclar la distribucion WSL (IMPRESCINDIBLE, ver la nota siguiente)
+.\infra\scripts\mantener-wsl.ps1 -SegundoPlano
+
+# 5. Infraestructura de datos
 .\infra\scripts\infra-arriba.ps1
 
-# 5. Backend
+# 6. Backend
 cd backend
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
@@ -76,18 +79,71 @@ uv run alembic upgrade head
 uv run python -m app.semillas.cargar_sinteticos
 uv run uvicorn app.main:aplicacion --reload
 
-# 6. Frontend (otra terminal)
+# 7. Frontend (otra terminal)
 cd frontend
 npm ci
 npm start
 ```
 
+
+### Por que hay que anclar la distribucion WSL
+
+WSL2 apaga la maquina virtual poco despues de que termine el ultimo proceso
+conectado a ella. Con comandos cortos —un `docker ps`, un `pytest` de diez
+segundos— la distribucion se apaga entre invocaciones y **se lleva los
+contenedores con ella**.
+
+El sintoma parece un problema de red y no lo es:
+
+* una conexion a PostgreSQL funciona y, medio minuto despues, la misma
+  conexion falla con `connection timeout expired` o con
+  `connection was closed in the middle of operation`;
+* el socket TCP conecta, porque el proxy de Docker acepta en cuanto el
+  contenedor existe, pero PostgreSQL todavia se esta inicializando y no
+  responde al protocolo;
+* en el registro del contenedor se ve un apagado limpio seguido de un
+  arranque, sin ningun error.
+
+Durante el desarrollo esto provocaba que la suite de integracion pasara
+27 de 27 en una ejecucion y fallara 7 pruebas en la siguiente, sin ningun
+cambio de codigo.
+
+`vmIdleTimeout=-1` en `.wslconfig` deberia evitarlo, pero en la version
+probada (WSL 2.7.10) no basta. La solucion que si funciona es mantener un
+proceso vivo dentro de la distribucion:
+
+```powershell
+.\infra\scripts\mantener-wsl.ps1 -SegundoPlano   # anclar
+.\infra\scripts\mantener-wsl.ps1 -Estado         # comprobar
+.\infra\scripts\mantener-wsl.ps1 -Detener        # soltar
+```
+
+Con el anclaje activo: 27 de 27 en tres ejecuciones consecutivas y cero
+reinicios del contenedor.
+
+### Antes de cualquier operacion sobre la base de datos
+
+Comprobar que el puerto esta abierto **no sirve**: hay que comprobar que la
+base de datos responde una consulta. Esa es la unica senal fiable de que esta
+lista, y es lo que hace esta herramienta:
+
+```powershell
+cd backend
+uv run python -m herramientas.esperar_bd        # espera y verifica extensiones
+uv run alembic upgrade head
+```
+
+Tambien verifica que existan `vector`, `btree_gist`, `pg_trgm` y `pgcrypto`:
+un PostgreSQL sano sin esas extensiones no sirve para este sistema.
+
 ### Uso diario
 
 ```powershell
-.\infra\scripts\infra-arriba.ps1      # levantar PostgreSQL y Redis
-.\infra\scripts\infra-abajo.ps1       # detener, conservando los datos
-wsl --shutdown                        # liberar la memoria que retiene WSL
+.\infra\scripts\mantener-wsl.ps1 -SegundoPlano   # anclar la distribucion
+.\infra\scripts\infra-arriba.ps1                 # levantar PostgreSQL y Redis
+.\infra\scripts\infra-abajo.ps1                  # detener, conservando datos
+.\infra\scripts\mantener-wsl.ps1 -Detener        # soltar el anclaje
+wsl --shutdown                                     # liberar la memoria de WSL
 ```
 
 ### Infraestructura de pruebas
@@ -119,6 +175,9 @@ cd backend; uv run alembic upgrade head; uv run python -m app.semillas.cargar_si
 | `POSTGRES_CONTRASENA debe definirse` | Falta en `.env` | Generarla y añadirla |
 | Falta la extensión `vector` | El volumen se creó antes del script de inicialización | `infra-abajo.ps1 -BorrarDatos` y volver a levantar |
 | El equipo se ralentiza | WSL retiene memoria | Revisar `%USERPROFILE%\.wslconfig`; `wsl --shutdown` |
+| La conexion a la base falla de forma intermitente | WSL se apaga entre comandos y reinicia los contenedores | `.\infra\scripts\mantener-wsl.ps1 -SegundoPlano` |
+| `connection timeout expired` justo tras levantar | PostgreSQL aun se inicializa; el proxy ya acepta el TCP | `uv run python -m herramientas.esperar_bd` |
+| La conexion se cuelga sin fallar | `localhost` resuelve a `::1` y WSL no relaya IPv6 | Usar `127.0.0.1` en `POSTGRES_HOST` |
 | La descarga de la imagen falla | Sin espacio o sin red | La imagen va a `D:\wsl\imagenes`; comprobar espacio en D: |
 
 ---

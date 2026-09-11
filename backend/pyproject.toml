@@ -163,13 +163,24 @@ known-first-party = ["app"]
 [tool.ruff.lint.per-file-ignores]
 # Las pruebas pueden usar valores fijos y estructuras mas laxas
 "pruebas/**" = ["S", "PLR2004", "ARG", "DTZ"]
-# Alembic genera codigo con su propio estilo
-"alembic/**" = ["ERA", "E", "F", "I", "ARG", "PTH"]
+# Alembic genera codigo con su propio estilo.  PLR0915 sobra porque una
+# migracion inicial de 39 tablas son, por definicion, muchas sentencias
+# seguidas; dividirla en funciones no la haria mas legible.
+"alembic/**" = ["ERA", "E", "F", "I", "ARG", "PTH", "PLR0915"]
 # El modulo del reloj es el unico autorizado a llamar a datetime.now
 "app/nucleo/reloj.py" = ["DTZ005"]
 # El catalogo de acciones de auditoria contiene nombres como
 # `token.refrescado`, que S105 confunde con contrasenas incrustadas.
 "app/nucleo/auditoria.py" = ["S105"]
+# Los catalogos de estados contienen nombres como `TOKEN_VENCIDO`, que
+# S105 confunde con contrasenas incrustadas.
+"app/modulos/profesionales/modelos.py" = ["S105"]
+# Las herramientas de operacion son scripts de linea de comandos:
+# imprimen por salida estandar (T20), importan dentro de la funcion para
+# arrancar rapido sin cargar dependencias que quizas no se usen (PLC0415),
+# y componen codigo fuente de migraciones, que S608 confunde con SQL
+# construido por concatenacion (S608).
+"herramientas/**" = ["T20", "PLC0415", "S608"]
 
 [tool.ruff.lint.flake8-tidy-imports.banned-api]
 # Regla clave del ADR-0010: el tiempo entra por el reloj inyectable para que

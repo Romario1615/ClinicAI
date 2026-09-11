@@ -1,0 +1,150 @@
+"""Punto unico de importacion de todos los modelos.
+
+Existe por dos motivos concretos:
+
+1. **Alembic necesita que todos los modelos esten importados** antes de
+   comparar el metadata con la base de datos.  Si falta uno, `autogenerate`
+   genera una migracion que **borra** su tabla, porque la ve en la base y no
+   en el metadata.  Es la forma mas rapida de perder datos con Alembic.
+
+2. Evita el ciclo de importaciones entre modulos que se referencian por clave
+   externa.
+
+Al anadir un modelo, hay que anadirlo aqui **y a `__all__`**.  Una clase
+importada pero ausente de `__all__` la elimina `ruff --fix` por considerarla
+sin usar, y entonces su tabla desaparece del metadata sin que nadie lo note
+hasta que una migracion la borra.  La prueba
+`pruebas/unitarias/test_modelos_exportados.py` lo verifica.
+"""
+
+from __future__ import annotations
+
+from app.modulos.agenda.modelos import (
+    BloqueoAgenda,
+    Cita,
+    CitaHistorial,
+    ClaveIdempotencia,
+    EstadoCita,
+    OrigenCita,
+    TipoBloqueo,
+)
+from app.modulos.auditoria.modelos import Auditoria
+from app.modulos.organizacion.modelos import (
+    Clinica,
+    ConfiguracionClinica,
+    Consultorio,
+    Descanso,
+    Especialidad,
+    Feriado,
+    HorarioAtencion,
+    Sede,
+    Servicio,
+    TipoConsultorio,
+    TipoPropietarioHorario,
+)
+from app.modulos.outbox.modelos import (
+    CanalOutbox,
+    EstadoOutbox,
+    OutboxMensaje,
+    Recordatorio,
+    TipoMensajeOutbox,
+)
+from app.modulos.pacientes.modelos import (
+    Alergia,
+    Antecedente,
+    Consentimiento,
+    DocumentoPaciente,
+    EstadoEscaneoAntivirus,
+    Paciente,
+    PacienteContacto,
+    RelacionAsistencial,
+    SeveridadAlergia,
+    TipoConsentimiento,
+    TipoDocumento,
+)
+from app.modulos.profesionales.modelos import (
+    AgendaPlantilla,
+    CalendarioConexion,
+    CalendarioEvento,
+    EstadoDisponibilidad,
+    EstadoEventoCalendario,
+    EstadoSincronizacion,
+    Profesional,
+    ProfesionalSede,
+    ProfesionalServicio,
+)
+from app.modulos.usuarios.modelos import (
+    AmbitoAsignacion,
+    CodigoRecuperacion2FA,
+    HistorialAcceso,
+    MotivoRevocacion,
+    Permiso,
+    ResultadoAcceso,
+    Rol,
+    RolPermiso,
+    Sesion,
+    TokenUnUso,
+    Usuario,
+    UsuarioRol,
+)
+from app.nucleo.bd import Base
+
+__all__ = [
+    "AgendaPlantilla",
+    "Alergia",
+    "AmbitoAsignacion",
+    "Antecedente",
+    "Auditoria",
+    "Base",
+    "BloqueoAgenda",
+    "CalendarioConexion",
+    "CalendarioEvento",
+    "CanalOutbox",
+    "Cita",
+    "CitaHistorial",
+    "ClaveIdempotencia",
+    "Clinica",
+    "CodigoRecuperacion2FA",
+    "ConfiguracionClinica",
+    "Consentimiento",
+    "Consultorio",
+    "Descanso",
+    "DocumentoPaciente",
+    "Especialidad",
+    "EstadoCita",
+    "EstadoDisponibilidad",
+    "EstadoEscaneoAntivirus",
+    "EstadoEventoCalendario",
+    "EstadoOutbox",
+    "EstadoSincronizacion",
+    "Feriado",
+    "HistorialAcceso",
+    "HorarioAtencion",
+    "MotivoRevocacion",
+    "OrigenCita",
+    "OutboxMensaje",
+    "Paciente",
+    "PacienteContacto",
+    "Permiso",
+    "Profesional",
+    "ProfesionalSede",
+    "ProfesionalServicio",
+    "Recordatorio",
+    "RelacionAsistencial",
+    "ResultadoAcceso",
+    "Rol",
+    "RolPermiso",
+    "Sede",
+    "Servicio",
+    "Sesion",
+    "SeveridadAlergia",
+    "TipoBloqueo",
+    "TipoConsentimiento",
+    "TipoConsultorio",
+    "TipoDocumento",
+    "TipoMensajeOutbox",
+    "TipoPropietarioHorario",
+    "TokenUnUso",
+    "Usuario",
+    "UsuarioRol",
+]
