@@ -1,0 +1,261 @@
+[project]
+name = "clinica-backend"
+version = "0.1.0"
+description = "Plataforma de gestion clinica: API, agenda, agente de WhatsApp y RAG"
+requires-python = ">=3.11,<3.13"
+
+dependencies = [
+    # --- Web -------------------------------------------------------------
+    "fastapi>=0.115,<0.200",
+    "uvicorn[standard]>=0.32,<0.40",
+    "pydantic>=2.9,<3",
+    "pydantic-settings>=2.6,<3",
+    # Necesario para recibir archivos en formularios multiparte
+    "python-multipart>=0.0.18,<0.1",
+
+    # --- Base de datos ---------------------------------------------------
+    "sqlalchemy[asyncio]>=2.0.36,<3",
+    "asyncpg>=0.30,<0.31",
+    "alembic>=1.14,<2",
+    # pgvector expone los tipos de columna vectorial para SQLAlchemy
+    "pgvector>=0.3.6,<0.5",
+    # El script de semillas y algunas pruebas usan el driver sincrono
+    "psycopg[binary]>=3.2,<4",
+
+    # --- Seguridad -------------------------------------------------------
+    # Argon2id para contrasenas (recomendacion actual de OWASP)
+    "argon2-cffi>=23.1,<25",
+    # PyJWT en lugar de python-jose: mantenimiento mas activo y superficie menor
+    "pyjwt>=2.10,<3",
+    # Segundo factor TOTP
+    "pyotp>=2.9,<3",
+    "qrcode[pil]>=8.0,<9",
+    # Cifrado de los tokens OAuth de terceros en reposo
+    "cryptography>=44.0,<47",
+
+    # --- Cola y cache ----------------------------------------------------
+    "redis[hiredis]>=5.2,<7",
+    # ARQ: planificador asincrono sobre Redis.  La durabilidad la aporta el
+    # outbox en PostgreSQL, no Redis (ADR-0008).
+    "arq>=0.26,<0.27",
+
+    # --- Clientes externos -----------------------------------------------
+    "httpx>=0.28,<0.30",
+    # Reintentos con retroceso para los adaptadores de terceros
+    "tenacity>=9.0,<10",
+
+    # --- Observabilidad --------------------------------------------------
+    # Logs estructurados en JSON con redaccion de datos sensibles
+    "structlog>=24.4,<26",
+    "prometheus-client>=0.21,<0.24",
+
+    # --- Ingesta de documentos -------------------------------------------
+    "pypdf>=5.1,<7",
+    # Deteccion del tipo real de archivo por su contenido, no por extension.
+    # Se elige `filetype` (Python puro) en lugar de python-magic, que en
+    # Windows exige libmagic como biblioteca nativa.
+    "filetype>=1.2,<2",
+
+    # --- Zonas horarias --------------------------------------------------
+    # zoneinfo esta en la biblioteca estandar, pero Windows no trae la base
+    # de datos de zonas horarias del sistema.
+    "tzdata>=2024.2",
+]
+
+[project.optional-dependencies]
+# Proveedor de LLM.  Separado para que el CI no necesite instalarlo.
+llm = [
+    "anthropic>=0.40,<1",
+]
+
+# Embeddings locales por ONNX.  Instala onnxruntime (~200 MB), asi que se
+# mantiene fuera de las dependencias base: el CI usa el proveedor simulado.
+embeddings = [
+    "fastembed>=0.4,<0.8",
+]
+
+# Modelos predictivos de la Fase 8
+prediccion = [
+    "scikit-learn>=1.5,<2",
+    "pandas>=2.2,<3",
+    "numpy>=1.26,<3",
+]
+
+dev = [
+    # --- Pruebas ---------------------------------------------------------
+    "pytest>=8.3,<9",
+    "pytest-asyncio>=0.24,<1.3",
+    "pytest-cov>=6.0,<8",
+    # Ejecuta las pruebas en paralelo; util en la suite de integracion
+    "pytest-xdist>=3.6,<4",
+    # Pruebas basadas en propiedades para el calculo de disponibilidad
+    "hypothesis>=6.122,<7",
+    # Pruebas de contrato contra el esquema OpenAPI
+    "schemathesis>=3.38,<5",
+    # Datos sinteticos en espanol.  NUNCA datos reales (regla 6).
+    "faker>=33.1,<38",
+
+    # --- Calidad ---------------------------------------------------------
+    "ruff>=0.8,<0.16",
+    "mypy>=1.13,<2",
+    "types-redis>=4.6,<5",
+    "types-pyyaml>=6.0,<7",
+
+    # --- Seguridad -------------------------------------------------------
+    "pip-audit>=2.7,<3",
+    # Analisis estatico de seguridad
+    "bandit>=1.8,<2",
+]
+
+# ---------------------------------------------------------------------------
+#  Ruff: linter y formateador
+# ---------------------------------------------------------------------------
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+src = ["app", "pruebas"]
+
+[tool.ruff.lint]
+select = [
+    "E", "W",    # pycodestyle
+    "F",         # pyflakes
+    "I",         # isort
+    "N",         # pep8-naming
+    "UP",        # pyupgrade
+    "B",         # bugbear
+    "C4",        # comprehensions
+    "DTZ",       # flake8-datetimez: prohibe fechas sin zona horaria (ADR-0010)
+    "S",         # bandit
+    "A",         # builtins sombreados
+    "RET",       # returns
+    "SIM",       # simplificaciones
+    "ARG",       # argumentos sin usar
+    "PTH",       # usar pathlib
+    "ERA",       # codigo comentado
+    "PL",        # pylint
+    "RUF",       # reglas propias de ruff
+    "ASYNC",     # errores de async
+    "T20",       # print olvidado
+]
+ignore = [
+    # El formateador se encarga de la longitud de linea
+    "E501",
+    # Los nombres de dominio estan en espanol a proposito (ADR-0015)
+    "N999",
+    # N818 exige que las excepciones terminen en "Error".  Aqui empiezan por
+    # "Error" porque los identificadores van en espanol (ADR-0015):
+    # `ErrorDominio`, `ErrorMetadatosAuditoria`.  Renombrarlas a
+    # `DominioError` produciria espanglish.
+    "N818",
+    # Permitir `assert` en las pruebas
+    "S101",
+    # Las cadenas de conexion de las pruebas no son secretos
+    "S106",
+    # Demasiados argumentos: los servicios de dominio los necesitan
+    "PLR0913",
+]
+
+[tool.ruff.lint.isort]
+# Sin esto, ruff trata `app` como dependencia externa y agrupa sus imports
+# junto a pytest y sqlalchemy, lo que hace ruidoso cada diff.
+known-first-party = ["app"]
+
+[tool.ruff.lint.per-file-ignores]
+# Las pruebas pueden usar valores fijos y estructuras mas laxas
+"pruebas/**" = ["S", "PLR2004", "ARG", "DTZ"]
+# Alembic genera codigo con su propio estilo
+"alembic/**" = ["ERA", "E", "F", "I", "ARG", "PTH"]
+# El modulo del reloj es el unico autorizado a llamar a datetime.now
+"app/nucleo/reloj.py" = ["DTZ005"]
+# El catalogo de acciones de auditoria contiene nombres como
+# `token.refrescado`, que S105 confunde con contrasenas incrustadas.
+"app/nucleo/auditoria.py" = ["S105"]
+
+[tool.ruff.lint.flake8-tidy-imports.banned-api]
+# Regla clave del ADR-0010: el tiempo entra por el reloj inyectable para que
+# las pruebas puedan fijarlo.  Una llamada directa a datetime.now() produce
+# pruebas no deterministas y errores de zona horaria en produccion.
+"datetime.datetime.utcnow".msg = "Use app.nucleo.reloj.Reloj.ahora() (ADR-0010)"
+"datetime.datetime.now".msg = "Use app.nucleo.reloj.Reloj.ahora() (ADR-0010)"
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+
+# ---------------------------------------------------------------------------
+#  mypy: comprobacion estricta de tipos
+# ---------------------------------------------------------------------------
+[tool.mypy]
+python_version = "3.11"
+strict = true
+warn_unreachable = true
+warn_return_any = true
+disallow_untyped_defs = true
+disallow_any_generics = true
+no_implicit_reexport = true
+show_error_codes = true
+plugins = ["pydantic.mypy"]
+
+[[tool.mypy.overrides]]
+# Dependencias sin anotaciones publicadas
+module = ["arq.*", "fastembed.*", "filetype.*", "pgvector.*", "qrcode.*"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = ["alembic.versions.*"]
+ignore_errors = true
+
+# ---------------------------------------------------------------------------
+#  pytest
+# ---------------------------------------------------------------------------
+[tool.pytest.ini_options]
+testpaths = ["pruebas"]
+asyncio_mode = "auto"
+# Falla si una prueba usa un marcador no declarado: evita que una prueba
+# quede excluida del pipeline por una errata en el nombre del marcador.
+addopts = [
+    "--strict-markers",
+    "--strict-config",
+    "-ra",
+]
+markers = [
+    "unitaria: sin dependencias externas, rapida",
+    "integracion: requiere PostgreSQL y Redis reales en contenedores",
+    "api: prueba de extremo HTTP contra la aplicacion",
+    "concurrencia: verifica el comportamiento bajo acceso simultaneo",
+    "seguridad: verifica un control de seguridad concreto",
+    "rag: recuperacion, permisos y resistencia a inyeccion de prompt",
+    "lento: tarda mas de cinco segundos",
+]
+filterwarnings = [
+    "error",
+    # Avisos de dependencias que no controlamos
+    "ignore::DeprecationWarning:passlib.*",
+    "ignore::DeprecationWarning:pydantic.*",
+]
+
+[tool.coverage.run]
+source = ["app"]
+branch = true
+omit = [
+    "app/semillas/*",
+    "*/__init__.py",
+]
+
+[tool.coverage.report]
+# Umbral definido en RNF-06.  El pipeline falla por debajo.
+fail_under = 80
+show_missing = true
+exclude_lines = [
+    "pragma: sin cobertura",
+    "if TYPE_CHECKING:",
+    "raise NotImplementedError",
+    "@abstractmethod",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["app"]

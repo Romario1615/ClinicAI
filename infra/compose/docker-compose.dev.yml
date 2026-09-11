@@ -1,0 +1,138 @@
+# ---------------------------------------------------------------------------
+#  Infraestructura de datos para desarrollo local.
+#
+#  Se ejecuta DENTRO de WSL2 (ver ADR-0002).  Desde PowerShell use
+#  infra/scripts/infra-arriba.ps1, que hace la traduccion de rutas.
+#
+#  Los limites de memoria son deliberadamente bajos: el equipo de desarrollo
+#  tiene ~2.8 GB de RAM libres con MSSQLSERVER activo (riesgo R-02).
+# ---------------------------------------------------------------------------
+
+name: clinica-dev
+
+services:
+  postgres:
+    # Imagen oficial de pgvector sobre PostgreSQL 16.  Trae la extension
+    # `vector` compilada, que es justo lo que no se puede construir de forma
+    # nativa en este equipo por falta de MSVC.
+    image: pgvector/pgvector:pg16
+    container_name: clinica-pg
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_BD:-clinica}
+      POSTGRES_USER: ${POSTGRES_USUARIO:-clinica}
+      POSTGRES_PASSWORD: ${POSTGRES_CONTRASENA:?debe definirse en .env}
+      # Proveedor de collation ICU con locale espanol.
+      #
+      # La imagen de pgvector es Debian slim y solo tiene generados los
+      # locales C, C.utf8, en_US.utf8 y POSIX: `--locale=es_ES.UTF-8` hace
+      # fallar initdb con "invalid locale name".
+      #
+      # ICU resuelve el problema mejor que generar el locale del sistema:
+      # da ordenacion correcta en espanol (la enye despues de la n, tildes
+      # tratadas como la letra base) sin depender de que la imagen tenga el
+      # locale compilado.  Importa para ordenar apellidos de pacientes.
+      #
+      # LC_CTYPE queda en C.UTF-8, que es lo recomendado con el proveedor ICU.
+      # La busqueda textual en espanol no depende de esto: usa la
+      # configuracion `spanish` de snowball mas `unaccent` (ver el script de
+      # inicializacion), que son independientes del locale del sistema.
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale-provider=icu --icu-locale=es-ES --locale=C.UTF-8"
+      TZ: UTC
+    ports:
+      # Solo en la interfaz local: la base de datos no se expone a la red
+      - "127.0.0.1:5432:5432"
+    volumes:
+      # Volumen nombrado, dentro del sistema de archivos ext4 de WSL.
+      # No se usa un montaje de /mnt/d a proposito: el rendimiento de
+      # entrada/salida de PostgreSQL sobre el sistema de archivos de Windows
+      # es muy inferior.
+      - pgdata:/var/lib/postgresql/data
+      - ../docker/postgres/init:/docker-entrypoint-initdb.d:ro
+    command:
+      - postgres
+      # Ajustes moderados para un equipo con poca memoria libre
+      - -c
+      - shared_buffers=256MB
+      - -c
+      - work_mem=16MB
+      - -c
+      - maintenance_work_mem=128MB
+      - -c
+      - max_connections=100
+      - -c
+      - timezone=UTC
+      # Registro de consultas lentas: util para las pruebas de carga
+      - -c
+      - log_min_duration_statement=500
+      - -c
+      - log_lock_waits=on
+      # Necesario para que las pruebas de concurrencia vean los bloqueos
+      - -c
+      - deadlock_timeout=1s
+    healthcheck:
+      # La comprobacion no se limita a que el puerto responda: verifica que
+      # las extensiones existan.  Un PostgreSQL sano sin pgvector no sirve.
+      test:
+        - CMD-SHELL
+        - >-
+          pg_isready -U ${POSTGRES_USUARIO:-clinica} -d ${POSTGRES_BD:-clinica}
+          && psql -U ${POSTGRES_USUARIO:-clinica} -d ${POSTGRES_BD:-clinica}
+          -tAc "SELECT 1 FROM pg_extension WHERE extname='vector'" | grep -q 1
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  redis:
+    image: redis:7-alpine
+    container_name: clinica-redis
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:6379:6379"
+    volumes:
+      - redisdata:/data
+    command:
+      - redis-server
+      # Persistencia AOF activada.  Redis no es la fuente de verdad (el
+      # outbox de PostgreSQL lo es, ver ADR-0008), pero perder la cola en
+      # cada reinicio complicaria el desarrollo sin necesidad.
+      - --appendonly
+      - "yes"
+      - --appendfsync
+      - everysec
+      - --maxmemory
+      - 256mb
+      - --maxmemory-policy
+      # noeviction, no allkeys-lru: preferimos que una escritura falle de
+      # forma visible antes que perder en silencio un trabajo programado.
+      - noeviction
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          memory: 320M
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  pgdata:
+    name: clinica-dev-pgdata
+  redisdata:
+    name: clinica-dev-redisdata

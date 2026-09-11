@@ -1,0 +1,88 @@
+# ---------------------------------------------------------------------------
+#  Infraestructura para pruebas de integracion.
+#
+#  Diferencias respecto a dev, todas deliberadas:
+#   - Puertos distintos (5433 / 6380): las pruebas no pisan la base de
+#     desarrollo ni dependen de que este levantada.
+#   - Sin volumenes persistentes: cada arranque parte de cero, que es lo que
+#     una suite de integracion necesita para ser determinista.
+#   - `fsync=off` y compania: solo aqui.  Multiplica la velocidad de las
+#     pruebas a cambio de durabilidad, que en datos desechables no importa.
+#     NUNCA usar estos ajustes en desarrollo ni en produccion.
+# ---------------------------------------------------------------------------
+
+name: clinica-test
+
+services:
+  postgres-test:
+    image: pgvector/pgvector:pg16
+    container_name: clinica-pg-test
+    environment:
+      POSTGRES_DB: clinica_pruebas
+      POSTGRES_USER: clinica_pruebas
+      # Credencial de un contenedor efimero sin datos reales, accesible solo
+      # desde localhost.  No es un secreto: no protege nada.
+      POSTGRES_PASSWORD: clinica_pruebas
+      # Mismo proveedor ICU que en desarrollo, para que las pruebas de
+      # ordenacion se comporten igual que en el entorno real.
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale-provider=icu --icu-locale=es-ES --locale=C.UTF-8"
+      TZ: UTC
+    ports:
+      - "127.0.0.1:5433:5432"
+    volumes:
+      - ../docker/postgres/init:/docker-entrypoint-initdb.d:ro
+    tmpfs:
+      # Datos en memoria: las pruebas de integracion vuelan y no dejan rastro
+      - /var/lib/postgresql/data
+    command:
+      - postgres
+      - -c
+      - fsync=off
+      - -c
+      - synchronous_commit=off
+      - -c
+      - full_page_writes=off
+      - -c
+      - shared_buffers=256MB
+      - -c
+      - max_connections=200
+      - -c
+      - timezone=UTC
+      # Las pruebas de concurrencia necesitan detectar bloqueos rapido
+      - -c
+      - deadlock_timeout=200ms
+      - -c
+      - lock_timeout=10s
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - >-
+          pg_isready -U clinica_pruebas -d clinica_pruebas
+          && psql -U clinica_pruebas -d clinica_pruebas
+          -tAc "SELECT 1 FROM pg_extension WHERE extname='vector'" | grep -q 1
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 20s
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+
+  redis-test:
+    image: redis:7-alpine
+    container_name: clinica-redis-test
+    ports:
+      - "127.0.0.1:6380:6379"
+    # Sin persistencia: las pruebas que verifican la caida de Redis lo
+    # reinician a proposito y esperan encontrarlo vacio.
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    deploy:
+      resources:
+        limits:
+          memory: 192M

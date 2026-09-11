@@ -1,0 +1,28 @@
+# Limites de WSL2 para el equipo de desarrollo actual.
+#
+# Copiar a  %USERPROFILE%\.wslconfig  (aprovisionar.ps1 lo hace solo si no
+# existe ya uno, para no pisar la configuracion del usuario).
+#
+# Contexto: el equipo tiene 13.9 GB de RAM y solo ~2.8 GB libres con
+# MSSQLSERVER activo (riesgo R-02 en docs/threat-model.md).  Sin limite
+# explicito, WSL2 reclama hasta el 50 % de la memoria fisica y deja el
+# escritorio inservible mientras corren los contenedores.
+#
+# Aplicar con:  wsl --shutdown
+
+[wsl2]
+memory=4GB
+processors=4
+swap=2GB
+
+# El archivo de intercambio va en D: para no consumir el escaso espacio
+# libre de C: (ADR-0003).
+swapFile=D:\\wsl\\swap.vhdx
+
+[experimental]
+# Devuelve al sistema la memoria que los contenedores dejan de usar, en vez
+# de retenerla hasta el proximo reinicio.
+autoMemoryReclaim=gradual
+
+# Permite que el disco virtual libere espacio en D: cuando se borran datos.
+sparseVhd=true

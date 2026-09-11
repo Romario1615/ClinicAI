@@ -1,0 +1,85 @@
+# ---------------------------------------------------------------------------
+# Secretos y configuracion local  (NUNCA versionar)
+# ---------------------------------------------------------------------------
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+*.crt
+secretos/
+credenciales/
+*-credenciales.json
+client_secret*.json
+service-account*.json
+
+# ---------------------------------------------------------------------------
+# Python / backend
+# ---------------------------------------------------------------------------
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
+.hypothesis/
+dist/
+build/
+
+# ---------------------------------------------------------------------------
+# Node / frontend
+# ---------------------------------------------------------------------------
+node_modules/
+.angular/
+frontend/dist/
+*.tsbuildinfo
+npm-debug.log*
+.pnpm-store/
+
+# ---------------------------------------------------------------------------
+# Pruebas
+# ---------------------------------------------------------------------------
+pruebas-e2e/test-results/
+pruebas-e2e/playwright-report/
+pruebas-e2e/.auth/
+pruebas-carga/resultados/
+reportes/
+
+# ---------------------------------------------------------------------------
+# Datos: jamas se versionan datos clinicos, ni sinteticos generados
+# ---------------------------------------------------------------------------
+datos-sinteticos/generados/
+*.dump
+*.sql.gz
+*.bak
+respaldos/
+adjuntos/
+almacenamiento/
+
+# ---------------------------------------------------------------------------
+# Sistema operativo y editores
+# ---------------------------------------------------------------------------
+Thumbs.db
+desktop.ini
+.DS_Store
+.idea/
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.recomendado.json
+*.swp
+
+# ---------------------------------------------------------------------------
+# Temporales
+# ---------------------------------------------------------------------------
+tmp/
+temporal/
+*.log
+!docs/**/*.log.md
