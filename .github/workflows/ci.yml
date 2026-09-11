@@ -1,0 +1,447 @@
+# ---------------------------------------------------------------------------
+#  Integracion continua.
+#
+#  El pipeline falla -- y con ello bloquea la fusion -- ante cualquiera de
+#  estas condiciones:
+#
+#    * lint o formato incorrecto
+#    * error de tipos
+#    * prueba en rojo
+#    * cobertura por debajo del 80 % (RNF-06)
+#    * secreto detectado en el arbol o en el historial
+#    * vulnerabilidad alta o critica en dependencias o en las imagenes
+#    * migracion que no aplica o que no se puede revertir
+#    * imagen que no construye
+#
+#  Los trabajos son independientes a proposito: un fallo de lint no oculta un
+#  fallo de pruebas. Ver el detalle y el porque de cada puerta en
+#  docs/test-plan.md.
+# ---------------------------------------------------------------------------
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  # Permite lanzarlo a mano, que es lo que hace falta la primera vez que se
+  # conecta un remoto.
+  workflow_dispatch:
+
+# Cancela ejecuciones anteriores de la misma rama. Sin esto, tres empujones
+# seguidos dejan tres pipelines compitiendo por los mismos ejecutores y el
+# resultado del ultimo llega el ultimo.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+# Permisos minimos. El valor por omision de la organizacion puede ser
+# `write-all`, y un trabajo de CI no necesita escribir en el repositorio.
+permissions:
+  contents: read
+
+env:
+  VERSION_PYTHON: "3.11"
+  VERSION_UV: "0.5.11"
+  # Valores de prueba. No son secretos: solo abren la base de datos efimera
+  # de este ejecutor, que se destruye al terminar el trabajo.
+  POSTGRES_BD: clinica_ci
+  POSTGRES_USUARIO: clinica
+  POSTGRES_CONTRASENA: contrasena_efimera_de_ci
+
+jobs:
+  # =========================================================================
+  #  Calidad estatica del backend
+  # =========================================================================
+  calidad-backend:
+    name: Lint, formato y tipos (backend)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Instalar uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          version: ${{ env.VERSION_UV }}
+          enable-cache: true
+          cache-dependency-glob: backend/uv.lock
+
+      - name: Instalar dependencias
+        working-directory: backend
+        # `--frozen` falla si `uv.lock` no corresponde a `pyproject.toml`.
+        # Es una puerta en si misma: una dependencia anadida sin regenerar el
+        # bloqueo haria que CI probara un arbol distinto al de produccion.
+        run: uv sync --frozen --extra dev --extra llm
+
+      - name: Lint
+        working-directory: backend
+        run: uv run ruff check . --output-format=github
+
+      - name: Formato
+        working-directory: backend
+        run: uv run ruff format --check .
+
+      - name: Tipos
+        working-directory: backend
+        run: uv run mypy app
+
+      - name: Analisis estatico de seguridad (bandit)
+        working-directory: backend
+        # Solo severidad media o superior. Bandit senala cada `assert` de las
+        # pruebas como hallazgo bajo, y un informe con cien avisos
+        # irrelevantes se deja de leer, que es peor que no tenerlo.
+        run: uv run bandit -r app -ll --format screen
+
+  # =========================================================================
+  #  Pruebas del backend contra PostgreSQL y Redis reales
+  # =========================================================================
+  pruebas-backend:
+    name: Pruebas (backend)
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        # La misma imagen que en desarrollo. Con `postgres:16` a secas no
+        # existiria la extension `vector` y las pruebas de RAG no medirian
+        # nada real.
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_DB: clinica_ci
+          POSTGRES_USER: clinica
+          POSTGRES_PASSWORD: contrasena_efimera_de_ci
+          POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale-provider=icu --icu-locale=es-ES --locale=C.UTF-8"
+          TZ: UTC
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U clinica -d clinica_ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+
+      redis:
+        image: redis:7-alpine
+        ports: ["6379:6379"]
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+
+    env:
+      ENTORNO: desarrollo
+      POSTGRES_HOST: 127.0.0.1
+      POSTGRES_PUERTO: "5432"
+      POSTGRES_BD: clinica_ci
+      POSTGRES_USUARIO: clinica
+      POSTGRES_CONTRASENA: contrasena_efimera_de_ci
+      REDIS_HOST: 127.0.0.1
+      REDIS_PUERTO: "6379"
+      # Claves efimeras generadas por el propio ejecutor; ver el paso que las
+      # define. Aqui solo se declara el nombre.
+      FORMATO_LOG: json
+      NIVEL_LOG: WARNING
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Instalar uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          version: ${{ env.VERSION_UV }}
+          enable-cache: true
+          cache-dependency-glob: backend/uv.lock
+
+      - name: Instalar dependencias
+        working-directory: backend
+        run: uv sync --frozen --extra dev --extra llm
+
+      - name: Generar claves efimeras
+        # Se generan en el ejecutor y nunca se almacenan. No hacen falta
+        # secretos del repositorio para probar: las claves solo tienen que ser
+        # validas, no ser las de produccion. Y asi el pipeline funciona en una
+        # bifurcacion, donde los secretos no estan disponibles.
+        run: |
+          echo "CLAVE_SECRETA=$(openssl rand -hex 32)" >> "$GITHUB_ENV"
+          echo "CLAVE_CIFRADO_DATOS=$(openssl rand -base64 32)" >> "$GITHUB_ENV"
+
+      - name: Crear extensiones y configuracion de busqueda
+        # El contenedor de servicio de GitHub no ejecuta los scripts de
+        # `/docker-entrypoint-initdb.d`, asi que lo que en desarrollo hace la
+        # inicializacion del volumen hay que hacerlo aqui de forma explicita.
+        env:
+          PGPASSWORD: contrasena_efimera_de_ci
+        run: |
+          psql -h 127.0.0.1 -U clinica -d clinica_ci \
+            -v ON_ERROR_STOP=1 \
+            -f infra/docker/postgres/init/01-extensiones.sql
+
+      - name: Verificar que las extensiones esten presentes
+        env:
+          PGPASSWORD: contrasena_efimera_de_ci
+        # Sin `btree_gist` no existe la garantia contra doble reserva y sin
+        # `vector` no hay busqueda de conocimiento. Si faltan, las pruebas
+        # correspondientes fallarian con errores de SQL desconcertantes; es
+        # mejor detenerse aqui con un mensaje claro.
+        run: |
+          faltan=$(psql -h 127.0.0.1 -U clinica -d clinica_ci -tAc "
+            SELECT string_agg(e, ', ')
+            FROM unnest(ARRAY['vector','btree_gist','pg_trgm','pgcrypto','unaccent']) AS e
+            WHERE e NOT IN (SELECT extname FROM pg_extension)")
+          if [ -n "$faltan" ]; then
+            echo "::error::Faltan extensiones en PostgreSQL: $faltan"
+            exit 1
+          fi
+
+      - name: Aplicar migraciones
+        working-directory: backend
+        run: uv run alembic upgrade head
+
+      - name: Comprobar que el esquema coincide con los modelos
+        working-directory: backend
+        # Detecta el caso en que alguien cambia un modelo y olvida generar la
+        # migracion. El sintoma sin esta puerta seria una diferencia silenciosa
+        # entre lo que las pruebas usan y lo que produccion tiene.
+        run: uv run alembic check
+
+      - name: Comprobar que la migracion se puede revertir
+        working-directory: backend
+        # RNF-11. Una migracion irreversible convierte cualquier despliegue
+        # fallido en una restauracion desde copia de seguridad.
+        run: |
+          uv run alembic downgrade -1
+          uv run alembic upgrade head
+
+      - name: Cargar catalogos
+        working-directory: backend
+        # Los permisos y roles son parte del funcionamiento, no datos de
+        # ejemplo: sin ellos la resolucion de permisos devuelve el conjunto
+        # vacio y varias pruebas de autorizacion no medirian nada.
+        run: uv run python -m app.semillas.cargar --solo-catalogos
+
+      - name: Pruebas unitarias
+        working-directory: backend
+        run: uv run pytest -m unitaria -q
+
+      - name: Pruebas de integracion y de API
+        working-directory: backend
+        run: uv run pytest -m "integracion or api" -q
+
+      - name: Pruebas de concurrencia
+        working-directory: backend
+        # Separadas porque abren varias conexiones reales y no toleran
+        # ejecutarse en paralelo con el resto.
+        run: uv run pytest -m concurrencia -q
+
+      - name: Pruebas de seguridad
+        working-directory: backend
+        run: uv run pytest -m seguridad -q
+
+      - name: Suite completa con cobertura
+        working-directory: backend
+        # El umbral esta en pyproject (`fail_under = 80`); este paso falla solo
+        # si se baja de ahi.
+        run: uv run pytest --cov=app --cov-report=term-missing --cov-report=xml -q
+
+      - name: Publicar el informe de cobertura
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cobertura-backend
+          path: backend/coverage.xml
+          retention-days: 14
+
+  # =========================================================================
+  #  Secretos
+  # =========================================================================
+  secretos:
+    name: Deteccion de secretos
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Historial completo: un secreto comprometido en un commit anterior
+          # sigue estando comprometido aunque el archivo ya no exista.
+          fetch-depth: 0
+
+      - name: gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # =========================================================================
+  #  Dependencias
+  # =========================================================================
+  dependencias:
+    name: Vulnerabilidades en dependencias
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Instalar uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          version: ${{ env.VERSION_UV }}
+          enable-cache: true
+          cache-dependency-glob: backend/uv.lock
+
+      - name: Instalar dependencias
+        working-directory: backend
+        run: uv sync --frozen --extra dev --extra llm
+
+      - name: Exportar el arbol bloqueado
+        working-directory: backend
+        # Se audita el bloqueo exportado y no el entorno instalado. Dos
+        # motivos:
+        #
+        #  * `pip-audit` sobre el entorno falla al encontrar el propio
+        #    proyecto, que esta instalado como editable y no existe en PyPI.
+        #  * El bloqueo es exactamente lo que se instalara en la imagen, asi
+        #    que auditarlo mide lo que se despliega y no lo que este
+        #    ejecutor resolvio.
+        #
+        # Se excluye el extra `embeddings` a proposito: no viaja en la imagen
+        # del backend y arrastra Pillow acotado por fastembed. Ver E-12 en
+        # docs/known-limitations.md.
+        run: |
+          uv export --frozen --no-emit-project --no-hashes             --extra dev --extra llm             -o /tmp/requisitos-auditoria.txt
+
+      - name: pip-audit
+        working-directory: backend
+        # Sin `--ignore-vuln`: una excepcion tiene que quedar escrita en
+        # `docs/production-readiness.md` con su justificacion y su plan de
+        # correccion, no enterrada en un argumento de linea de comandos.
+        run: uv run pip-audit --strict --desc -r /tmp/requisitos-auditoria.txt
+
+  # =========================================================================
+  #  Imagenes
+  # =========================================================================
+  imagenes:
+    name: Construccion y analisis de imagenes
+    runs-on: ubuntu-latest
+    strategy:
+      # Si una imagen falla, interesa saber si la otra tambien.
+      fail-fast: false
+      matrix:
+        imagen: [backend, worker]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Construir
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: infra/docker/Dockerfile.${{ matrix.imagen }}
+          # No se publica: aqui solo se comprueba que construye y que no
+          # arrastra vulnerabilidades. La publicacion es del flujo de
+          # despliegue, que va firmado y etiquetado.
+          push: false
+          load: true
+          tags: clinica-${{ matrix.imagen }}:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Trivy
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: clinica-${{ matrix.imagen }}:ci
+          format: table
+          exit-code: "1"
+          severity: HIGH,CRITICAL
+          # Solo lo que tiene correccion disponible. Una vulnerabilidad sin
+          # parche publicado no se arregla bloqueando la fusion; se registra
+          # como riesgo y se vigila.
+          ignore-unfixed: true
+
+  # =========================================================================
+  #  Frontend
+  # =========================================================================
+  frontend:
+    name: Lint, tipos, pruebas y build (frontend)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Comprobar si el frontend existe
+        id: existe
+        # El frontend llega en la Fase 1. Hasta entonces el trabajo se salta
+        # de forma explicita en lugar de fallar: un rojo permanente en el
+        # tablero acostumbra al equipo a ignorar los rojos.
+        run: |
+          if [ -f frontend/package.json ]; then
+            echo "presente=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "presente=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::El frontend aun no existe (Fase 1). Trabajo omitido."
+          fi
+
+      - uses: actions/setup-node@v4
+        if: steps.existe.outputs.presente == 'true'
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Instalar dependencias
+        if: steps.existe.outputs.presente == 'true'
+        working-directory: frontend
+        # `npm ci` y no `npm install`: instala exactamente el arbol del
+        # bloqueo y falla si no corresponde al manifiesto.
+        run: npm ci
+
+      - name: Lint
+        if: steps.existe.outputs.presente == 'true'
+        working-directory: frontend
+        run: npm run lint
+
+      - name: Tipos
+        if: steps.existe.outputs.presente == 'true'
+        working-directory: frontend
+        run: npx tsc --noEmit
+
+      - name: Pruebas
+        if: steps.existe.outputs.presente == 'true'
+        working-directory: frontend
+        env:
+          CHROME_BIN: /usr/bin/chromium-browser
+        run: npm test -- --watch=false --browsers=ChromeHeadlessCI
+
+      - name: Build
+        if: steps.existe.outputs.presente == 'true'
+        working-directory: frontend
+        run: npm run build
+
+      - name: Vulnerabilidades en dependencias de npm
+        if: steps.existe.outputs.presente == 'true'
+        working-directory: frontend
+        run: npm audit --audit-level=high
+
+  # =========================================================================
+  #  Puerta final
+  # =========================================================================
+  puerta:
+    name: Puerta de fusion
+    runs-on: ubuntu-latest
+    if: always()
+    needs:
+      - calidad-backend
+      - pruebas-backend
+      - secretos
+      - dependencias
+      - imagenes
+      - frontend
+    steps:
+      - name: Comprobar el resultado de todos los trabajos
+        # Un trabajo omitido es aceptable (el frontend hasta la Fase 1); uno
+        # fallido o cancelado, no. Sin esta comprobacion, marcar un trabajo
+        # como no requerido en la configuracion de ramas dejaria pasar fallos
+        # sin que nadie lo note.
+        run: |
+          resultados='${{ toJSON(needs) }}'
+          echo "$resultados"
+          if echo "$resultados" | grep -q '"result": *"\(failure\|cancelled\)"'; then
+            echo "::error::Al menos un trabajo requerido no paso."
+            exit 1
+          fi
+          echo "Todos los trabajos requeridos pasaron o se omitieron de forma explicita."

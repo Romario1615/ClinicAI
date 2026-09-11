@@ -1,0 +1,88 @@
+# ---------------------------------------------------------------------------
+#  Imagen del backend.
+#
+#  Dos etapas. No es por elegancia: la etapa de construccion necesita `uv` y
+#  las cabeceras de compilacion de algunas dependencias, y nada de eso tiene
+#  por que viajar a produccion. Menos paquetes en la imagen final es menos
+#  superficie que parchear cuando salga la siguiente vulnerabilidad de una
+#  herramienta de construccion.
+# ---------------------------------------------------------------------------
+
+# --- Etapa 1: dependencias ---
+FROM python:3.11-slim-bookworm AS construccion
+
+# Version fijada. `latest` haria que dos construcciones de la misma etiqueta
+# de Git produjeran imagenes distintas, y entonces "reproducible" seria falso.
+COPY --from=ghcr.io/astral-sh/uv:0.5.11 /uv /usr/local/bin/uv
+
+ENV UV_COMPILE_BYTECODE=1 \
+    UV_LINK_MODE=copy \
+    UV_PYTHON_DOWNLOADS=never
+
+WORKDIR /app
+
+# Solo los manifiestos primero: mientras no cambien, Docker reutiliza la capa
+# de dependencias. Copiar el codigo antes invalidaria esa capa en cada commit
+# y cada construccion reinstalaria todo.
+COPY backend/pyproject.toml backend/uv.lock ./
+
+# `--frozen` falla si `uv.lock` no corresponde a `pyproject.toml`. Es
+# deliberado: una imagen construida con dependencias resueltas al vuelo no es
+# la misma que se probo en CI.
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv sync --frozen --no-install-project --no-dev
+
+COPY backend/ ./
+
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv sync --frozen --no-dev
+
+
+# --- Etapa 2: ejecucion ---
+FROM python:3.11-slim-bookworm AS ejecucion
+
+# `tzdata` va explicito: la imagen slim no la trae, y sin ella `zoneinfo` no
+# resuelve "America/Guayaquil". El sintoma seria una agenda que falla al
+# convertir horarios locales, no un error al arrancar.
+#
+# `curl` es para la comprobacion de salud del contenedor. `libpq5` no hace
+# falta: asyncpg habla el protocolo directamente.
+RUN apt-get update \
+    && apt-get install --no-install-recommends -y tzdata curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Usuario sin privilegios. Un proceso como root dentro del contenedor
+# convierte cualquier escape en acceso de root al anfitrion.
+RUN groupadd --system --gid 1001 clinica \
+    && useradd --system --uid 1001 --gid clinica --create-home clinica
+
+WORKDIR /app
+
+COPY --from=construccion --chown=clinica:clinica /app /app
+
+ENV PATH="/app/.venv/bin:$PATH" \
+    PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    # Toda la aplicacion trabaja en UTC (ADR-0010). La zona de presentacion
+    # viene de la clinica, no del contenedor.
+    TZ=UTC
+
+USER clinica
+
+EXPOSE 8000
+
+# La sonda usa `/salud/listo`, no `/salud/vivo`: interesa que el contenedor se
+# marque no disponible cuando PostgreSQL no responde o le faltan extensiones,
+# aunque el proceso siga en pie. Reiniciar el proceso no arreglaria eso.
+HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
+    CMD curl --fail --silent http://127.0.0.1:8000/salud/listo || exit 1
+
+# `--factory` porque `app.main` no expone una instancia de modulo: crearla al
+# importar abriria un motor de base de datos como efecto secundario.
+#
+# Sin `--reload` y con `--proxy-headers`, porque en produccion hay un proxy
+# inverso delante y la IP del cliente tiene que llegar correcta: se registra en
+# la auditoria de accesos.
+CMD ["uvicorn", "app.main:crear_aplicacion", "--factory", \
+     "--host", "0.0.0.0", "--port", "8000", \
+     "--proxy-headers", "--forwarded-allow-ips", "*"]

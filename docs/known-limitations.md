@@ -35,6 +35,7 @@ Estas no desaparecen al terminar las fases. Son propiedades del alcance acordado
 | E‑9 | La calidad de recuperación con embeddings locales pequeños es inferior a la de modelos comerciales grandes | ADR‑0007 | Se medirá y publicará. Si no alcanza el umbral, la decisión se revisa |
 | E‑10 | **La verificación TOTP usa el reloj de pared del servidor, no el reloj inyectado** (ADR‑0010) | Un código TOTP se calcula contra la hora real del teléfono del usuario; validarlo contra un reloj de pruebas lo invalidaría en producción | Es la única excepción consciente a ADR‑0010, y está acotada a `verificar_codigo_totp`. Consecuencia operativa: **el servidor necesita sincronización horaria (NTP)**; con más de ~30 s de desfase el personal con 2FA obligatorio no podrá entrar. Se comprueba en la Fase 10 |
 | E‑11 | **El límite de tasa falla abierto fuera de la autenticación** | Si Redis no responde, denegar toda la API dejaría la agenda de la clínica inoperativa, y en esos endpoints el atacante ya necesita un token válido | Los endpoints de autenticación sí fallan cerrados (nadie entra mientras Redis esté caído). En el resto se permite y se registra `limite_tasa.sin_contador.permitido`: durante una caída de Redis, un cliente autenticado puede exceder su cuota. La decisión está en `app/nucleo/limite_tasa.py`; **vigilar ese evento es parte de la monitorización** |
+| E‑12 | **El extra `embeddings` arrastra una versión de Pillow con vulnerabilidades conocidas** | `fastembed` limita `pillow<12.0`, y la corrección está en 12.1.1 (ADR‑0007) | Pillow **no** está en el árbol base ni en la imagen del backend: solo aparece si se instala el extra `embeddings` para embeddings locales. Las vulnerabilidades son de códecs de imagen, que este sistema nunca invoca — usa fastembed solo para texto. Se revisa en cada actualización de fastembed; si sigue capado cuando llegue la Fase 6, se evalúa un proveedor de embeddings alternativo |
 
 ---
 
@@ -77,7 +78,7 @@ No son defectos. Se listan para que no se «arreglen» por error.
 | 3 · Agenda | **cerrada** | Disponibilidad, servicios, rutas HTTP, anti doble‑reserva bajo concurrencia real y barrido de bloqueos vencidos, todo con pruebas. El worker ARQ ejecuta el barrido cada minuto; su corrección está probada, pero **su ejecución continuada en un despliegue real no se ha verificado todavía** — eso corresponde a la Fase 10 |
 | 4 · WhatsApp y calendarios | pendiente | E‑1 |
 | 5 · Lista de espera | pendiente | — |
-| 6 · Conocimiento y RAG | pendiente | E‑3, E‑9 |
+| 6 · Conocimiento y RAG | pendiente | E‑3, E‑9, E‑12 |
 | 7 · Historia clínica y medicamentos | pendiente | — |
 | 8 · Dashboard y predicciones | pendiente | E‑4, E‑5 |
 | 9 · Pagos | pendiente | — |
