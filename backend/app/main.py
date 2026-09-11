@@ -37,6 +37,8 @@ from fastapi.responses import JSONResponse
 from app.api.manejadores import registrar_manejadores
 from app.api.middleware import MiddlewareCorrelacion
 from app.modulos.agenda import rutas as rutas_agenda
+from app.modulos.organizacion import rutas as rutas_catalogo
+from app.modulos.pacientes import rutas as rutas_pacientes
 from app.modulos.usuarios import rutas as rutas_usuarios
 from app.nucleo.bd import GestorBaseDatos
 from app.nucleo.configuracion import Configuracion
@@ -182,6 +184,8 @@ def crear_aplicacion(
 def _registrar_rutas(aplicacion: FastAPI) -> None:
     aplicacion.include_router(rutas_usuarios.enrutador, prefix=PREFIJO_API)
     aplicacion.include_router(rutas_agenda.enrutador, prefix=PREFIJO_API)
+    aplicacion.include_router(rutas_catalogo.enrutador, prefix=PREFIJO_API)
+    aplicacion.include_router(rutas_pacientes.enrutador, prefix=PREFIJO_API)
 
     @aplicacion.get("/salud/vivo", tags=["salud"], summary="El proceso responde")
     async def vivo() -> dict[str, str]:

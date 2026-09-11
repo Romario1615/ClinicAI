@@ -107,6 +107,14 @@ IDOR.
 | `POST /api/v1/agenda/citas/{id}/reprogramacion` | `cita.reprogramar` | Conserva el identificador de la cita; el horario anterior queda en `cita_historial` |
 | `POST /api/v1/agenda/citas/{id}/completado` | `cita.completar` | |
 | `POST /api/v1/agenda/citas/{id}/inasistencia` | `cita.marcar_inasistencia` | Estado propio, no una cancelación: alimenta la predicción de ausentismo |
+| `GET /api/v1/catalogo/clinica` | `agenda.leer` | Devuelve **la** clínica del solicitante; no acepta identificador, para no invitar a probarlos. No expone la identificación fiscal |
+| `GET /api/v1/catalogo/sedes` | `agenda.leer` | Filtrado por ámbito de sede. Devuelve la zona horaria **efectiva** (sede o, si no la fija, clínica) |
+| `GET /api/v1/catalogo/consultorios` | `agenda.leer` | Se une con `sede` para obtener `clinica_id`: `consultorio` no lo lleva |
+| `GET /api/v1/catalogo/especialidades` · `/servicios` | `agenda.leer` | Filtrado por ámbito de especialidad. Ámbito vacío → lista vacía |
+| `GET /api/v1/catalogo/profesionales` | `agenda.leer` | `EXISTS` sobre `profesional_sede`, no unión: un profesional en dos sedes no debe aparecer duplicado. No expone su WhatsApp ni su correo de calendario |
+| `GET /api/v1/catalogo/profesionales/{id}` | `agenda.leer` | Fuera de ámbito → **404** |
+| `GET /api/v1/pacientes/` | `paciente.leer_administrativo` | Término mínimo de 3 caracteres (devuelve `termino_ignorado`); documento por coincidencia **exacta**, nunca parcial; techo de 100 resultados. **No se audita fila por fila** |
+| `GET /api/v1/pacientes/{id}` | `paciente.leer_administrativo` | **Se audita** (`paciente.consultado`). Fuera de ámbito → 404, indistinguible de inexistente. Solo ficha administrativa: nada clínico |
 
 ### Acceso de emergencia
 

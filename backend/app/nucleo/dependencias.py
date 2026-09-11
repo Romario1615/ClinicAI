@@ -33,6 +33,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.modulos.agenda.repositorio import RepositorioAgenda
 from app.modulos.agenda.servicios import ServicioAgenda
 from app.modulos.auditoria.repositorio import RepositorioAuditoria
+from app.modulos.organizacion.repositorio import RepositorioCatalogo
+from app.modulos.pacientes.repositorio import RepositorioPacientes
 from app.modulos.usuarios.servicios import ServicioAutenticacion
 from app.nucleo.auditoria import AccionAuditada, ResultadoAuditoria, construir_entrada
 from app.nucleo.autorizacion import Principal
@@ -142,7 +144,17 @@ def obtener_servicio_agenda(
     )
 
 
+def obtener_repositorio_catalogo(sesion: Sesion) -> RepositorioCatalogo:
+    return RepositorioCatalogo(sesion)
+
+
+def obtener_repositorio_pacientes(sesion: Sesion) -> RepositorioPacientes:
+    return RepositorioPacientes(sesion)
+
+
 ServicioAuth = Annotated[ServicioAutenticacion, Depends(obtener_servicio_autenticacion)]
+RepoCatalogo = Annotated[RepositorioCatalogo, Depends(obtener_repositorio_catalogo)]
+RepoPacientes = Annotated[RepositorioPacientes, Depends(obtener_repositorio_pacientes)]
 RepoAgenda = Annotated[RepositorioAgenda, Depends(obtener_repositorio_agenda)]
 ServicioDeAgenda = Annotated[ServicioAgenda, Depends(obtener_servicio_agenda)]
 Auditor = Annotated[RepositorioAuditoria, Depends(obtener_repositorio_auditoria)]
@@ -304,6 +316,8 @@ __all__ = [
     "PrincipalActual",
     "RelojActual",
     "RepoAgenda",
+    "RepoCatalogo",
+    "RepoPacientes",
     "ServicioAuth",
     "ServicioDeAgenda",
     "Sesion",
@@ -317,6 +331,8 @@ __all__ = [
     "obtener_reloj",
     "obtener_repositorio_agenda",
     "obtener_repositorio_auditoria",
+    "obtener_repositorio_catalogo",
+    "obtener_repositorio_pacientes",
     "obtener_servicio_agenda",
     "obtener_servicio_autenticacion",
     "obtener_sesion",

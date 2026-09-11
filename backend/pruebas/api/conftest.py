@@ -398,6 +398,7 @@ async def conceder_permisos(
     codigo_rol: str | None = None,
     sedes: Sequence[uuid.UUID] = (),
     todas_las_sedes: bool = False,
+    todas_las_especialidades: bool = True,
     todos_los_profesionales: bool = True,
     todos_los_pacientes: bool = True,
 ) -> Rol:
@@ -452,6 +453,14 @@ async def conceder_permisos(
         AmbitoAsignacion(usuario_rol_id=asignacion.id, tipo=TipoAmbito.SEDE.value, valor_id=sede_id)
         for sede_id in sedes
     )
+    if todas_las_especialidades:
+        ambitos.append(
+            AmbitoAsignacion(
+                usuario_rol_id=asignacion.id,
+                tipo=TipoAmbito.ESPECIALIDAD.value,
+                valor_id=None,
+            )
+        )
     if todos_los_profesionales:
         ambitos.append(
             AmbitoAsignacion(
