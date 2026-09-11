@@ -79,6 +79,25 @@ Observaciones que importan:
   pasada o futura, asignación explícita o derivación), no solo pertenecer a la clínica.
 * Un permiso sin ámbito asignado equivale a alcance nulo, no a alcance total.
 
+### Permiso exigido por cada endpoint
+
+Esta tabla es el contrato de autorización de la API y se actualiza **en el mismo commit**
+que añade el endpoint. Un endpoint que no aparezca aquí es un endpoint cuya autorización
+nadie revisó.
+
+Recordatorio: el permiso responde «puede ejecutar esta operación». El **ámbito** responde
+«sobre qué datos», y lo aplica el repositorio en el `WHERE` de la consulta. Ninguno de los
+dos sustituye al otro; un endpoint con permiso correcto y sin filtro de ámbito tiene un
+IDOR.
+
+| Método y ruta | Permiso | Notas |
+|---|---|---|
+| `POST /api/v1/autenticacion/sesion` | — (público) | Límite de tasa por IP y por cuenta, más estricto que el general. Falla cerrado si Redis no responde |
+| `POST /api/v1/autenticacion/refresco` | — (lo autoriza el propio refresco) | Límite de tasa por IP |
+| `POST /api/v1/autenticacion/cierre` | — (lo autoriza el propio refresco) | No exige token de acceso válido: cerrar sesión debe funcionar con el de acceso ya caducado |
+| `GET /api/v1/autenticacion/yo` | — (solo autenticación) | Devuelve permisos y ámbito **leídos de la base**, no del token |
+| `GET /salud/vivo` · `GET /salud/listo` | — (público) | No revelan versión, configuración ni datos; `listo` solo nombra extensiones de PostgreSQL ausentes |
+
 ### Acceso de emergencia
 
 Un profesional puede necesitar la historia de un paciente que no es suyo (urgencia,
@@ -95,14 +114,14 @@ desapercibido.
 
 | Control | Implementación | Estado |
 |---|---|---|
-| Hash de contraseñas | Argon2id, parámetros según OWASP | Fase 2 |
+| Hash de contraseñas | Argon2id, parámetros según OWASP | **implementado y probado** |
 | Política de contraseñas | longitud mínima 12, comprobación contra lista de filtradas | Fase 2 |
-| Token de acceso | JWT de 15 min | Fase 2 |
-| Token de refresco | rotativo, hash en base de datos, revocable | Fase 2 |
-| Detección de robo de token | reutilizar un refresco rotado revoca la familia de sesiones | Fase 2 |
-| Segundo factor | TOTP obligatorio para superadmin, admin y auditor | Fase 2 |
-| Bloqueo por intentos | 5 intentos, 15 min de bloqueo, por cuenta y por IP | Fase 2 |
-| Historial de accesos | tabla `historial_acceso` | Fase 2 |
+| Token de acceso | JWT de 15 min, sin permisos en el contenido | **implementado y probado** |
+| Token de refresco | rotativo, hash en base de datos, revocable | **implementado y probado** |
+| Detección de robo de token | reutilizar un refresco rotado revoca la familia de sesiones | **implementado y probado** |
+| Segundo factor | TOTP obligatorio para superadmin, admin y auditor | **implementado y probado**; ver E‑10 en `known-limitations.md` (usa reloj de pared, exige NTP) |
+| Bloqueo por intentos | 5 intentos, 15 min de bloqueo, por cuenta y por IP | **implementado y probado** |
+| Historial de accesos | tabla `historial_acceso` | **implementado y probado** |
 | Verificación de correo | token de un solo uso con caducidad | Fase 2 |
 | Recuperación de contraseña | token de un solo uso; respuesta idéntica exista o no la cuenta | Fase 2 |
 | Expiración de sesión | inactividad y vida máxima absoluta | Fase 2 |
@@ -111,16 +130,16 @@ desapercibido.
 
 | Control | Implementación | Estado |
 |---|---|---|
-| Autorización | permiso por endpoint + filtro de ámbito en repositorio | Fase 2 |
+| Autorización | permiso por endpoint (`exige_permiso`) + filtro de ámbito en repositorio | permiso **implementado y probado**; el filtro de ámbito por repositorio, pendiente en los endpoints aún no escritos |
 | Protección IDOR | 404 para recursos fuera de ámbito; nunca 403 | Fase 2 |
 | Inyección SQL | SQLAlchemy con parámetros enlazados; prohibido componer SQL por cadenas | Fase 2 |
-| Validación de entrada | Pydantic v2 estricto; rechazo de campos no declarados | Fase 2 |
+| Validación de entrada | Pydantic v2 estricto; rechazo de campos no declarados; el valor rechazado **no** vuelve en la respuesta | **implementado y probado** |
 | XSS | Angular escapa por defecto; `innerHTML` prohibido por lint; CSP sin `unsafe-inline` | Fase 1‑2 |
-| CSRF | tokens en cabecera `Authorization`, no en cookie. Si se adopta cookie: `SameSite=Strict` + token sincronizador | Fase 2 |
+| CSRF | tokens en cabecera `Authorization`, nunca en cookie (ADR‑0016) | **implementado**; sin superficie CSRF mientras no haya cookie de sesión |
 | SSRF | la obtención de documentos por URL usa lista blanca de destinos y bloquea rangos privados y metadatos de nube | Fase 6 |
-| Límite de tasa | Redis, por IP y por cuenta, con límite propio y más estricto en el inicio de sesión | Fase 2 |
-| Cabeceras | HSTS, CSP, `X-Content-Type-Options`, `Referrer-Policy`, `X-Frame-Options: DENY` | Fase 2 |
-| CORS | lista explícita de orígenes; comodín rechazado en producción | Fase 2 |
+| Límite de tasa | ventana deslizante en Redis, por IP y por cuenta, más estricto en el inicio de sesión | **implementado y probado**; falla cerrado en autenticación y abierto en el resto (E‑11) |
+| Cabeceras | CSP, `X-Content-Type-Options`, `Referrer-Policy`, `X-Frame-Options: DENY`, `Cache-Control: no-store` | **implementado y probado**. HSTS lo pone el proxy inverso, no la aplicación: pendiente de la Fase 10 |
+| CORS | lista explícita de orígenes; comodín rechazado en producción | **implementado** |
 | Archivos | verificación del tipo real por contenido, no por extensión; límite de tamaño; nombre saneado; almacenamiento fuera de la raíz web | Fase 6 |
 | Antivirus | análisis con clamd; en producción, carga rechazada si no está disponible | Fase 6 |
 | Cifrado de tokens de terceros | AES‑GCM con clave de `CLAVE_CIFRADO_DATOS` | Fase 4 |

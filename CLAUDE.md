@@ -81,7 +81,7 @@ Sin tildes ni `ñ` en identificadores de código y base de datos: `contrasena`, 
 # Backend
 cd backend
 uv sync                                  # instalar dependencias desde uv.lock
-uv run uvicorn app.main:aplicacion --reload
+uv run uvicorn app.main:crear_aplicacion --factory --reload
 uv run alembic revision --autogenerate -m "descripcion"
 uv run alembic upgrade head
 uv run alembic downgrade -1

@@ -99,7 +99,7 @@ pip install uv; uv sync
 uv run python -m herramientas.esperar_bd            # espera a que la BD responda
 uv run alembic upgrade head
 uv run python -m app.semillas.cargar_sinteticos     # datos sintéticos
-uv run uvicorn app.main:aplicacion --reload
+uv run uvicorn app.main:crear_aplicacion --factory --reload
 
 # 4. Frontend
 cd ..\frontend

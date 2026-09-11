@@ -358,3 +358,4 @@ comprobación de configuración explícita, no un supuesto.
 | [0013](decisiones/0013-rag-hibrido-con-filtros-sql.md) | RAG híbrido con filtros en SQL |
 | [0014](decisiones/0014-defensa-prompt-injection.md) | Documentos como dato, no instrucción |
 | [0015](decisiones/0015-convencion-idioma.md) | Convención de idioma del código y la documentación |
+| [0016](decisiones/0016-entrega-de-tokens.md) | El token de refresco viaja en el cuerpo, no en una cookie |

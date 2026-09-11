@@ -526,6 +526,17 @@ class ServicioAutenticacion:
             segundo_factor_cumplido=contenido.segundo_factor_cumplido,
         )
 
+    async def cargar_usuario(self, usuario_id: uuid.UUID) -> Usuario | None:
+        """Carga la fila de usuario.
+
+        Existe para que las rutas no hagan SQL (CLAUDE.md, seccion 4): el
+        endpoint de identidad necesita nombre y correo, que no viajan en el
+        principal porque este solo lleva lo que hace falta para autorizar.
+        """
+        return (
+            await self._sesion.execute(select(Usuario).where(Usuario.id == usuario_id))
+        ).scalar_one_or_none()
+
     async def resolver_principal_por_id(self, usuario_id: uuid.UUID) -> Principal:
         usuario = (
             await self._sesion.execute(select(Usuario).where(Usuario.id == usuario_id))
