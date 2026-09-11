@@ -1,0 +1,18 @@
+# Los finales de linea se normalizan a LF en el repositorio.
+#
+# Sin esto, un editor de Windows reescribe el archivo completo con CRLF y el
+# diff pasa de cinco lineas a ochenta: la revision deja de ser posible y el
+# historial deja de decir que cambio de verdad.
+* text=auto eol=lf
+
+# Scripts de PowerShell: se ejecutan en Windows y algunos consumidores
+# antiguos esperan CRLF.
+*.ps1 text eol=crlf
+
+# Binarios: nunca se tocan.
+*.png binary
+*.jpg binary
+*.pdf binary
+*.ico binary
+*.woff binary
+*.woff2 binary
