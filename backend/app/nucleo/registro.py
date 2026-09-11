@@ -232,47 +232,101 @@ def configurar_registro(
     """Configura structlog y la biblioteca estandar de registro.
 
     Se llama una sola vez al arrancar la aplicacion o el worker.
+
+    Por que todo pasa por `logging` de la biblioteca estandar
+    ---------------------------------------------------------
+    Porque la redaccion tiene que cubrir tambien lo que registran las
+    librerias. SQLAlchemy escribe las sentencias con sus parametros
+    enlazados, y esos parametros son nombres, documentos y telefonos de
+    pacientes; uvicorn escribe las URL, que llevan identificadores. Si esos
+    registros salieran por un camino distinto al de structlog, la promesa de
+    este modulo seria falsa justo donde mas importa.
+
+    `ProcessorFormatter` es el mecanismo que lo consigue: la cadena de
+    procesadores -- incluida la redaccion -- se aplica tanto a los eventos de
+    structlog como a los `LogRecord` ajenos, que entran por `foreign_pre_chain`.
+
+    La alternativa anterior (`PrintLoggerFactory`) no solo dejaba fuera a las
+    librerias: rompia. `structlog.stdlib.add_logger_name` lee `logger.name`, y
+    un `PrintLogger` no tiene ese atributo, asi que **cualquier linea de
+    registro lanzaba `AttributeError`**. No se detectaba porque ninguna prueba
+    llamaba a esta funcion y despues emitia una linea; ahora hay varias que si.
     """
-    procesadores: list[Processor] = [
+    compartidos: list[Processor] = [
         structlog.contextvars.merge_contextvars,
         structlog.stdlib.add_log_level,
         structlog.stdlib.add_logger_name,
         structlog.processors.TimeStamper(fmt="iso", utc=True),
         structlog.processors.StackInfoRenderer(),
         structlog.processors.format_exc_info,
+        # La redaccion va la ultima de la cadena compartida: despues de que
+        # los procesadores anteriores hayan anadido todo lo que van a anadir,
+        # y antes de serializar.
+        procesador_redaccion if redactar else procesador_sin_redaccion,
     ]
 
-    # La redaccion va en penultimo lugar: despues de que los procesadores
-    # anteriores hayan anadido todo lo que van a anadir, y antes de
-    # serializar.
-    procesadores.append(procesador_redaccion if redactar else procesador_sin_redaccion)
-
-    if formato == "json":
-        procesadores.append(structlog.processors.JSONRenderer(ensure_ascii=False))
-    else:
-        procesadores.append(structlog.dev.ConsoleRenderer(colors=True))
+    representador: Processor = (
+        structlog.processors.JSONRenderer(ensure_ascii=False)
+        if formato == "json"
+        else structlog.dev.ConsoleRenderer(colors=True)
+    )
 
     structlog.configure(
-        processors=procesadores,
-        wrapper_class=structlog.make_filtering_bound_logger(
-            logging.getLevelName(nivel) if isinstance(nivel, str) else nivel
-        ),
-        logger_factory=structlog.PrintLoggerFactory(file=sys.stdout),
+        processors=[
+            *compartidos,
+            # Entrega el evento al formateador de `logging` en lugar de
+            # representarlo aqui. Es lo que permite que structlog y las
+            # librerias compartan salida y formato.
+            structlog.stdlib.ProcessorFormatter.wrap_for_formatter,
+        ],
+        wrapper_class=structlog.make_filtering_bound_logger(_nivel_numerico(nivel)),
+        logger_factory=structlog.stdlib.LoggerFactory(),
         cache_logger_on_first_use=True,
     )
 
-    # Encamina los registros de las librerias (uvicorn, sqlalchemy, httpx)
-    # por la misma cadena, para que tambien pasen por la redaccion.
-    logging.basicConfig(
-        format="%(message)s",
-        stream=sys.stdout,
-        level=logging.getLevelName(nivel),
-        force=True,
+    formateador = structlog.stdlib.ProcessorFormatter(
+        # Los `LogRecord` que no vienen de structlog (uvicorn, sqlalchemy,
+        # httpx) pasan por esta cadena antes de representarse, de modo que
+        # tambien quedan redactados.
+        foreign_pre_chain=compartidos,
+        processors=[
+            structlog.stdlib.ProcessorFormatter.remove_processors_meta,
+            representador,
+        ],
     )
+
+    manejador = logging.StreamHandler(stream=sys.stdout)
+    manejador.setFormatter(formateador)
+
+    raiz = logging.getLogger()
+    # Se sustituyen los manejadores en lugar de anadir uno: llamar dos veces a
+    # esta funcion duplicaria cada linea, y una linea duplicada en una
+    # investigacion de acceso indebido se lee como dos accesos.
+    raiz.handlers = [manejador]
+    raiz.setLevel(_nivel_numerico(nivel))
+
     for nombre in ("uvicorn", "uvicorn.access", "uvicorn.error", "sqlalchemy.engine", "httpx"):
         logger_lib = logging.getLogger(nombre)
         logger_lib.handlers.clear()
         logger_lib.propagate = True
+
+
+def _nivel_numerico(nivel: str | int) -> int:
+    """Traduce el nombre del nivel a su numero.
+
+    `logging.getLevelName` con un nombre desconocido devuelve la cadena
+    "Level X" en lugar de fallar, y eso acaba en un filtro que no filtra nada.
+    Aqui un nivel desconocido es un error explicito al arrancar.
+    """
+    if isinstance(nivel, int):
+        return nivel
+    numero = logging.getLevelNamesMapping().get(nivel.upper())
+    if numero is None:
+        raise ValueError(
+            f"Nivel de registro desconocido: {nivel!r}. "
+            "Valores validos: DEBUG, INFO, WARNING, ERROR, CRITICAL."
+        )
+    return numero
 
 
 def obtener_logger(nombre: str | None = None) -> structlog.stdlib.BoundLogger:

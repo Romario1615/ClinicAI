@@ -78,6 +78,7 @@ uv sync --frozen
 uv run alembic upgrade head
 uv run python -m app.semillas.cargar_sinteticos
 uv run uvicorn app.main:crear_aplicacion --factory --reload
+uv run arq app.tareas.worker.ConfiguracionWorker   # trabajos periodicos
 
 # 7. Frontend (otra terminal)
 cd frontend

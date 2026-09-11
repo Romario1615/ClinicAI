@@ -162,8 +162,13 @@ teléfonos, correos, contenido de mensajes, diagnósticos y medicamentos no se e
 claro. Se registra el identificador del paciente, no sus datos. Los prompts enviados al
 LLM se auditan con el contenido clínico sustituido por referencias.
 
-Existe una prueba de seguridad específica que provoca errores en cada módulo y verifica
-que ningún dato personal ni clínico aparece en la salida de los logs.
+Los registros de las librerías (uvicorn, SQLAlchemy, httpx) pasan por **la misma cadena
+de redacción**, no por una salida paralela. Importa: SQLAlchemy escribe las sentencias con
+sus parámetros enlazados, y esos parámetros son nombres, documentos y teléfonos de
+pacientes. Hay una prueba que lo comprueba emitiendo una línea desde `sqlalchemy.engine`.
+
+Existe además una prueba de seguridad que provoca errores en cada módulo y verifica que
+ningún dato personal ni clínico aparece en la salida de los logs.
 
 ---
 

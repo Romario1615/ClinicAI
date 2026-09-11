@@ -74,7 +74,7 @@ No son defectos. Se listan para que no se «arreglen» por error.
 | 0b · Infraestructura | **cerrada** | D‑3 |
 | 1 · Prototipo visual | pendiente | — |
 | 2 · Backend y seguridad | en curso | Modelo de datos, migraciones, autenticación, RBAC con ámbito, auditoría, capa HTTP, límite de tasa y OpenAPI implementados y probados. **Faltan los endpoints de pacientes y de administración de usuarios** |
-| 3 · Agenda | en curso | Motor de disponibilidad, servicios, rutas HTTP y anti doble‑reserva verificados, incluida la concurrencia real. **Falta el barrido automático de expiración de `HELD`**: la lógica existe (`expirar_bloqueos_vencidos`) pero todavía no hay worker que la ejecute, así que un bloqueo vencido sigue ocupando el turno hasta que alguien lo toca |
+| 3 · Agenda | **cerrada** | Disponibilidad, servicios, rutas HTTP, anti doble‑reserva bajo concurrencia real y barrido de bloqueos vencidos, todo con pruebas. El worker ARQ ejecuta el barrido cada minuto; su corrección está probada, pero **su ejecución continuada en un despliegue real no se ha verificado todavía** — eso corresponde a la Fase 10 |
 | 4 · WhatsApp y calendarios | pendiente | E‑1 |
 | 5 · Lista de espera | pendiente | — |
 | 6 · Conocimiento y RAG | pendiente | E‑3, E‑9 |

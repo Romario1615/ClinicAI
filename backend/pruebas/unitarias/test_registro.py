@@ -8,12 +8,20 @@ sensibles, sino eliminarlos antes de escribir.
 
 from __future__ import annotations
 
+import io
+import json
+import logging
+from collections.abc import Iterator
+
 import pytest
+import structlog
 
 from app.nucleo.registro import (
     MARCA_REDACTADO,
     campos_sensibles_en,
     comprobar_texto_sin_datos_sensibles,
+    configurar_registro,
+    obtener_logger,
     procesador_redaccion,
 )
 
@@ -221,3 +229,139 @@ class TestComprobadorDePruebas:
         """Los identificadores del sistema no deben dar falsos positivos."""
         texto = "cita_id=3f2b7c1e-0000-4000-8000-000000000001"
         assert comprobar_texto_sin_datos_sensibles(texto) == []
+
+
+# ===========================================================================
+#  La configuracion real, extremo a extremo
+# ===========================================================================
+class TestConfiguracionReal:
+    """Emite lineas con la configuracion de verdad y mira lo que sale.
+
+    Estas pruebas existen por un fallo concreto: `configurar_registro` usaba
+    un factory de structlog incompatible con `add_logger_name`, y **toda**
+    linea de registro lanzaba `AttributeError`. La suite estaba en verde
+    porque todas las pruebas invocaban el procesador de redaccion de forma
+    aislada y ninguna llamaba a la configuracion y despues emitia.
+
+    La leccion es general: probar las piezas no prueba el cableado.
+    """
+
+    @pytest.fixture(autouse=True)
+    def _restaurar_registro(self) -> Iterator[None]:
+        """Devuelve el registro global a su estado previo.
+
+        `configurar_registro` toca estado global de `logging` y de structlog;
+        sin restaurarlo, estas pruebas cambiarian el comportamiento de las
+        demas segun el orden de ejecucion.
+        """
+        raiz = logging.getLogger()
+        manejadores = list(raiz.handlers)
+        nivel = raiz.level
+        configuracion_previa = structlog.get_config()
+        try:
+            yield
+        finally:
+            raiz.handlers = manejadores
+            raiz.setLevel(nivel)
+            structlog.configure(**configuracion_previa)
+
+    @staticmethod
+    def _capturar(salida: io.StringIO) -> list[dict[str, object]]:
+        lineas = [linea for linea in salida.getvalue().splitlines() if linea.strip()]
+        return [json.loads(linea) for linea in lineas]
+
+    def test_una_linea_se_emite_sin_lanzar(self) -> None:
+        """El fallo original: `AttributeError` en cada linea."""
+        salida = io.StringIO()
+        configurar_registro(nivel="INFO", formato="json", redactar=True)
+        logging.getLogger().handlers[0].setStream(salida)  # type: ignore[attr-defined]
+
+        obtener_logger("prueba").info("evento.de.prueba", identificador="abc")
+
+        eventos = self._capturar(salida)
+        assert len(eventos) == 1
+        assert eventos[0]["event"] == "evento.de.prueba"
+        assert eventos[0]["logger"] == "prueba"
+        assert eventos[0]["level"] == "info"
+
+    def test_la_redaccion_se_aplica_de_verdad(self) -> None:
+        """No basta con que el procesador funcione: tiene que estar montado."""
+        salida = io.StringIO()
+        configurar_registro(nivel="INFO", formato="json", redactar=True)
+        logging.getLogger().handlers[0].setStream(salida)  # type: ignore[attr-defined]
+
+        obtener_logger("prueba").warning(
+            "acceso", telefono="0999999999", nombre="Nombre De Prueba", cita_id="abc-123"
+        )
+
+        evento = self._capturar(salida)[0]
+        assert evento["telefono"] == MARCA_REDACTADO
+        assert evento["nombre"] == MARCA_REDACTADO
+        # Un identificador si se registra: es lo que permite investigar.
+        assert evento["cita_id"] == "abc-123"
+
+    def test_los_registros_de_otras_librerias_tambien_se_redactan(self) -> None:
+        """SQLAlchemy escribe sentencias con sus parametros enlazados.
+
+        Esos parametros son nombres, documentos y telefonos de pacientes. Si
+        salieran por un camino distinto al de structlog, la promesa de este
+        modulo seria falsa justo donde mas importa.
+        """
+        salida = io.StringIO()
+        configurar_registro(nivel="INFO", formato="json", redactar=True)
+        logging.getLogger().handlers[0].setStream(salida)  # type: ignore[attr-defined]
+
+        logging.getLogger("sqlalchemy.engine").warning(
+            "SELECT * FROM paciente WHERE correo = 'persona@example.invalid'"
+        )
+
+        evento = self._capturar(salida)[0]
+        assert evento["logger"] == "sqlalchemy.engine"
+        assert "persona@example.invalid" not in json.dumps(evento)
+
+    def test_una_excepcion_se_registra_con_su_traza(self) -> None:
+        salida = io.StringIO()
+        configurar_registro(nivel="INFO", formato="json", redactar=True)
+        logging.getLogger().handlers[0].setStream(salida)  # type: ignore[attr-defined]
+
+        try:
+            raise RuntimeError("fallo simulado")
+        except RuntimeError:
+            obtener_logger("prueba").exception("error.simulado")
+
+        evento = self._capturar(salida)[0]
+        assert evento["event"] == "error.simulado"
+        assert "RuntimeError" in str(evento.get("exception", ""))
+
+    def test_el_nivel_filtra(self) -> None:
+        salida = io.StringIO()
+        configurar_registro(nivel="WARNING", formato="json", redactar=True)
+        logging.getLogger().handlers[0].setStream(salida)  # type: ignore[attr-defined]
+
+        registro = obtener_logger("prueba")
+        registro.debug("no.deberia.salir")
+        registro.warning("si.sale")
+
+        eventos = self._capturar(salida)
+        assert [e["event"] for e in eventos] == ["si.sale"]
+
+    def test_configurar_dos_veces_no_duplica_las_lineas(self) -> None:
+        """Una linea duplicada en una investigacion se lee como dos accesos."""
+        salida = io.StringIO()
+        configurar_registro(nivel="INFO", formato="json", redactar=True)
+        configurar_registro(nivel="INFO", formato="json", redactar=True)
+        logging.getLogger().handlers[0].setStream(salida)  # type: ignore[attr-defined]
+
+        obtener_logger("prueba").info("evento.unico")
+
+        assert len(self._capturar(salida)) == 1
+
+    def test_un_nivel_desconocido_falla_al_arrancar(self) -> None:
+        """`logging.getLevelName` devolveria "Level X" en lugar de fallar.
+
+        Eso acaba en un filtro que no filtra nada, y en un sistema clinico un
+        filtro de registro que no filtra puede significar escribir consultas
+        SQL con datos de pacientes en produccion.
+        """
+        with pytest.raises(ValueError, match="Nivel de registro desconocido"):
+            configurar_registro(nivel="VERBOSO")
