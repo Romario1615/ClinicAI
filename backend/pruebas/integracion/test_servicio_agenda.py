@@ -75,6 +75,10 @@ def principal_recepcion(clinica, sede) -> Principal:
         ambito=Ambito(
             clinica_id=clinica.id,
             sedes=frozenset({sede.id}),
+            # El comodin de especialidad es obligatorio, igual que en el rol
+            # real: sin el, el ambito de especialidad queda vacio y vacio
+            # significa ningun acceso, asi que no veria ninguna cita.
+            todas_las_especialidades=True,
             todos_los_profesionales=True,
             todos_los_pacientes=True,
         ),
@@ -104,6 +108,7 @@ def principal_paciente(clinica, sede, paciente) -> Principal:
         ambito=Ambito(
             clinica_id=clinica.id,
             sedes=frozenset({sede.id}),
+            todas_las_especialidades=True,
             todos_los_profesionales=True,
             pacientes=frozenset({paciente.id}),
         ),
@@ -371,6 +376,115 @@ class TestIdempotencia:
 # ===========================================================================
 #  Bloqueo temporal
 # ===========================================================================
+class TestAmbitoVacio:
+    """El ambito vacio significa ningun acceso, en TODAS las dimensiones.
+
+    Esta clase existe por un fallo real. El filtro de ambito de la agenda
+    escribia `if not ambito.todos_los_profesionales and ambito.profesionales`,
+    de modo que un ambito de profesional **vacio** no filtraba nada y el
+    principal veia las citas de todos. La condicion parecia defensiva y hacia
+    lo contrario. Lo mismo con pacientes, y la dimension de especialidad no se
+    aplicaba en absoluto.
+
+    Se prueba dimension por dimension: basta con que una sola vuelva a
+    invertirse para que la agenda de la clinica entera quede expuesta.
+    """
+
+    @staticmethod
+    def _principal(clinica, sede, **ambito) -> Principal:  # type: ignore[no-untyped-def]
+        base = {
+            "clinica_id": clinica.id,
+            "sedes": frozenset({sede.id}),
+            "todas_las_especialidades": True,
+            "todos_los_profesionales": True,
+            "todos_los_pacientes": True,
+        }
+        base.update(ambito)
+        return Principal(
+            actor_tipo=TipoActor.USUARIO,
+            actor_id=uuid.uuid4(),
+            clinica_id=clinica.id,
+            permisos=frozenset({"agenda.leer", "cita.crear"}),
+            ambito=Ambito(**base),
+        )
+
+    @pytest.fixture
+    async def cita_creada(self, servicio_agenda, solicitud, principal_recepcion, sesion, sede):  # type: ignore[no-untyped-def]
+        await _horario_de_la_sede(sesion, sede.id)
+        resultado = await servicio_agenda.crear_cita_confirmada(
+            solicitud, principal=principal_recepcion
+        )
+        return resultado.cita
+
+    async def test_con_ambito_completo_la_cita_se_ve(
+        self, servicio_agenda, cita_creada, clinica, sede
+    ) -> None:  # type: ignore[no-untyped-def]
+        """Control: sin esta, las demas pruebas pasarian por el motivo equivocado."""
+        principal = self._principal(clinica, sede)
+        citas = await servicio_agenda._repo.listar_citas(principal=principal)
+        assert cita_creada.id in {c.id for c in citas}
+
+    async def test_sin_profesionales_no_se_ve_ninguna_cita(
+        self, servicio_agenda, cita_creada, clinica, sede
+    ) -> None:  # type: ignore[no-untyped-def]
+        principal = self._principal(clinica, sede, todos_los_profesionales=False)
+        citas = await servicio_agenda._repo.listar_citas(principal=principal)
+        assert citas == []
+
+    async def test_sin_pacientes_no_se_ve_ninguna_cita(
+        self, servicio_agenda, cita_creada, clinica, sede
+    ) -> None:  # type: ignore[no-untyped-def]
+        principal = self._principal(clinica, sede, todos_los_pacientes=False)
+        citas = await servicio_agenda._repo.listar_citas(principal=principal)
+        assert citas == []
+
+    async def test_sin_especialidades_no_se_ve_ninguna_cita(
+        self, servicio_agenda, cita_creada, clinica, sede
+    ) -> None:  # type: ignore[no-untyped-def]
+        """La dimension que faltaba por completo.
+
+        Un profesional de una especialidad veia las citas de todas las demas.
+        """
+        principal = self._principal(clinica, sede, todas_las_especialidades=False)
+        citas = await servicio_agenda._repo.listar_citas(principal=principal)
+        assert citas == []
+
+    async def test_sin_sedes_no_se_ve_ninguna_cita(
+        self, servicio_agenda, cita_creada, clinica, sede
+    ) -> None:  # type: ignore[no-untyped-def]
+        principal = self._principal(clinica, sede, sedes=frozenset())
+        citas = await servicio_agenda._repo.listar_citas(principal=principal)
+        assert citas == []
+
+    async def test_el_total_respeta_el_ambito_igual_que_el_listado(
+        self, servicio_agenda, cita_creada, clinica, sede
+    ) -> None:  # type: ignore[no-untyped-def]
+        """Si el total no filtrara, diria cuantas citas tiene la clinica."""
+        principal = self._principal(clinica, sede, todas_las_especialidades=False)
+        assert await servicio_agenda._repo.contar_citas(principal=principal) == 0
+
+    async def test_una_especialidad_concreta_solo_ve_lo_suyo(
+        self, servicio_agenda, cita_creada, clinica, sede, especialidad
+    ) -> None:  # type: ignore[no-untyped-def]
+        propia = self._principal(
+            clinica,
+            sede,
+            todas_las_especialidades=False,
+            especialidades=frozenset({especialidad.id}),
+        )
+        ajena = self._principal(
+            clinica,
+            sede,
+            todas_las_especialidades=False,
+            especialidades=frozenset({uuid.uuid4()}),
+        )
+
+        assert cita_creada.id in {
+            c.id for c in await servicio_agenda._repo.listar_citas(principal=propia)
+        }
+        assert await servicio_agenda._repo.listar_citas(principal=ajena) == []
+
+
 class TestBloqueoTemporal:
     async def test_el_bloqueo_caduca(self, servicio_agenda, solicitud, principal_recepcion) -> None:
         """El plazo es obligatorio y lo exige la base de datos.

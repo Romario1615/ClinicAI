@@ -166,7 +166,18 @@ class RepositorioCatalogo:
                 return []
             consulta = consulta.where(Profesional.id.in_(ambito.profesionales))
 
-        if not ambito.todas_las_especialidades and ambito.especialidades:
+        # El ambito de especialidad se aplica igual que en especialidades y
+        # servicios: vacio significa ningun acceso, no "sin restriccion".
+        #
+        # Antes esta rama solo filtraba cuando la lista tenia elementos, de
+        # modo que un ambito de especialidad vacio devolvia CERO especialidades
+        # y CERO servicios pero TODOS los profesionales. La misma condicion
+        # producia dos respuestas distintas segun el endpoint, que es la peor
+        # propiedad posible en un modelo de autorizacion: deja de ser
+        # predecible.
+        if not ambito.todas_las_especialidades:
+            if not ambito.especialidades:
+                return []
             consulta = consulta.where(Profesional.especialidad_id.in_(ambito.especialidades))
 
         if especialidad_id is not None:
@@ -210,6 +221,11 @@ class RepositorioCatalogo:
             if not ambito.profesionales:
                 return None
             consulta = consulta.where(Profesional.id.in_(ambito.profesionales))
+
+        if not ambito.todas_las_especialidades:
+            if not ambito.especialidades:
+                return None
+            consulta = consulta.where(Profesional.especialidad_id.in_(ambito.especialidades))
 
         return (await self._sesion.execute(consulta)).scalar_one_or_none()
 

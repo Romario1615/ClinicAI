@@ -26,7 +26,7 @@ from datetime import date, datetime, time, timedelta
 from typing import Any
 from zoneinfo import ZoneInfo
 
-from sqlalchemy import Select, and_, func, or_, select
+from sqlalchemy import Select, and_, func, literal, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modulos.agenda.disponibilidad import (
@@ -56,6 +56,11 @@ from app.nucleo.autorizacion import Principal
 _ESTADOS_OCUPADOS_SQL = tuple(e.value for e in _ESTADOS_QUE_OCUPAN)
 
 
+# Identificador que no puede existir. Fuerza un resultado vacio de forma
+# explicita, que es mas seguro que devolver la consulta sin filtrar.
+_NINGUNO = uuid.UUID(int=0)
+
+
 class RepositorioAgenda:
     """Consultas de la agenda, con filtro de ambito obligatorio."""
 
@@ -71,6 +76,20 @@ class RepositorioAgenda:
         El orden de las condiciones importa poco para el planificador, pero la
         de clinica va primera porque es la que mas filas descarta y la que
         nunca debe faltar: sin ella, una consulta podria cruzar clinicas.
+
+        Las cuatro dimensiones se aplican con la MISMA regla
+        ----------------------------------------------------
+        Sin comodin y con la lista vacia, el resultado es vacio. No "sin
+        restriccion".
+
+        Conviene insistir porque la version anterior de este metodo no lo
+        hacia: escribia `if not ambito.todos_los_profesionales and
+        ambito.profesionales`, de modo que un ambito de profesional **vacio**
+        no filtraba nada y el principal veia las citas de todos. La condicion
+        parecia defensiva y era justo lo contrario. Lo mismo con pacientes.
+
+        La dimension de especialidad faltaba por completo: un profesional de
+        una especialidad veia las citas de todas las demas.
         """
         if principal.clinica_id is None:
             # Sin clinica no hay nada que ver.  Devolver una consulta que no
@@ -82,14 +101,36 @@ class RepositorioAgenda:
         ambito = principal.ambito
         if not ambito.todas_las_sedes:
             if not ambito.sedes:
-                return consulta.where(Cita.sede_id == uuid.UUID(int=0))
+                return consulta.where(Cita.sede_id == _NINGUNO)
             consulta = consulta.where(Cita.sede_id.in_(ambito.sedes))
 
-        if not ambito.todos_los_profesionales and ambito.profesionales:
+        if not ambito.todos_los_profesionales:
+            if not ambito.profesionales:
+                return consulta.where(Cita.profesional_id == _NINGUNO)
             consulta = consulta.where(Cita.profesional_id.in_(ambito.profesionales))
 
-        if not ambito.todos_los_pacientes and ambito.pacientes:
+        if not ambito.todos_los_pacientes:
+            if not ambito.pacientes:
+                return consulta.where(Cita.paciente_id == _NINGUNO)
             consulta = consulta.where(Cita.paciente_id.in_(ambito.pacientes))
+
+        if not ambito.todas_las_especialidades:
+            if not ambito.especialidades:
+                return consulta.where(Cita.servicio_id == _NINGUNO)
+            # `Cita` no lleva `especialidad_id`: la especialidad vive en
+            # `servicio`. Se usa EXISTS y no una union porque la union
+            # arrastraria las columnas de `servicio` a una consulta que solo
+            # necesita filtrar, y con `DISTINCT` de por medio cambiaria el
+            # plan del ordenamiento por `inicio`.
+            consulta = consulta.where(
+                select(literal(1))
+                .select_from(Servicio)
+                .where(
+                    Servicio.id == Cita.servicio_id,
+                    Servicio.especialidad_id.in_(ambito.especialidades),
+                )
+                .exists()
+            )
 
         return consulta
 

@@ -438,8 +438,19 @@ async def cargar_datos_sinteticos(  # noqa: PLR0912, PLR0915
                     incluir=True,
                 )
             )
-        # Comodines de profesional y paciente dentro de esas sedes.
-        for tipo in (TipoAmbito.PROFESIONAL.value, TipoAmbito.PACIENTE.value):
+        # Comodines de especialidad, profesional y paciente dentro de esas
+        # sedes.
+        #
+        # El de ESPECIALIDAD no es opcional y su ausencia no es un detalle:
+        # sin el, el conjunto de especialidades del principal queda vacio, y
+        # vacio significa ningun acceso. El resultado es un usuario que entra,
+        # ve su sede y sus pacientes, y no puede agendar nada porque la lista
+        # de servicios le llega vacia -- sin ningun error que lo explique.
+        for tipo in (
+            TipoAmbito.ESPECIALIDAD.value,
+            TipoAmbito.PROFESIONAL.value,
+            TipoAmbito.PACIENTE.value,
+        ):
             sesion.add(
                 AmbitoAsignacion(
                     usuario_rol_id=asignacion.id,

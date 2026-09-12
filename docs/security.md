@@ -149,7 +149,8 @@ desapercibido.
 | Control | Implementación | Estado |
 |---|---|---|
 | Autorización | permiso por endpoint (`exige_permiso`) + filtro de ámbito en repositorio | permiso **implementado y probado**; el filtro de ámbito por repositorio, pendiente en los endpoints aún no escritos |
-| Protección IDOR | 404 para recursos fuera de ámbito; nunca 403 | **implementado y probado** en la agenda: hay una prueba por cada transición de estado, porque basta con que una olvide el filtro |
+| Protección IDOR | 404 para recursos fuera de ámbito; nunca 403 | **implementado y probado** en agenda, catálogo y pacientes: una prueba por cada transición de estado, porque basta con que una olvide el filtro |
+| Ámbito vacío = sin acceso | las cuatro dimensiones (sede, especialidad, profesional, paciente) aplican la misma regla | **implementado y probado**, con una prueba por dimensión. Corrige un fallo real: el filtro de la agenda escribía `if not todos_los_profesionales **and** profesionales`, de modo que un ámbito vacío no filtraba nada; y la dimensión de especialidad no se aplicaba en absoluto |
 | Inyección SQL | SQLAlchemy con parámetros enlazados; prohibido componer SQL por cadenas | Fase 2 |
 | Validación de entrada | Pydantic v2 estricto; rechazo de campos no declarados; el valor rechazado **no** vuelve en la respuesta | **implementado y probado** |
 | XSS | Angular escapa por defecto; `innerHTML` prohibido por lint; CSP sin `unsafe-inline` | Fase 1‑2 |
