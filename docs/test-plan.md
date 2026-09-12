@@ -1,6 +1,6 @@
 # Plan de pruebas
 
-> **Última actualización:** 2026‑09‑12 · Fases 0–4 cerradas · 891 pruebas.
+> **Última actualización:** 2026‑09‑12 · Fases 0–4 cerradas · 899 pruebas.
 
 Este documento dice **qué se prueba, con qué, y por qué de esa forma**. No es un
 inventario de pruebas: el inventario está en el código. Lo que aquí importa son las
@@ -44,6 +44,28 @@ cancelación e IDOR— que se ejecuta antes de dar una fase por cerrada, y por e
 pruebas de ámbito verifican **dimensión por dimensión** con una prueba de control que
 confirma que el caso permitido sí devuelve datos. Sin esa prueba de control, las demás
 pasarían por el motivo equivocado.
+
+**La regla se volvió a cumplir en la Fase 4, y con un fallo peor.** Con 891 pruebas en
+verde, ejercer el sistema arrancado contra las semillas reales destapó que **un paciente que
+respondía `BAJA` por WhatsApp no quedaba dado de baja**: la columna guarda el número como lo
+escribió el personal («+593 99 900 0333») y el webhook entrega solo dígitos
+(«593999000333»), así que la revocación de consentimiento no encontraba a quien revocar y el
+sistema le seguía escribiendo.
+
+Las fixtures guardaban el número **ya normalizado**, que es justo lo que el panel no hace.
+Las 26 pruebas del webhook pasaban por el motivo equivocado. Es el mismo sitio donde vivían
+los tres fallos de ámbito: el espacio entre lo que la fixture supone y lo que los datos
+reales tienen.
+
+De ahí dos consecuencias para las pruebas de este repositorio:
+
+* **Una fixture debe guardar el dato en la forma más incómoda que admita el sistema**, no en
+  la más cómoda para la aserción. El teléfono se guarda ahora con «+» y espacios.
+* **Los identificadores de las pruebas se generan por prueba, no son constantes del módulo.**
+  El `phone_number_id` estaba fijo, y bastó que un ejercicio manual insertara una fila de
+  configuración con ese mismo valor para que 20 pruebas fallaran por datos ajenos. Igual con
+  contar filas: `SELECT count(*)` sobre una tabla entera supone una base vacía, y la de
+  desarrollo no lo está.
 
 **Un porcentaje de cobertura es una medición, y una medición puede estar mal.** Regla
 añadida en la Fase 4, al ver que `conversaciones/servicios.py` aparecía al 65 % con 26

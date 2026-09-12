@@ -20,7 +20,7 @@ funcionalidad no existe todavía; **no** significa que esté bien.
 
 | # | Criterio | Estado | Evidencia |
 |---|---|---|---|
-| 1 | No hay errores críticos | **parcial** | 891 pruebas en verde, `ruff`/`mypy --strict` sin hallazgos. Pero sin E2E, sin carga y sin DAST, «no hay errores críticos» es una afirmación que no se puede sostener |
+| 1 | No hay errores críticos | **parcial** | 899 pruebas en verde, `ruff`/`mypy --strict` sin hallazgos. Pero sin E2E, sin carga y sin DAST, «no hay errores críticos» es una afirmación que no se puede sostener |
 | 2 | Sin vulnerabilidades críticas o altas pendientes | **parcial** | `pip-audit --strict` → sin vulnerabilidades conocidas; `bandit -r app -ll` sin hallazgos. 44 vulnerabilidades corregidas (ver informe). **Falta DAST y Trivy sobre imágenes construidas** |
 | 3 | No existen secretos en el repositorio | **parcial** | `.env` excluido, `.env.example` sin un valor real, secretos de prueba sintéticos. `gitleaks` **no está instalado localmente**; corre en el pipeline, que nunca se ha ejecutado |
 | 4 | Las reservas concurrentes no generan duplicados | **verificado** | Restricción de exclusión `gist`; prueba de concurrencia real con 50 participantes y `asyncio.Barrier` sobre conexiones separadas |
@@ -94,4 +94,4 @@ No se declarará el sistema listo hasta que **todas** se cumplan con evidencia:
 |---|---|---|
 | 2026‑09‑11 | 0 | **No preparado.** Análisis, arquitectura, modelo de datos, modelo de amenazas, matriz de permisos y backlog documentados. Sin código funcional. Cuatro bloqueos externos identificados |
 | 2026‑09‑12 | 0b, 2, 3, 7, 5 | **No preparado.** Infraestructura, modelo de datos (49 tablas), autenticación, RBAC con ámbito, agenda con anti doble‑reserva verificado bajo concurrencia real, historia clínica append‑only y lista de espera. Tres fallos propios del filtro de ámbito encontrados **ejerciendo el sistema** con la suite en verde |
-| 2026‑09‑12 | 4 (WhatsApp) | **No preparado.** Outbox de entrega, catálogo de plantillas sin datos clínicos y webhook con firma validada, verificados con 228 pruebas contra PostgreSQL real. **El camino real hacia Meta no está verificado** y así se declara (E‑1). Se corrigió además la medición de cobertura del proyecto, que llevaba varias fases mal medida por el greenlet de SQLAlchemy async |
+| 2026‑09‑12 | 4 (WhatsApp) | **No preparado.** Outbox de entrega, catálogo de plantillas sin datos clínicos y webhook con firma validada, verificados con 236 pruebas contra PostgreSQL real y 33 comprobaciones sobre la API arrancada. Ese ejercicio manual encontró, con 891 pruebas en verde, que **una `BAJA` por WhatsApp no daba de baja al paciente** por el formato del número; corregido con un índice funcional y 6 pruebas de regresión. **El camino real hacia Meta no está verificado** y así se declara (E‑1). Se corrigió además la medición de cobertura del proyecto, que llevaba varias fases mal medida por el greenlet de SQLAlchemy async |

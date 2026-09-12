@@ -1,6 +1,6 @@
 # Informe de avance
 
-> **Fecha:** 2026‑09‑12 · 22 commits · Fases 0, 0b, 3 y **4 (WhatsApp)** cerradas;
+> **Fecha:** 2026‑09‑12 · 23 commits · Fases 0, 0b, 3 y **4 (WhatsApp)** cerradas;
 > 1, 2, 5 y 7 en curso. El calendario externo de la Fase 4 queda sin empezar.
 
 Este informe cubre los 18 puntos exigidos. Está escrito para ser contrastado: cada cifra
@@ -91,10 +91,10 @@ Decisiones no cubiertas por ADR pero con consecuencia:
 
 ```
 cd backend
-uv run pytest --cov=app -q            891 passed · cobertura 91,63 %
+uv run pytest --cov=app -q            899 passed · cobertura 91,65 %
 uv run pytest -m unitaria -q          466
 uv run pytest -m integracion -q       287
-uv run pytest -m api -q               136
+uv run pytest -m api -q               144
 uv run pytest -m concurrencia -q       12
 uv run pytest -m seguridad -q         355
 uv run ruff check .                   All checks passed
@@ -114,7 +114,7 @@ npm run build                         299.92 kB inicial · 86.50 kB transferidos
 
 Los marcadores se solapan: una prueba de IDOR cuenta como `api` y como `seguridad`.
 
-**Las 228 pruebas nuevas de esta fase**, por archivo y por lo que cubren:
+**Las 236 pruebas nuevas de esta fase**, por archivo y por lo que cubren:
 
 | Suite | Casos | Qué garantiza |
 |---|:--:|---|
@@ -122,7 +122,7 @@ Los marcadores se solapan: una prueba de IDOR cuenta como `api` y como `segurida
 | `test_intenciones.py` | 41 | Que un mensaje clínico, ambiguo o negado **no** se reconoce y va a una persona |
 | `test_adaptadores_whatsapp.py` | 32 | Forma del cuerpo de la Cloud API y clasificación de errores; que en `sandbox` no se construye el adaptador real |
 | `test_carga_whatsapp.py` | 26 | Parseo del webhook, incluidas **14 formas deformes** que no deben romperlo |
-| `test_webhook_whatsapp_api.py` | 26 | El endpoint real: firma, deduplicación, opt‑out, frontera clínica, robustez |
+| `test_webhook_whatsapp_api.py` | 34 | El endpoint real: firma, deduplicación, opt‑out, frontera clínica, robustez, **formato del número** |
 | `test_outbox.py` | 25 | Deduplicación, rollback, reintentos, huérfanos, conciliación, consentimiento |
 | `test_destinatarios.py` | 16 | Resolución de contacto en las tres tablas de destinatario |
 | `test_webhook_firma.py` | 13 | Firma válida, alterada, **reserializada**, sin cabecera, sin secreto |
@@ -157,7 +157,7 @@ paciente ajeno             404 RECURSO_NO_ENCONTRADO
 
 ## 5. Cobertura
 
-**Backend 91,63 %** (umbral del pipeline 80 %, RNF‑06). **Frontend 95,41 % sentencias,
+**Backend 91,65 %** (umbral del pipeline 80 %, RNF‑06). **Frontend 95,41 % sentencias,
 87,3 % ramas, 90,69 % funciones** (umbrales 80/70/80).
 
 ### La cifra anterior estaba mal medida
@@ -186,7 +186,7 @@ principio en [`test-plan.md`](test-plan.md).
 | `modulos/conversaciones/intenciones.py` | 94 % |
 | `mensajeria/adaptadores.py` | 93 % |
 | `mensajeria/carga_whatsapp.py` | 90 % |
-| `mensajeria/rutas.py` | 89 % |
+| `mensajeria/rutas.py` | 90 % |
 
 Lo no cubierto en `rutas.py` son las ramas de configuración degradada
 (`WHATSAPP_VALIDAR_FIRMA=false`, cuerpo mayor de 1 MB), que no se pueden ejercer sin
@@ -233,6 +233,41 @@ Estado actual: `pip-audit --strict` → **No known vulnerabilities found**.
 Los tres primeros aparecieron **ejerciendo el sistema**, no ejecutando la suite: vivían en
 el espacio entre lo que las fixtures suponían y lo que los datos reales tienen. Está
 anotado como principio en `test-plan.md`.
+
+### El fallo que encontro ejercer el sistema
+
+Con **891 pruebas en verde**, arrancar la API y recorrer el flujo real contra las
+semillas destapó un fallo serio: **un paciente que respondía `BAJA` por WhatsApp no
+quedaba dado de baja.**
+
+`paciente.telefono_whatsapp` guarda el número como lo escribió el personal
+(«+593 99 900 0333»), porque es lo legible en un panel; el webhook entrega solo dígitos
+(«593999000333»). La comparación literal no encontraba a nadie, así que la revocación de
+consentimiento no revocaba nada y el sistema **seguía escribiendo a quien pidió que
+pararan**. Es el fallo exacto que ADR‑0017 dice que no puede ocurrir, y afecta al único
+camino que esa ADR permite ejecutar sin intervención humana.
+
+**Por qué la suite no lo veía:** sus fixtures guardaban el número ya normalizado, que es
+justo lo que el panel no hace. Las 26 pruebas del webhook pasaban por el motivo equivocado.
+
+Corregido con una expresión única —`telefono_normalizado()`— que comparten la consulta y un
+índice funcional nuevo, verificado con `EXPLAIN`
+(`Index Scan using ix_paciente_whatsapp_normalizado`). Seis pruebas de regresión, una de
+ellas parametrizada sobre los formatos que produce copiar un número de una agenda, de un
+mensaje o de un documento.
+
+En el mismo ejercicio aparecieron dos defectos de las propias pruebas: usaban un
+`phone_number_id` **fijo**, lo que las acoplaba al contenido de la base de desarrollo (bastó
+una fila de configuración con ese valor para que 20 fallaran por datos ajenos), y dos
+contaban filas de la tabla entera suponiéndola vacía. Ambos corregidos.
+
+Y un tercero en los datos: **las semillas creaban 60 pacientes con número de WhatsApp y cero
+consentimientos**, así que ningún recordatorio podía salir y el flujo no se podía ejercitar
+ni demostrar en desarrollo. Ahora crean 60 vigentes, 6 revocados y dejan 7 pacientes sin
+ninguna fila, para que los tres caminos que el código distingue tengan datos.
+
+**Evidencia del ejercicio:** 33 comprobaciones sobre la API arrancada, 0 fallos, tras la
+corrección.
 
 ### Sobre esta fase en particular
 

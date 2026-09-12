@@ -250,6 +250,22 @@ para cancelar la cita de nadie.
 `BAJA` es la excepción porque es el único caso donde no hacer nada es peor que
 equivocarse, y porque el error se corrige volviendo a dar de alta.
 
+### El formato del número: dónde estuvo el fallo
+
+Toda comparación contra `paciente.telefono_whatsapp` pasa por `telefono_normalizado()`, que
+reduce la columna a dígitos **en el `WHERE`**, con el índice funcional
+`ix_paciente_whatsapp_normalizado` detrás.
+
+No es una comodidad. El panel guarda el número como lo escribió el personal
+(«+593 99 900 0333»); el webhook entrega solo dígitos. Comparar las dos formas en crudo no
+encuentra a nadie, y la consecuencia real era que **un paciente que respondía `BAJA` no
+quedaba dado de baja** y el sistema le seguía escribiendo —el fallo exacto que ADR‑0017 dice
+que no puede ocurrir.
+
+Se encontró ejerciendo el sistema con las semillas reales, con 891 pruebas en verde. Hay seis
+pruebas de regresión, y la parametrizada recorre los formatos que produce copiar un número de
+una agenda, de un mensaje o de un documento.
+
 ### Multi‑clínica
 
 El `phone_number_id` de la carga decide a qué clínica pertenece el mensaje. La asociación
@@ -348,18 +364,24 @@ Ejecutadas el 2026‑09‑12 contra PostgreSQL 16 + pgvector 0.8.6 en contenedor
 | `test_outbox.py` | 25 | Deduplicación, rollback, reintentos, huérfanos, conciliación, consentimiento |
 | `test_destinatarios.py` | 16 | Resolución de contacto en las tres tablas |
 | `test_tareas_outbox.py` | 3 | El trabajo periódico completo |
-| `test_webhook_whatsapp_api.py` | 26 | El endpoint real: firma, deduplicación, baja, frontera clínica, robustez |
+| `test_webhook_whatsapp_api.py` | 34 | El endpoint real: firma, deduplicación, baja, frontera clínica, robustez, **formato del número** |
 
 ```
-uv run pytest -q                    →  891 passed
-uv run pytest --cov=app             →  91,63 %
+uv run pytest -q                    →  899 passed
+uv run pytest --cov=app             →  91,65 %
 uv run ruff check . ; uv run mypy app  →  sin hallazgos
 uv run alembic upgrade head ; downgrade -1 ; upgrade head  →  correcto
 ```
 
 Cobertura de los módulos de esta fase: `plantillas.py` y `firma.py` 100 %,
 `servicios.py` 98 %, `destinatarios.py` 98 %, `conversaciones/servicios.py` 100 %,
-`intenciones.py` 94 %, `adaptadores.py` 93 %, `carga_whatsapp.py` 90 %, `rutas.py` 89 %.
+`intenciones.py` 94 %, `adaptadores.py` 93 %, `carga_whatsapp.py` 90 %, `rutas.py` 90 %.
 
-**Una suite verde no sustituye a ejercer el sistema**, y menos aún a verificar el camino
-real del proveedor. Ver [`test-plan.md`](test-plan.md).
+Además, **33 comprobaciones sobre la API arrancada** contra la base con datos sintéticos:
+encolado, deduplicación, entrega por el worker, normalización del destino, reto de
+verificación, firma inválida sin efecto y auditada, reintento de Meta, apertura de hilo,
+`CANCELAR` derivado, estado de entrega conciliado, `BAJA` aplicada y tres cuerpos deformes.
+
+Ese ejercicio es el que encontró el fallo del formato del número. **Una suite verde no
+sustituye a ejercer el sistema**, y ninguno de los dos sustituye a verificar el camino real
+del proveedor. Ver [`test-plan.md`](test-plan.md).
