@@ -79,7 +79,7 @@ No son defectos. Se listan para que no se «arreglen» por error.
 | 4 · WhatsApp y calendarios | pendiente | E‑1 |
 | 5 · Lista de espera | pendiente | — |
 | 6 · Conocimiento y RAG | pendiente | E‑3, E‑9, E‑12 |
-| 7 · Historia clínica y medicamentos | pendiente | — |
+| 7 · Historia clínica y medicamentos | en curso | Modelo de datos y **las tres garantías clínicas sostenidas por disparadores de PostgreSQL**, con 23 pruebas que las atacan con SQL directo saltándose el servicio. **Faltan** servicios, rutas HTTP, generación del calendario de tomas, recordatorios y cálculo de alertas |
 | 8 · Dashboard y predicciones | pendiente | E‑4, E‑5 |
 | 9 · Pagos | pendiente | — |
 | 10 · Producción | pendiente | E‑2, E‑10, E‑11, D‑4 |
