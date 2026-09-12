@@ -29,6 +29,12 @@ from app.modulos.agenda.modelos import (
     TipoBloqueo,
 )
 from app.modulos.auditoria.modelos import Auditoria
+from app.modulos.conversaciones.modelos import (
+    Conversacion,
+    EstadoConversacion,
+    IntencionEntrante,
+    MensajeEntrante,
+)
 from app.modulos.historia.modelos import (
     AlertaAdherencia,
     Diagnostico,
@@ -129,12 +135,14 @@ __all__ = [
     "ConfiguracionClinica",
     "Consentimiento",
     "Consultorio",
+    "Conversacion",
     "Descanso",
     "Diagnostico",
     "DocumentoPaciente",
     "EntradaListaEspera",
     "Especialidad",
     "EstadoCita",
+    "EstadoConversacion",
     "EstadoDisponibilidad",
     "EstadoEscaneoAntivirus",
     "EstadoEspera",
@@ -147,6 +155,8 @@ __all__ = [
     "Feriado",
     "HistorialAcceso",
     "HorarioAtencion",
+    "IntencionEntrante",
+    "MensajeEntrante",
     "MotivoRevocacion",
     "NotaEvolucion",
     "OfertaTurno",
