@@ -31,6 +31,20 @@ a la configuración y después emitía una línea. En la API eso habría sido un
 primera petición. Desde entonces hay pruebas de arranque para la configuración de logs y
 para el worker.
 
+**Una suite verde no sustituye a ejercer el sistema.** Regla añadida tras encontrar tres
+fallos del filtro de ámbito —uno de ellos dejaba a la recepción sin poder agendar nada, y
+otro exponía las citas de todos los profesionales a quien tuviera el ámbito de profesional
+vacío— **arrancando la API y recorriendo el flujo real**, con 557 pruebas en verde.
+
+Vivían en el espacio entre lo que las fixtures suponían y lo que los datos reales tienen:
+las fixtures construían el `Principal` a mano, con un ámbito que ningún rol real produce.
+Por eso ahora existe una comprobación de extremo a extremo contra la base con datos
+sintéticos —login, catálogo, disponibilidad, reserva idempotente, colisión de turno,
+cancelación e IDOR— que se ejecuta antes de dar una fase por cerrada, y por eso las
+pruebas de ámbito verifican **dimensión por dimensión** con una prueba de control que
+confirma que el caso permitido sí devuelve datos. Sin esa prueba de control, las demás
+pasarían por el motivo equivocado.
+
 ---
 
 ## 2. Marcadores y qué cubre cada uno
@@ -50,7 +64,7 @@ pipeline y qué infraestructura necesita.
 
 Los marcadores se solapan a propósito: una prueba de IDOR es `api` **y** `seguridad`.
 
-**Total actual: 536 pruebas. Cobertura 90,6 %** (umbral del pipeline: 80 %, RNF‑06).
+**Total actual: 564 pruebas (backend) y 67 (frontend). Cobertura 90 % y 95 %** (umbral del pipeline: 80 %, RNF‑06).
 
 ---
 
