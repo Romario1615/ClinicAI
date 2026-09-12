@@ -29,6 +29,7 @@ from arq.connections import RedisSettings
 
 from app.nucleo.configuracion import Configuracion
 from app.tareas.agenda import expirar_bloqueos
+from app.tareas.calendario import reconciliar_calendarios, sincronizar_calendarios
 from app.tareas.contexto import al_arrancar, al_parar
 from app.tareas.outbox import procesar_outbox, recuperar_mensajes_huerfanos
 
@@ -44,6 +45,8 @@ class ConfiguracionWorker:
         expirar_bloqueos,
         procesar_outbox,
         recuperar_mensajes_huerfanos,
+        sincronizar_calendarios,
+        reconciliar_calendarios,
     ]
 
     cron_jobs: list[Any] = [  # noqa: RUF012
@@ -80,6 +83,27 @@ class ConfiguracionWorker:
             minute={0, 10, 20, 30, 40, 50},
             unique=True,
             timeout=60,
+            max_tries=1,
+        ),
+        # Cada dos minutos. Un reflejo de calendario no tiene una hora
+        # concreta a la que deba salir -- solo tiene que estar antes de que el
+        # profesional mire su agenda --, asi que no necesita la cadencia del
+        # outbox y evita barridos vacios contra el proveedor.
+        cron(
+            sincronizar_calendarios,
+            minute=set(range(0, 60, 2)),
+            unique=True,
+            timeout=180,
+            max_tries=1,
+        ),
+        # Cada hora, y no mas a menudo: consume una lectura del proveedor por
+        # evento, asi que es el trabajo mas caro en cuota de API. Su ventana de
+        # deteccion aceptable se mide en horas.
+        cron(
+            reconciliar_calendarios,
+            minute={7},
+            unique=True,
+            timeout=300,
             max_tries=1,
         ),
     ]

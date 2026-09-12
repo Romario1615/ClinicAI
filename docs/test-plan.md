@@ -1,6 +1,6 @@
 # Plan de pruebas
 
-> **Última actualización:** 2026‑09‑12 · Fases 0–4 cerradas · 899 pruebas.
+> **Última actualización:** 2026‑09‑12 · Fases 0–4 cerradas · 984 pruebas.
 
 Este documento dice **qué se prueba, con qué, y por qué de esa forma**. No es un
 inventario de pruebas: el inventario está en el código. Lo que aquí importa son las

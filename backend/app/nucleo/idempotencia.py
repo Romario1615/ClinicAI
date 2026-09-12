@@ -54,6 +54,12 @@ class AlcanceIdempotencia(StrEnum):
     PAGO_REGISTRAR = "pago.registrar"
     WEBHOOK_WHATSAPP = "webhook.whatsapp"
     OUTBOX_ENTREGA = "outbox.entrega"
+    # El `state` de OAuth de calendario. Se registra aqui, y no en
+    # `token_un_uso`, porque esa tabla exige un usuario y restringe su
+    # `tipo` por CHECK; esto es exactamente lo que `clave_idempotencia`
+    # existe para guardar: «esta operacion ya se proceso», con durabilidad
+    # de PostgreSQL y no de Redis.
+    CALENDARIO_OAUTH = "calendario.oauth"
 
 
 def calcular_hash_peticion(cuerpo: Any) -> str:

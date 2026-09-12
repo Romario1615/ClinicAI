@@ -126,6 +126,12 @@ IDOR.
 | `GET /api/v1/historia/recetas/{id}/adherencia` | `adherencia.leer` | Cuenta omisiones; **no interpreta clínicamente** |
 | `GET /api/v1/whatsapp/webhook` | — (**público**) | Reto de verificación de Meta. Compara `hub.verify_token` en **tiempo constante** y devuelve el reto en texto plano. Token incorrecto → 403 |
 | `POST /api/v1/whatsapp/webhook` | — (**público**) | **El único endpoint sin autenticación que escribe.** Lo que lo autoriza es la firma HMAC‑SHA256 sobre el **cuerpo crudo**, comparada con `compare_digest`. Firma inválida → **403 sin escribir nada**, auditado como `webhook.firma_invalida` (acción con alerta). Deduplicación por restricción única en `mensaje_entrante.external_id`. Límite de 120/min por IP (falla abierto, E‑11) y tope de 1 MB. Responde 200 ante cualquier otro fallo, a propósito: un 5xx repetido le cuesta al sistema la suscripción del webhook. **Ninguna intención cambia el estado de una cita** (ADR‑0017); la única que ejecuta es `BAJA`. La respuesta es un acuse de recibo y no contiene ningún dato del paciente |
+| `GET /api/v1/calendario/conexiones` | `profesional.conectar_calendario` | Solo las **propias**. El filtro es por `principal.profesional_id`, no por un parámetro: no hay forma de pedir las de otro. No devuelve los tokens, ni cifrados |
+| `POST /api/v1/calendario/oauth/inicio` | `profesional.conectar_calendario` | Devuelve la URL de consentimiento con un `state` firmado (HMAC), vigencia de 15 min y de un solo uso. Sin `GOOGLE_CLIENT_ID` → 503 con el modo a usar |
+| `GET /api/v1/calendario/oauth/callback` | — (**público**) | Lo llama el navegador redirigido por Google. Lo autoriza el `state` firmado: firma en tiempo constante, caducidad, y **consumo** registrado en `clave_idempotencia` (su restricción única es la garantía, no un `SELECT` previo). Se consume **antes** de canjear el código. Los tokens se guardan cifrados con AES-GCM y contexto `profesional_id`, y no salen en la respuesta |
+| `POST /api/v1/calendario/conexiones/{id}/desconexion` | `profesional.conectar_calendario` | Conexión de otro → **404**, no 403. Pone los tokens a nulo y conserva la fila. Motivo obligatorio; se audita (`calendario.desconectado`) |
+| `POST /api/v1/calendario/conexiones/{id}/sincronizacion` | `profesional.conectar_calendario` | Conexión de otro → 404 |
+| `GET /api/v1/calendario/conexiones/{id}/eventos` | `profesional.conectar_calendario` | Solo estados de sincronización: ni paciente, ni servicio, ni motivo (RF-I09). Conexión de otro → 404 |
 
 ### Acceso de emergencia
 

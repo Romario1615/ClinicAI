@@ -360,3 +360,4 @@ comprobación de configuración explícita, no un supuesto.
 | [0015](decisiones/0015-convencion-idioma.md) | Convención de idioma del código y la documentación |
 | [0016](decisiones/0016-entrega-de-tokens.md) | El token de refresco viaja en el cuerpo, no en una cookie |
 | [0017](decisiones/0017-frontera-de-la-automatizacion-entrante.md) | Ninguna intencion entrante que cambie el estado de una cita se ejecuta sin una persona |
+| [0018](decisiones/0018-evento-externo-sin-datos-clinicos.md) | El evento del calendario externo no lleva paciente, servicio ni especialidad |

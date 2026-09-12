@@ -1,7 +1,8 @@
 # Informe de avance
 
-> **Fecha:** 2026‑09‑12 · 23 commits · Fases 0, 0b, 3 y **4 (WhatsApp)** cerradas;
-> 1, 2, 5 y 7 en curso. El calendario externo de la Fase 4 queda sin empezar.
+> **Fecha:** 2026‑09‑12 · 24 commits · Fases 0, 0b, 3 y **4 (WhatsApp)** cerradas;
+> 1, 2, 5 y 7 en curso. Del calendario externo queda pendiente el adaptador real de
+> Google y la renovación automática del token.
 
 Este informe cubre los 18 puntos exigidos. Está escrito para ser contrastado: cada cifra
 procede de una ejecución real cuyo comando se indica, y lo que no se ha verificado se dice
@@ -27,8 +28,8 @@ que no se ha verificado.
 | Plantillas de notificación sin datos clínicos (regla 10, RF‑K07) | completo · 15 plantillas |
 | Webhook de WhatsApp: firma HMAC, deduplicación, opt‑out, derivación a persona | completo |
 | Adaptador WhatsApp Cloud API | escrito · **camino real sin verificar** (E‑1) |
-| Calendario externo (Google) | **no empezado** |
-| API HTTP | **36 operaciones** en 34 caminos |
+| Calendario externo: OAuth, tokens cifrados, publicación, reconciliación de cambios externos | completo con sandbox · **adaptador real de Google no implementado** (E‑1, E‑19) |
+| API HTTP | **42 operaciones** en 40 caminos |
 | Frontend Angular 19 PWA | 9 pantallas; agenda conectada al backend real |
 | CI/CD con puertas de fallo | completo, **sin ejecutar en GitHub** |
 
@@ -46,9 +47,11 @@ backend/app/
   api/           middleware · manejadores
   mensajeria/    plantillas · adaptadores · firma · carga_whatsapp · destinatarios
                  servicios (outbox) · rutas (webhook)
+  modulos/calendario/  eventos · adaptadores · oauth · seleccion
+                 servicios · esquemas · rutas
   modulos/       agenda · auditoria · conversaciones · historia · lista_espera
                  organizacion · outbox · pacientes · profesionales · usuarios
-  tareas/        worker ARQ · contexto · agenda · outbox
+  tareas/        worker ARQ · contexto · agenda · outbox · calendario
   semillas/      catalogos · sinteticos · cargar
 frontend/src/app/
   nucleo/        modelos · servicios · guardias · interceptores · utilidades
@@ -56,14 +59,14 @@ frontend/src/app/
   paginas/       acceso · agenda · demostracion
 infra/           compose · docker (backend, worker, postgres) · scripts · wsl
 .github/workflows/ci.yml
-docs/            18 documentos + 17 ADR
+docs/            19 documentos + 18 ADR
 ```
 
 ---
 
 ## 3. Decisiones tomadas
 
-Las 17 ADR están en [`docs/decisiones/`](decisiones/). Las que más condicionan el sistema:
+Las 18 ADR están en [`docs/decisiones/`](decisiones/). Las que más condicionan el sistema:
 
 * **ADR‑0009** — El anti doble‑reserva es una restricción de exclusión `gist` de
   PostgreSQL, no lógica de aplicación.
@@ -76,6 +79,11 @@ Las 17 ADR están en [`docs/decisiones/`](decisiones/). Las que más condicionan
   ejecuta sin una persona.** El webhook solo trae un número de teléfono, y en este sistema
   un teléfono no identifica a una persona: es familiar con frecuencia. La única excepción
   es `BAJA`, porque es el único caso donde no hacer nada es peor que equivocarse.
+* **ADR‑0018** (nueva) — **El evento del calendario externo no lleva paciente, servicio ni
+  especialidad.** El calendario de Google es un tercero: lo que se escribe ahí sale del
+  control de acceso del sistema y queda en la cuenta personal del profesional y en todos
+  sus dispositivos. Y el nombre del servicio basta por sí solo para revelar un diagnóstico:
+  la especialidad **es** información de salud.
 
 Decisiones no cubiertas por ADR pero con consecuencia:
 
@@ -91,12 +99,12 @@ Decisiones no cubiertas por ADR pero con consecuencia:
 
 ```
 cd backend
-uv run pytest --cov=app -q            899 passed · cobertura 91,65 %
-uv run pytest -m unitaria -q          466
-uv run pytest -m integracion -q       287
-uv run pytest -m api -q               144
+uv run pytest --cov=app -q            984 passed · cobertura 91,37 %
+uv run pytest -m unitaria -q          508
+uv run pytest -m integracion -q       313
+uv run pytest -m api -q               161
 uv run pytest -m concurrencia -q       12
-uv run pytest -m seguridad -q         355
+uv run pytest -m seguridad -q         419
 uv run ruff check .                   All checks passed
 uv run ruff format --check .          132 files already formatted
 uv run mypy app                       no issues found in 79 source files
@@ -129,6 +137,17 @@ Los marcadores se solapan: una prueba de IDOR cuenta como `api` y como `segurida
 | `test_normalizacion_telefono.py` | 6 | Formato que exige el proveedor |
 | `test_tareas_outbox.py` | 3 | El trabajo periódico completo, con su contexto de worker |
 
+**Y las 85 del calendario externo:**
+
+| Suite | Casos | Qué garantiza |
+|---|:--:|---|
+| `test_oauth_calendario.py` | 23 | Que un `state` manipulado para nombrar a otro profesional no pasa |
+| `test_calendario.py` | 22 | Cifrado ligado al profesional, borrado externo, cambio externo, token vencido |
+| `test_calendario_api.py` | 17 | Autorización, 404 vs 403, tokens fuera de la respuesta, `state` de un solo uso |
+| `test_eventos_calendario.py` | 16 | RF‑I09: que la función **no admite** datos de paciente ni de servicio |
+| `test_tareas_calendario.py` | 4 | El trabajo periódico completo e idempotente |
+| `test_seleccion_calendario.py` | 3 | Que en sandbox no se construye el adaptador real |
+
 Tres de esas pruebas son las que más valen, porque comprueban una **ausencia**:
 
 * `test_una_firma_invalida_no_produce_ningun_efecto` — no basta el 403: se verifica que no
@@ -157,7 +176,7 @@ paciente ajeno             404 RECURSO_NO_ENCONTRADO
 
 ## 5. Cobertura
 
-**Backend 91,65 %** (umbral del pipeline 80 %, RNF‑06). **Frontend 95,41 % sentencias,
+**Backend 91,37 %** (umbral del pipeline 80 %, RNF‑06). **Frontend 95,41 % sentencias,
 87,3 % ramas, 90,69 % funciones** (umbrales 80/70/80).
 
 ### La cifra anterior estaba mal medida
@@ -227,7 +246,7 @@ Estado actual: `pip-audit --strict` → **No known vulnerabilities found**.
 5. **Las pruebas de seguridad de la Fase 4 no llevaban su marcador** y quedaban fuera de la
    puerta `-m seguridad` del pipeline. La firma del webhook, la regla 10 y la frontera
    clínica son controles de seguridad, no pruebas funcionales. Corregido: la puerta pasa de
-   235 a **355** pruebas. Un control verificado por una prueba que la puerta no ejecuta no
+   235 a **419** pruebas (las del calendario tambien la llevan). Un control verificado por una prueba que la puerta no ejecuta no
    está protegido contra una regresión.
 
 Los tres primeros aparecieron **ejerciendo el sistema**, no ejecutando la suite: vivían en
@@ -368,7 +387,7 @@ válida**. Es la afirmación que más conviene no adelantar.
 | 1 · Prototipo visual | en curso · 6 de 9 pantallas con datos sintéticos |
 | 2 · Backend y seguridad | en curso · falta escritura de pacientes y administración de usuarios |
 | 4 · WhatsApp | **cerrada** · outbox, plantillas, webhook y adaptadores; camino real sin verificar (E‑1) |
-| 4b · Calendarios externos | **no empezada** · OAuth, tokens cifrados, conciliación de cambios externos |
+| 4b · Calendarios externos | en curso · flujo completo con sandbox. Faltan el **adaptador real de Google** y la renovación automática del token (E‑19) |
 | 5 · Lista de espera | en curso · faltan rutas HTTP y disparo automático; la oferta ya puede encolar por outbox |
 | 6 · Conocimiento y RAG | **no empezada** · 0 pruebas `rag` |
 | 7 · Historia clínica | en curso · el outbox ya existe; faltan programar los recordatorios de toma y la pantalla real |
@@ -377,9 +396,9 @@ válida**. Es la afirmación que más conviene no adelantar.
 | 10 · Producción | **no empezada** |
 
 También pendientes: los 21 escenarios E2E con Playwright, las pruebas de carga con k6,
-DAST, y cinco documentos (`rag.md`, `calendar-integration.md`, `monitoring.md`,
-`backup-and-restore.md`, `incident-response.md`). `whatsapp-integration.md` se entrega con
-esta fase.
+DAST, y cuatro documentos (`rag.md`, `monitoring.md`, `backup-and-restore.md`,
+`incident-response.md`). `whatsapp-integration.md` y `calendar-integration.md` se entregan
+con esta fase.
 
 **Lo que la Fase 4 deja explícitamente para después**, no por olvido:
 
@@ -393,6 +412,10 @@ esta fase.
 * **Los tres tipos de mensaje de calendario** (`CALENDARIO_*`) no tienen plantilla a
   propósito: llevan una operación sobre un evento, no texto para una persona. Hay una
   prueba que verifica esa ausencia para que sea una decisión visible y no un hueco.
+* **El adaptador real de Google Calendar.** El flujo está completo con sandbox; falta
+  hablar con la API v3 y renovar el token de acceso automáticamente (E‑19). Hoy, un token
+  caducado exige volver a autorizar a mano —no se pierde ningún evento, pero la
+  sincronización se detiene hasta que el profesional actúe.
 
 ---
 
@@ -413,7 +436,8 @@ esta fase.
 | Comunicación con pacientes (saliente) | ⚠️ **verificada contra sandbox**, no contra Meta (E‑1) |
 | Comunicación con pacientes (entrante) | ⚠️ webhook verificado; **nada que cambie una cita se ejecuta solo** (E‑13) |
 | Notificaciones sin datos clínicos | ✅ verificado sobre el catálogo completo |
-| Calendarios externos | ❌ no existe |
+| Eventos de calendario sin datos clínicos | ✅ verificado en la firma y en lo que sale al proveedor |
+| Calendarios externos | ⚠️ flujo verificado con sandbox; **adaptador real no implementado** (E‑1, E‑19) |
 | Historia clínica en la interfaz | ❌ maqueta |
 | Pruebas E2E, carga, DAST, recuperación | ❌ no existen |
 | Restauración de copias verificada | ❌ no existe |

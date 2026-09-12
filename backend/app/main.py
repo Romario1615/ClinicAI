@@ -38,6 +38,8 @@ from app.api.manejadores import registrar_manejadores
 from app.api.middleware import MiddlewareCorrelacion
 from app.mensajeria import rutas as rutas_whatsapp
 from app.modulos.agenda import rutas as rutas_agenda
+from app.modulos.calendario import rutas as rutas_calendario
+from app.modulos.calendario.seleccion import construir_proveedores
 from app.modulos.historia import rutas as rutas_historia
 from app.modulos.organizacion import rutas as rutas_catalogo
 from app.modulos.pacientes import rutas as rutas_pacientes
@@ -158,6 +160,10 @@ def crear_aplicacion(
         cliente_redis if cliente_redis is not None else _crear_cliente_redis(configuracion)
     )
     aplicacion.state.limitador = LimitadorTasa(aplicacion.state.redis, aplicacion.state.reloj)
+    # Adaptadores de calendario. Van en `app.state` y no como global del
+    # modulo para que la suite pueda levantar varias aplicaciones con
+    # adaptadores distintos en el mismo proceso.
+    aplicacion.state.proveedores_calendario = construir_proveedores(configuracion)
 
     # --- Middleware ---
     #
@@ -192,6 +198,7 @@ def _registrar_rutas(aplicacion: FastAPI) -> None:
     # El webhook no lleva autenticacion: lo protege la firma HMAC, no un
     # token. Ver el encabezado de app/mensajeria/rutas.py.
     aplicacion.include_router(rutas_whatsapp.enrutador, prefix=PREFIJO_API)
+    aplicacion.include_router(rutas_calendario.enrutador, prefix=PREFIJO_API)
 
     @aplicacion.get("/salud/vivo", tags=["salud"], summary="El proceso responde")
     async def vivo() -> dict[str, str]:
