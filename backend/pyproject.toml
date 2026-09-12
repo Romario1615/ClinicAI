@@ -263,6 +263,15 @@ filterwarnings = [
 [tool.coverage.run]
 source = ["app"]
 branch = true
+# SQLAlchemy async ejecuta el codigo que rodea a cada consulta dentro de un
+# greenlet (`greenlet_spawn`).  Sin declararlo, coverage no traza esas lineas y
+# reporta como no cubierto codigo que las pruebas si ejecutan: el webhook
+# aparecia al 74 % con 26 pruebas que lo recorren entero.
+#
+# El sintoma es peligroso porque empuja en la direccion contraria: invita a
+# escribir pruebas para lineas que ya estaban probadas, y oculta las que de
+# verdad no lo estan.
+concurrency = ["thread", "greenlet"]
 omit = [
     "app/semillas/*",
     "*/__init__.py",
