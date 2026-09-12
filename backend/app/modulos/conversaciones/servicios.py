@@ -33,6 +33,20 @@ volviendo a dar de alta, mientras que el error contrario no se corrige.
 
 Se da de baja a **todos** los pacientes que comparten ese numero, por el mismo
 motivo: ante la duda, dejar de escribir.
+
+Una nota sobre el formato del numero
+------------------------------------
+Toda comparacion contra `paciente.telefono_whatsapp` pasa por
+`telefono_normalizado()`, que reduce la columna a digitos en el `WHERE`.  No es
+una comodidad: el panel guarda el numero como lo escribio el personal
+(«+593 99 900 0333») y el webhook entrega solo digitos («593999000333»).
+
+Comparar las dos formas en crudo no encuentra a nadie, y la consecuencia real
+era que **un paciente que respondia BAJA no quedaba dado de baja** y el sistema
+le seguia escribiendo.  Se descubrio ejerciendo el sistema con las semillas
+reales; la suite no lo veia porque sus fixtures guardaban el numero ya
+normalizado.  Hay un indice funcional que sostiene esa consulta
+(`ix_paciente_whatsapp_normalizado`).
 """
 
 from __future__ import annotations
@@ -46,6 +60,7 @@ from sqlalchemy.dialects.postgresql import insert as insert_pg
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.mensajeria.carga_whatsapp import CargaWebhook, MensajeEntranteCrudo
+from app.mensajeria.destinatarios import normalizar_telefono
 from app.modulos.conversaciones.intenciones import reconocer
 from app.modulos.conversaciones.modelos import (
     Conversacion,
@@ -53,7 +68,12 @@ from app.modulos.conversaciones.modelos import (
     IntencionEntrante,
     MensajeEntrante,
 )
-from app.modulos.pacientes.modelos import Consentimiento, Paciente, TipoConsentimiento
+from app.modulos.pacientes.modelos import (
+    Consentimiento,
+    Paciente,
+    TipoConsentimiento,
+    telefono_normalizado,
+)
 from app.nucleo.bd import ejecutar_escritura
 from app.nucleo.registro import obtener_logger
 from app.nucleo.reloj import Reloj
@@ -206,10 +226,14 @@ class ServicioConversaciones:
         atribuiria el hilo a la persona equivocada, y a partir de ahi todo lo
         que se registre en esa conversacion quedaria en la ficha de quien no
         escribio.
+
+        La comparacion es sobre el numero **normalizado** en las dos partes.
+        Comparar la columna en crudo no encontraba a nadie: el panel guarda
+        «+593 99 900 0333» y el webhook entrega «593999000333».
         """
         consulta = select(Paciente.id).where(
             Paciente.clinica_id == clinica_id,
-            Paciente.telefono_whatsapp == telefono,
+            telefono_normalizado() == normalizar_telefono(telefono),
         )
         candidatos = list((await self._sesion.execute(consulta.limit(2))).scalars().all())
         return candidatos[0] if len(candidatos) == 1 else None
@@ -222,7 +246,7 @@ class ServicioConversaciones:
         """
         pacientes = select(Paciente.id).where(
             Paciente.clinica_id == clinica_id,
-            Paciente.telefono_whatsapp == telefono,
+            telefono_normalizado() == normalizar_telefono(telefono),
         )
         sentencia = (
             update(Consentimiento)

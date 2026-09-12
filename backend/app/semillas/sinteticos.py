@@ -24,6 +24,7 @@ reales, y separarlos despues seria un trabajo manual sobre datos clinicos.
 
 from __future__ import annotations
 
+import hashlib
 import random
 import unicodedata
 import uuid
@@ -47,7 +48,12 @@ from app.modulos.organizacion.modelos import (
     Sede,
     Servicio,
 )
-from app.modulos.pacientes.modelos import Paciente, RelacionAsistencial
+from app.modulos.pacientes.modelos import (
+    Consentimiento,
+    Paciente,
+    RelacionAsistencial,
+    TipoConsentimiento,
+)
 from app.modulos.profesionales.modelos import (
     AgendaPlantilla,
     Profesional,
@@ -123,6 +129,12 @@ class ResumenSinteticos:
     servicios: int = 0
     profesionales: int = 0
     pacientes: int = 0
+    # Consentimientos de comunicacion otorgados y vigentes.  Se informa porque
+    # es la cifra que decide a cuantos pacientes puede escribir el sistema: con
+    # cero, ningun recordatorio sale y el flujo de mensajeria no se puede
+    # ejercitar ni demostrar.
+    consentimientos_vigentes: int = 0
+    consentimientos_revocados: int = 0
     citas: int = 0
     # Citas descartadas por colisionar con otra ya generada.  Se informa
     # porque un numero alto indica que la agenda sintetica esta saturada y
@@ -138,6 +150,8 @@ class ResumenSinteticos:
             f"  Servicios:      {self.servicios}",
             f"  Profesionales:  {self.profesionales}",
             f"  Pacientes:      {self.pacientes}",
+            f"  Consentimientos vigentes: {self.consentimientos_vigentes}"
+            f" (revocados: {self.consentimientos_revocados})",
             f"  Citas:          {self.citas}",
             f"  Colisiones descartadas: {self.colisiones_descartadas}",
             "",
@@ -170,6 +184,18 @@ def _documento_sintetico(indice: int) -> str:
 
 def _telefono_sintetico(indice: int) -> str:
     return f"{PREFIJO_TELEFONO_PRUEBAS}{indice:04d}"
+
+
+def _hash_texto_sintetico(version: str) -> str:
+    """Hash del texto de consentimiento sintetico.
+
+    No es el hash de ningun texto legal real. Existe porque el modelo exige 64
+    caracteres hexadecimales -- guarda el hash del texto aceptado para poder
+    responder «que acepte exactamente» ante una reclamacion --, y un valor
+    derivado de la version es mas honesto que 64 ceros: deja claro que
+    corresponde a un texto concreto, aunque sea ficticio.
+    """
+    return hashlib.sha256(f"consentimiento-sintetico:{version}".encode()).hexdigest()
 
 
 def _correo_sintetico(nombre: str, indice: int) -> str:
@@ -556,6 +582,70 @@ async def cargar_datos_sinteticos(  # noqa: PLR0912, PLR0915
         pacientes.append(paciente)
     await sesion.flush()
     resumen.pacientes = len(pacientes)
+
+    # =====================================================================
+    #  Consentimientos de comunicacion
+    # =====================================================================
+    # Sin esta seccion, los 60 pacientes sinteticos tenian numero de WhatsApp y
+    # ningun consentimiento, asi que `ServicioOutbox.encolar` los rechazaba a
+    # todos: el flujo de mensajeria no se podia ejercitar ni demostrar sobre
+    # los datos de desarrollo.
+    #
+    # El reparto es deliberado y cubre los tres caminos que el codigo
+    # distingue, para que ninguno quede sin datos con los que ejercerlo:
+    #
+    #   * la mayoria acepta comunicacion de citas;
+    #   * una parte acepta ademas recordatorios de medicacion, que es un
+    #     consentimiento DISTINTO (aceptar avisos de cita no es aceptar que le
+    #     escriban sobre su medicacion);
+    #   * uno de cada nueve no acepta nada, para que el camino de rechazo
+    #     tenga a quien rechazar;
+    #   * uno de cada once lo revoco, que es el caso del paciente que respondio
+    #     BAJA por WhatsApp.
+    #
+    # El texto del consentimiento es sintetico y su version lo dice. El hash NO
+    # es el de ningun texto legal real: cuando exista uno revisado
+    # juridicamente (limitacion E-2), esta version debe sustituirse.
+    version_texto = "sintetica-v0"
+    texto_hash = _hash_texto_sintetico(version_texto)
+    vigentes = 0
+    revocados = 0
+
+    for indice, paciente in enumerate(pacientes):
+        if indice % 9 == 0:
+            # Sin consentimiento: no se crea fila. La ausencia de fila y una
+            # fila con `otorgado=False` no son lo mismo, y el codigo distingue.
+            continue
+
+        revocado = indice % 11 == 0
+        tipos = [TipoConsentimiento.COMUNICACION_WHATSAPP]
+        if indice % 3 == 0:
+            tipos.append(TipoConsentimiento.RECORDATORIOS_MEDICACION)
+
+        for tipo in tipos:
+            sesion.add(
+                Consentimiento(
+                    paciente_id=paciente.id,
+                    tipo=tipo.value,
+                    otorgado=True,
+                    version_texto=version_texto,
+                    texto_hash=texto_hash,
+                    canal="PANEL",
+                    otorgado_en=ahora - timedelta(days=30),
+                    # La revocacion no borra la fila: hay que poder demostrar
+                    # que hubo consentimiento mientras se enviaron mensajes.
+                    revocado_en=(ahora - timedelta(days=2)) if revocado else None,
+                    evidencia={"origen": "semilla sintetica", "marca": MARCA_SINTETICO},
+                )
+            )
+            if revocado:
+                revocados += 1
+            else:
+                vigentes += 1
+
+    await sesion.flush()
+    resumen.consentimientos_vigentes = vigentes
+    resumen.consentimientos_revocados = revocados
 
     # =====================================================================
     #  Citas

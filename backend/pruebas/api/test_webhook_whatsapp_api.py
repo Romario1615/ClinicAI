@@ -52,15 +52,51 @@ pytestmark = [pytest.mark.api, pytest.mark.seguridad, pytest.mark.asyncio]
 # Valores sinteticos. No son ni se parecen a credenciales reales.
 SECRETO_APP = "secreto-de-aplicacion-sintetico-para-pruebas"
 TOKEN_VERIFICACION = "token-de-verificacion-sintetico"
-ID_NUMERO = "000000000000000"
-TELEFONO = "593999000111"
+# El identificador del numero de Meta y el telefono del paciente se generan
+# **por prueba**, no son constantes del modulo.
+#
+# Lo eran, y con valores fijos: `000000000000000` y `593999000111`. Eso acoplaba
+# las pruebas al contenido de la base de desarrollo -- basto que un ejercicio
+# manual insertara una fila de `configuracion_clinica` con ese mismo
+# identificador para que 20 pruebas fallaran, unas por encontrar una clinica
+# donde esperaban ninguna y otras por resolver al paciente equivocado.
+#
+# Con valores unicos por prueba, el resultado no depende de lo que haya en la
+# base ni del orden de ejecucion.
+
+
+@pytest.fixture
+def id_numero(sufijo: str) -> str:
+    """`phone_number_id` de Meta, unico para esta prueba."""
+    return f"9{int(sufijo, 16) % 10**14:014d}"
+
+
+@pytest.fixture
+def telefono(sufijo: str) -> str:
+    """El numero **tal como llega del webhook**: solo digitos.
+
+    Es lo que exige y lo que entrega la Cloud API.
+    """
+    return f"5939{int(sufijo, 16) % 10**8:08d}"
+
+
+@pytest.fixture
+def telefono_guardado(telefono: str) -> str:
+    """El mismo numero **tal como lo guarda el panel**: con «+» y espacios.
+
+    La diferencia no es cosmetica. Cuando la fixture guardaba la forma ya
+    normalizada, estas pruebas pasaban mientras el sistema real no encontraba al
+    paciente, y **un paciente que respondia BAJA seguia recibiendo mensajes**.
+    Guardar aqui la forma realista es lo que hace que la prueba sirva.
+    """
+    return f"+{telefono[:3]} {telefono[3:5]} {telefono[5:8]} {telefono[8:]}"
 
 
 # ---------------------------------------------------------------------------
 #  Aplicacion con los secretos del webhook
 # ---------------------------------------------------------------------------
 @pytest.fixture
-def configuracion_webhook(configuracion: Configuracion) -> Configuracion:
+def configuracion_webhook(configuracion: Configuracion, id_numero: str) -> Configuracion:
     """Copia de la configuracion con los secretos del webhook puestos.
 
     Se copia en lugar de tocar el entorno del proceso: modificar variables de
@@ -69,7 +105,7 @@ def configuracion_webhook(configuracion: Configuracion) -> Configuracion:
     return configuracion.model_copy(
         update={
             "modo_whatsapp": "sandbox",
-            "whatsapp_id_numero_telefono": ID_NUMERO,
+            "whatsapp_id_numero_telefono": id_numero,
             "whatsapp_secreto_app": SecretStr(SECRETO_APP),
             "whatsapp_token_verificacion": SecretStr(TOKEN_VERIFICACION),
             "whatsapp_validar_firma": True,
@@ -109,7 +145,9 @@ async def cliente_webhook(aplicacion_webhook: FastAPI) -> AsyncIterator[AsyncCli
 
 
 @pytest_asyncio.fixture
-async def numero_de_la_clinica(sesion: AsyncSession, clinica: Clinica) -> ConfiguracionClinica:
+async def numero_de_la_clinica(
+    sesion: AsyncSession, clinica: Clinica, id_numero: str
+) -> ConfiguracionClinica:
     """Asocia el numero de Meta con la clinica.
 
     Sin esta fila el sistema no sabe a quien pertenece el mensaje, y por diseno
@@ -118,7 +156,7 @@ async def numero_de_la_clinica(sesion: AsyncSession, clinica: Clinica) -> Config
     registro = ConfiguracionClinica(
         clinica_id=clinica.id,
         clave=CLAVE_NUMERO,
-        valor={"valor": ID_NUMERO},
+        valor={"valor": id_numero},
         version=1,
         vigente=True,
     )
@@ -129,7 +167,7 @@ async def numero_de_la_clinica(sesion: AsyncSession, clinica: Clinica) -> Config
 
 @pytest_asyncio.fixture
 async def paciente_con_consentimiento(
-    sesion: AsyncSession, clinica: Clinica, sufijo: str
+    sesion: AsyncSession, clinica: Clinica, sufijo: str, telefono_guardado: str
 ) -> Paciente:
     registro = Paciente(
         clinica_id=clinica.id,
@@ -137,7 +175,7 @@ async def paciente_con_consentimiento(
         numero_documento=f"5{sufijo[:9]}",
         nombre="Paciente Webhook",
         apellido="De Prueba",
-        telefono_whatsapp=TELEFONO,
+        telefono_whatsapp=telefono_guardado,
     )
     sesion.add(registro)
     await sesion.flush()
@@ -162,7 +200,9 @@ async def paciente_con_consentimiento(
 # ---------------------------------------------------------------------------
 #  Utilidades
 # ---------------------------------------------------------------------------
-def _cuerpo_mensaje(texto: str, *, external_id: str) -> dict[str, Any]:
+def _cuerpo_mensaje(
+    texto: str, *, external_id: str, telefono: str, id_numero: str
+) -> dict[str, Any]:
     return {
         "object": "whatsapp_business_account",
         "entry": [
@@ -175,12 +215,12 @@ def _cuerpo_mensaje(texto: str, *, external_id: str) -> dict[str, Any]:
                             "messaging_product": "whatsapp",
                             "metadata": {
                                 "display_phone_number": "0",
-                                "phone_number_id": ID_NUMERO,
+                                "phone_number_id": id_numero,
                             },
                             "messages": [
                                 {
                                     "id": external_id,
-                                    "from": TELEFONO,
+                                    "from": telefono,
                                     "timestamp": "1776268800",
                                     "type": "text",
                                     "text": {"body": texto},
@@ -247,13 +287,19 @@ async def test_el_reto_con_token_incorrecto_no_pasa(cliente_webhook: AsyncClient
 #  Firma
 # ---------------------------------------------------------------------------
 async def test_una_firma_invalida_devuelve_403(
-    cliente_webhook: AsyncClient, api: str, numero_de_la_clinica: ConfiguracionClinica
+    cliente_webhook: AsyncClient,
+    api: str,
+    numero_de_la_clinica: ConfiguracionClinica,
+    telefono: str,
+    id_numero: str,
 ) -> None:
     """Un tercero podria inyectar cancelaciones que ningun paciente pidio."""
     respuesta = await _enviar(
         cliente_webhook,
         api,
-        _cuerpo_mensaje("CANCELAR", external_id="wamid.FALSIFICADO"),
+        _cuerpo_mensaje(
+            "CANCELAR", external_id="wamid.FALSIFICADO", telefono=telefono, id_numero=id_numero
+        ),
         firma="sha256=" + "0" * 64,
     )
     assert respuesta.status_code == 403
@@ -265,6 +311,8 @@ async def test_una_firma_invalida_no_produce_ningun_efecto(
     sesion: AsyncSession,
     numero_de_la_clinica: ConfiguracionClinica,
     paciente_con_consentimiento: Paciente,
+    telefono: str,
+    id_numero: str,
 ) -> None:
     """La comprobacion que de verdad importa: no se escribio nada.
 
@@ -273,11 +321,20 @@ async def test_una_firma_invalida_no_produce_ningun_efecto(
     await _enviar(
         cliente_webhook,
         api,
-        _cuerpo_mensaje("BAJA", external_id="wamid.FALSIFICADO2"),
+        _cuerpo_mensaje(
+            "BAJA", external_id="wamid.FALSIFICADO2", telefono=telefono, id_numero=id_numero
+        ),
         firma="sha256=" + "1" * 64,
     )
 
-    mensajes = await sesion.scalar(sa.select(sa.func.count()).select_from(MensajeEntrante))
+    # Se cuenta SOLO el identificador de esta prueba. Contar la tabla entera
+    # supondria una base vacia, y la de desarrollo no lo esta: la prueba
+    # fallaria por datos ajenos en lugar de por el comportamiento que mide.
+    mensajes = await sesion.scalar(
+        sa.select(sa.func.count())
+        .select_from(MensajeEntrante)
+        .where(MensajeEntrante.external_id == "wamid.FALSIFICADO2")
+    )
     assert mensajes == 0
 
     # El consentimiento sigue vigente: la baja falsificada no se aplico.
@@ -297,6 +354,8 @@ async def test_una_firma_invalida_queda_auditada(
     api: str,
     sesion: AsyncSession,
     numero_de_la_clinica: ConfiguracionClinica,
+    telefono: str,
+    id_numero: str,
 ) -> None:
     """`webhook.firma_invalida` es una de las acciones con alerta.
 
@@ -306,7 +365,9 @@ async def test_una_firma_invalida_queda_auditada(
     await _enviar(
         cliente_webhook,
         api,
-        _cuerpo_mensaje("CANCELAR", external_id="wamid.FALSIFICADO3"),
+        _cuerpo_mensaje(
+            "CANCELAR", external_id="wamid.FALSIFICADO3", telefono=telefono, id_numero=id_numero
+        ),
         firma="sha256=" + "2" * 64,
     )
 
@@ -318,10 +379,17 @@ async def test_una_firma_invalida_queda_auditada(
     assert accion == AccionAuditada.WEBHOOK_FIRMA_INVALIDA.value
 
 
-async def test_sin_cabecera_de_firma_devuelve_403(cliente_webhook: AsyncClient, api: str) -> None:
+async def test_sin_cabecera_de_firma_devuelve_403(
+    cliente_webhook: AsyncClient,
+    api: str,
+    telefono: str,
+    id_numero: str,
+) -> None:
     respuesta = await cliente_webhook.post(
         f"{api}/whatsapp/webhook",
-        json=_cuerpo_mensaje("hola", external_id="wamid.SINFIRMA"),
+        json=_cuerpo_mensaje(
+            "hola", external_id="wamid.SINFIRMA", telefono=telefono, id_numero=id_numero
+        ),
     )
     assert respuesta.status_code == 403
 
@@ -336,11 +404,18 @@ async def test_un_mensaje_valido_abre_conversacion_y_se_guarda(
     clinica: Clinica,
     numero_de_la_clinica: ConfiguracionClinica,
     paciente_con_consentimiento: Paciente,
+    telefono: str,
+    id_numero: str,
 ) -> None:
     respuesta = await _enviar(
         cliente_webhook,
         api,
-        _cuerpo_mensaje("Buenas tardes, tengo una duda", external_id="wamid.NUEVO1"),
+        _cuerpo_mensaje(
+            "Buenas tardes, tengo una duda",
+            external_id="wamid.NUEVO1",
+            telefono=telefono,
+            id_numero=id_numero,
+        ),
     )
     assert respuesta.status_code == 200
     assert respuesta.json()["mensajes"] == 1
@@ -371,12 +446,16 @@ async def test_un_reintento_de_meta_no_duplica_el_efecto(
     sesion: AsyncSession,
     numero_de_la_clinica: ConfiguracionClinica,
     paciente_con_consentimiento: Paciente,
+    telefono: str,
+    id_numero: str,
 ) -> None:
     """Meta entrega al menos una vez y reintenta ante cualquier duda.
 
     La restriccion unica sobre `external_id` es lo que lo absorbe.
     """
-    cuerpo = _cuerpo_mensaje("Tengo una consulta", external_id="wamid.REINTENTO")
+    cuerpo = _cuerpo_mensaje(
+        "Tengo una consulta", external_id="wamid.REINTENTO", telefono=telefono, id_numero=id_numero
+    )
 
     primera = await _enviar(cliente_webhook, api, cuerpo)
     segunda = await _enviar(cliente_webhook, api, cuerpo)
@@ -400,10 +479,22 @@ async def test_dos_mensajes_del_mismo_numero_comparten_hilo(
     clinica: Clinica,
     numero_de_la_clinica: ConfiguracionClinica,
     paciente_con_consentimiento: Paciente,
+    telefono: str,
+    id_numero: str,
 ) -> None:
     """Un hilo partido en dos deja al personal viendo media conversacion."""
-    await _enviar(cliente_webhook, api, _cuerpo_mensaje("hola", external_id="wamid.HILO1"))
-    await _enviar(cliente_webhook, api, _cuerpo_mensaje("sigo aqui", external_id="wamid.HILO2"))
+    await _enviar(
+        cliente_webhook,
+        api,
+        _cuerpo_mensaje("hola", external_id="wamid.HILO1", telefono=telefono, id_numero=id_numero),
+    )
+    await _enviar(
+        cliente_webhook,
+        api,
+        _cuerpo_mensaje(
+            "sigo aqui", external_id="wamid.HILO2", telefono=telefono, id_numero=id_numero
+        ),
+    )
 
     conversaciones = await sesion.scalar(
         sa.select(sa.func.count())
@@ -422,6 +513,8 @@ async def test_la_baja_revoca_el_consentimiento_de_inmediato(
     sesion: AsyncSession,
     numero_de_la_clinica: ConfiguracionClinica,
     paciente_con_consentimiento: Paciente,
+    telefono: str,
+    id_numero: str,
 ) -> None:
     """Si alguien pide que dejen de escribirle, se deja de escribirle ya.
 
@@ -429,7 +522,9 @@ async def test_la_baja_revoca_el_consentimiento_de_inmediato(
     el fin de semana.
     """
     respuesta = await _enviar(
-        cliente_webhook, api, _cuerpo_mensaje("BAJA", external_id="wamid.BAJA1")
+        cliente_webhook,
+        api,
+        _cuerpo_mensaje("BAJA", external_id="wamid.BAJA1", telefono=telefono, id_numero=id_numero),
     )
     assert respuesta.status_code == 200
 
@@ -450,12 +545,18 @@ async def test_la_baja_no_borra_el_consentimiento(
     sesion: AsyncSession,
     numero_de_la_clinica: ConfiguracionClinica,
     paciente_con_consentimiento: Paciente,
+    telefono: str,
+    id_numero: str,
 ) -> None:
     """Hay que poder demostrar que hubo consentimiento mientras se enviaba.
 
     La revocacion marca `revocado_en`; no borra la fila.
     """
-    await _enviar(cliente_webhook, api, _cuerpo_mensaje("STOP", external_id="wamid.BAJA2"))
+    await _enviar(
+        cliente_webhook,
+        api,
+        _cuerpo_mensaje("STOP", external_id="wamid.BAJA2", telefono=telefono, id_numero=id_numero),
+    )
 
     filas = (
         (
@@ -480,9 +581,15 @@ async def test_la_baja_cierra_el_hilo(
     clinica: Clinica,
     numero_de_la_clinica: ConfiguracionClinica,
     paciente_con_consentimiento: Paciente,
+    telefono: str,
+    id_numero: str,
 ) -> None:
     """Dejarlo abierto en la cola del personal invita a responderle."""
-    await _enviar(cliente_webhook, api, _cuerpo_mensaje("baja", external_id="wamid.BAJA3"))
+    await _enviar(
+        cliente_webhook,
+        api,
+        _cuerpo_mensaje("baja", external_id="wamid.BAJA3", telefono=telefono, id_numero=id_numero),
+    )
 
     conversacion = (
         await sesion.execute(sa.select(Conversacion).where(Conversacion.clinica_id == clinica.id))
@@ -513,6 +620,8 @@ async def test_ninguna_intencion_de_estado_se_ejecuta_sin_una_persona(
     paciente_con_consentimiento: Paciente,
     texto: str,
     intencion: IntencionEntrante,
+    telefono: str,
+    id_numero: str,
 ) -> None:
     """Se reconoce la intencion, se registra, y se deriva.
 
@@ -521,7 +630,11 @@ async def test_ninguna_intencion_de_estado_se_ejecuta_sin_una_persona(
     cita equivocada de una familia es un dano real.
     """
     external_id = f"wamid.ESTADO-{uuid.uuid4().hex[:8]}"
-    await _enviar(cliente_webhook, api, _cuerpo_mensaje(texto, external_id=external_id))
+    await _enviar(
+        cliente_webhook,
+        api,
+        _cuerpo_mensaje(texto, external_id=external_id, telefono=telefono, id_numero=id_numero),
+    )
 
     mensaje = (
         await sesion.execute(
@@ -543,6 +656,8 @@ async def test_un_mensaje_clinico_se_deriva_y_no_se_interpreta(
     clinica: Clinica,
     numero_de_la_clinica: ConfiguracionClinica,
     paciente_con_consentimiento: Paciente,
+    telefono: str,
+    id_numero: str,
 ) -> None:
     """CLAUDE.md, regla 5, en el camino real.
 
@@ -551,7 +666,12 @@ async def test_un_mensaje_clinico_se_deriva_y_no_se_interpreta(
     await _enviar(
         cliente_webhook,
         api,
-        _cuerpo_mensaje("la pastilla me da nauseas", external_id="wamid.CLINICO"),
+        _cuerpo_mensaje(
+            "la pastilla me da nauseas",
+            external_id="wamid.CLINICO",
+            telefono=telefono,
+            id_numero=id_numero,
+        ),
     )
 
     mensaje = (
@@ -582,20 +702,34 @@ async def test_un_mensaje_clinico_se_deriva_y_no_se_interpreta(
 #  Robustez: no perder la suscripcion
 # ---------------------------------------------------------------------------
 async def test_un_numero_sin_clinica_no_rompe_el_endpoint(
-    cliente_webhook: AsyncClient, api: str, sesion: AsyncSession
+    cliente_webhook: AsyncClient,
+    api: str,
+    sesion: AsyncSession,
+    telefono: str,
+    id_numero: str,
 ) -> None:
+    # No se pide `numero_de_la_clinica`: el objetivo es justo que no exista la
+    # fila que asocia el numero con una clinica.
     """Sin la fila de configuracion, el mensaje se descarta con alerta.
 
     Se responde 200: un 5xx repetido le cuesta al sistema la suscripcion del
     webhook, y entonces no llegan las respuestas de **ningun** paciente.
     """
     respuesta = await _enviar(
-        cliente_webhook, api, _cuerpo_mensaje("hola", external_id="wamid.SINCLINICA")
+        cliente_webhook,
+        api,
+        _cuerpo_mensaje(
+            "hola", external_id="wamid.SINCLINICA", telefono=telefono, id_numero=id_numero
+        ),
     )
     assert respuesta.status_code == 200
     assert respuesta.json()["mensajes"] == 0
 
-    total = await sesion.scalar(sa.select(sa.func.count()).select_from(MensajeEntrante))
+    total = await sesion.scalar(
+        sa.select(sa.func.count())
+        .select_from(MensajeEntrante)
+        .where(MensajeEntrante.external_id == "wamid.SINCLINICA")
+    )
     assert total == 0
 
 
@@ -637,6 +771,9 @@ async def test_el_webhook_no_devuelve_datos_del_paciente(
     api: str,
     numero_de_la_clinica: ConfiguracionClinica,
     paciente_con_consentimiento: Paciente,
+    telefono: str,
+    id_numero: str,
+    telefono_guardado: str,
 ) -> None:
     """La respuesta es un acuse de recibo, no una vista de datos.
 
@@ -644,9 +781,143 @@ async def test_el_webhook_no_devuelve_datos_del_paciente(
     sin control de acceso.
     """
     respuesta = await _enviar(
-        cliente_webhook, api, _cuerpo_mensaje("hola", external_id="wamid.SINDATOS")
+        cliente_webhook,
+        api,
+        _cuerpo_mensaje(
+            "hola", external_id="wamid.SINDATOS", telefono=telefono, id_numero=id_numero
+        ),
     )
     cuerpo = respuesta.text
-    assert TELEFONO not in cuerpo
+    assert telefono not in cuerpo
+    assert telefono_guardado not in cuerpo
     assert "Paciente Webhook" not in cuerpo
     assert str(paciente_con_consentimiento.id) not in cuerpo
+
+
+# ---------------------------------------------------------------------------
+#  Regresion: el formato del numero
+# ---------------------------------------------------------------------------
+# Estas tres pruebas existen por un fallo encontrado **ejerciendo el sistema**
+# con las semillas reales, con 891 pruebas en verde. El panel guarda
+# «+593 99 900 0111» y el webhook entrega «593999000111»; la comparacion en
+# crudo no encontraba a nadie, y un paciente que respondia BAJA seguia
+# recibiendo mensajes.
+#
+# Las fixtures guardaban el numero ya normalizado, asi que la suite no lo veia.
+# Vivia en el espacio entre lo que la fixture suponia y lo que los datos reales
+# tienen.
+async def test_la_identidad_se_resuelve_con_el_numero_en_formato_de_panel(
+    cliente_webhook: AsyncClient,
+    api: str,
+    sesion: AsyncSession,
+    clinica: Clinica,
+    numero_de_la_clinica: ConfiguracionClinica,
+    paciente_con_consentimiento: Paciente,
+    telefono: str,
+    id_numero: str,
+    telefono_guardado: str,
+) -> None:
+    """El paciente se encuentra aunque su numero esté guardado con «+» y espacios."""
+    assert paciente_con_consentimiento.telefono_whatsapp == telefono_guardado
+
+    await _enviar(
+        cliente_webhook,
+        api,
+        _cuerpo_mensaje(
+            "hola", external_id="wamid.FORMATO1", telefono=telefono, id_numero=id_numero
+        ),
+    )
+
+    conversacion = (
+        await sesion.execute(sa.select(Conversacion).where(Conversacion.clinica_id == clinica.id))
+    ).scalar_one()
+    assert conversacion.paciente_id == paciente_con_consentimiento.id
+
+
+async def test_la_baja_funciona_con_el_numero_en_formato_de_panel(
+    cliente_webhook: AsyncClient,
+    api: str,
+    sesion: AsyncSession,
+    numero_de_la_clinica: ConfiguracionClinica,
+    paciente_con_consentimiento: Paciente,
+    telefono: str,
+    id_numero: str,
+) -> None:
+    """La prueba que el fallo original habria hecho fallar.
+
+    Es la mas importante de este archivo: si la revocacion no encuentra al
+    paciente, el sistema sigue escribiendo a quien pidió que pararan.
+    """
+    await _enviar(
+        cliente_webhook,
+        api,
+        _cuerpo_mensaje(
+            "BAJA", external_id="wamid.FORMATO2", telefono=telefono, id_numero=id_numero
+        ),
+    )
+
+    vigentes = await sesion.scalar(
+        sa.select(sa.func.count())
+        .select_from(Consentimiento)
+        .where(
+            Consentimiento.paciente_id == paciente_con_consentimiento.id,
+            Consentimiento.revocado_en.is_(None),
+        )
+    )
+    assert vigentes == 0, (
+        "La baja no revoco el consentimiento: la comparacion del telefono no "
+        "encontro al paciente. El sistema le seguiria escribiendo."
+    )
+
+
+# Los formatos se derivan del numero de la prueba, no son cadenas fijas: con
+# `telefono` unico por prueba, una constante no coincidiria con nada.
+@pytest.mark.parametrize(
+    "formato",
+    [
+        "{n}",
+        "+{n}",
+        "+{a} {b} {c} {d}",
+        "{a}-{b}-{c}{d}",
+        "({a}) {b} {c} {d}",
+        " {n} ",
+    ],
+)
+async def test_cualquier_formato_guardado_resuelve_el_mismo_numero(
+    cliente_webhook: AsyncClient,
+    api: str,
+    sesion: AsyncSession,
+    clinica: Clinica,
+    numero_de_la_clinica: ConfiguracionClinica,
+    paciente_con_consentimiento: Paciente,
+    telefono: str,
+    id_numero: str,
+    formato: str,
+) -> None:
+    """El personal escribe el numero como quiere, y debe encontrarse igual.
+
+    Ninguno de estos formatos es exotico: son los que produce copiar un numero
+    de una agenda, de un mensaje o de un documento.
+    """
+    paciente_con_consentimiento.telefono_whatsapp = formato.format(
+        n=telefono,
+        a=telefono[:3],
+        b=telefono[3:5],
+        c=telefono[5:8],
+        d=telefono[8:],
+    )
+    await sesion.flush()
+
+    external_id = f"wamid.FMT-{uuid.uuid4().hex[:8]}"
+    await _enviar(
+        cliente_webhook,
+        api,
+        _cuerpo_mensaje("hola", external_id=external_id, telefono=telefono, id_numero=id_numero),
+    )
+
+    conversacion = (
+        await sesion.execute(sa.select(Conversacion).where(Conversacion.clinica_id == clinica.id))
+    ).scalar_one()
+    assert conversacion.paciente_id == paciente_con_consentimiento.id, (
+        f"El numero guardado como «{paciente_con_consentimiento.telefono_whatsapp}» no se resolvio."
+    )

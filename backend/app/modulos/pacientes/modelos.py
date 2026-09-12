@@ -22,11 +22,14 @@ from sqlalchemy import (
     BigInteger,
     Boolean,
     CheckConstraint,
+    ColumnElement,
     Date,
     ForeignKey,
     Index,
     String,
     Text,
+    func,
+    literal_column,
     text,
 )
 from sqlalchemy.dialects.postgresql import JSONB
@@ -123,6 +126,30 @@ class Paciente(Base, MezclaIdentificador, MezclaAuditoria, MezclaAnulacion):
         # corresponder a varias personas.  Hacerlo unico obligaria a inventar
         # numeros para los hijos, que es peor.
         Index("ix_paciente_whatsapp", "clinica_id", "telefono_whatsapp"),
+        # =================================================================
+        #  Indice FUNCIONAL sobre el numero normalizado.
+        #
+        #  Existe porque la columna guarda el numero tal como lo escribio el
+        #  personal -- «+593 99 900 0333» es lo legible en un panel -- y el
+        #  webhook de WhatsApp entrega «593999000333», solo digitos.  Comparar
+        #  las dos formas literalmente no encuentra al paciente.
+        #
+        #  Eso se descubrio ejerciendo el sistema: un paciente que respondia
+        #  BAJA no quedaba dado de baja, porque la revocacion no encontraba a
+        #  quien revocar, y el sistema le seguia escribiendo.  Era el fallo
+        #  exacto que ADR-0017 dice que no puede ocurrir.
+        #
+        #  Se resuelve normalizando en el `WHERE`, y este indice es lo que
+        #  impide que esa normalizacion obligue a recorrer la tabla en cada
+        #  mensaje entrante.  `regexp_replace` es IMMUTABLE, asi que se puede
+        #  indexar.
+        # =================================================================
+        Index(
+            "ix_paciente_whatsapp_normalizado",
+            "clinica_id",
+            text(r"regexp_replace(telefono_whatsapp, '\D', '', 'g')"),
+            postgresql_where=text("telefono_whatsapp IS NOT NULL"),
+        ),
         Index("ix_paciente_apellido", "clinica_id", "apellido", "nombre"),
         CheckConstraint(
             "nivel_verificacion IN ('NO_VERIFICADO', 'TELEFONO', 'DOCUMENTO', 'PRESENCIAL')",
@@ -410,3 +437,28 @@ class RelacionAsistencial(Base, MezclaIdentificador, MezclaAuditoria):
         if self.revocada_en is not None:
             return False
         return self.vigente_hasta is None or self.vigente_hasta > ahora
+
+
+def telefono_normalizado() -> ColumnElement[str]:
+    r"""Expresion SQL del numero de WhatsApp reducido a digitos.
+
+    La usan a la vez el indice funcional y las consultas que resuelven un
+    numero entrante.  Vive en una sola funcion a proposito: si la expresion
+    del indice y la de la consulta divergieran aunque sea en un espacio,
+    PostgreSQL dejaria de usar el indice y nadie lo notaria hasta que la
+    tabla creciera.
+
+    Los tres argumentos del patron van como `literal_column` y no como
+    parametros enlazados, y esto es lo que decide que el indice sirva:
+    PostgreSQL empareja una expresion indexada de forma **estructural**, y
+    `regexp_replace(col, $1, $2, $3)` no es la misma expresion que
+    `regexp_replace(col, '\D', '', 'g')`.  Con parametros, el indice existe y
+    no se usa.  No hay riesgo de inyeccion: son constantes del codigo, y el
+    valor que se compara si es un parametro enlazado.
+    """
+    return func.regexp_replace(
+        Paciente.telefono_whatsapp,
+        literal_column(r"'\D'"),
+        literal_column("''"),
+        literal_column("'g'"),
+    )
