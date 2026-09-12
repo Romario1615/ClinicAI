@@ -77,7 +77,7 @@ No son defectos. Se listan para que no se «arreglen» por error.
 | 2 · Backend y seguridad | en curso | Modelo de datos, migraciones, autenticación, RBAC con ámbito, auditoría, capa HTTP, límite de tasa, OpenAPI, catálogo y pacientes (lectura) implementados y probados. **Falta la escritura**: crear y editar pacientes, y la administración de usuarios, roles y ámbitos |
 | 3 · Agenda | **cerrada** | Disponibilidad, servicios, rutas HTTP, anti doble‑reserva bajo concurrencia real y barrido de bloqueos vencidos, todo con pruebas. El worker ARQ ejecuta el barrido cada minuto; su corrección está probada, pero **su ejecución continuada en un despliegue real no se ha verificado todavía** — eso corresponde a la Fase 10 |
 | 4 · WhatsApp y calendarios | pendiente | E‑1 |
-| 5 · Lista de espera | pendiente | — |
+| 5 · Lista de espera | en curso | Modelo y servicio con la garantía de **una oferta activa por turno** (índice único parcial + bloqueo consultivo), verificada con dos aceptaciones simultáneas en conexiones reales. 26 pruebas. **Faltan** las rutas HTTP, el disparo automático al cancelar una cita y el envío del aviso por outbox |
 | 6 · Conocimiento y RAG | pendiente | E‑3, E‑9, E‑12 |
 | 7 · Historia clínica y medicamentos | en curso | Modelo, **tres garantías clínicas en disparadores**, servicios, nueve rutas HTTP y relación asistencial obligatoria. 73 pruebas. **Faltan** los recordatorios de toma por outbox, el cálculo periódico de alertas en el worker y la pantalla real de la interfaz |
 | 8 · Dashboard y predicciones | pendiente | E‑4, E‑5 |
