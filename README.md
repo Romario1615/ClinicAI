@@ -165,6 +165,8 @@ El plan de pruebas completo, con los escenarios obligatorios y los resultados de
 | [`docs/known-limitations.md`](docs/known-limitations.md) | Limitaciones y riesgos residuales |
 | [`docs/backlog.md`](docs/backlog.md) | Backlog por fases con criterios de aceptación |
 | [`docs/decisiones/`](docs/decisiones/) | Registros de decisiones de arquitectura (ADR) |
+| [`docs/informe-avance.md`](docs/informe-avance.md) | **Estado real del proyecto**, con los 18 puntos exigidos y sus evidencias |
+| [`docs/test-plan.md`](docs/test-plan.md) | Qué se prueba, con qué y por qué de esa forma |
 
 ---
 
