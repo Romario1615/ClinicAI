@@ -21,9 +21,9 @@ from __future__ import annotations
 import uuid
 from collections.abc import AsyncIterator
 from datetime import datetime
-from typing import Any
+from typing import Any, cast
 
-from sqlalchemy import MetaData, text
+from sqlalchemy import CursorResult, Executable, MetaData, text
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
     AsyncSession,
@@ -262,3 +262,20 @@ ESPACIO_BLOQUEO_TURNO = 1
 ESPACIO_BLOQUEO_OFERTA = 2
 ESPACIO_BLOQUEO_OUTBOX = 3
 ESPACIO_BLOQUEO_INGESTA = 4
+
+
+async def ejecutar_escritura(sesion: AsyncSession, sentencia: Executable) -> int:
+    """Ejecuta un `UPDATE`/`DELETE` masivo y devuelve las filas afectadas.
+
+    Existe por una limitacion de tipos, no de comportamiento:
+    `AsyncSession.execute` esta anotado como `Result[Any]`, que no expone
+    `rowcount`, aunque en un `UPDATE` devuelve siempre un `CursorResult`.  El
+    `cast` se concentra aqui, con su explicacion, en lugar de repetirse -- o
+    de resolverse con un `# type: ignore` -- en cada servicio.
+
+    El numero de filas importa: es lo que permite registrar cuantos
+    recordatorios se cancelaron o cuantos consentimientos se revocaron, y esa
+    cifra aparece en la auditoria y en el log.
+    """
+    resultado = await sesion.execute(sentencia)
+    return cast("CursorResult[Any]", resultado).rowcount or 0

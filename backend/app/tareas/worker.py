@@ -30,6 +30,7 @@ from arq.connections import RedisSettings
 from app.nucleo.configuracion import Configuracion
 from app.tareas.agenda import expirar_bloqueos
 from app.tareas.contexto import al_arrancar, al_parar
+from app.tareas.outbox import procesar_outbox, recuperar_mensajes_huerfanos
 
 
 def _ajustes_redis() -> RedisSettings:
@@ -39,7 +40,11 @@ def _ajustes_redis() -> RedisSettings:
 class ConfiguracionWorker:
     """Configuracion que ARQ lee por reflexion."""
 
-    functions: list[Any] = [expirar_bloqueos]  # noqa: RUF012
+    functions: list[Any] = [  # noqa: RUF012
+        expirar_bloqueos,
+        procesar_outbox,
+        recuperar_mensajes_huerfanos,
+    ]
 
     cron_jobs: list[Any] = [  # noqa: RUF012
         # Cada minuto. Es la resolucion util: el bloqueo dura minutos, y
@@ -54,6 +59,27 @@ class ConfiguracionWorker:
             # se aborta la anterior. Dos barridos simultaneos del mismo lote
             # no aportan nada.
             timeout=120,
+            max_tries=1,
+        ),
+        # Cada minuto tambien. Es la cadencia que decide la puntualidad de los
+        # recordatorios: con cinco minutos, un aviso programado para las 07:00
+        # podria salir a las 07:04, y el paciente que iba a las 07:30 ya salio
+        # de casa.
+        cron(
+            procesar_outbox,
+            minute=set(range(60)),
+            unique=True,
+            timeout=120,
+            max_tries=1,
+        ),
+        # Cada diez minutos. Solo actua si un worker murio a media entrega, y
+        # la ventana de deteccion son quince minutos de todas formas: barrer
+        # mas a menudo no adelantaria nada.
+        cron(
+            recuperar_mensajes_huerfanos,
+            minute={0, 10, 20, 30, 40, 50},
+            unique=True,
+            timeout=60,
             max_tries=1,
         ),
     ]
