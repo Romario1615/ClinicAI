@@ -33,6 +33,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.modulos.agenda.repositorio import RepositorioAgenda
 from app.modulos.agenda.servicios import ServicioAgenda
 from app.modulos.auditoria.repositorio import RepositorioAuditoria
+from app.modulos.historia.repositorio import RepositorioHistoria
+from app.modulos.historia.servicios import ServicioHistoria
 from app.modulos.organizacion.repositorio import RepositorioCatalogo
 from app.modulos.pacientes.repositorio import RepositorioPacientes
 from app.modulos.usuarios.servicios import ServicioAutenticacion
@@ -144,6 +146,24 @@ def obtener_servicio_agenda(
     )
 
 
+def obtener_repositorio_historia(sesion: Sesion) -> RepositorioHistoria:
+    return RepositorioHistoria(sesion)
+
+
+def obtener_servicio_historia(
+    sesion: Sesion,
+    reloj: RelojActual,
+    repositorio: Annotated[RepositorioHistoria, Depends(obtener_repositorio_historia)],
+    configuracion: ConfiguracionActual,
+) -> ServicioHistoria:
+    return ServicioHistoria(
+        sesion,
+        repositorio,
+        reloj,
+        zona_por_defecto=configuracion.zona_horaria_por_defecto,
+    )
+
+
 def obtener_repositorio_catalogo(sesion: Sesion) -> RepositorioCatalogo:
     return RepositorioCatalogo(sesion)
 
@@ -155,6 +175,8 @@ def obtener_repositorio_pacientes(sesion: Sesion) -> RepositorioPacientes:
 ServicioAuth = Annotated[ServicioAutenticacion, Depends(obtener_servicio_autenticacion)]
 RepoCatalogo = Annotated[RepositorioCatalogo, Depends(obtener_repositorio_catalogo)]
 RepoPacientes = Annotated[RepositorioPacientes, Depends(obtener_repositorio_pacientes)]
+RepoHistoria = Annotated[RepositorioHistoria, Depends(obtener_repositorio_historia)]
+ServicioDeHistoria = Annotated[ServicioHistoria, Depends(obtener_servicio_historia)]
 RepoAgenda = Annotated[RepositorioAgenda, Depends(obtener_repositorio_agenda)]
 ServicioDeAgenda = Annotated[ServicioAgenda, Depends(obtener_servicio_agenda)]
 Auditor = Annotated[RepositorioAuditoria, Depends(obtener_repositorio_auditoria)]
@@ -317,9 +339,11 @@ __all__ = [
     "RelojActual",
     "RepoAgenda",
     "RepoCatalogo",
+    "RepoHistoria",
     "RepoPacientes",
     "ServicioAuth",
     "ServicioDeAgenda",
+    "ServicioDeHistoria",
     "Sesion",
     "exige_permiso",
     "extraer_token",
@@ -332,8 +356,10 @@ __all__ = [
     "obtener_repositorio_agenda",
     "obtener_repositorio_auditoria",
     "obtener_repositorio_catalogo",
+    "obtener_repositorio_historia",
     "obtener_repositorio_pacientes",
     "obtener_servicio_agenda",
     "obtener_servicio_autenticacion",
+    "obtener_servicio_historia",
     "obtener_sesion",
 ]

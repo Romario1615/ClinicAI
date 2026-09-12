@@ -115,6 +115,15 @@ IDOR.
 | `GET /api/v1/catalogo/profesionales/{id}` | `agenda.leer` | Fuera de ámbito → **404** |
 | `GET /api/v1/pacientes/` | `paciente.leer_administrativo` | Término mínimo de 3 caracteres (devuelve `termino_ignorado`); documento por coincidencia **exacta**, nunca parcial; techo de 100 resultados. **No se audita fila por fila** |
 | `GET /api/v1/pacientes/{id}` | `paciente.leer_administrativo` | **Se audita** (`paciente.consultado`). Fuera de ámbito → 404, indistinguible de inexistente. Solo ficha administrativa: nada clínico |
+| `GET /api/v1/historia/pacientes/{id}/notas` | `historia_clinica.leer` | **Exige además relación asistencial vigente.** Se audita (`historia_clinica.consultada`, N2) antes de responder |
+| `POST /api/v1/historia/notas` | `historia_clinica.escribir` | Exige relación asistencial. Los diagnósticos requieren además `diagnostico.registrar` |
+| `POST /api/v1/historia/notas/{raiz}/correccion` | `historia_clinica.escribir` | Crea una versión nueva; **no reescribe nada**. Motivo obligatorio, mínimo 5 caracteres |
+| `GET /api/v1/historia/pacientes/{id}/recetas` | `receta.leer` | Exige relación asistencial |
+| `POST /api/v1/historia/recetas` | `receta.crear` | Nace en **BORRADOR**, nunca confirmada |
+| `POST /api/v1/historia/recetas/{id}/confirmacion` | `receta.confirmar` | Único camino que genera tomas; un disparador lo respalda. `tomas_generadas = 0` es correcto para un PRN |
+| `POST /api/v1/historia/recetas/{id}/suspension` | `receta.confirmar` | Cancela las tomas **futuras**; las pasadas quedan intactas |
+| `POST /api/v1/historia/tomas/{id}/registro` | `adherencia.leer` o `receta.leer` | No acepta una toma futura |
+| `GET /api/v1/historia/recetas/{id}/adherencia` | `adherencia.leer` | Cuenta omisiones; **no interpreta clínicamente** |
 
 ### Acceso de emergencia
 
@@ -148,7 +157,7 @@ desapercibido.
 
 | Control | Implementación | Estado |
 |---|---|---|
-| Autorización | permiso por endpoint (`exige_permiso`) + filtro de ámbito en repositorio | permiso **implementado y probado**; el filtro de ámbito por repositorio, pendiente en los endpoints aún no escritos |
+| Autorización | permiso por endpoint (`exige_permiso`) + filtro de ámbito en repositorio + **relación asistencial** en la historia clínica | **implementado y probado**. La relación asistencial se activa por `profesional_id` en el principal, que se resuelve del usuario en cada petición |
 | Protección IDOR | 404 para recursos fuera de ámbito; nunca 403 | **implementado y probado** en agenda, catálogo y pacientes: una prueba por cada transición de estado, porque basta con que una olvide el filtro |
 | Ámbito vacío = sin acceso | las cuatro dimensiones (sede, especialidad, profesional, paciente) aplican la misma regla | **implementado y probado**, con una prueba por dimensión. Corrige un fallo real: el filtro de la agenda escribía `if not todos_los_profesionales **and** profesionales`, de modo que un ámbito vacío no filtraba nada; y la dimensión de especialidad no se aplicaba en absoluto |
 | Inyección SQL | SQLAlchemy con parámetros enlazados; prohibido componer SQL por cadenas | Fase 2 |

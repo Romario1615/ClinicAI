@@ -79,7 +79,7 @@ No son defectos. Se listan para que no se «arreglen» por error.
 | 4 · WhatsApp y calendarios | pendiente | E‑1 |
 | 5 · Lista de espera | pendiente | — |
 | 6 · Conocimiento y RAG | pendiente | E‑3, E‑9, E‑12 |
-| 7 · Historia clínica y medicamentos | en curso | Modelo, **tres garantías clínicas en disparadores**, servicios (notas versionadas, recetas, generación y cancelación de tomas, registro de adherencia y alertas) y relación asistencial obligatoria. 55 pruebas. **Faltan las rutas HTTP**, los recordatorios por outbox y la pantalla real de la interfaz |
+| 7 · Historia clínica y medicamentos | en curso | Modelo, **tres garantías clínicas en disparadores**, servicios, nueve rutas HTTP y relación asistencial obligatoria. 73 pruebas. **Faltan** los recordatorios de toma por outbox, el cálculo periódico de alertas en el worker y la pantalla real de la interfaz |
 | 8 · Dashboard y predicciones | pendiente | E‑4, E‑5 |
 | 9 · Pagos | pendiente | — |
 | 10 · Producción | pendiente | E‑2, E‑10, E‑11, D‑4 |

@@ -130,6 +130,15 @@ class ServicioHistoria:
         self._reloj = reloj
         self._zona = zona_por_defecto
 
+    def ahora(self) -> datetime:
+        """Instante actual segun el reloj inyectado.
+
+        Se expone para que las rutas puedan pasarlo al repositorio sin tocar
+        el reloj privado del servicio ni llamar a `datetime.now()`, que el
+        linter prohibe fuera de `reloj.py` (ADR-0010).
+        """
+        return self._reloj.ahora()
+
     # ==================================================================
     #  Notas
     # ==================================================================

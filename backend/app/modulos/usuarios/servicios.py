@@ -36,6 +36,7 @@ from datetime import datetime, timedelta
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.modulos.profesionales.modelos import Profesional
 from app.modulos.usuarios.modelos import (
     AmbitoAsignacion,
     HistorialAcceso,
@@ -582,6 +583,8 @@ class ServicioAutenticacion:
             and (usuario_rol.vigente_hasta is None or usuario_rol.vigente_hasta >= hoy)
         ]
 
+        profesional_id = await self._profesional_de(usuario.id)
+
         if not vigentes:
             # Sin rol vigente no hay permisos.  Un usuario recien creado o con
             # el rol caducado no accede a nada, que es el lado seguro.
@@ -593,6 +596,7 @@ class ServicioAutenticacion:
                 ambito=Ambito(clinica_id=usuario.clinica_id),
                 segundo_factor_cumplido=segundo_factor_cumplido,
                 requiere_segundo_factor=False,
+                profesional_id=profesional_id,
             )
 
         ids_rol = [rol.id for _, rol in vigentes]
@@ -624,6 +628,9 @@ class ServicioAutenticacion:
             segundo_factor_cumplido=segundo_factor_cumplido,
             requiere_segundo_factor=bool(codigos_rol & self._roles_con_2fa),
             roles=codigos_rol,
+            # Sin esto, la comprobacion de relacion asistencial de la historia
+            # clinica no se ejecuta nunca por HTTP.
+            profesional_id=profesional_id,
             origen="API",
         )
 
@@ -705,6 +712,28 @@ class ServicioAutenticacion:
     # ==================================================================
     #  Auxiliares
     # ==================================================================
+    async def _profesional_de(self, usuario_id: uuid.UUID) -> uuid.UUID | None:
+        """Profesional ligado a este usuario, si lo hay.
+
+        Es lo que activa la comprobacion de **relacion asistencial** en la
+        historia clinica: sin `profesional_id` en el principal, ese control no
+        se ejecuta y cualquier usuario con el permiso leeria la historia de
+        cualquier paciente.
+
+        Un usuario sin profesional -- recepcion, administracion, auditoria --
+        devuelve `None`, y entonces la relacion asistencial no aplica: su
+        acceso se controla por permiso y por auditoria.
+        """
+        return (
+            await self._sesion.execute(
+                select(Profesional.id).where(
+                    Profesional.usuario_id == usuario_id,
+                    Profesional.anulado_en.is_(None),
+                    Profesional.activo.is_(True),
+                )
+            )
+        ).scalar_one_or_none()
+
     async def _buscar_usuario(self, correo: str, clinica_id: uuid.UUID) -> Usuario | None:
         return (
             await self._sesion.execute(
