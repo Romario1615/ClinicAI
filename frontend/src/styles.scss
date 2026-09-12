@@ -1,0 +1,368 @@
+/* ---------------------------------------------------------------------------
+ *  Estilos globales.
+ *
+ *  Criterios de diseño, y el motivo de cada uno
+ *  --------------------------------------------
+ *  El contexto de uso no es una oficina tranquila: es una recepción con
+ *  pacientes esperando y el teléfono sonando. Eso dicta las decisiones:
+ *
+ *  * **Contraste alto y tipografía grande.** Se lee de pie, de reojo y a
+ *    veces con la pantalla a un metro. El cuerpo base es 16 px, no 14.
+ *  * **El color nunca es el único portador de información.** Un estado se
+ *    reconoce por su texto, no solo por su tono: aproximadamente una de cada
+ *    doce personas con visión cromática típica masculina no distingue
+ *    rojo de verde.
+ *  * **Paleta sobria.** El color se reserva para el estado y para la acción
+ *    principal. Una interfaz clínica llena de color hace que lo urgente deje
+ *    de destacar.
+ *  * **Áreas de pulsación de 44 px.** Se usa con prisa, y a veces en tableta.
+ *  * **Respeta `prefers-reduced-motion`.** Nadie necesita animaciones para
+ *    agendar una cita.
+ * ------------------------------------------------------------------------- */
+
+:root {
+  /* --- Color --- */
+  --superficie: #f7f8fa;
+  --superficie-elevada: #ffffff;
+  --superficie-hundida: #eceef2;
+  --borde: #d4d8e0;
+  --borde-fuerte: #b3bac6;
+
+  --texto: #16202e;
+  --texto-suave: #566175;
+  --texto-tenue: #7c8699;
+
+  --acento: #15557a;
+  --acento-fuerte: #0f4160;
+  --acento-suave: #e4eef5;
+  --acento-texto: #ffffff;
+
+  /* Semánticos. Cada uno se acompaña SIEMPRE de texto. */
+  --exito: #1c6b45;
+  --exito-fondo: #e3f2ea;
+  --aviso: #8a5800;
+  --aviso-fondo: #fdf3e0;
+  --peligro: #a52320;
+  --peligro-fondo: #fbe9e8;
+  --info: #1e5081;
+  --info-fondo: #e7effa;
+
+  /* --- Medidas --- */
+  --radio: 8px;
+  --radio-pequeno: 5px;
+  --espacio-1: 4px;
+  --espacio-2: 8px;
+  --espacio-3: 12px;
+  --espacio-4: 16px;
+  --espacio-5: 24px;
+  --espacio-6: 32px;
+  --espacio-7: 48px;
+  --toque-minimo: 44px;
+
+  --sombra-1: 0 1px 2px rgb(22 32 46 / 8%);
+  --sombra-2: 0 4px 12px rgb(22 32 46 / 10%);
+
+  --fuente: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --fuente-mono: ui-monospace, 'Cascadia Mono', 'Segoe UI Mono', Menlo, monospace;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  /* No se fija `font-size` en px para no anular el tamaño que el usuario
+   * haya configurado en el navegador. Quien necesita texto más grande lo
+   * tiene ya elegido en el sistema. */
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: var(--fuente);
+  font-size: 1rem;
+  line-height: 1.55;
+  color: var(--texto);
+  background: var(--superficie);
+  /* `optimizeLegibility` sobre texto denso: las tablas de agenda llevan
+   * muchos números y nombres pegados. */
+  text-rendering: optimizeLegibility;
+}
+
+h1,
+h2,
+h3,
+h4 {
+  margin: 0 0 var(--espacio-3);
+  line-height: 1.25;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+}
+
+h1 {
+  font-size: 1.6rem;
+}
+h2 {
+  font-size: 1.25rem;
+}
+h3 {
+  font-size: 1.05rem;
+}
+
+p {
+  margin: 0 0 var(--espacio-3);
+}
+
+a {
+  color: var(--acento);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 2px;
+}
+
+/* ---------------------------------------------------------------------------
+ *  Foco visible
+ *
+ *  Nunca `outline: none`. El foco es la única orientación de quien navega con
+ *  teclado, y en este sistema hay personal que agenda más rápido con el
+ *  tabulador que con el ratón.
+ * ------------------------------------------------------------------------- */
+:focus-visible {
+  outline: 3px solid var(--acento);
+  outline-offset: 2px;
+  border-radius: var(--radio-pequeno);
+}
+
+/* --- Controles --- */
+button,
+input,
+select,
+textarea {
+  font: inherit;
+  color: inherit;
+}
+
+.boton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--espacio-2);
+  min-height: var(--toque-minimo);
+  padding: 0 var(--espacio-4);
+  border: 1px solid var(--borde-fuerte);
+  border-radius: var(--radio);
+  background: var(--superficie-elevada);
+  color: var(--texto);
+  font-weight: 550;
+  cursor: pointer;
+  transition: background-color 120ms ease, border-color 120ms ease;
+}
+
+.boton:hover:not(:disabled) {
+  background: var(--superficie-hundida);
+}
+
+.boton:disabled {
+  /* Opacidad más contraste reducido, no solo opacidad: con opacidad sola,
+   * un botón deshabilitado sigue pareciendo pulsable en pantallas brillantes. */
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.boton--principal {
+  background: var(--acento);
+  border-color: var(--acento);
+  color: var(--acento-texto);
+}
+
+.boton--principal:hover:not(:disabled) {
+  background: var(--acento-fuerte);
+  border-color: var(--acento-fuerte);
+}
+
+.boton--peligro {
+  background: var(--superficie-elevada);
+  border-color: var(--peligro);
+  color: var(--peligro);
+}
+
+.boton--peligro:hover:not(:disabled) {
+  background: var(--peligro-fondo);
+}
+
+.boton--plano {
+  border-color: transparent;
+  background: transparent;
+}
+
+.boton--pequeno {
+  min-height: 34px;
+  padding: 0 var(--espacio-3);
+  font-size: 0.9rem;
+}
+
+.campo {
+  display: block;
+  margin-bottom: var(--espacio-4);
+}
+
+.campo__etiqueta {
+  display: block;
+  margin-bottom: var(--espacio-1);
+  font-size: 0.9rem;
+  font-weight: 550;
+  color: var(--texto-suave);
+}
+
+.campo__control {
+  width: 100%;
+  min-height: var(--toque-minimo);
+  padding: 0 var(--espacio-3);
+  border: 1px solid var(--borde-fuerte);
+  border-radius: var(--radio);
+  background: var(--superficie-elevada);
+}
+
+textarea.campo__control {
+  min-height: 96px;
+  padding: var(--espacio-3);
+  resize: vertical;
+}
+
+.campo__control[aria-invalid='true'] {
+  border-color: var(--peligro);
+  /* El borde rojo no basta: siempre va acompañado del texto de `campo__error`. */
+  box-shadow: 0 0 0 1px var(--peligro);
+}
+
+.campo__error {
+  display: block;
+  margin-top: var(--espacio-1);
+  font-size: 0.875rem;
+  color: var(--peligro);
+  font-weight: 550;
+}
+
+.campo__ayuda {
+  display: block;
+  margin-top: var(--espacio-1);
+  font-size: 0.875rem;
+  color: var(--texto-tenue);
+}
+
+/* --- Contenedores --- */
+.tarjeta {
+  padding: var(--espacio-5);
+  border: 1px solid var(--borde);
+  border-radius: var(--radio);
+  background: var(--superficie-elevada);
+  box-shadow: var(--sombra-1);
+}
+
+.pila {
+  display: flex;
+  flex-direction: column;
+  gap: var(--espacio-4);
+}
+
+.fila {
+  display: flex;
+  align-items: center;
+  gap: var(--espacio-3);
+  flex-wrap: wrap;
+}
+
+.rejilla {
+  display: grid;
+  gap: var(--espacio-4);
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+}
+
+/* --- Tablas --- */
+.tabla-envoltorio {
+  /* Las tablas de agenda son anchas; el desbordamiento se acota aquí para
+   * que el cuerpo de la página nunca tenga barra horizontal. */
+  overflow-x: auto;
+  border: 1px solid var(--borde);
+  border-radius: var(--radio);
+  background: var(--superficie-elevada);
+}
+
+.tabla {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.95rem;
+}
+
+.tabla th,
+.tabla td {
+  padding: var(--espacio-3) var(--espacio-4);
+  text-align: left;
+  border-bottom: 1px solid var(--borde);
+  vertical-align: middle;
+}
+
+.tabla th {
+  position: sticky;
+  top: 0;
+  background: var(--superficie-hundida);
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--texto-suave);
+  white-space: nowrap;
+}
+
+.tabla tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.tabla tbody tr:hover {
+  background: var(--acento-suave);
+}
+
+.numerico {
+  font-variant-numeric: tabular-nums;
+  /* Cifras tabulares para que las horas de una columna queden alineadas. Sin
+   * esto, "9:15" y "11:45" desplazan la columna y la lectura vertical cuesta. */
+}
+
+/* --- Accesibilidad --- */
+.solo-lectores {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.salto-contenido {
+  position: absolute;
+  left: -9999px;
+  top: 0;
+  z-index: 100;
+  padding: var(--espacio-3) var(--espacio-4);
+  background: var(--acento);
+  color: var(--acento-texto);
+  border-radius: 0 0 var(--radio) 0;
+}
+
+.salto-contenido:focus {
+  left: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

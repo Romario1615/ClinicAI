@@ -1,0 +1,62 @@
+.acceso {
+  width: 100%;
+  display: flex;
+  justify-content: center;
+}
+
+.acceso__tarjeta {
+  width: 100%;
+  max-width: 420px;
+}
+
+.acceso__intro {
+  color: var(--texto-suave);
+  margin-bottom: var(--espacio-5);
+}
+
+.acceso__recordar {
+  display: flex;
+  align-items: center;
+  gap: var(--espacio-2);
+  margin-bottom: var(--espacio-4);
+  font-size: 0.92rem;
+  color: var(--texto-suave);
+  /* Área de pulsación completa, no solo la casilla. */
+  min-height: var(--toque-minimo);
+  cursor: pointer;
+}
+
+.acceso__error {
+  padding: var(--espacio-3) var(--espacio-4);
+  margin-bottom: var(--espacio-4);
+  border: 1px solid var(--peligro);
+  border-left-width: 4px;
+  border-radius: var(--radio);
+  background: var(--peligro-fondo);
+}
+
+.acceso__error-mensaje {
+  margin: 0;
+  font-weight: 600;
+  color: var(--peligro);
+}
+
+.acceso__error-detalle {
+  margin: var(--espacio-2) 0 0;
+  font-size: 0.88rem;
+  color: var(--texto-suave);
+}
+
+.acceso__enviar {
+  width: 100%;
+}
+
+.acceso__nota {
+  margin: var(--espacio-5) 0 0;
+  font-size: 0.82rem;
+  color: var(--texto-tenue);
+}
+
+code {
+  font-family: var(--fuente-mono);
+}

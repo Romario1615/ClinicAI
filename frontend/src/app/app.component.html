@@ -1,0 +1,71 @@
+<!-- Primer elemento enfocable de la página: quien navega con teclado no
+     debería recorrer todo el menú para llegar al contenido. -->
+<a class="salto-contenido" href="#contenido">Saltar al contenido</a>
+
+@if (sesion.autenticado()) {
+  <div class="armazon">
+    <header class="cabecera">
+      <button
+        type="button"
+        class="boton boton--plano cabecera__menu"
+        [attr.aria-expanded]="menuAbierto()"
+        aria-controls="navegacion-principal"
+        (click)="alternarMenu()"
+      >
+        <span aria-hidden="true">☰</span>
+        <span class="solo-lectores">Alternar navegación</span>
+      </button>
+
+      <span class="cabecera__marca">Gestión clínica</span>
+
+      <div class="cabecera__usuario">
+        <span class="cabecera__nombre">{{ sesion.nombreCompleto() }}</span>
+        @if (roles(); as listaRoles) {
+          <span class="cabecera__roles">{{ listaRoles }}</span>
+        }
+      </div>
+
+      <button type="button" class="boton boton--pequeno" (click)="cerrarSesion()">
+        Cerrar sesión
+      </button>
+    </header>
+
+    <nav
+      id="navegacion-principal"
+      class="navegacion"
+      [class.navegacion--abierta]="menuAbierto()"
+      aria-label="Secciones"
+    >
+      <ul class="navegacion__lista">
+        @for (enlace of enlaces(); track enlace.ruta) {
+          <li>
+            <a
+              [routerLink]="enlace.ruta"
+              routerLinkActive="navegacion__enlace--activo"
+              class="navegacion__enlace"
+              (click)="cerrarMenu()"
+            >
+              {{ enlace.etiqueta }}
+              @if (enlace.demostracion) {
+                <!-- Marca visible en la propia navegación: quien entra sabe
+                     antes de pulsar que esa sección todavía no está
+                     conectada al sistema real. -->
+                <span class="navegacion__demo" title="Sección con datos de demostración">
+                  demo
+                </span>
+              }
+            </a>
+          </li>
+        }
+      </ul>
+    </nav>
+
+    <main id="contenido" class="contenido" tabindex="-1">
+      <router-outlet />
+    </main>
+  </div>
+} @else {
+  <main id="contenido" class="contenido contenido--suelto" tabindex="-1">
+    <router-outlet />
+  </main>
+}

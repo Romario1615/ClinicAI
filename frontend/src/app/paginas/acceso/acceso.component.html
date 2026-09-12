@@ -1,0 +1,103 @@
+<div class="acceso">
+  <div class="tarjeta acceso__tarjeta">
+    <h1>Gestión clínica</h1>
+    <p class="acceso__intro">Acceso del personal autorizado.</p>
+
+    <form (ngSubmit)="entrar()" #formulario="ngForm" novalidate>
+      @if (pideClinica) {
+        <label class="campo">
+          <span class="campo__etiqueta">Identificador de la clínica</span>
+          <input
+            class="campo__control"
+            name="clinica"
+            required
+            autocomplete="off"
+            [(ngModel)]="clinicaId"
+          />
+          <!-- Se explica por qué se pide: sin esta nota parece un dato
+               arbitrario, y en realidad es lo que separa dos clínicas que
+               comparten instalación. -->
+          <span class="campo__ayuda">
+            El correo es único por clínica, no en todo el sistema. En una instalación
+            definitiva este valor lo fija el despliegue.
+          </span>
+        </label>
+      }
+
+      <label class="campo">
+        <span class="campo__etiqueta">Correo</span>
+        <input
+          class="campo__control"
+          type="email"
+          name="correo"
+          required
+          autocomplete="username"
+          inputmode="email"
+          [(ngModel)]="correo"
+        />
+      </label>
+
+      <label class="campo">
+        <span class="campo__etiqueta">Contraseña</span>
+        <input
+          class="campo__control"
+          type="password"
+          name="contrasena"
+          required
+          autocomplete="current-password"
+          [(ngModel)]="contrasena"
+        />
+      </label>
+
+      @if (pideSegundoFactor()) {
+        <label class="campo">
+          <span class="campo__etiqueta">Código de verificación</span>
+          <input
+            class="campo__control"
+            name="codigo"
+            inputmode="numeric"
+            autocomplete="one-time-code"
+            maxlength="6"
+            [(ngModel)]="codigo2fa"
+          />
+          <span class="campo__ayuda">
+            Seis dígitos de su aplicación de autenticación. Su rol exige segundo factor.
+          </span>
+        </label>
+      }
+
+      <label class="acceso__recordar">
+        <input type="checkbox" name="recordar" [(ngModel)]="recordar" />
+        <span>Recordar mi correo en este equipo</span>
+      </label>
+
+      @if (error()) {
+        <div class="acceso__error" role="alert">
+          <p class="acceso__error-mensaje">{{ mensajeError() }}</p>
+          @if (esFalloDelSistema()) {
+            <p class="acceso__error-detalle">
+              No es un problema con sus datos. Vuelva a intentarlo en unos minutos o avise
+              al responsable del sistema.
+              @if (error()?.correlacionId) {
+                <span>Referencia: <code>{{ error()?.correlacionId }}</code></span>
+              }
+            </p>
+          }
+        </div>
+      }
+
+      <button
+        type="submit"
+        class="boton boton--principal acceso__enviar"
+        [disabled]="enviando() || !formulario.form.valid"
+      >
+        {{ enviando() ? 'Comprobando...' : 'Entrar' }}
+      </button>
+    </form>
+
+    <p class="acceso__nota">
+      Al cerrar esta pestaña la sesión termina: los tokens viven solo en memoria, nunca en
+      el almacenamiento del navegador (ADR‑0016).
+    </p>
+  </div>
+</div>

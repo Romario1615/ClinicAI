@@ -94,7 +94,7 @@ uv run pytest --cov=app --cov-report=term-missing
 
 # Frontend
 cd frontend
-npm start ; npm run lint ; npm test -- --watch=false ; npm run build
+npm start ; npm run lint ; npm run test:ci ; npm run build
 
 # Extremo a extremo
 cd pruebas-e2e ; npx playwright test

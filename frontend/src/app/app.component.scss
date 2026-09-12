@@ -1,0 +1,151 @@
+/* Disposición en rejilla: cabecera arriba, navegación a la izquierda,
+ * contenido ocupando el resto. En pantallas estrechas la navegación se
+ * convierte en un panel desplegable, porque una tableta en recepción no tiene
+ * ancho para las dos columnas. */
+.armazon {
+  display: grid;
+  grid-template-areas:
+    'cabecera cabecera'
+    'navegacion contenido';
+  grid-template-columns: 232px 1fr;
+  grid-template-rows: auto 1fr;
+  min-height: 100vh;
+}
+
+.cabecera {
+  grid-area: cabecera;
+  display: flex;
+  align-items: center;
+  gap: var(--espacio-4);
+  padding: var(--espacio-3) var(--espacio-5);
+  background: var(--superficie-elevada);
+  border-bottom: 1px solid var(--borde);
+  /* Se mantiene visible al desplazar: el nombre del usuario conectado es la
+   * forma de detectar que alguien dejó la sesión de otra persona abierta. */
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.cabecera__menu {
+  display: none;
+  min-width: var(--toque-minimo);
+}
+
+.cabecera__marca {
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.cabecera__usuario {
+  margin-left: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  line-height: 1.25;
+}
+
+.cabecera__nombre {
+  font-weight: 600;
+  font-size: 0.95rem;
+}
+
+.cabecera__roles {
+  font-size: 0.8rem;
+  color: var(--texto-tenue);
+}
+
+.navegacion {
+  grid-area: navegacion;
+  padding: var(--espacio-4) var(--espacio-3);
+  background: var(--superficie-elevada);
+  border-right: 1px solid var(--borde);
+}
+
+.navegacion__lista {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.navegacion__enlace {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--espacio-2);
+  min-height: var(--toque-minimo);
+  padding: 0 var(--espacio-3);
+  border-radius: var(--radio);
+  color: var(--texto);
+  text-decoration: none;
+  font-weight: 550;
+}
+
+.navegacion__enlace:hover {
+  background: var(--superficie-hundida);
+}
+
+.navegacion__enlace--activo {
+  background: var(--acento-suave);
+  color: var(--acento-fuerte);
+  /* Barra lateral además del color: la sección activa tiene que distinguirse
+   * sin depender de percibir el tono. */
+  box-shadow: inset 3px 0 0 var(--acento);
+}
+
+.navegacion__demo {
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 1px var(--espacio-1);
+  border: 1px dashed var(--aviso);
+  border-radius: var(--radio-pequeno);
+  color: var(--aviso);
+}
+
+.contenido {
+  grid-area: contenido;
+  padding: var(--espacio-5);
+  max-width: 1200px;
+}
+
+.contenido--suelto {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  padding: var(--espacio-5);
+  max-width: none;
+}
+
+@media (max-width: 820px) {
+  .armazon {
+    grid-template-areas:
+      'cabecera'
+      'contenido';
+    grid-template-columns: 1fr;
+  }
+
+  .cabecera__menu {
+    display: inline-flex;
+  }
+
+  .navegacion {
+    display: none;
+  }
+
+  .navegacion--abierta {
+    display: block;
+    grid-area: contenido;
+    border-right: none;
+    border-bottom: 1px solid var(--borde);
+  }
+
+  .contenido {
+    padding: var(--espacio-4);
+  }
+}

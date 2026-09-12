@@ -1,0 +1,150 @@
+.filtros {
+  margin-bottom: var(--espacio-4);
+}
+
+.filtros__rejilla {
+  display: grid;
+  gap: var(--espacio-3);
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+}
+
+.filtros__rejilla .campo {
+  margin-bottom: 0;
+}
+
+.filtros__dia {
+  display: flex;
+  align-items: center;
+  gap: var(--espacio-2);
+  flex-wrap: wrap;
+  margin-top: var(--espacio-4);
+  padding-top: var(--espacio-4);
+  border-top: 1px solid var(--borde);
+}
+
+.filtros__fecha {
+  margin-bottom: 0;
+  width: auto;
+}
+
+.filtros__fecha .campo__control {
+  width: auto;
+}
+
+.filtros__zona {
+  margin-left: auto;
+  color: var(--texto-suave);
+  font-size: 0.9rem;
+}
+
+.columnas {
+  display: grid;
+  gap: var(--espacio-5);
+  /* La agenda del día pesa más que los turnos libres: se le da más ancho
+   * porque es lo que se consulta continuamente durante la jornada. */
+  grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+  align-items: start;
+}
+
+@media (max-width: 1000px) {
+  .columnas {
+    grid-template-columns: 1fr;
+  }
+}
+
+.acciones {
+  display: flex;
+  gap: var(--espacio-1);
+  flex-wrap: wrap;
+}
+
+.turnos {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: var(--espacio-2);
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+}
+
+.turnos__boton {
+  width: 100%;
+  flex-direction: column;
+  gap: 0;
+  padding: var(--espacio-2);
+}
+
+.turnos__boton--elegido {
+  background: var(--acento);
+  border-color: var(--acento);
+  color: var(--acento-texto);
+}
+
+.turnos__fin {
+  font-size: 0.8rem;
+  opacity: 0.85;
+}
+
+.motivos__intro {
+  margin-bottom: var(--espacio-2);
+}
+
+.motivos {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: inline-block;
+  text-align: left;
+}
+
+.motivos li {
+  margin-bottom: var(--espacio-1);
+}
+
+.reserva {
+  margin-top: var(--espacio-4);
+  border-left: 4px solid var(--acento);
+}
+
+.reserva__detalle {
+  color: var(--texto-suave);
+  font-size: 0.92rem;
+}
+
+.reserva__error {
+  padding: var(--espacio-2) var(--espacio-3);
+  border-radius: var(--radio);
+  background: var(--peligro-fondo);
+  color: var(--peligro);
+  font-weight: 550;
+}
+
+.exito {
+  padding: var(--espacio-3) var(--espacio-4);
+  margin-bottom: var(--espacio-4);
+  border: 1px solid var(--exito);
+  border-left-width: 4px;
+  border-radius: var(--radio);
+  background: var(--exito-fondo);
+  color: var(--exito);
+  font-weight: 550;
+}
+
+/* Diálogo modal. No se usa <dialog> nativo para no depender de su
+ * comportamiento en las tabletas antiguas que puede haber en recepción. */
+.dialogo {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--espacio-4);
+  background: rgb(22 32 46 / 45%);
+  z-index: 50;
+}
+
+.dialogo__panel {
+  width: 100%;
+  max-width: 480px;
+  box-shadow: var(--sombra-2);
+}

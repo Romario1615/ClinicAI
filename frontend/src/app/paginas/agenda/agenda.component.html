@@ -1,0 +1,339 @@
+<h1>Agenda</h1>
+
+@if (cargandoCatalogo()) {
+  <app-cargando mensaje="Cargando el catálogo de la clínica..." />
+} @else if (errorCatalogo()) {
+  <app-error
+    titulo="No se pudo cargar el catálogo"
+    [mensaje]="errorCatalogo()!.message"
+    [codigo]="errorCatalogo()!.codigo"
+    [correlacion]="errorCatalogo()!.correlacionId ?? ''"
+    (reintentar)="cargarCatalogo()"
+  />
+} @else if (sedes().length === 0) {
+  <app-vacio
+    titulo="No hay sedes en su ámbito"
+    detalle="Su usuario no tiene ninguna sede asignada, así que no hay agenda que mostrar. Pida al administrador de la clínica que revise su ámbito."
+  />
+} @else {
+  <section class="tarjeta filtros" aria-label="Filtros de la agenda">
+    <div class="filtros__rejilla">
+      <label class="campo">
+        <span class="campo__etiqueta">Sede</span>
+        <select
+          class="campo__control"
+          name="sede"
+          [ngModel]="sedeId()"
+          (ngModelChange)="sedeId.set($event); cargarAgenda()"
+        >
+          @for (sede of sedes(); track sede.id) {
+            <option [value]="sede.id">{{ sede.nombre }}</option>
+          }
+        </select>
+      </label>
+
+      <label class="campo">
+        <span class="campo__etiqueta">Especialidad</span>
+        <select
+          class="campo__control"
+          name="especialidad"
+          [ngModel]="especialidadId()"
+          (ngModelChange)="especialidadId.set($event); alCambiarEspecialidad()"
+        >
+          <option value="">Todas</option>
+          @for (especialidad of especialidades(); track especialidad.id) {
+            <option [value]="especialidad.id">{{ especialidad.nombre }}</option>
+          }
+        </select>
+      </label>
+
+      <label class="campo">
+        <span class="campo__etiqueta">Servicio</span>
+        <select
+          class="campo__control"
+          name="servicio"
+          [ngModel]="servicioId()"
+          (ngModelChange)="servicioId.set($event); cargarAgenda()"
+        >
+          <option value="">Seleccione…</option>
+          @for (servicio of serviciosDeEspecialidad(); track servicio.id) {
+            <option [value]="servicio.id">
+              {{ servicio.nombre }} ({{ servicio.duracion_minutos }} min)
+            </option>
+          }
+        </select>
+      </label>
+
+      <label class="campo">
+        <span class="campo__etiqueta">Profesional</span>
+        <select
+          class="campo__control"
+          name="profesional"
+          [ngModel]="profesionalId()"
+          (ngModelChange)="profesionalId.set($event); cargarAgenda()"
+        >
+          <option value="">Todos</option>
+          @for (profesional of profesionalesDeEspecialidad(); track profesional.id) {
+            <option [value]="profesional.id">
+              {{ profesional.nombre }} {{ profesional.apellido }}
+            </option>
+          }
+        </select>
+      </label>
+    </div>
+
+    <div class="filtros__dia">
+      <button type="button" class="boton boton--pequeno" (click)="cambiarDia(-1)">
+        <span aria-hidden="true">←</span> Día anterior
+      </button>
+      <button type="button" class="boton boton--pequeno" (click)="irAHoy()">Hoy</button>
+      <button type="button" class="boton boton--pequeno" (click)="cambiarDia(1)">
+        Día siguiente <span aria-hidden="true">→</span>
+      </button>
+
+      <label class="campo filtros__fecha">
+        <span class="solo-lectores">Fecha</span>
+        <input
+          class="campo__control"
+          type="date"
+          name="fecha"
+          [ngModel]="fecha()"
+          (ngModelChange)="fecha.set($event); cargarAgenda()"
+        />
+      </label>
+
+      <!-- La zona se muestra siempre. Sin ella, quien mira la pantalla no
+           puede saber si las horas son locales de la sede o de su equipo. -->
+      <span class="filtros__zona">{{ fechaLegible() }} · horario de {{ zona() }}</span>
+    </div>
+  </section>
+
+  @if (mensajeExito()) {
+    <p class="exito" role="status">{{ mensajeExito() }}</p>
+  }
+
+  @if (errorAgenda(); as fallo) {
+    <app-error
+      [mensaje]="fallo.message"
+      [codigo]="fallo.codigo"
+      [correlacion]="fallo.correlacionId ?? ''"
+      (reintentar)="cargarAgenda()"
+    />
+  }
+
+  @if (cargandoAgenda()) {
+    <app-cargando mensaje="Cargando la agenda del día..." />
+  } @else {
+    <div class="columnas">
+      <section aria-labelledby="titulo-citas">
+        <h2 id="titulo-citas">Citas del día ({{ citas().length }})</h2>
+
+        @if (citas().length === 0) {
+          <div class="tarjeta">
+            <app-vacio
+              titulo="Sin citas este día"
+              detalle="No hay ninguna cita agendada para los filtros seleccionados."
+            />
+          </div>
+        } @else {
+          <div class="tabla-envoltorio">
+            <table class="tabla">
+              <caption class="solo-lectores">Citas del día seleccionado</caption>
+              <thead>
+                <tr>
+                  <th scope="col">Hora</th>
+                  <th scope="col">Paciente</th>
+                  <th scope="col">Profesional</th>
+                  <th scope="col">Servicio</th>
+                  <th scope="col">Estado</th>
+                  <th scope="col">Acciones</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (cita of citas(); track cita.id) {
+                  <tr>
+                    <td class="numerico">{{ hora(cita.inicio) }}</td>
+                    <td>{{ nombrePaciente(cita.paciente_id) }}</td>
+                    <td>{{ nombreProfesional(cita.profesional_id) }}</td>
+                    <td>{{ nombreServicio(cita.servicio_id) }}</td>
+                    <td><app-insignia-estado [estado]="cita.estado" /></td>
+                    <td>
+                      <div class="acciones">
+                        @if (accionesDe(cita).confirmar) {
+                          <button type="button" class="boton boton--pequeno" (click)="confirmarCita(cita)">
+                            Confirmar
+                          </button>
+                        }
+                        @if (accionesDe(cita).completar) {
+                          <button type="button" class="boton boton--pequeno" (click)="completarCita(cita)">
+                            Atendida
+                          </button>
+                        }
+                        @if (accionesDe(cita).inasistencia) {
+                          <button type="button" class="boton boton--pequeno" (click)="marcarInasistencia(cita)">
+                            No asistió
+                          </button>
+                        }
+                        @if (accionesDe(cita).cancelar) {
+                          <button
+                            type="button"
+                            class="boton boton--pequeno boton--peligro"
+                            (click)="pedirCancelacion(cita)"
+                          >
+                            Cancelar
+                          </button>
+                        }
+                      </div>
+                    </td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        }
+      </section>
+
+      <section aria-labelledby="titulo-turnos">
+        <h2 id="titulo-turnos">Turnos libres</h2>
+
+        @if (seleccionIncompleta()) {
+          <div class="tarjeta">
+            <app-vacio
+              titulo="Elija servicio y profesional"
+              detalle="Para calcular los turnos libres hace falta saber de qué servicio y de qué profesional: la duración y la preparación dependen de ambos."
+            />
+          </div>
+        } @else if (hayTurnos()) {
+            <div class="tarjeta">
+              <ul class="turnos">
+                @for (turno of turnos(); track turno.inicio) {
+                  <li>
+                    <button
+                      type="button"
+                      class="boton turnos__boton numerico"
+                      [class.turnos__boton--elegido]="turnoElegido()?.inicio === turno.inicio"
+                      [disabled]="!puedeCrear()"
+                      (click)="elegirTurno(turno)"
+                    >
+                      {{ hora(turno.inicio) }}
+                      <span class="turnos__fin">– {{ hora(turno.fin_consulta) }}</span>
+                    </button>
+                  </li>
+                }
+              </ul>
+              @if (!puedeCrear()) {
+                <p class="campo__ayuda">Su rol no permite crear citas.</p>
+              }
+            </div>
+        } @else if (disponibilidad()) {
+            <div class="tarjeta">
+              <!-- Explicar el porqué en lugar de un «no hay disponibilidad»
+                   seco: quien atiende necesita saber si insistir otro día o
+                   llamar por teléfono. -->
+              <app-vacio titulo="No hay turnos libres este día">
+                @if (motivosSinTurno().length > 0) {
+                  <p class="motivos__intro">Los huecos del día quedaron descartados porque:</p>
+                  <ul class="motivos">
+                    @for (motivo of motivosSinTurno(); track motivo.motivo) {
+                      <li>
+                        <strong class="numerico">{{ motivo.cantidad }}</strong> {{ motivo.motivo }}
+                      </li>
+                    }
+                  </ul>
+                }
+              </app-vacio>
+            </div>
+        }
+
+        @if (turnoElegido(); as turno) {
+          <div class="tarjeta reserva">
+            <h3>Reservar las {{ hora(turno.inicio) }}</h3>
+            <p class="reserva__detalle">
+              {{ nombreServicio(servicioId()) }} con {{ nombreProfesional(profesionalId()) }} ·
+              {{ turno.duracion_minutos }} min de consulta
+              @if (turno.minutos_preparacion > 0) {
+                <span>(+{{ turno.minutos_preparacion }} min de preparación)</span>
+              }
+            </p>
+
+            <label class="campo">
+              <span class="campo__etiqueta">Paciente</span>
+              <select class="campo__control" name="paciente" [(ngModel)]="pacienteId">
+                <option value="">Seleccione…</option>
+                @for (paciente of pacientes(); track paciente.id) {
+                  <option [value]="paciente.id">{{ paciente.apellido }}, {{ paciente.nombre }}</option>
+                }
+              </select>
+            </label>
+
+            <label class="campo">
+              <span class="campo__etiqueta">Notas de recepción (opcional)</span>
+              <textarea class="campo__control" name="notas" maxlength="2000" [(ngModel)]="notas"></textarea>
+              <!-- Se dice explícitamente para que nadie escriba aquí un
+                   diagnóstico: este campo lo ve recepción. -->
+              <span class="campo__ayuda">
+                Texto administrativo. No escriba aquí información clínica: la ve todo el
+                personal que gestiona la agenda.
+              </span>
+            </label>
+
+            @if (errorReserva()) {
+              <p class="reserva__error" role="alert">{{ mensajeErrorReserva() }}</p>
+            }
+
+            <div class="fila">
+              <button
+                type="button"
+                class="boton boton--principal"
+                [disabled]="!pacienteId || reservando()"
+                (click)="confirmarReserva()"
+              >
+                {{ reservando() ? 'Reservando...' : 'Confirmar cita' }}
+              </button>
+              <button type="button" class="boton" (click)="cancelarReserva()">Descartar</button>
+            </div>
+          </div>
+        }
+      </section>
+    </div>
+  }
+
+  @if (citaACancelar(); as cita) {
+    <div class="dialogo" role="dialog" aria-modal="true" aria-labelledby="titulo-cancelar">
+      <div class="tarjeta dialogo__panel">
+        <h3 id="titulo-cancelar">Cancelar la cita de las {{ hora(cita.inicio) }}</h3>
+        <p>{{ nombrePaciente(cita.paciente_id) }} · {{ nombreServicio(cita.servicio_id) }}</p>
+
+        <label class="campo">
+          <span class="campo__etiqueta">Motivo de la cancelación</span>
+          <textarea
+            class="campo__control"
+            name="motivo"
+            minlength="3"
+            maxlength="500"
+            [(ngModel)]="motivoCancelacion"
+          ></textarea>
+          <!-- El motivo es obligatorio y lo exige también la base de datos:
+               sin él, ante una reclamación no se puede explicar por qué un
+               paciente no fue atendido. -->
+          <span class="campo__ayuda">
+            Obligatorio. Queda registrado y es lo que permite explicar después por qué se
+            anuló esta cita.
+          </span>
+        </label>
+
+        <div class="fila">
+          <button
+            type="button"
+            class="boton boton--peligro"
+            [disabled]="motivoCancelacion.trim().length < 3"
+            (click)="confirmarCancelacion()"
+          >
+            Cancelar la cita
+          </button>
+          <button type="button" class="boton" (click)="descartarCancelacion()">Volver</button>
+        </div>
+      </div>
+    </div>
+  }
+}
