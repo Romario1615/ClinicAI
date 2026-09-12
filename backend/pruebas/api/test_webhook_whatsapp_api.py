@@ -47,7 +47,7 @@ from app.nucleo.dependencias import obtener_sesion
 from app.nucleo.reloj import RelojFijo
 from pruebas.api.conftest import GestorDeUnaSesion, RedisEnMemoria
 
-pytestmark = [pytest.mark.api, pytest.mark.asyncio]
+pytestmark = [pytest.mark.api, pytest.mark.seguridad, pytest.mark.asyncio]
 
 # Valores sinteticos. No son ni se parecen a credenciales reales.
 SECRETO_APP = "secreto-de-aplicacion-sintetico-para-pruebas"

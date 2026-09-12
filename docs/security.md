@@ -124,6 +124,8 @@ IDOR.
 | `POST /api/v1/historia/recetas/{id}/suspension` | `receta.confirmar` | Cancela las tomas **futuras**; las pasadas quedan intactas |
 | `POST /api/v1/historia/tomas/{id}/registro` | `adherencia.leer` o `receta.leer` | No acepta una toma futura |
 | `GET /api/v1/historia/recetas/{id}/adherencia` | `adherencia.leer` | Cuenta omisiones; **no interpreta clínicamente** |
+| `GET /api/v1/whatsapp/webhook` | — (**público**) | Reto de verificación de Meta. Compara `hub.verify_token` en **tiempo constante** y devuelve el reto en texto plano. Token incorrecto → 403 |
+| `POST /api/v1/whatsapp/webhook` | — (**público**) | **El único endpoint sin autenticación que escribe.** Lo que lo autoriza es la firma HMAC‑SHA256 sobre el **cuerpo crudo**, comparada con `compare_digest`. Firma inválida → **403 sin escribir nada**, auditado como `webhook.firma_invalida` (acción con alerta). Deduplicación por restricción única en `mensaje_entrante.external_id`. Límite de 120/min por IP (falla abierto, E‑11) y tope de 1 MB. Responde 200 ante cualquier otro fallo, a propósito: un 5xx repetido le cuesta al sistema la suscripción del webhook. **Ninguna intención cambia el estado de una cita** (ADR‑0017); la única que ejecuta es `BAJA`. La respuesta es un acuse de recibo y no contiene ningún dato del paciente |
 
 ### Acceso de emergencia
 

@@ -24,7 +24,7 @@ from app.mensajeria.plantillas import (
 )
 from app.modulos.outbox.modelos import TipoMensajeOutbox
 
-pytestmark = pytest.mark.unitaria
+pytestmark = [pytest.mark.unitaria, pytest.mark.seguridad]
 
 # Orden estable para que el informe de pruebas sea comparable entre
 # ejecuciones; el diccionario no garantiza orden entre versiones.

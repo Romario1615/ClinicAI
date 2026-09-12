@@ -14,7 +14,7 @@ import pytest
 from app.modulos.conversaciones.intenciones import FRASES, normalizar, reconocer
 from app.modulos.conversaciones.modelos import IntencionEntrante
 
-pytestmark = pytest.mark.unitaria
+pytestmark = [pytest.mark.unitaria, pytest.mark.seguridad]
 
 
 # ---------------------------------------------------------------------------

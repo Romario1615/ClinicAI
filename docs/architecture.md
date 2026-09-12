@@ -359,3 +359,4 @@ comprobación de configuración explícita, no un supuesto.
 | [0014](decisiones/0014-defensa-prompt-injection.md) | Documentos como dato, no instrucción |
 | [0015](decisiones/0015-convencion-idioma.md) | Convención de idioma del código y la documentación |
 | [0016](decisiones/0016-entrega-de-tokens.md) | El token de refresco viaja en el cuerpo, no en una cookie |
+| [0017](decisiones/0017-frontera-de-la-automatizacion-entrante.md) | Ninguna intencion entrante que cambie el estado de una cita se ejecuta sin una persona |

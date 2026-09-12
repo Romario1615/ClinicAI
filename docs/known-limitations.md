@@ -1,6 +1,6 @@
 # Limitaciones conocidas y riesgos residuales
 
-> **Última actualización:** 2026‑09‑11 · Fase 0.
+> **Última actualización:** 2026‑09‑12 · Fase 4.
 >
 > Este documento existe para que nadie deduzca capacidades que el sistema no tiene. Se
 > actualiza al cerrar cada fase. Una limitación resuelta no se borra: se marca como
@@ -24,7 +24,7 @@ Estas no desaparecen al terminar las fases. Son propiedades del alcance acordado
 
 | # | Limitación | Por qué | Consecuencia práctica |
 |---|---|---|---|
-| E‑1 | **Las integraciones reales de WhatsApp y Google Calendar no están verificadas** | No hay credenciales (ADR‑0012) | El sandbox demuestra que nuestra lógica cumple el contrato **documentado**. No demuestra que el proveedor real se comporte igual. Hace falta verificación en preproducción con credenciales |
+| E‑1 | **El camino real de WhatsApp no está verificado; el de Google Calendar no está implementado** | No hay credenciales y no se inventan (ADR‑0012, regla 3) | **WhatsApp (Fase 4):** el outbox, la deduplicación, los reintentos, la firma del webhook y la conciliación de estados están verificados contra PostgreSQL real y adaptador sandbox (228 pruebas). Lo **no** verificado es concreto: que Meta acepte el cuerpo que construye `AdaptadorWhatsAppCloud`, que sus códigos de error sean los de `CODIGOS_PERMANENTES`, y que las plantillas se aprueben con el texto de `plantillas.py`. Ni un mensaje ha salido hacia Meta. Cierre: los 6 puntos de la sección 7 de [`whatsapp-integration.md`](whatsapp-integration.md). **Google Calendar:** pendiente de implementar |
 | E‑2 | **El cumplimiento legal no está validado** | Requiere un profesional jurídico | El sistema **no puede operar con pacientes reales**. 19 puntos en [`security.md`](security.md) |
 | E‑3 | **Ninguna defensa contra inyección de prompt es completa** | Propiedad del estado del arte | Lo garantizado es que una inyección no otorga acceso a datos no autorizados ni escritura, porque esas capacidades no existen detrás del modelo (ADR‑0014) |
 | E‑4 | **Las predicciones son apoyo operativo, no criterio clínico** | Decisión de diseño | No pueden cambiar tratamientos, negar atención ni clasificar pacientes. Su exactitud se reportará medida sobre datos sintéticos, que no representan la realidad de una clínica |
@@ -36,6 +36,11 @@ Estas no desaparecen al terminar las fases. Son propiedades del alcance acordado
 | E‑10 | **La verificación TOTP usa el reloj de pared del servidor, no el reloj inyectado** (ADR‑0010) | Un código TOTP se calcula contra la hora real del teléfono del usuario; validarlo contra un reloj de pruebas lo invalidaría en producción | Es la única excepción consciente a ADR‑0010, y está acotada a `verificar_codigo_totp`. Consecuencia operativa: **el servidor necesita sincronización horaria (NTP)**; con más de ~30 s de desfase el personal con 2FA obligatorio no podrá entrar. Se comprueba en la Fase 10 |
 | E‑11 | **El límite de tasa falla abierto fuera de la autenticación** | Si Redis no responde, denegar toda la API dejaría la agenda de la clínica inoperativa, y en esos endpoints el atacante ya necesita un token válido | Los endpoints de autenticación sí fallan cerrados (nadie entra mientras Redis esté caído). En el resto se permite y se registra `limite_tasa.sin_contador.permitido`: durante una caída de Redis, un cliente autenticado puede exceder su cuota. La decisión está en `app/nucleo/limite_tasa.py`; **vigilar ese evento es parte de la monitorización** |
 | E‑12 | **El extra `embeddings` arrastra una versión de Pillow con vulnerabilidades conocidas** | `fastembed` limita `pillow<12.0`, y la corrección está en 12.1.1 (ADR‑0007) | Pillow **no** está en el árbol base ni en la imagen del backend: solo aparece si se instala el extra `embeddings` para embeddings locales. Las vulnerabilidades son de códecs de imagen, que este sistema nunca invoca — usa fastembed solo para texto. Se revisa en cada actualización de fastembed; si sigue capado cuando llegue la Fase 6, se evalúa un proveedor de embeddings alternativo |
+
+| E‑13 | **Ninguna intención entrante que cambie el estado de una cita se ejecuta automáticamente** | Un teléfono no identifica a una persona: es familiar con frecuencia (ADR‑0017) | `CONFIRMAR`, `CANCELAR`, `SI` y `TOMADA` se reconocen, se registran y se **derivan a una persona**. Consecuencia operativa real: **cada respuesta de un paciente genera trabajo para recepción**. El índice `ix_conversacion_en_handoff` existe para trabajar esa cola por antigüedad. Se revisa en la Fase 6, con las herramientas del agente |
+| E‑14 | **La recuperación de mensajes huérfanos puede duplicar un envío** | Si el worker muere *después* de entregar y *antes* de registrarlo, el mensaje vuelve a la cola | Elección deliberada: ante la duda se prefiere que el paciente reciba dos veces un recordatorio a que no lo reciba. Ventana de exposición: 15 minutos (`MINUTOS_HUERFANO`) |
+| E‑15 | **El reconocimiento de intención no interpreta lenguaje natural** | Coincidencia exacta de frase normalizada, sin modelo de lenguaje (ADR‑0017) | «no creo que pueda ir» no cancela nada. El personal atiende mensajes que una máquina podría haber resuelto; a cambio, la máquina nunca resuelve mal uno que no entendió. **No es una carencia a corregir** |
+| E‑16 | **Los canales de correo y calendario usan el adaptador sandbox** | No están implementados todavía (Fases 4b y 10) | Un mensaje de canal `CORREO` se marca `ENTREGADO` sin que salga nada. El worker lo avisa en el arranque (`outbox.canal_en_sandbox`); **no debe interpretarse como entrega real** |
 
 ---
 

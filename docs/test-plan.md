@@ -1,6 +1,6 @@
 # Plan de pruebas
 
-> **Última actualización:** 2026‑09‑11 · Fases 0–3 cerradas.
+> **Última actualización:** 2026‑09‑12 · Fases 0–4 cerradas · 891 pruebas.
 
 Este documento dice **qué se prueba, con qué, y por qué de esa forma**. No es un
 inventario de pruebas: el inventario está en el código. Lo que aquí importa son las
@@ -44,6 +44,21 @@ cancelación e IDOR— que se ejecuta antes de dar una fase por cerrada, y por e
 pruebas de ámbito verifican **dimensión por dimensión** con una prueba de control que
 confirma que el caso permitido sí devuelve datos. Sin esa prueba de control, las demás
 pasarían por el motivo equivocado.
+
+**Un porcentaje de cobertura es una medición, y una medición puede estar mal.** Regla
+añadida en la Fase 4, al ver que `conversaciones/servicios.py` aparecía al 65 % con 26
+pruebas de API que lo recorren entero. La causa no era el código ni las pruebas: SQLAlchemy
+async ejecuta el código que rodea a cada consulta dentro de un greenlet (`greenlet_spawn`),
+y `coverage` no traza esas líneas sin `concurrency = ["thread", "greenlet"]`.
+
+El síntoma empuja en la dirección contraria a la útil: invita a escribir pruebas para
+líneas que ya estaban probadas, y **oculta las que de verdad no lo están**. Corregirlo
+subió la cobertura total de 89,18 % a 91,63 % sin añadir una sola prueba —y dejó a la vista
+dos huecos reales (`destinatarios.py` al 41 %, la cancelación de recordatorios sin cubrir)
+que el ruido tapaba.
+
+Antes de creerse un número bajo, conviene comprobar que la línea se ejecuta de verdad: un
+`print` o un fallo provocado a propósito lo resuelven en un minuto.
 
 ---
 

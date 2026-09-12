@@ -16,7 +16,7 @@ import pytest
 from app.mensajeria.firma import calcular_firma, verificar_firma, verificar_reto
 from app.nucleo.errores import FirmaInvalida
 
-pytestmark = pytest.mark.unitaria
+pytestmark = [pytest.mark.unitaria, pytest.mark.seguridad]
 
 # Secreto sintetico, solo para estas pruebas. No es ni se parece a una
 # credencial real (CLAUDE.md, regla 2).

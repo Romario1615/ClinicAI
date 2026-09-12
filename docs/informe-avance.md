@@ -1,6 +1,7 @@
 # Informe de avance
 
-> **Fecha:** 2026‑09‑12 · 19 commits · Fases 0, 0b y 3 cerradas; 1, 2, 5 y 7 en curso.
+> **Fecha:** 2026‑09‑12 · 22 commits · Fases 0, 0b, 3 y **4 (WhatsApp)** cerradas;
+> 1, 2, 5 y 7 en curso. El calendario externo de la Fase 4 queda sin empezar.
 
 Este informe cubre los 18 puntos exigidos. Está escrito para ser contrastado: cada cifra
 procede de una ejecución real cuyo comando se indica, y lo que no se ha verificado se dice
@@ -13,7 +14,7 @@ que no se ha verificado.
 | Área | Estado |
 |---|---|
 | Infraestructura local (WSL2 + Docker, PostgreSQL 16 + pgvector, Redis) | operativa |
-| Modelo de datos | **47 tablas** migradas, reversibles |
+| Modelo de datos | **49 tablas** migradas, reversibles |
 | Autenticación (Argon2id, JWT, refresco rotativo, TOTP, bloqueo) | completa |
 | RBAC con ámbito de 4 dimensiones + relación asistencial | completo |
 | Auditoría append‑only con redacción activa | completa |
@@ -22,12 +23,17 @@ que no se ha verificado.
 | Catálogo y pacientes (lectura) | completo |
 | Historia clínica versionada, recetas, tomas, adherencia | servicios y API completos |
 | Lista de espera con oferta única por turno | servicios completos |
-| API HTTP | **33 rutas** |
+| Outbox de entrega: deduplicación, reintentos con retroceso, huérfanos, estados de entrega | completo |
+| Plantillas de notificación sin datos clínicos (regla 10, RF‑K07) | completo · 15 plantillas |
+| Webhook de WhatsApp: firma HMAC, deduplicación, opt‑out, derivación a persona | completo |
+| Adaptador WhatsApp Cloud API | escrito · **camino real sin verificar** (E‑1) |
+| Calendario externo (Google) | **no empezado** |
+| API HTTP | **36 operaciones** en 34 caminos |
 | Frontend Angular 19 PWA | 9 pantallas; agenda conectada al backend real |
 | CI/CD con puertas de fallo | completo, **sin ejecutar en GitHub** |
 
-**No implementado:** WhatsApp, calendarios externos, RAG, dashboard, predicciones, pagos,
-E2E, pruebas de carga, y la preparación de producción.
+**No implementado:** calendarios externos, RAG, dashboard, predicciones, pagos, E2E,
+pruebas de carga, y la preparación de producción.
 
 ---
 
@@ -38,9 +44,11 @@ backend/app/
   nucleo/        configuracion · seguridad · autorizacion · auditoria · bd · errores
                  errores_bd · idempotencia · registro · reloj · dependencias · limite_tasa
   api/           middleware · manejadores
-  modulos/       agenda · auditoria · historia · lista_espera · organizacion
-                 outbox · pacientes · profesionales · usuarios
-  tareas/        worker ARQ · contexto · agenda
+  mensajeria/    plantillas · adaptadores · firma · carga_whatsapp · destinatarios
+                 servicios (outbox) · rutas (webhook)
+  modulos/       agenda · auditoria · conversaciones · historia · lista_espera
+                 organizacion · outbox · pacientes · profesionales · usuarios
+  tareas/        worker ARQ · contexto · agenda · outbox
   semillas/      catalogos · sinteticos · cargar
 frontend/src/app/
   nucleo/        modelos · servicios · guardias · interceptores · utilidades
@@ -48,14 +56,14 @@ frontend/src/app/
   paginas/       acceso · agenda · demostracion
 infra/           compose · docker (backend, worker, postgres) · scripts · wsl
 .github/workflows/ci.yml
-docs/            17 documentos + 16 ADR
+docs/            18 documentos + 17 ADR
 ```
 
 ---
 
 ## 3. Decisiones tomadas
 
-Las 16 ADR están en [`docs/decisiones/`](decisiones/). Las que más condicionan el sistema:
+Las 17 ADR están en [`docs/decisiones/`](decisiones/). Las que más condicionan el sistema:
 
 * **ADR‑0009** — El anti doble‑reserva es una restricción de exclusión `gist` de
   PostgreSQL, no lógica de aplicación.
@@ -64,6 +72,10 @@ Las 16 ADR están en [`docs/decisiones/`](decisiones/). Las que más condicionan
 * **ADR‑0011** — Historia clínica append‑only, sostenida por un disparador.
 * **ADR‑0016** — El token de refresco viaja en el cuerpo, no en cookie; la defensa es
   detectar su duplicado, no ocultarlo.
+* **ADR‑0017** (nueva) — **Ninguna intención entrante que cambie el estado de una cita se
+  ejecuta sin una persona.** El webhook solo trae un número de teléfono, y en este sistema
+  un teléfono no identifica a una persona: es familiar con frecuencia. La única excepción
+  es `BAJA`, porque es el único caso donde no hacer nada es peor que equivocarse.
 
 Decisiones no cubiertas por ADR pero con consecuencia:
 
@@ -79,15 +91,15 @@ Decisiones no cubiertas por ADR pero con consecuencia:
 
 ```
 cd backend
-uv run pytest --cov=app -q            663 passed · cobertura 90 %
-uv run pytest -m unitaria -q          308
-uv run pytest -m integracion -q       243
-uv run pytest -m api -q               110
+uv run pytest --cov=app -q            891 passed · cobertura 91,63 %
+uv run pytest -m unitaria -q          466
+uv run pytest -m integracion -q       287
+uv run pytest -m api -q               136
 uv run pytest -m concurrencia -q       12
-uv run pytest -m seguridad -q         235
+uv run pytest -m seguridad -q         355
 uv run ruff check .                   All checks passed
-uv run ruff format --check .          todos los archivos formateados
-uv run mypy app                       no issues found in 66 source files
+uv run ruff format --check .          132 files already formatted
+uv run mypy app                       no issues found in 79 source files
 uv run bandit -r app -ll              sin hallazgos de severidad media o alta
 uv run alembic upgrade head           aplicada
 uv run alembic downgrade -1 && upgrade head    reversible
@@ -96,11 +108,35 @@ uv run alembic check                  No new upgrade operations detected
 cd frontend
 npm run lint                          All files pass linting
 npx tsc --noEmit                      sin errores
-npm run test:ci                       67 SUCCESS
+npm run test:ci                       67 SUCCESS (sin cambios: la fase no toca el frontend)
 npm run build                         299.92 kB inicial · 86.50 kB transferidos
 ```
 
 Los marcadores se solapan: una prueba de IDOR cuenta como `api` y como `seguridad`.
+
+**Las 228 pruebas nuevas de esta fase**, por archivo y por lo que cubren:
+
+| Suite | Casos | Qué garantiza |
+|---|:--:|---|
+| `test_plantillas.py` | 40 | Regla 10 sobre el catálogo **completo**: ninguna plantilla admite ni menciona diagnóstico, medicamento ni motivo de consulta |
+| `test_intenciones.py` | 41 | Que un mensaje clínico, ambiguo o negado **no** se reconoce y va a una persona |
+| `test_adaptadores_whatsapp.py` | 32 | Forma del cuerpo de la Cloud API y clasificación de errores; que en `sandbox` no se construye el adaptador real |
+| `test_carga_whatsapp.py` | 26 | Parseo del webhook, incluidas **14 formas deformes** que no deben romperlo |
+| `test_webhook_whatsapp_api.py` | 26 | El endpoint real: firma, deduplicación, opt‑out, frontera clínica, robustez |
+| `test_outbox.py` | 25 | Deduplicación, rollback, reintentos, huérfanos, conciliación, consentimiento |
+| `test_destinatarios.py` | 16 | Resolución de contacto en las tres tablas de destinatario |
+| `test_webhook_firma.py` | 13 | Firma válida, alterada, **reserializada**, sin cabecera, sin secreto |
+| `test_normalizacion_telefono.py` | 6 | Formato que exige el proveedor |
+| `test_tareas_outbox.py` | 3 | El trabajo periódico completo, con su contexto de worker |
+
+Tres de esas pruebas son las que más valen, porque comprueban una **ausencia**:
+
+* `test_una_firma_invalida_no_produce_ningun_efecto` — no basta el 403: se verifica que no
+  se escribió nada y que el consentimiento del paciente sigue vigente.
+* `test_ninguna_intencion_de_estado_se_ejecuta_sin_una_persona` — ni `CANCELAR`, ni
+  `CONFIRMAR`, ni `SI`, ni `TOMADA` cambian nada por sí solos.
+* `test_el_webhook_no_devuelve_datos_del_paciente` — el cuerpo de la respuesta lo lee Meta,
+  no la clínica: cualquier dato ahí sale del sistema sin control de acceso.
 
 **Verificación de extremo a extremo** contra la base con datos sintéticos, con la API
 arrancada de verdad:
@@ -121,13 +157,43 @@ paciente ajeno             404 RECURSO_NO_ENCONTRADO
 
 ## 5. Cobertura
 
-**Backend 90 %** (umbral del pipeline 80 %, RNF‑06). **Frontend 95,4 % sentencias,
-87,3 % ramas, 90,7 % funciones** (umbrales 80/70/80).
+**Backend 91,63 %** (umbral del pipeline 80 %, RNF‑06). **Frontend 95,41 % sentencias,
+87,3 % ramas, 90,69 % funciones** (umbrales 80/70/80).
 
-Los módulos por debajo del 80 % y por qué: `nucleo/bd.py` (58 %, la parte no cubierta es
-el ciclo de vida del motor, que se ejercita al arrancar); `agenda/repositorio.py` (69 %,
-ramas de consulta de feriados y descansos aún sin caso de prueba);
-`nucleo/idempotencia.py` (68 %, funciones que usará el webhook de WhatsApp).
+### La cifra anterior estaba mal medida
+
+`app/modulos/conversaciones/servicios.py` aparecía al **65 %** con 26 pruebas de API que lo
+recorren entero. No era el código ni las pruebas: **SQLAlchemy async ejecuta el código que
+rodea a cada consulta dentro de un greenlet** (`greenlet_spawn`), y `coverage` no traza esas
+líneas sin `concurrency = ["thread", "greenlet"]`.
+
+Corregirlo subió la cobertura total de 89,18 % a 91,63 % **sin añadir una sola prueba**, y
+dejó a la vista dos huecos reales que el ruido tapaba: `destinatarios.py` al 41 % y la
+cancelación de recordatorios sin cubrir. Ambos cerrados (98 % y cubierta).
+
+El síntoma era peligroso porque empujaba en la dirección contraria: invitaba a escribir
+pruebas para líneas ya probadas y ocultaba las que de verdad faltaban. Queda anotado como
+principio en [`test-plan.md`](test-plan.md).
+
+### Módulos de esta fase
+
+| Módulo | Cobertura |
+|---|:--:|
+| `mensajeria/plantillas.py` · `mensajeria/firma.py` | 100 % |
+| `modulos/conversaciones/servicios.py` · `modelos.py` | 100 % |
+| `mensajeria/servicios.py` · `mensajeria/destinatarios.py` | 98 % |
+| `tareas/outbox.py` | 96 % |
+| `modulos/conversaciones/intenciones.py` | 94 % |
+| `mensajeria/adaptadores.py` | 93 % |
+| `mensajeria/carga_whatsapp.py` | 90 % |
+| `mensajeria/rutas.py` | 89 % |
+
+Lo no cubierto en `rutas.py` son las ramas de configuración degradada
+(`WHATSAPP_VALIDAR_FIRMA=false`, cuerpo mayor de 1 MB), que no se pueden ejercer sin
+levantar una segunda aplicación mal configurada a propósito.
+
+Módulos por debajo del 80 % que persisten: `nucleo/bd.py` (ciclo de vida del motor, se
+ejercita al arrancar) y `agenda/repositorio.py` (ramas de feriados y descansos).
 
 ---
 
@@ -158,16 +224,41 @@ Estado actual: `pip-audit --strict` → **No known vulnerabilities found**.
    registros de librerías no pasaban por la redacción, y SQLAlchemy escribe las sentencias
    con sus parámetros —nombres, documentos y teléfonos de pacientes.
 4. **`WWW-Authenticate` faltaba en la mayoría de los 401.**
+5. **Las pruebas de seguridad de la Fase 4 no llevaban su marcador** y quedaban fuera de la
+   puerta `-m seguridad` del pipeline. La firma del webhook, la regla 10 y la frontera
+   clínica son controles de seguridad, no pruebas funcionales. Corregido: la puerta pasa de
+   235 a **355** pruebas. Un control verificado por una prueba que la puerta no ejecuta no
+   está protegido contra una regresión.
 
 Los tres primeros aparecieron **ejerciendo el sistema**, no ejecutando la suite: vivían en
 el espacio entre lo que las fixtures suponían y lo que los datos reales tienen. Está
 anotado como principio en `test-plan.md`.
 
+### Sobre esta fase en particular
+
+`pip-audit --strict` sigue en **No known vulnerabilities found**; la fase no añadió
+dependencias (`httpx` ya estaba en el árbol para el cliente de pruebas). `bandit -r app -ll`
+no reporta hallazgos de severidad media o alta.
+
+Decisiones de seguridad que conviene poder contrastar:
+
+* La firma se calcula sobre el **cuerpo crudo** y se compara con `hmac.compare_digest`.
+  Hay una prueba (`test_el_cuerpo_reserializado_no_valida`) cuyo único propósito es impedir
+  que alguien «simplifique» la ruta pasando el cuerpo ya parseado.
+* Una firma inválida se audita **en su propia confirmación** antes de propagar el error,
+  porque la transacción de la petición se descarta al lanzar y `webhook.firma_invalida` es
+  una de las acciones con alerta.
+* El webhook **responde 200 ante cualquier otro fallo**, a propósito. Es una decisión
+  contraintuitiva: Meta deshabilita la suscripción ante errores persistentes, y perderla
+  deja al sistema sin recibir las respuestas de **ningún** paciente.
+* El destino de un envío **no se registra en el log**: es un número de teléfono, y un log
+  de aplicación no es el sitio de un dato de contacto.
+
 ---
 
 ## 7. Riesgos pendientes
 
-Los 12 riesgos residuales están en [`known-limitations.md`](known-limitations.md). Los que
+Los 16 riesgos residuales están en [`known-limitations.md`](known-limitations.md). Los que
 más pesan:
 
 * **E‑2** El cumplimiento legal no está validado. **El sistema no puede operar con
@@ -177,6 +268,17 @@ más pesan:
 * **E‑11** El límite de tasa falla abierto fuera de autenticación.
 * **E‑7** La auditoría es inalterable desde la aplicación, no frente a un superusuario de
   base de datos.
+* **E‑1** El camino real de WhatsApp **no está verificado**: ni un mensaje ha salido hacia
+  Meta. Lo verificado es todo lo que rodea al envío; lo que falta es concreto y está
+  enumerado en la sección 7 de [`whatsapp-integration.md`](whatsapp-integration.md).
+* **E‑13** Ninguna intención entrante que cambie el estado de una cita se ejecuta sola
+  (ADR‑0017). **Consecuencia operativa real: cada respuesta de un paciente genera trabajo
+  para recepción.** No es un defecto; es el precio de no cancelar la cita equivocada de una
+  familia.
+* **E‑14** La recuperación de mensajes huérfanos puede duplicar un envío si el worker muere
+  justo después de entregar. Ventana: 15 minutos.
+* **E‑16** Los canales de correo y calendario usan el adaptador sandbox: un mensaje de
+  canal `CORREO` se marca `ENTREGADO` **sin que salga nada**.
 * **D‑1** El disco C: del equipo de desarrollo está al límite por causas ajenas al
   proyecto (`C:\Windows\WinSxS`).
 
@@ -186,13 +288,19 @@ más pesan:
 
 | Servicio | Estado | Consecuencia |
 |---|---|---|
-| WhatsApp Business Cloud API | **ausente** | La Fase 4 no se puede verificar contra el proveedor |
-| Google Calendar (OAuth) | **ausente** | Ídem |
+| WhatsApp Business Cloud API | **ausente** | El adaptador real está escrito y **no se ha ejecutado contra Meta**. Faltan: cuenta de WhatsApp Business, número verificado y aprobación de las 10 plantillas |
+| Google Calendar (OAuth) | **ausente** | El módulo de calendario no está implementado |
 | Embeddings en la nube | ausente | Se usará `fastembed` local (ADR‑0007) |
 | `ANTHROPIC_API_KEY` | presente en el entorno | Suficiente para la Fase 6 |
 
-Ninguna se ha inventado. Cuando llegue la Fase 4 se implementarán adaptador real y
-adaptador sandbox, y **se declarará explícitamente que el camino real no está verificado**.
+Ninguna se ha inventado. La Fase 4 se implementó con adaptador real **y** adaptador
+sandbox seleccionable por entorno (ADR‑0012), y **se declara explícitamente que el camino
+real no está verificado** (E‑1).
+
+El adaptador real **falla al construirse** si faltan las credenciales, no al primer envío:
+arrancar mal configurado significa descubrirlo cuando un paciente no recibió su
+recordatorio. En modo `sandbox` el worker lo avisa en cada arranque
+(`outbox.canal_en_sandbox`) para que nadie confunda una entrega simulada con una real.
 
 ---
 
@@ -224,17 +332,32 @@ válida**. Es la afirmación que más conviene no adelantar.
 |---|---|
 | 1 · Prototipo visual | en curso · 6 de 9 pantallas con datos sintéticos |
 | 2 · Backend y seguridad | en curso · falta escritura de pacientes y administración de usuarios |
-| 4 · WhatsApp y calendarios | **no empezada** |
-| 5 · Lista de espera | en curso · faltan rutas HTTP y disparo automático |
+| 4 · WhatsApp | **cerrada** · outbox, plantillas, webhook y adaptadores; camino real sin verificar (E‑1) |
+| 4b · Calendarios externos | **no empezada** · OAuth, tokens cifrados, conciliación de cambios externos |
+| 5 · Lista de espera | en curso · faltan rutas HTTP y disparo automático; la oferta ya puede encolar por outbox |
 | 6 · Conocimiento y RAG | **no empezada** · 0 pruebas `rag` |
-| 7 · Historia clínica | en curso · faltan recordatorios por outbox y pantalla real |
+| 7 · Historia clínica | en curso · el outbox ya existe; faltan programar los recordatorios de toma y la pantalla real |
 | 8 · Dashboard y predicciones | **no empezada** |
 | 9 · Pagos | **no empezada** |
 | 10 · Producción | **no empezada** |
 
 También pendientes: los 21 escenarios E2E con Playwright, las pruebas de carga con k6,
-DAST, y seis documentos (`rag.md`, `whatsapp-integration.md`, `calendar-integration.md`,
-`monitoring.md`, `backup-and-restore.md`, `incident-response.md`).
+DAST, y cinco documentos (`rag.md`, `calendar-integration.md`, `monitoring.md`,
+`backup-and-restore.md`, `incident-response.md`). `whatsapp-integration.md` se entrega con
+esta fase.
+
+**Lo que la Fase 4 deja explícitamente para después**, no por olvido:
+
+* **Programar los recordatorios de cita y de toma.** El outbox y las plantillas existen y
+  están probados; lo que falta es el planificador que crea las filas de `recordatorio` al
+  confirmar una cita o una receta. Es trabajo de las Fases 5 y 7.
+* **Ejecutar las intenciones entrantes.** Requiere las herramientas del agente, que
+  trabajan con principal y ámbito (ADR‑0017). Fase 6.
+* **Responder al paciente dentro de la ventana de 24 horas.** El dato
+  (`ventana_expira_en`) se guarda ya; falta la pantalla del personal para usarlo.
+* **Los tres tipos de mensaje de calendario** (`CALENDARIO_*`) no tienen plantilla a
+  propósito: llevan una operación sobre un evento, no texto para una persona. Hay una
+  prueba que verifica esa ausencia para que sea una decisión visible y no un hueco.
 
 ---
 
@@ -252,14 +375,24 @@ DAST, y seis documentos (`rag.md`, `whatsapp-integration.md`, `calendar-integrat
 | Pipeline con puertas de fallo | ⚠️ escrito y validado en local; **nunca ejecutado en GitHub** |
 | Imágenes de contenedor | ⚠️ escritas; **nunca construidas**, no hay Docker en el anfitrión |
 | Interfaz de usuario | ⚠️ prototipo; 6 de 9 pantallas son maquetas |
-| Comunicación con pacientes | ❌ no existe |
+| Comunicación con pacientes (saliente) | ⚠️ **verificada contra sandbox**, no contra Meta (E‑1) |
+| Comunicación con pacientes (entrante) | ⚠️ webhook verificado; **nada que cambie una cita se ejecuta solo** (E‑13) |
+| Notificaciones sin datos clínicos | ✅ verificado sobre el catálogo completo |
+| Calendarios externos | ❌ no existe |
 | Historia clínica en la interfaz | ❌ maqueta |
 | Pruebas E2E, carga, DAST, recuperación | ❌ no existen |
 | Restauración de copias verificada | ❌ no existe |
 | Validación legal (Ecuador) | ❌ no existe |
 
-Lo que hay es una **columna vertebral sólida y verificada**: datos, seguridad, agenda y
-núcleo clínico. Lo que falta es más de la mitad del alcance acordado.
+Lo que hay es una **columna vertebral sólida y verificada**: datos, seguridad, agenda,
+núcleo clínico y ahora el canal de comunicación. Lo que falta sigue siendo cerca de la
+mitad del alcance acordado.
+
+Sobre la Fase 4 en concreto, la distinción que importa: **la lógica alrededor del envío
+está verificada y el envío mismo no.** El outbox, la deduplicación, los reintentos, la
+firma, la conciliación de estados y la frontera clínica se ejercen con 228 pruebas contra
+PostgreSQL real. Que Meta acepte el cuerpo que se le construye es una afirmación que este
+informe **no hace**.
 
 ---
 
@@ -273,6 +406,12 @@ con qué resultado.
 se ha ejecutado nunca en GitHub. Su sintaxis YAML está validada y cada puerta se comprobó
 a mano en local, una por una. Lo que no se ha verificado es el comportamiento de los
 contenedores de servicio ni de las acciones de terceros en el ejecutor.
+
+**Sobre la medición que estaba mal.** El hallazgo más útil de esta fase no fue código
+nuevo: fue descubrir que la cobertura llevaba midiéndose mal desde el principio por el
+greenlet de SQLAlchemy async. Un número que parece objetivo puede no serlo, y este llevaba
+varias fases empujando el esfuerzo en la dirección equivocada. Se corrigió en su propio
+commit, separado de la fase, porque afecta a todo el proyecto y no a esta parte.
 
 **Sobre las seis pruebas mal escritas.** Durante el trabajo se descubrió que seis pruebas
 propias estaban mal: tres asumían comportamientos de disponibilidad que el motor no tiene,
