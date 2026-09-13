@@ -1,6 +1,6 @@
 # Informe de avance
 
-> **Fecha:** 2026‑09‑12 · 27 commits · Fases 0, 0b, 3 y **4 (WhatsApp)** cerradas;
+> **Fecha:** 2026‑09‑12 · 29 commits · Fases 0, 0b, 3 y **4 (WhatsApp)** cerradas;
 > **Fase 6 (conocimiento y RAG) cerrada.** 1, 2, 5 y 7 en curso. Del calendario externo
 > queda pendiente el adaptador real de Google y la renovación automática del token; del
 > RAG, el agente que lo use.
@@ -105,7 +105,7 @@ Decisiones no cubiertas por ADR pero con consecuencia:
 
 ```
 cd backend
-uv run pytest --cov=app -q            1139 passed · cobertura 91,90 %
+uv run pytest --cov=app -q            1140 passed · cobertura 92,03 %
 uv run pytest -m unitaria -q          583
 uv run pytest -m integracion -q       372
 uv run pytest -m api -q               182
@@ -167,7 +167,7 @@ Los marcadores se solapan: una prueba de IDOR cuenta como `api` y como `segurida
 | `test_embeddings.py` | 13 | Determinismo, del que dependen todas las pruebas de recuperación |
 | `test_recuperador.py` | 9 | Contexto citado y la respuesta sin fuente |
 | `test_evaluacion_rag.py` | 7 | Hit@K y casos negativos deliberados |
-| `test_arquitectura_rag.py` | 5 | Que **no hay otra vía** de consulta a `knowledge_chunks` |
+| `test_arquitectura_rag.py` | 6 | Que **no hay otra vía** de consulta a `knowledge_chunks` |
 
 Tres de esas pruebas son las que más valen, porque comprueban una **ausencia**:
 
@@ -197,7 +197,7 @@ paciente ajeno             404 RECURSO_NO_ENCONTRADO
 
 ## 5. Cobertura
 
-**Backend 91,90 %** (umbral del pipeline 80 %, RNF‑06). **Frontend 95,41 % sentencias,
+**Backend 92,03 %** (umbral del pipeline 80 %, RNF‑06). **Frontend 95,41 % sentencias,
 87,3 % ramas, 90,69 % funciones** (umbrales 80/70/80).
 
 ### La cifra anterior estaba mal medida
@@ -296,6 +296,13 @@ Al corregir el primero, las pruebas de fuga fallaron y eso dejó ver el segundo.
 **Medido después de las dos correcciones:** Hit@1 80 %, Hit@3 100 %, media de 2,5 resultados
 por consulta sobre un corpus de 5 documentos, y **0 resultados** para una pregunta sin
 documentación —antes, los 5—.
+
+**Y un tercero, del mismo tipo que el de los consentimientos:** la base de conocimiento
+estaba **vacía** en desarrollo, así que el RAG no se podía demostrar ni ejercitar. Las
+semillas cargan ahora 9 documentos en los cinco estados; dos existen solo para poder
+comprobar a mano que un borrador y un archivado **no** se recuperan. Al sembrarlos, el
+`CHECK aprobado_con_responsable` rechazó la primera versión —dejaba el autor opcional—, y la
+prueba de arquitectura detectó el módulo nuevo. Las dos hicieron su trabajo.
 
 Ninguno de los dos aparece ejecutando la suite: aparecen al **medir**. Es el mismo patrón que
 el fallo del formato del teléfono, con otra forma.

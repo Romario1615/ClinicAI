@@ -371,8 +371,8 @@ es qué documentos se usaron. Hay una prueba que lo comprueba.
 
 ```
 uv run pytest -m rag -q          →  80 passed
-uv run pytest -q                 →  1139 passed
-uv run pytest --cov=app          →  91,9 %
+uv run pytest -q                 →  1140 passed
+uv run pytest --cov=app          →  92,0 %
 uv run ruff check . ; mypy app   →  sin hallazgos
 alembic upgrade/downgrade/upgrade → reversible
 ```
@@ -399,4 +399,13 @@ SELECT is_generated, generation_expression FROM information_schema.columns
 | `test_saneamiento.py` | 34 | Patrones, evasiones, falsos positivos |
 | `test_recuperador.py` | 9 | Contexto citado, sin fuente |
 | `test_evaluacion_rag.py` | 7 | Hit@K y casos negativos deliberados |
-| `test_arquitectura_rag.py` | 5 | Una sola puerta a `knowledge_chunks` |
+| `test_arquitectura_rag.py` | 6 | Una sola puerta a `knowledge_chunks`, y que el sembrador solo escribe |
+
+Además, **31 comprobaciones sobre la API arrancada** con los datos sembrados: listado,
+búsqueda con y sin respuesta, que el borrador y el archivado no se recuperan, el ciclo de
+vida completo, el bloqueo por inyección con su revisión manual, y la retirada para corregir.
+0 fallos.
+
+Las semillas cargan **9 documentos en los cinco estados** (`--embeddings mock` evita
+descargar el modelo). Que no todos estén publicados es deliberado: un conjunto donde todo es
+recuperable no permite comprobar a mano que un borrador **no** aparece.
