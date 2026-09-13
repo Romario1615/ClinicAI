@@ -45,6 +45,13 @@ AUTORIZADOS: dict[str, str] = {
         "Los escribe durante la ingesta y propaga el estado del documento."
     ),
     "app/modelos.py": "Punto unico de importacion que necesita Alembic.",
+    "app/semillas/conocimiento.py": (
+        "Siembra documentos de desarrollo. **Solo escribe**: no consulta, asi "
+        "que no puede ser una via de fuga. Se incluye porque esta prueba "
+        "detecta cualquier referencia, y detectarla es lo correcto: un "
+        "sembrador que escriba metadatos incoherentes dejaria fragmentos "
+        "recuperables que no deberian serlo."
+    ),
 }
 
 
@@ -159,3 +166,27 @@ def test_el_contexto_de_autorizacion_no_tiene_valores_por_defecto() -> None:
         or campo.default_factory is not dataclasses.MISSING
     ]
     assert not con_defecto, f"Campos con valor por defecto en el contexto: {con_defecto}"
+
+
+def test_el_sembrador_no_consulta_los_fragmentos() -> None:
+    """La excepcion del sembrador vale porque **solo escribe**.
+
+    Si algun dia consultara -- para decidir que sembrar, por ejemplo --, seria
+    una via de lectura sin el filtro de autorizacion, y la excepcion dejaria de
+    estar justificada. Esta prueba lo vigila.
+    """
+    ruta = RAIZ / "semillas" / "conocimiento.py"
+    arbol = ast.parse(ruta.read_text(encoding="utf-8"), filename=str(ruta))
+
+    consultas = [
+        nodo
+        for nodo in ast.walk(arbol)
+        if isinstance(nodo, ast.Call)
+        and isinstance(nodo.func, ast.Name)
+        and nodo.func.id == "select"
+    ]
+    assert not consultas, (
+        "`app/semillas/conocimiento.py` hace una consulta. Su excepcion en "
+        "AUTORIZADOS se justifica porque solo escribe; si lee, debe pasar por "
+        "`RepositorioConocimiento` o dejar de estar en la lista."
+    )

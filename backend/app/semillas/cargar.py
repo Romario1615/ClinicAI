@@ -17,17 +17,23 @@ from __future__ import annotations
 import argparse
 import asyncio
 import sys
+import uuid
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
+from app.ia.embeddings import construir_proveedor_embeddings
+from app.modulos.usuarios.modelos import Usuario
 from app.nucleo.configuracion import Configuracion
+from app.nucleo.reloj import RelojSistema
 from app.semillas.catalogos import (
     cargar_catalogos,
     verificar_coherencia,
 )
+from app.semillas.conocimiento import cargar_conocimiento
 from app.semillas.sinteticos import cargar_datos_sinteticos
 
 
@@ -86,6 +92,14 @@ async def _ejecutar(opciones: argparse.Namespace) -> int:
             _escribir()
             _escribir(sinteticos.describir())
 
+        # --- Base de conocimiento ---
+        #
+        # Transaccion propia: si la indexacion falla -- porque falta el modelo
+        # de embeddings, por ejemplo --, los datos sinteticos ya cargados se
+        # conservan. Son utiles por si solos.
+        if sinteticos.clinica_id is not None:
+            await _cargar_conocimiento(fabrica, configuracion, opciones, sinteticos.clinica_id)
+
     except RuntimeError as exc:
         _escribir()
         _escribir(f"Carga detenida: {exc}")
@@ -98,6 +112,60 @@ async def _ejecutar(opciones: argparse.Namespace) -> int:
         await motor.dispose()
 
     return codigo_salida
+
+
+async def _cargar_conocimiento(
+    fabrica: async_sessionmaker[AsyncSession],
+    configuracion: Configuracion,
+    opciones: argparse.Namespace,
+    clinica_id: uuid.UUID,
+) -> None:
+    """Siembra e indexa los documentos de conocimiento.
+
+    Vive aparte de `_ejecutar` porque es un paso completo: elige proveedor de
+    embeddings, abre su propia transaccion y puede fallar sin arrastrar lo ya
+    cargado.
+    """
+    _escribir()
+    _escribir("=== Base de conocimiento ===")
+
+    embeddings = construir_proveedor_embeddings(
+        opciones.embeddings or configuracion.proveedor_embeddings,
+        modelo=configuracion.modelo_embeddings,
+        dimension=configuracion.dimension_embeddings,
+        ruta_cache=str(configuracion.ruta_cache_embeddings),
+    )
+    _escribir(f"Proveedor de embeddings: {embeddings.nombre_modelo}")
+    if embeddings.nombre_modelo.startswith("simulado:"):
+        # No es un detalle menor: con vectores simulados la busqueda semantica
+        # no mide nada, y la recuperacion depende solo de la coincidencia
+        # textual.
+        _escribir("  AVISO: vectores simulados. La busqueda semantica no mide parecido real.")
+
+    async with fabrica() as sesion, sesion.begin():
+        # El autor es obligatorio: los documentos aprobados exigen constancia
+        # de quien los aprobo, y el motor lo comprueba.
+        autor_id = await sesion.scalar(
+            select(Usuario.id)
+            .where(Usuario.clinica_id == clinica_id)
+            .order_by(Usuario.creado_en)
+            .limit(1)
+        )
+        if autor_id is None:
+            raise RuntimeError(
+                "No hay usuarios en la clinica sintetica; no se puede atribuir la "
+                "aprobacion de los documentos."
+            )
+        conocimiento = await cargar_conocimiento(
+            sesion,
+            clinica_id=clinica_id,
+            embeddings=embeddings,
+            ahora=RelojSistema().ahora(),
+            autor_id=autor_id,
+            tamano_fragmento=configuracion.rag_tamano_fragmento,
+            solape_fragmento=configuracion.rag_solape_fragmento,
+        )
+    _escribir(conocimiento.describir())
 
 
 def main(argumentos: list[str] | None = None) -> int:
@@ -116,6 +184,15 @@ def main(argumentos: list[str] | None = None) -> int:
     )
     analizador.add_argument("--pacientes", type=int, default=60, help="Pacientes sinteticos (60).")
     analizador.add_argument("--citas", type=int, default=200, help="Citas sinteticas (200).")
+    analizador.add_argument(
+        "--embeddings",
+        choices=("fastembed", "mock"),
+        default=None,
+        help=(
+            "Proveedor de embeddings para indexar el conocimiento. Por defecto, el "
+            "de la configuracion. Use 'mock' para no descargar el modelo real."
+        ),
+    )
     analizador.add_argument(
         "--semilla",
         type=int,
