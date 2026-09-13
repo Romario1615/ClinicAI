@@ -1,6 +1,6 @@
 # Limitaciones conocidas y riesgos residuales
 
-> **Última actualización:** 2026‑09‑12 · Fase 4.
+> **Última actualización:** 2026‑09‑13 · capa de herramientas del agente.
 >
 > Este documento existe para que nadie deduzca capacidades que el sistema no tiene. Se
 > actualiza al cerrar cada fase. Una limitación resuelta no se borra: se marca como
@@ -49,6 +49,8 @@ Estas no desaparecen al terminar las fases. Son propiedades del alcance acordado
 | E‑20 | **`knowledge_permissions` existe y no se aplica** | Falta implementar el filtro por rol y usuario sobre documentos concretos | El control de acceso al conocimiento es hoy por clínica, sede, especialidad y nivel de sensibilidad. Un documento no se puede restringir a un rol concreto ni marcar como «legible por el personal pero no citable por el agente», aunque la tabla tenga las columnas |
 | E‑21 | **La latencia del RAG no está medida** (RNF‑03, P95 < 2 s) | Requiere volumen y pruebas de carga (Fase 10) | HNSW con pre‑filtro puede necesitar explorar más grafo para reunir `k` candidatos cuando el filtro es muy selectivo (ADR‑0013). Con el corpus de pruebas —5 documentos— eso no se ve |
 | E‑22 | **No hay reindexado al cambiar de modelo de embeddings** | Falta implementar el trabajo | La columna `modelo` permite que convivan dos modelos, pero cambiar `MODELO_EMBEDDINGS` deja los vectores antiguos sin equivalente nuevo: la búsqueda vectorial devolvería cero para todo lo ya indexado, **sin ningún error** |
+| E‑23 | **El bucle del modelo del agente no existe** | Falta construirlo | La capa de herramientas está probada ([ADR‑0019](decisiones/0019-la-frontera-de-las-herramientas-del-agente.md)), pero **ningún LLM ha invocado nunca estas herramientas**. Faltan el prompt de sistema, la memoria de conversación y la resolución de identidad del paciente sin la cual el agente no puede operar por WhatsApp. Que el recinto sea correcto no dice nada sobre si el modelo elegirá bien dentro de él: eso exige su propia evaluación |
+| E‑24 | **El despachador oculta los fallos de programación durante el desarrollo** | Deliberado, con coste declarado | Una excepción inesperada se registra con `logger.exception` y al paciente se le deriva, para que nunca salga un nombre de tabla por WhatsApp. El efecto secundario es que un atributo mal escrito se presenta como «le paso con una persona» en lugar de reventar. Ocurrió al construir la capa. **Al depurar el agente, mirar el log, no el resultado de la herramienta** |
 
 ---
 
@@ -76,7 +78,8 @@ No son defectos. Se listan para que no se «arreglen» por error.
 | P‑5 | Los medicamentos «cuando sea necesario» no generan horarios automáticos | Un PRN convertido en pauta fija es un error de medicación |
 | P‑6 | No existe sobreagendamiento | La restricción de exclusión lo impide por diseño |
 | P‑7 | No se implementa borrado automático por retención sobre historia clínica | Un borrado mal configurado es irreversible; requiere validación jurídica |
-| P‑8 | La IA no tiene ninguna herramienta de escritura clínica | No es una instrucción al modelo: la capacidad no existe |
+| P‑8 | La IA no tiene ninguna herramienta de escritura clínica | No es una instrucción al modelo: la capacidad no existe. El catálogo son siete herramientas y una prueba falla si aparece una octava |
+| P‑9 | El agente solo devuelve cinco horarios, y de la cita solo fecha, hora y estado | Un mensaje con cuarenta horas no lo lee nadie; y el nombre del servicio revela la especialidad, que revela la condición |
 
 ---
 

@@ -167,6 +167,7 @@ El plan de pruebas completo, con los escenarios obligatorios y los resultados de
 | [`docs/security.md`](docs/security.md) | Controles, política de acceso y retención |
 | [`docs/threat-model.md`](docs/threat-model.md) | Modelo de amenazas y matriz de riesgos |
 | [`docs/rag.md`](docs/rag.md) | Recuperación, permisos y anti prompt injection |
+| [`docs/agente.md`](docs/agente.md) | Las siete herramientas, la frontera clínica y lo que aún falta |
 | [`docs/whatsapp-integration.md`](docs/whatsapp-integration.md) | Webhooks, plantillas y entrega |
 | [`docs/calendar-integration.md`](docs/calendar-integration.md) | OAuth, sincronización y reconciliación |
 | [`docs/deployment.md`](docs/deployment.md) | Despliegue local, staging, producción y rollback |

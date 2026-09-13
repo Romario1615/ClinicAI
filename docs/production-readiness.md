@@ -1,6 +1,6 @@
 # Estado de preparación para producción
 
-> **Última actualización:** 2026‑09‑12 · Fases 0, 0b, 3, 4 y 6 cerradas.
+> **Última actualización:** 2026‑09‑13 · Fases 0, 0b, 3, 4 y 6 cerradas; capa de herramientas del agente construida.
 >
 > **Veredicto actual: el sistema NO está preparado para producción y no puede usarse con
 > datos de pacientes reales.** No es una fórmula de cautela. Hay tres motivos concretos, y
@@ -20,7 +20,7 @@ funcionalidad no existe todavía; **no** significa que esté bien.
 
 | # | Criterio | Estado | Evidencia |
 |---|---|---|---|
-| 1 | No hay errores críticos | **parcial** | 1139 pruebas en verde, `ruff`/`mypy --strict` sin hallazgos. Pero sin E2E, sin carga y sin DAST, «no hay errores críticos» es una afirmación que no se puede sostener |
+| 1 | No hay errores críticos | **parcial** | 1234 pruebas en verde, `ruff`/`mypy --strict` sin hallazgos. Pero sin E2E, sin carga y sin DAST, «no hay errores críticos» es una afirmación que no se puede sostener |
 | 2 | Sin vulnerabilidades críticas o altas pendientes | **parcial** | `pip-audit --strict` → sin vulnerabilidades conocidas; `bandit -r app -ll` sin hallazgos. 44 vulnerabilidades corregidas (ver informe). **Falta DAST y Trivy sobre imágenes construidas** |
 | 3 | No existen secretos en el repositorio | **parcial** | `.env` excluido, `.env.example` sin un valor real, secretos de prueba sintéticos. `gitleaks` **no está instalado localmente**; corre en el pipeline, que nunca se ha ejecutado |
 | 4 | Las reservas concurrentes no generan duplicados | **verificado** | Restricción de exclusión `gist`; prueba de concurrencia real con 50 participantes y `asyncio.Barrier` sobre conexiones separadas |
@@ -30,18 +30,18 @@ funcionalidad no existe todavía; **no** significa que esté bien.
 | 8 | Los permisos impiden accesos indebidos | **verificado** | Permiso + ámbito de 4 dimensiones + relación asistencial, aplicados en el `WHERE`. 404 y no 403 fuera de ámbito. 504 pruebas con marcador `seguridad`. Tres fallos propios del filtro de ámbito encontrados y corregidos |
 | 9 | La historia clínica está protegida | **verificado** | Append‑only por disparador, versionado con autor y motivo, atacado con SQL directo en las pruebas |
 | 10 | Los medicamentos solo usan recetas aprobadas | **verificado** | Disparador `toma_exige_receta_confirmada`; los PRN no generan horarios fijos |
-| 11 | La IA no modifica datos sin autorización | **parcial** | Las herramientas del agente **siguen sin existir**: el agente conversacional no está implementado. Lo verificado: el servicio clínico rechaza a un principal con `es_agente`; el webhook **no ejecuta ninguna intención que cambie una cita** (ADR‑0017); y la capa de recuperación **solo lee**, con una prueba de arquitectura que verifica que ninguna otra vía consulta `knowledge_chunks` |
+| 11 | La IA no modifica datos sin autorización | **parcial** | La **capa de herramientas** ya existe y está verificada (94 pruebas, [ADR‑0019](decisiones/0019-la-frontera-de-las-herramientas-del-agente.md)): catálogo cerrado de siete herramientas, ninguna toca contenido clínico; el principal viaja fuera de los argumentos y una prueba recorre los siete esquemas JSON para que siga siendo así; el ámbito se verifica contra PostgreSQL real intentando leer y cancelar la cita de otro paciente; toda invocación —incluida la denegada— queda auditada como `AGENTE_IA`. Lo que falta: **el bucle del modelo no existe**, así que ningún LLM ha invocado nunca estas herramientas. El webhook sigue sin ejecutar intenciones que cambien una cita (ADR‑0017) |
 | 12 | El RAG no filtra información entre pacientes | **verificado** | Los filtros van en el `WHERE` de una consulta única (ADR‑0013), con **21 pruebas de casos negativos** —otra clínica, otra sede, otra especialidad, por encima del nivel— cada una con su prueba de control. La historia clínica individual **no se indexa** en ningún índice vectorial (RF‑M07). Una prueba de arquitectura recorre el AST de `app/` y verifica que no hay otra vía de consulta |
 | 13 | Los documentos vencidos no son recuperados | **verificado** | Vigencia, estado y archivado filtran en el `WHERE`. Probado con el documento vencido, el que aún no entra en vigor, el archivado y el borrador, incluido el caso en que el texto del documento **son las palabras exactas de la consulta** |
 | 14 | Los respaldos se pueden restaurar | **no evaluado** | Fase 10. **Un respaldo sin restauración probada no cuenta** |
 | 15 | El sistema soporta las pruebas de carga definidas | **no evaluado** | Fase 10 |
 | 16 | El pipeline CI/CD está funcionando | **parcial** | 7 trabajos y puerta de fusión escritos; YAML validado y cada puerta comprobada a mano en local. **Nunca ejecutado en GitHub**: el repositorio no tiene remoto |
-| 17 | Existe documentación de operación | **parcial** | 20 documentos y 18 ADR. Faltan `monitoring.md`, `backup-and-restore.md`, `incident-response.md` |
+| 17 | Existe documentación de operación | **parcial** | 21 documentos y 19 ADR. Faltan `monitoring.md`, `backup-and-restore.md`, `incident-response.md` |
 | 18 | Existe procedimiento de rollback | **parcial** | El rollback de esquema **sí está verificado** (`upgrade → downgrade -1 → upgrade` en cada migración). El rollback de despliegue está documentado y sin probar |
 | 19 | Existe procedimiento de restauración | **parcial** | Documentado, sin ejecutar |
 | 20 | Existe monitoreo | **no evaluado** | Fase 10. Ya hay eventos que exigen vigilancia y nadie los vigila: la cola `FALLIDO` del outbox, `limite_tasa.sin_contador.permitido` y `whatsapp.numero_sin_clinica` |
 | 21 | Pruebas de aceptación con escenarios de clínica | **no evaluado** | Fase 10. Los 21 escenarios E2E no existen |
-| 22 | Todas las limitaciones documentadas | **hecho** | 16 limitaciones estructurales en [`known-limitations.md`](known-limitations.md) |
+| 22 | Todas las limitaciones documentadas | **hecho** | 24 limitaciones estructurales y 9 restricciones deliberadas en [`known-limitations.md`](known-limitations.md) |
 | 23 | Notificaciones sin datos clínicos | **verificado** | 40 pruebas recorren el catálogo completo de plantillas: ninguna admite ni menciona diagnóstico, medicamento ni motivo de consulta (regla 10, RF‑K07) |
 | 24 | Los eventos del calendario externo no contienen datos clínicos | **verificado** | RF‑I09. `construir_evento` **no acepta** paciente ni servicio, y una prueba inspecciona su firma para que siga siendo así. Comprobado también sobre lo que de verdad sale hacia el proveedor (ADR‑0018) |
 

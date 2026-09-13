@@ -74,6 +74,7 @@ from app.modulos.pacientes.modelos import (
     TipoConsentimiento,
     telefono_normalizado,
 )
+from app.nucleo.autorizacion import Principal
 from app.nucleo.bd import ejecutar_escritura
 from app.nucleo.registro import obtener_logger
 from app.nucleo.reloj import Reloj
@@ -192,6 +193,46 @@ class ServicioConversaciones:
             intencion, MOTIVOS_HANDOFF[IntencionEntrante.DESCONOCIDA]
         )
         return _con(resumen, derivados=resumen.derivados + 1)
+
+    async def derivar_a_humano(
+        self,
+        conversacion_id: uuid.UUID,
+        *,
+        principal: Principal,
+        motivo: str,
+    ) -> bool:
+        """Marca una conversacion para que la atienda una persona.
+
+        Es la contraparte de `handoff_to_human`: la herramienta del agente no
+        escribe en la base, invoca esto (CLAUDE.md, regla 4).
+
+        Devuelve si hubo cambio.  Marcar una conversacion ya derivada no es un
+        error -- el paciente puede insistir, y el segundo mensaje no tiene por
+        que fallar --, pero tampoco reescribe el motivo: el primero es el que
+        explica por que se derivo.
+
+        El filtro por `clinica_id` del principal no es decorativo.  Sin el, un
+        identificador de conversacion de otra clinica -- que un modelo de
+        lenguaje puede producir por alucinacion o por inyeccion -- movería el
+        estado de un hilo ajeno.
+        """
+        if principal.clinica_id is None:
+            return False
+
+        sentencia = (
+            update(Conversacion)
+            .where(
+                Conversacion.id == conversacion_id,
+                Conversacion.clinica_id == principal.clinica_id,
+                Conversacion.estado == EstadoConversacion.ABIERTA.value,
+            )
+            .values(
+                estado=EstadoConversacion.EN_HANDOFF.value,
+                motivo_handoff=motivo[:255],
+                ultima_actividad_en=self._reloj.ahora(),
+            )
+        )
+        return await ejecutar_escritura(self._sesion, sentencia) > 0
 
     async def _obtener_o_abrir(
         self, crudo: MensajeEntranteCrudo, clinica_id: uuid.UUID
