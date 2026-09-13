@@ -33,6 +33,7 @@ from app.semillas.catalogos import (
     cargar_catalogos,
     verificar_coherencia,
 )
+from app.semillas.clinico import cargar_clinico
 from app.semillas.conocimiento import cargar_conocimiento
 from app.semillas.sinteticos import cargar_datos_sinteticos
 
@@ -99,6 +100,7 @@ async def _ejecutar(opciones: argparse.Namespace) -> int:
         # conservan. Son utiles por si solos.
         if sinteticos.clinica_id is not None:
             await _cargar_conocimiento(fabrica, configuracion, opciones, sinteticos.clinica_id)
+            await _cargar_clinico(fabrica, sinteticos.clinica_id)
 
     except RuntimeError as exc:
         _escribir()
@@ -166,6 +168,25 @@ async def _cargar_conocimiento(
             solape_fragmento=configuracion.rag_solape_fragmento,
         )
     _escribir(conocimiento.describir())
+
+
+async def _cargar_clinico(
+    fabrica: async_sessionmaker[AsyncSession],
+    clinica_id: uuid.UUID,
+) -> None:
+    """Siembra historia clinica sintetica.
+
+    Transaccion propia, igual que el conocimiento: si falla, lo ya cargado se
+    conserva. Escribe a traves de la capa de servicios, asi que pasa por los
+    mismos disparadores y reglas que una nota real -- incluida la relacion
+    asistencial obligatoria.
+    """
+    _escribir()
+    _escribir("=== Historia clinica ===")
+
+    async with fabrica() as sesion, sesion.begin():
+        resumen = await cargar_clinico(sesion, clinica_id=clinica_id, reloj=RelojSistema())
+    _escribir(resumen.describir())
 
 
 def main(argumentos: list[str] | None = None) -> int:

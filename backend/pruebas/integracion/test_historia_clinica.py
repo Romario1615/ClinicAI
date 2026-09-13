@@ -356,7 +356,16 @@ class TestRecetaConfirmada:
         )
         await sesion.flush()
 
-        total = (await sesion.execute(sa.select(sa.func.count()).select_from(Toma))).scalar_one()
+        # Acotado a este medicamento. Contar la tabla entera medía el estado de
+        # la base de desarrollo -- contra la que corre esta suite -- y no lo que
+        # la prueba afirma; pasaba solo mientras no hubiera datos sembrados.
+        total = (
+            await sesion.execute(
+                sa.select(sa.func.count())
+                .select_from(Toma)
+                .where(Toma.receta_medicamento_id == medicamento_pauta_fija.id)
+            )
+        ).scalar_one()
         assert total == 1
 
     async def test_confirmar_exige_responsable(

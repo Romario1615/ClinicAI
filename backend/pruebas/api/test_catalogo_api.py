@@ -555,18 +555,23 @@ class TestPacientes:
         await conceder_permisos(sesion, usuario, clinica, "paciente.leer_administrativo")
         cabeceras = await cabecera_bearer(cliente, usuario, clinica)
 
+        # Se mide el **incremento**, no el total. Contar la tabla entera acopla
+        # la prueba a que nadie haya abierto nunca una ficha en la base de
+        # desarrollo, contra la que corre esta suite; pasaba por el estado del
+        # entorno y no por lo que afirma.
+        consulta = (
+            sa.select(sa.func.count())
+            .select_from(Auditoria)
+            .where(Auditoria.accion == AccionAuditada.PACIENTE_CONSULTADO.value)
+        )
+        antes = (await sesion.execute(consulta)).scalar_one()
+
         await cliente.get(
             _ruta(api, "/pacientes/"), headers=cabeceras, params={"termino": "Prueba"}
         )
 
-        entradas = (
-            await sesion.execute(
-                sa.select(sa.func.count())
-                .select_from(Auditoria)
-                .where(Auditoria.accion == AccionAuditada.PACIENTE_CONSULTADO.value)
-            )
-        ).scalar_one()
-        assert entradas == 0
+        despues = (await sesion.execute(consulta)).scalar_one()
+        assert despues == antes
 
     async def test_la_ficha_no_incluye_datos_de_proceso_interno(
         self,

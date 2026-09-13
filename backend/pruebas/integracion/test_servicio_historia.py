@@ -25,7 +25,13 @@ import pytest_asyncio
 import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.modulos.historia.modelos import EstadoReceta, EstadoToma, NotaEvolucion, Toma
+from app.modulos.historia.modelos import (
+    EstadoReceta,
+    EstadoToma,
+    NotaEvolucion,
+    RecetaMedicamento,
+    Toma,
+)
 from app.modulos.historia.repositorio import RepositorioHistoria
 from app.modulos.historia.servicios import (
     MAXIMO_TOMAS_POR_MEDICAMENTO,
@@ -416,6 +422,23 @@ class TestVersionado:
 # ===========================================================================
 #  Recetas y tomas
 # ===========================================================================
+async def _tomas_de(sesion: AsyncSession, receta_id: uuid.UUID) -> int:
+    """Cuantas tomas tiene una receta concreta.
+
+    Existe porque contar `Toma` entera acopla la prueba a que la base de
+    desarrollo este vacia de datos clinicos, y las pruebas de integracion
+    corren contra esa misma base.
+    """
+    return (
+        await sesion.execute(
+            sa.select(sa.func.count())
+            .select_from(Toma)
+            .join(RecetaMedicamento, RecetaMedicamento.id == Toma.receta_medicamento_id)
+            .where(RecetaMedicamento.receta_id == receta_id)
+        )
+    ).scalar_one()
+
+
 class TestRecetas:
     @pytest_asyncio.fixture
     async def receta_con_pauta(
@@ -455,7 +478,14 @@ class TestRecetas:
         assert receta_con_pauta.confirmada_en is None
 
     async def test_un_borrador_no_tiene_tomas(self, sesion: AsyncSession, receta_con_pauta) -> None:  # type: ignore[no-untyped-def]
-        total = (await sesion.execute(sa.select(sa.func.count()).select_from(Toma))).scalar_one()
+        """Se cuentan las tomas **de esta receta**, no las de toda la base.
+
+        Contarlas en toda la tabla solo funcionaba mientras la base de
+        desarrollo no tuviera ni una toma; la prueba pasaba por el estado del
+        entorno y no por lo que afirma. En cuanto se sembraron datos clinicos
+        empezo a fallar sin que nada del comportamiento hubiera cambiado.
+        """
+        total = await _tomas_de(sesion, receta_con_pauta.id)
         assert total == 0
 
     async def test_confirmar_genera_las_tomas_de_la_pauta_fija(
@@ -483,9 +513,10 @@ class TestRecetas:
             AccionAuditada.TOMAS_GENERADAS,
         }
 
-        # Ninguna toma corresponde al PRN.
-        filas = list((await sesion.execute(sa.select(Toma))).scalars())
-        assert len(filas) == 6
+        # Ninguna toma corresponde al PRN. Acotado a esta receta: la base de
+        # desarrollo tiene datos clinicos sembrados y el conteo global mediria
+        # otra cosa.
+        assert await _tomas_de(sesion, receta_con_pauta.id) == 6
 
     async def test_no_se_confirma_dos_veces(
         self,
@@ -533,7 +564,13 @@ class TestRecetas:
         estados = list(
             (
                 await sesion.execute(
-                    sa.select(Toma.estado, Toma.programada_en).order_by(Toma.programada_en)
+                    sa.select(Toma.estado, Toma.programada_en)
+                    .join(
+                        RecetaMedicamento,
+                        RecetaMedicamento.id == Toma.receta_medicamento_id,
+                    )
+                    .where(RecetaMedicamento.receta_id == receta_con_pauta.id)
+                    .order_by(Toma.programada_en)
                 )
             ).all()
         )

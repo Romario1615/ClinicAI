@@ -37,11 +37,13 @@ from app.nucleo.autorizacion import (
     PERMISOS_SOLO_ASISTENCIALES,
 )
 from app.nucleo.configuracion import Configuracion
+from app.nucleo.reloj import RelojSistema
 from app.semillas.catalogos import (
     NOMBRES_DE_ROL,
     cargar_catalogos,
     verificar_coherencia,
 )
+from app.semillas.clinico import cargar_clinico
 from app.semillas.sinteticos import (
     DOMINIO_PRUEBAS,
     MARCA_SINTETICO,
@@ -450,3 +452,161 @@ class TestDatosSinteticos:
                 )
             ).scalar_one()
             assert int(cuenta) > 0, f"El usuario {usuario_id} no tiene ambito y no podria trabajar."
+
+
+# ===========================================================================
+#  Semillas clinicas
+# ===========================================================================
+class TestSemillasClinicas:
+    """Lo que la siembra clinica tiene que garantizar.
+
+    Estas pruebas no comprueban «que el sembrador funcione»: comprueban que los
+    datos que deja permiten ejercitar los caminos que importan. Una base de
+    desarrollo con solo recetas confirmadas y pauta fija haria que el borrador,
+    el PRN y la suspension no se probaran nunca -- ni en la interfaz ni a mano.
+    """
+
+    @pytest.fixture
+    async def sembrado(self, sesion: AsyncSession):
+        configuracion = Configuracion(_env_file=None, entorno="local")
+        await cargar_catalogos(sesion)
+        await sesion.flush()
+        base = await cargar_datos_sinteticos(
+            sesion,
+            configuracion,
+            cantidad_pacientes=12,
+            cantidad_citas=25,
+            semilla=910002,
+        )
+        assert base.clinica_id is not None
+        resumen = await cargar_clinico(sesion, clinica_id=base.clinica_id, reloj=RelojSistema())
+        await sesion.flush()
+        return base, resumen
+
+    async def test_un_medicamento_prn_no_genera_ninguna_toma(
+        self, sesion: AsyncSession, sembrado
+    ) -> None:
+        """La garantia clinica, comprobada sobre lo sembrado.
+
+        Convertir un «cuando sea necesario» en pauta fija es un error de
+        medicacion. El motor lo impide; esto verifica que la base de desarrollo
+        contiene el caso, porque si no lo contuviera nadie lo veria nunca.
+        """
+        base, _ = sembrado
+        tomas_prn = await sesion.scalar(
+            sa.text(
+                "SELECT count(t.id) FROM receta_medicamento m "
+                "JOIN receta r ON r.id = m.receta_id "
+                "JOIN paciente p ON p.id = r.paciente_id "
+                "LEFT JOIN toma t ON t.receta_medicamento_id = m.id "
+                "WHERE m.cuando_sea_necesario AND p.clinica_id = :clinica"
+            ),
+            {"clinica": base.clinica_id},
+        )
+        medicamentos_prn = await sesion.scalar(
+            sa.text(
+                "SELECT count(*) FROM receta_medicamento m "
+                "JOIN receta r ON r.id = m.receta_id "
+                "JOIN paciente p ON p.id = r.paciente_id "
+                "WHERE m.cuando_sea_necesario AND p.clinica_id = :clinica"
+            ),
+            {"clinica": base.clinica_id},
+        )
+        assert medicamentos_prn > 0, "Sin un PRN sembrado, el caso no se prueba nunca."
+        assert tomas_prn == 0
+
+    async def test_una_pauta_fija_confirmada_si_genera_tomas(
+        self, sesion: AsyncSession, sembrado
+    ) -> None:
+        """Las tomas se cuentan **dentro de la clinica sembrada**.
+
+        Contarlas en toda la base compara contra lo que dejaron otras cargas y
+        falla por un motivo que no tiene nada que ver con lo que se prueba.
+        """
+        base, resumen = sembrado
+        assert resumen.tomas > 0
+        tomas = await sesion.scalar(
+            sa.text(
+                "SELECT count(t.id) FROM toma t "
+                "JOIN paciente p ON p.id = t.paciente_id "
+                "WHERE p.clinica_id = :clinica"
+            ),
+            {"clinica": base.clinica_id},
+        )
+        assert tomas == resumen.tomas
+
+    async def test_se_siembran_los_cuatro_estados_de_receta(
+        self, sesion: AsyncSession, sembrado
+    ) -> None:
+        """Sin borrador ni suspendida, la interfaz solo se prueba en el camino feliz."""
+        estados = {
+            fila[0]
+            for fila in (await sesion.execute(sa.text("SELECT DISTINCT estado FROM receta"))).all()
+        }
+        assert {"BORRADOR", "CONFIRMADA", "SUSPENDIDA"} <= estados
+
+    async def test_hay_al_menos_una_nota_con_version_anterior_conservada(
+        self, sesion: AsyncSession, sembrado
+    ) -> None:
+        """El versionado es la garantia central de la historia clinica.
+
+        Si la base de desarrollo no tuviera ninguna nota corregida, nadie veria
+        nunca una version anterior y esa garantia no se ejercitaria.
+        """
+        base, _ = sembrado
+        antiguas = await sesion.scalar(
+            sa.text(
+                "SELECT count(n.id) FROM nota_evolucion n "
+                "JOIN paciente p ON p.id = n.paciente_id "
+                "WHERE NOT n.vigente AND p.clinica_id = :clinica"
+            ),
+            {"clinica": base.clinica_id},
+        )
+        assert antiguas > 0
+
+    async def test_ningun_medicamento_sembrado_es_un_farmaco_real(
+        self, sesion: AsyncSession, sembrado
+    ) -> None:
+        """CLAUDE.md, regla 3: no se inventan datos clinicos.
+
+        Los nombres son deliberadamente «Medicamento de ejemplo X». Si alguien
+        sembrara un farmaco real atado a un paciente, esta prueba lo detiene.
+        """
+        nombres = {
+            fila[0]
+            for fila in (
+                await sesion.execute(sa.text("SELECT DISTINCT nombre FROM receta_medicamento"))
+            ).all()
+        }
+        assert nombres, "No se sembro ningun medicamento."
+        for nombre in nombres:
+            assert nombre.startswith("Medicamento de ejemplo"), (
+                f"«{nombre}» no sigue la convencion de nombre sintetico. "
+                "Un farmaco real atado a un paciente es un dato clinico inventado."
+            )
+
+    async def test_sembrar_dos_veces_no_duplica_la_historia(
+        self, sesion: AsyncSession, sembrado
+    ) -> None:
+        """La historia clinica es append-only: lo duplicado no se puede limpiar."""
+        base, _ = sembrado
+        antes = await sesion.scalar(
+            sa.text(
+                "SELECT count(n.id) FROM nota_evolucion n "
+                "JOIN paciente p ON p.id = n.paciente_id WHERE p.clinica_id = :clinica"
+            ),
+            {"clinica": base.clinica_id},
+        )
+
+        repetido = await cargar_clinico(sesion, clinica_id=base.clinica_id, reloj=RelojSistema())
+        await sesion.flush()
+
+        despues = await sesion.scalar(
+            sa.text(
+                "SELECT count(n.id) FROM nota_evolucion n "
+                "JOIN paciente p ON p.id = n.paciente_id WHERE p.clinica_id = :clinica"
+            ),
+            {"clinica": base.clinica_id},
+        )
+        assert repetido.notas == 0
+        assert despues == antes

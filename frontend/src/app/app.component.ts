@@ -44,8 +44,8 @@ const NAVEGACION: readonly EnlaceNavegacion[] = [
   {
     ruta: '/historia-clinica',
     etiqueta: 'Historia clínica',
-    permisos: [PERMISOS.historiaLeer, PERMISOS.pacienteLeer],
-    demostracion: true,
+    permisos: [PERMISOS.historiaLeer, PERMISOS.recetaLeer],
+    demostracion: false,
   },
   {
     ruta: '/medicamentos',

@@ -1,0 +1,281 @@
+<h1>Historia clínica</h1>
+
+@if (!hayPaciente()) {
+  <section class="tarjeta buscador" aria-label="Buscar paciente">
+    <form (ngSubmit)="cargarPacientes()">
+      <label class="campo">
+        <span class="campo__etiqueta">Buscar paciente</span>
+        <div class="buscador__fila">
+          <input
+            class="campo__control"
+            name="termino"
+            autocomplete="off"
+            placeholder="Nombre, apellido o documento"
+            [(ngModel)]="termino"
+          />
+          <button class="boton boton--principal" type="submit">Buscar</button>
+        </div>
+      </label>
+    </form>
+  </section>
+
+  @if (cargandoPacientes()) {
+    <app-cargando mensaje="Cargando pacientes..." />
+  } @else if (errorPacientes()) {
+    <app-error
+      titulo="No se pudo cargar el listado"
+      [mensaje]="errorPacientes()!.message"
+      [codigo]="errorPacientes()!.codigo"
+      [correlacion]="errorPacientes()!.correlacionId ?? ''"
+      (reintentar)="cargarPacientes()"
+    />
+  } @else if (pacientes().length === 0) {
+    <div class="tarjeta">
+      <app-vacio
+        titulo="Sin pacientes"
+        detalle="No hay pacientes de su ámbito que coincidan con la búsqueda."
+      />
+    </div>
+  } @else {
+    <div class="tabla-envoltorio">
+      <table class="tabla">
+        <thead>
+          <tr>
+            <th scope="col">Paciente</th>
+            <th scope="col">Documento</th>
+            <th scope="col"></th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (p of pacientes(); track p.id) {
+            <tr>
+              <td>{{ p.apellido }}, {{ p.nombre }}</td>
+              <td class="numerico">{{ p.numero_documento }}</td>
+              <td class="acciones">
+                <button class="boton boton--pequeno" type="button" (click)="abrir(p)">
+                  Abrir historia
+                </button>
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+  }
+} @else {
+  <!-- ===================== Historia del paciente ===================== -->
+  <header class="cabecera-paciente tarjeta">
+    <div>
+      <h2>{{ nombreCompleto(paciente()!) }}</h2>
+      <p class="cabecera-paciente__sub">
+        {{ paciente()!.tipo_documento }} {{ paciente()!.numero_documento }}
+      </p>
+    </div>
+    <button class="boton" type="button" (click)="cerrar()">Volver al listado</button>
+  </header>
+
+  @if (cargandoHistoria()) {
+    <app-cargando mensaje="Cargando la historia clínica..." />
+  } @else if (errorHistoria()) {
+    <app-error
+      titulo="No se pudo cargar la historia"
+      [mensaje]="errorHistoria()!.message"
+      [codigo]="errorHistoria()!.codigo"
+      [correlacion]="errorHistoria()!.correlacionId ?? ''"
+      (reintentar)="cargarHistoria()"
+    />
+  } @else {
+    <!-- ===================== Notas ===================== -->
+    <section aria-label="Notas de evolución">
+      <div class="seccion__cabecera">
+        <h2>Notas de evolución</h2>
+        @if (puedeLeerNotas() && !notasDenegadas()) {
+          <button class="boton boton--pequeno" type="button" (click)="alternarHistorico()">
+            {{ incluirHistorico() ? 'Ocultar versiones anteriores' : 'Ver versiones anteriores' }}
+          </button>
+        }
+      </div>
+
+      <!-- Que un rol no pueda leer notas no es un error del sistema: es el
+           control funcionando. Se dice así, y no con un mensaje rojo que
+           parezca una avería. Tampoco se revela cuántas notas hay. -->
+      @if (!puedeLeerNotas() || notasDenegadas()) {
+        <div class="tarjeta sin-acceso">
+          <h3>Las notas de evolución no están a su alcance</h3>
+          <p>
+            Su rol no incluye <code>historia_clinica.leer</code>. Puede seguir la medicación
+            del paciente, que es lo que su trabajo requiere, pero el contenido de las notas
+            es de acceso restringido.
+          </p>
+        </div>
+      } @else if (historias().length === 0) {
+        <div class="tarjeta">
+          <app-vacio
+            titulo="Sin notas registradas"
+            detalle="Este paciente no tiene notas de evolución en su ámbito."
+          />
+        </div>
+      } @else {
+        @for (historia of historias(); track historia.raizId) {
+          <article class="tarjeta nota">
+            <header class="nota__cabecera">
+              <div>
+                <span class="nota__tipo">{{ historia.vigente.tipo }}</span>
+                @if (historia.vigente.motivo_consulta) {
+                  <span class="nota__motivo">{{ historia.vigente.motivo_consulta }}</span>
+                }
+              </div>
+              <span class="nota__meta">
+                versión {{ historia.vigente.version }} · {{ fecha(historia.vigente.creado_en) }}
+              </span>
+            </header>
+
+            @if (historia.vigente.motivo_modificacion) {
+              <p class="nota__correccion">
+                <strong>Corregida:</strong> {{ historia.vigente.motivo_modificacion }}
+              </p>
+            }
+
+            <dl class="soap">
+              @if (historia.vigente.subjetivo) {
+                <div>
+                  <dt>Subjetivo</dt>
+                  <dd>{{ historia.vigente.subjetivo }}</dd>
+                </div>
+              }
+              @if (historia.vigente.objetivo) {
+                <div>
+                  <dt>Objetivo</dt>
+                  <dd>{{ historia.vigente.objetivo }}</dd>
+                </div>
+              }
+              @if (historia.vigente.analisis) {
+                <div>
+                  <dt>Análisis</dt>
+                  <dd>{{ historia.vigente.analisis }}</dd>
+                </div>
+              }
+              @if (historia.vigente.plan) {
+                <div>
+                  <dt>Plan</dt>
+                  <dd>{{ historia.vigente.plan }}</dd>
+                </div>
+              }
+            </dl>
+
+            <!-- La historia clínica no se borra: se versiona. Si la interfaz
+                 solo mostrara la versión vigente, esa garantía existiría en la
+                 base de datos y no le serviría de nada a quien la audita. -->
+            @if (historia.anteriores.length > 0) {
+              <details class="versiones">
+                <summary>
+                  {{ historia.anteriores.length }} versión(es) anterior(es) conservada(s)
+                </summary>
+                @for (anterior of historia.anteriores; track anterior.id) {
+                  <div class="version-anterior">
+                    <p class="version-anterior__meta">
+                      versión {{ anterior.version }} · {{ fecha(anterior.creado_en) }}
+                    </p>
+                    @if (anterior.subjetivo) {
+                      <p>{{ anterior.subjetivo }}</p>
+                    }
+                    @if (anterior.plan) {
+                      <p>{{ anterior.plan }}</p>
+                    }
+                  </div>
+                }
+              </details>
+            }
+          </article>
+        }
+      }
+    </section>
+
+    <!-- ===================== Recetas ===================== -->
+    <section aria-label="Recetas">
+      <div class="seccion__cabecera">
+        <h2>Recetas</h2>
+      </div>
+
+      @if (!puedeLeerRecetas()) {
+        <div class="tarjeta sin-acceso">
+          <h3>Las recetas no están a su alcance</h3>
+          <p>Su rol no incluye <code>receta.leer</code>.</p>
+        </div>
+      } @else if (recetas().length === 0) {
+        <div class="tarjeta">
+          <app-vacio
+            titulo="Sin recetas"
+            detalle="Este paciente no tiene recetas registradas en su ámbito."
+          />
+        </div>
+      } @else {
+        @for (receta of recetas(); track receta.id) {
+          <article class="tarjeta receta">
+            <header class="receta__cabecera">
+              <span
+                [class]="'estado estado--' + estadoReceta(receta.estado).tono"
+                [title]="estadoReceta(receta.estado).detalle"
+              >
+                {{ estadoReceta(receta.estado).texto }}
+              </span>
+              <span class="receta__meta">{{ fecha(receta.creado_en) }}</span>
+            </header>
+
+            @if (receta.estado === 'BORRADOR') {
+              <p class="receta__nota">
+                Sin confirmar. <strong>No genera recordatorios</strong> y no cuenta como
+                indicación vigente: solo una receta confirmada por el profesional produce
+                calendario de tomas.
+              </p>
+            }
+            @if (receta.motivo_suspension) {
+              <!-- La receta suspendida sigue visible con su motivo. Ocultarla
+                   daría la impresión de que nunca existió, y lo que hay que
+                   saber es justo lo contrario. -->
+              <p class="receta__nota receta__nota--suspension">
+                <strong>Suspendida el {{ fecha(receta.suspendida_en) }}:</strong>
+                {{ receta.motivo_suspension }}
+              </p>
+            }
+            @if (receta.indicaciones_generales) {
+              <p class="receta__indicaciones">{{ receta.indicaciones_generales }}</p>
+            }
+
+            <ul class="medicamentos">
+              @for (medicamento of receta.medicamentos; track medicamento.id) {
+                <li class="medicamento" [class.medicamento--prn]="medicamento.cuando_sea_necesario">
+                  <div class="medicamento__nombre">
+                    {{ medicamento.nombre }}
+                    @if (medicamento.concentracion) {
+                      <span class="medicamento__concentracion">{{ medicamento.concentracion }}</span>
+                    }
+                    <!-- Marcado explícito, nunca por omisión del campo de
+                         frecuencia: presentar un PRN como pauta fija es un
+                         error de medicación. -->
+                    @if (medicamento.cuando_sea_necesario) {
+                      <span class="etiqueta-prn">cuando sea necesario</span>
+                    }
+                  </div>
+                  <div class="medicamento__pauta">
+                    {{ medicamento.dosis }} · {{ via(medicamento.via) }} ·
+                    {{ pauta(medicamento) }}
+                  </div>
+                  @if (medicamento.instrucciones) {
+                    <div class="medicamento__instrucciones">{{ medicamento.instrucciones }}</div>
+                  }
+                </li>
+              }
+            </ul>
+          </article>
+        }
+      }
+    </section>
+
+    <p class="pie">
+      Esta pantalla es de <strong>consulta</strong>. Escribir notas, crear recetas y
+      confirmarlas se hace todavía por la API; llegará a la interfaz con su propio recorrido
+      de revisión.
+    </p>
+  }
+}

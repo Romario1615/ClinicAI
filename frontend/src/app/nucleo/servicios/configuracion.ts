@@ -72,6 +72,10 @@ export const PERMISOS = {
   historiaLeer: 'historia_clinica.leer',
   historiaEscribir: 'historia_clinica.escribir',
   recetaCrear: 'receta.crear',
+  // Un asistente tiene `receta.leer` y `adherencia.leer` sin tener
+  // `historia_clinica.leer`: puede seguir la medicacion y no leer las notas.
+  recetaLeer: 'receta.leer',
+  adherenciaLeer: 'adherencia.leer',
   listaEsperaGestionar: 'lista_espera.gestionar',
   conocimientoLeer: 'conocimiento.leer',
   metricasLeer: 'metricas.leer',

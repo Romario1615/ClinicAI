@@ -70,11 +70,11 @@ export const routes: Routes = [
     canActivate: [
       guardiaAutenticacion,
       guardiaSegundoFactor,
-      guardiaPermiso(PERMISOS.historiaLeer, PERMISOS.pacienteLeer),
+      guardiaPermiso(PERMISOS.historiaLeer, PERMISOS.recetaLeer),
     ],
     title: 'Historia clinica · Gestion clinica',
     loadComponent: () =>
-      import('./paginas/demostracion/paginas-demostracion.component').then(
+      import('./paginas/historia-clinica/historia-clinica.component').then(
         (m) => m.HistoriaClinicaComponent,
       ),
   },

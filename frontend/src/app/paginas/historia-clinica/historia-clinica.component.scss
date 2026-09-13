@@ -1,0 +1,286 @@
+.buscador {
+  margin-bottom: var(--espacio-4);
+}
+
+.buscador__fila {
+  display: flex;
+  gap: var(--espacio-2);
+  flex-wrap: wrap;
+}
+
+.buscador__fila .campo__control {
+  flex: 1 1 20rem;
+}
+
+.acciones {
+  text-align: right;
+  white-space: nowrap;
+}
+
+/* ----- Cabecera del paciente ----- */
+.cabecera-paciente {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: var(--espacio-3);
+  margin-bottom: var(--espacio-5);
+}
+
+.cabecera-paciente h2 {
+  margin: 0;
+}
+
+.cabecera-paciente__sub {
+  margin: var(--espacio-1) 0 0;
+  color: var(--texto-suave);
+  font-family: var(--fuente-mono);
+  font-size: 0.9rem;
+}
+
+.seccion__cabecera {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: var(--espacio-3);
+  flex-wrap: wrap;
+  margin: var(--espacio-6) 0 var(--espacio-3);
+}
+
+.seccion__cabecera h2 {
+  margin: 0;
+}
+
+/* Falta de permiso: es el control funcionando, no una avería. Tono neutro, no
+   el rojo de error. */
+.sin-acceso {
+  border-left: 4px solid var(--borde);
+}
+
+.sin-acceso h3 {
+  margin: 0 0 var(--espacio-2);
+  font-size: 1rem;
+}
+
+.sin-acceso p {
+  margin: 0;
+  color: var(--texto-suave);
+}
+
+.sin-acceso code {
+  font-family: var(--fuente-mono);
+  font-size: 0.88em;
+}
+
+/* ----- Notas ----- */
+.nota {
+  margin-bottom: var(--espacio-3);
+}
+
+.nota__cabecera {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: var(--espacio-3);
+  flex-wrap: wrap;
+  margin-bottom: var(--espacio-3);
+}
+
+.nota__tipo {
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--texto-suave);
+  margin-right: var(--espacio-2);
+}
+
+.nota__motivo {
+  font-weight: 600;
+}
+
+.nota__meta {
+  font-size: 0.82rem;
+  color: var(--texto-suave);
+  font-family: var(--fuente-mono);
+}
+
+.nota__correccion {
+  margin: 0 0 var(--espacio-3);
+  padding: var(--espacio-2) var(--espacio-3);
+  border-left: 3px solid var(--aviso);
+  background: var(--aviso-fondo);
+  color: var(--aviso);
+  font-size: 0.9rem;
+}
+
+.soap {
+  display: grid;
+  gap: var(--espacio-3);
+  margin: 0;
+}
+
+.soap dt {
+  font-size: 0.78rem;
+  font-weight: 650;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--texto-suave);
+}
+
+.soap dd {
+  margin: var(--espacio-1) 0 0;
+  white-space: pre-wrap;
+}
+
+.versiones {
+  margin-top: var(--espacio-4);
+  padding-top: var(--espacio-3);
+  border-top: 1px solid var(--borde);
+}
+
+.versiones summary {
+  cursor: pointer;
+  font-size: 0.9rem;
+  color: var(--texto-suave);
+}
+
+.version-anterior {
+  margin-top: var(--espacio-3);
+  padding-left: var(--espacio-4);
+  border-left: 2px solid var(--borde);
+  color: var(--texto-suave);
+  font-size: 0.92rem;
+}
+
+.version-anterior__meta {
+  margin: 0 0 var(--espacio-1);
+  font-family: var(--fuente-mono);
+  font-size: 0.8rem;
+}
+
+/* ----- Recetas ----- */
+.receta {
+  margin-bottom: var(--espacio-3);
+}
+
+.receta__cabecera {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: var(--espacio-3);
+  flex-wrap: wrap;
+  margin-bottom: var(--espacio-3);
+}
+
+.receta__meta {
+  font-size: 0.82rem;
+  color: var(--texto-suave);
+  font-family: var(--fuente-mono);
+}
+
+.receta__nota {
+  margin: 0 0 var(--espacio-3);
+  padding: var(--espacio-2) var(--espacio-3);
+  border-left: 3px solid var(--borde);
+  color: var(--texto-suave);
+  font-size: 0.9rem;
+}
+
+.receta__nota--suspension {
+  border-left-color: var(--peligro);
+  background: var(--peligro-fondo);
+  color: var(--peligro);
+}
+
+.receta__indicaciones {
+  margin: 0 0 var(--espacio-3);
+}
+
+.estado {
+  display: inline-block;
+  font-size: 0.78rem;
+  font-weight: 650;
+  padding: 2px var(--espacio-2);
+  border-radius: 999px;
+  border: 1px solid currentcolor;
+}
+
+.estado--exito {
+  color: var(--exito);
+  background: var(--exito-fondo);
+}
+
+.estado--peligro {
+  color: var(--peligro);
+  background: var(--peligro-fondo);
+}
+
+.estado--neutro {
+  color: var(--texto-suave);
+}
+
+/* ----- Medicamentos ----- */
+.medicamentos {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: var(--espacio-2);
+}
+
+.medicamento {
+  padding: var(--espacio-3);
+  border: 1px solid var(--borde);
+  border-radius: var(--radio-2);
+}
+
+/* El PRN se distingue visualmente además de por el texto: presentarlo igual
+   que una pauta fija es como una indicación a demanda acaba tomándose a
+   horario. */
+.medicamento--prn {
+  border-left: 4px solid var(--aviso);
+  background: var(--aviso-fondo);
+}
+
+.medicamento__nombre {
+  font-weight: 600;
+}
+
+.medicamento__concentracion {
+  font-weight: 400;
+  color: var(--texto-suave);
+  margin-left: var(--espacio-2);
+}
+
+.etiqueta-prn {
+  display: inline-block;
+  margin-left: var(--espacio-2);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  padding: 1px var(--espacio-2);
+  border-radius: 999px;
+  border: 1px solid var(--aviso);
+  color: var(--aviso);
+  background: var(--fondo, #fff);
+}
+
+.medicamento__pauta {
+  margin-top: var(--espacio-1);
+  color: var(--texto-suave);
+  font-size: 0.92rem;
+}
+
+.medicamento__instrucciones {
+  margin-top: var(--espacio-2);
+  font-size: 0.9rem;
+}
+
+.pie {
+  margin-top: var(--espacio-6);
+  padding-top: var(--espacio-4);
+  border-top: 1px solid var(--borde);
+  color: var(--texto-suave);
+  font-size: 0.9rem;
+}

@@ -208,6 +208,66 @@ export interface RespuestaBusqueda {
   readonly documentos_citados: readonly string[];
 }
 
+// ---------------------------------------------------------------------------
+//  Historia clinica
+// ---------------------------------------------------------------------------
+export interface Nota {
+  readonly id: string;
+  /** Identificador estable de la nota a traves de sus versiones. */
+  readonly raiz_id: string;
+  readonly version: number;
+  /** Falso en las versiones antiguas, que se conservan y no se borran. */
+  readonly vigente: boolean;
+  readonly motivo_modificacion: string | null;
+  readonly paciente_id: string;
+  readonly profesional_id: string;
+  readonly cita_id: string | null;
+  readonly tipo: string;
+  readonly motivo_consulta: string | null;
+  readonly subjetivo: string | null;
+  readonly objetivo: string | null;
+  readonly analisis: string | null;
+  readonly plan: string | null;
+  readonly signos_vitales: Readonly<Record<string, unknown>> | null;
+  readonly creado_en: string;
+}
+
+export interface Medicamento {
+  readonly id: string;
+  readonly nombre: string;
+  readonly concentracion: string | null;
+  readonly forma: string | null;
+  readonly dosis: string;
+  readonly via: string;
+  /**
+   * «Cuando sea necesario». Un PRN **no** genera horarios fijos, y la
+   * interfaz tiene que distinguirlo: convertirlo en pauta fija es un error
+   * de medicacion.
+   */
+  readonly cuando_sea_necesario: boolean;
+  readonly frecuencia_horas: number | null;
+  readonly duracion_dias: number | null;
+  readonly instrucciones: string | null;
+}
+
+export interface Receta {
+  readonly id: string;
+  readonly paciente_id: string;
+  readonly profesional_id: string;
+  readonly estado: string;
+  readonly confirmada_en: string | null;
+  readonly suspendida_en: string | null;
+  readonly motivo_suspension: string | null;
+  readonly indicaciones_generales: string | null;
+  readonly creado_en: string;
+  readonly medicamentos: readonly Medicamento[];
+}
+
+export interface Adherencia {
+  readonly alerta: Readonly<Record<string, unknown>> | null;
+  readonly motivo: string | null;
+}
+
 @Injectable({ providedIn: 'root' })
 export class ApiService {
   private readonly http = inject(HttpClient);
@@ -292,6 +352,22 @@ export class ApiService {
 
   paciente(id: string): Observable<PacienteDetalle> {
     return this.get<PacienteDetalle>(`/pacientes/${id}`);
+  }
+
+  // --- Historia clinica ---
+  notas(pacienteId: string, incluirHistorico = false): Observable<readonly Nota[]> {
+    return this.get<readonly Nota[]>(
+      `/historia/pacientes/${pacienteId}/notas`,
+      incluirHistorico ? { incluir_historico: true } : undefined,
+    );
+  }
+
+  recetas(pacienteId: string): Observable<readonly Receta[]> {
+    return this.get<readonly Receta[]>(`/historia/pacientes/${pacienteId}/recetas`);
+  }
+
+  adherencia(recetaId: string): Observable<Adherencia> {
+    return this.get<Adherencia>(`/historia/recetas/${recetaId}/adherencia`);
   }
 
   // --- Conocimiento ---
