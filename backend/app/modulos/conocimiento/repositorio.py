@@ -39,7 +39,8 @@ import uuid
 from dataclasses import dataclass
 from datetime import datetime
 
-from sqlalchemy import Select, and_, func, literal, or_, select
+from sqlalchemy import Select, Text, and_, func, literal, or_, select
+from sqlalchemy.dialects.postgresql import TSQUERY
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.sql.elements import ColumnElement
 
@@ -63,6 +64,24 @@ K_RRF = 60
 # no mejora la respuesta -- el modelo se pierde en el medio -- y multiplica el
 # coste de cada consulta.
 LIMITE_MAXIMO = 20
+
+# =========================================================================
+#  Umbral de similitud de la rama vectorial.
+#
+#  Sin el, la busqueda vectorial SIEMPRE devuelve candidatos: ordena por
+#  distancia y entrega los N primeros, por lejos que esten. Eso significa que
+#  «no tengo informacion aprobada» (RF-O06) no se dispararia casi nunca, y el
+#  agente citaria como fuente el documento menos irrelevante que encontrase.
+#
+#  La distancia coseno de pgvector va de 0 (identico) a 2 (opuesto), y la
+#  similitud es `1 - distancia`. Un umbral de similitud de 0.35 se traduce en
+#  una distancia maxima de 0.65.
+#
+#  El valor por defecto viene de `RAG_UMBRAL_SIMILITUD` y **se debe recalibrar
+#  con el modelo real**: lo que es «parecido» depende del modelo, y el
+#  simulado no mide parecido en absoluto.
+# =========================================================================
+UMBRAL_SIMILITUD_POR_DEFECTO = 0.35
 
 
 @dataclass(frozen=True, slots=True)
@@ -184,6 +203,7 @@ class RepositorioConocimiento:
         limite: int = 8,
         candidatos: int = 40,
         peso_vectorial: float = 0.6,
+        umbral_similitud: float = UMBRAL_SIMILITUD_POR_DEFECTO,
     ) -> list[FragmentoRecuperado]:
         """Busqueda hibrida con los filtros de autorizacion en el `WHERE`.
 
@@ -199,7 +219,9 @@ class RepositorioConocimiento:
         candidatos = max(candidatos, limite)
         condiciones = _condiciones(contexto)
 
-        vectorial = self._ranking_vectorial(vector, modelo_embeddings, condiciones, candidatos)
+        vectorial = self._ranking_vectorial(
+            vector, modelo_embeddings, condiciones, candidatos, umbral_similitud
+        )
         textual = self._ranking_textual(consulta, condiciones, candidatos)
 
         # Fusion RRF: 1 / (K + posicion) en cada lista, ponderada. Opera sobre
@@ -268,6 +290,7 @@ class RepositorioConocimiento:
         modelo: str,
         condiciones: list[ColumnElement[bool]],
         candidatos: int,
+        umbral_similitud: float,
     ) -> Select[tuple[uuid.UUID, int]]:
         """Los `n` fragmentos autorizados mas cercanos por coseno.
 
@@ -280,8 +303,13 @@ class RepositorioConocimiento:
         Se exige `modelo` en la union: mezclar vectores de dos modelos en la
         misma busqueda da resultados sin sentido que **no fallan**, solo son
         malos.
+
+        Y se aplica el **umbral de similitud**: sin el, esta rama devolveria
+        candidatos siempre, por lejanos que fueran, y el sistema nunca podria
+        decir que no tiene informacion aprobada.
         """
         distancia = KnowledgeEmbedding.embedding.cosine_distance(vector)
+        distancia_maxima = 1.0 - umbral_similitud
         return (
             select(
                 KnowledgeChunk.id.label("chunk_id"),
@@ -296,7 +324,7 @@ class RepositorioConocimiento:
                     ),
                 )
             )
-            .where(and_(*condiciones))
+            .where(and_(*condiciones, distancia <= distancia_maxima))
             .order_by(distancia)
             .limit(candidatos)
         )
@@ -311,14 +339,31 @@ class RepositorioConocimiento:
 
         Usa `websearch_to_tsquery`, que acepta lo que una persona escribe --
         comillas, `or`, `-` para excluir -- sin lanzar ante una sintaxis
-        invalida. `plainto_tsquery` ignoraria esos operadores y
-        `to_tsquery` fallaria con una excepcion ante cualquier texto libre.
+        invalida. `plainto_tsquery` ignoraria esos operadores y `to_tsquery`
+        fallaria con una excepcion ante cualquier texto libre.
+
+        Y **se reescriben los `&` por `|`**, que es el detalle que hace que
+        esta rama sirva de algo. `websearch_to_tsquery` une todos los terminos
+        con AND: la pregunta «cuantas horas de ayuno necesito para el examen de
+        sangre» solo encontraria un documento que contenga TODAS esas palabras,
+        y una pregunta natural casi nunca coincide asi. Con OR, el documento
+        aparece si contiene alguna, y `ts_rank_cd` lo ordena por cuantas y con
+        que peso -- que es lo que se quiere de un ranking que luego se fusiona.
+
+        La reescritura se hace sobre el `tsquery` YA construido, no sobre el
+        texto del usuario: la consulta sigue pasando por
+        `websearch_to_tsquery` como parametro enlazado, asi que no hay forma de
+        inyectar operadores.
 
         La mitad textual existe porque la semantica sola falla justo donde mas
         se nota: el nombre exacto de un examen o de un medicamento, que el
         modelo de embeddings no distingue de sus vecinos.
         """
-        consulta_ts = func.websearch_to_tsquery("espanol_sin_tildes", consulta)
+        consulta_ts = func.replace(
+            func.websearch_to_tsquery("espanol_sin_tildes", consulta).cast(Text),
+            " & ",
+            " | ",
+        ).cast(TSQUERY)
         relevancia = func.ts_rank_cd(KnowledgeChunk.contenido_tsv, consulta_ts)
         return (
             select(
@@ -334,6 +379,7 @@ class RepositorioConocimiento:
 __all__ = [
     "K_RRF",
     "LIMITE_MAXIMO",
+    "UMBRAL_SIMILITUD_POR_DEFECTO",
     "ContextoAutorizacion",
     "FragmentoRecuperado",
     "RepositorioConocimiento",

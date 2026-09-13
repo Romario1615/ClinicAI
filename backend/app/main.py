@@ -36,10 +36,12 @@ from fastapi.responses import JSONResponse
 
 from app.api.manejadores import registrar_manejadores
 from app.api.middleware import MiddlewareCorrelacion
+from app.ia.embeddings import construir_proveedor_embeddings
 from app.mensajeria import rutas as rutas_whatsapp
 from app.modulos.agenda import rutas as rutas_agenda
 from app.modulos.calendario import rutas as rutas_calendario
 from app.modulos.calendario.seleccion import construir_proveedores
+from app.modulos.conocimiento import rutas as rutas_conocimiento
 from app.modulos.historia import rutas as rutas_historia
 from app.modulos.organizacion import rutas as rutas_catalogo
 from app.modulos.pacientes import rutas as rutas_pacientes
@@ -164,6 +166,15 @@ def crear_aplicacion(
     # modulo para que la suite pueda levantar varias aplicaciones con
     # adaptadores distintos en el mismo proceso.
     aplicacion.state.proveedores_calendario = construir_proveedores(configuracion)
+    # Proveedor de embeddings. Se construye una vez por aplicacion porque el
+    # real carga un modelo ONNX de cientos de megabytes: hacerlo por peticion
+    # seria inviable.
+    aplicacion.state.embeddings = construir_proveedor_embeddings(
+        configuracion.proveedor_embeddings,
+        modelo=configuracion.modelo_embeddings,
+        dimension=configuracion.dimension_embeddings,
+        ruta_cache=str(configuracion.ruta_cache_embeddings),
+    )
 
     # --- Middleware ---
     #
@@ -199,6 +210,7 @@ def _registrar_rutas(aplicacion: FastAPI) -> None:
     # token. Ver el encabezado de app/mensajeria/rutas.py.
     aplicacion.include_router(rutas_whatsapp.enrutador, prefix=PREFIJO_API)
     aplicacion.include_router(rutas_calendario.enrutador, prefix=PREFIJO_API)
+    aplicacion.include_router(rutas_conocimiento.enrutador, prefix=PREFIJO_API)
 
     @aplicacion.get("/salud/vivo", tags=["salud"], summary="El proceso responde")
     async def vivo() -> dict[str, str]:
