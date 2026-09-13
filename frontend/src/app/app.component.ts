@@ -33,7 +33,7 @@ const NAVEGACION: readonly EnlaceNavegacion[] = [
     ruta: '/pacientes',
     etiqueta: 'Pacientes',
     permisos: [PERMISOS.pacienteLeer],
-    demostracion: true,
+    demostracion: false,
   },
   {
     ruta: '/lista-espera',

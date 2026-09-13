@@ -1,0 +1,165 @@
+.buscador {
+  margin-bottom: var(--espacio-4);
+}
+
+.buscador__fila {
+  display: flex;
+  gap: var(--espacio-2);
+  align-items: stretch;
+  flex-wrap: wrap;
+}
+
+.buscador__fila .campo__control {
+  flex: 1 1 18rem;
+}
+
+/* El aviso de término ignorado usa el tono de advertencia, no el de error:
+   no ha fallado nada, pero lo que se ve no es lo que se pidió. */
+.aviso-termino {
+  margin: 0 0 var(--espacio-4);
+  padding: var(--espacio-3) var(--espacio-4);
+  border: 1px solid var(--aviso);
+  border-left-width: 4px;
+  border-radius: var(--radio-2);
+  background: var(--aviso-fondo);
+  color: var(--aviso);
+}
+
+.recuento {
+  margin: 0 0 var(--espacio-3);
+  color: var(--texto-suave);
+}
+
+.tipo-doc {
+  font-family: var(--fuente-base);
+  font-size: 0.75rem;
+  color: var(--texto-suave);
+  margin-right: var(--espacio-1);
+}
+
+.acciones {
+  text-align: right;
+  white-space: nowrap;
+}
+
+.paginacion {
+  display: flex;
+  gap: var(--espacio-2);
+  justify-content: center;
+  margin-top: var(--espacio-4);
+}
+
+/* ----- Verificación ----- */
+.verificacion {
+  display: inline-block;
+  font-size: 0.78rem;
+  font-weight: 650;
+  padding: 2px var(--espacio-2);
+  border-radius: 999px;
+  border: 1px solid currentcolor;
+  white-space: nowrap;
+}
+
+.verificacion--peligro {
+  color: var(--peligro);
+  background: var(--peligro-fondo);
+}
+
+.verificacion--aviso {
+  color: var(--aviso);
+  background: var(--aviso-fondo);
+}
+
+.verificacion--exito {
+  color: var(--exito);
+  background: var(--exito-fondo);
+}
+
+/* ----- Ficha ----- */
+.ficha {
+  margin-top: var(--espacio-5);
+}
+
+.ficha__cabecera {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: var(--espacio-3);
+  margin-bottom: var(--espacio-4);
+}
+
+.ficha__cabecera h2 {
+  margin: 0;
+}
+
+.ficha__sub {
+  margin: var(--espacio-1) 0 0;
+  color: var(--texto-suave);
+  font-family: var(--fuente-mono);
+  font-size: 0.9rem;
+}
+
+.inactivo {
+  font-family: var(--fuente-base);
+  font-size: 0.78rem;
+  font-weight: 650;
+  margin-left: var(--espacio-2);
+  padding: 2px var(--espacio-2);
+  border-radius: 999px;
+  border: 1px solid var(--peligro);
+  background: var(--peligro-fondo);
+  color: var(--peligro);
+}
+
+.ficha__datos {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr));
+  gap: var(--espacio-4);
+  margin: 0;
+}
+
+.ficha__ancho {
+  grid-column: 1 / -1;
+}
+
+.ficha__datos dt {
+  font-size: 0.8rem;
+  font-weight: 650;
+  color: var(--texto-suave);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.ficha__datos dd {
+  margin: var(--espacio-1) 0 0;
+}
+
+.ficha__nota {
+  display: block;
+  margin-top: var(--espacio-1);
+  color: var(--texto-suave);
+  font-size: 0.88rem;
+}
+
+.ficha__limite {
+  margin: var(--espacio-5) 0 0;
+  padding-top: var(--espacio-4);
+  border-top: 1px solid var(--borde);
+  color: var(--texto-suave);
+  font-size: 0.9rem;
+}
+
+/* Encabezado de columna que existe para el lector de pantalla pero no ocupa
+   espacio: la columna de acciones no necesita título visible y dejarla sin
+   `th` accesible deja la tabla sin describir. */
+.oculto-visual {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}

@@ -54,9 +54,7 @@ export const routes: Routes = [
     ],
     title: 'Pacientes · Gestion clinica',
     loadComponent: () =>
-      import('./paginas/demostracion/paginas-demostracion.component').then(
-        (m) => m.PacientesDemoComponent,
-      ),
+      import('./paginas/pacientes/pacientes.component').then((m) => m.PacientesComponent),
   },
   {
     path: 'lista-espera',

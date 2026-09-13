@@ -1,0 +1,217 @@
+<h1>Pacientes</h1>
+
+<section class="tarjeta buscador" aria-label="Buscar pacientes">
+  <form (ngSubmit)="buscar()">
+    <label class="campo">
+      <span class="campo__etiqueta">Buscar por nombre, apellido o documento</span>
+      <div class="buscador__fila">
+        <input
+          class="campo__control"
+          name="termino"
+          autocomplete="off"
+          placeholder="Al menos {{ minimoTermino }} caracteres"
+          [(ngModel)]="termino"
+        />
+        <button class="boton boton--principal" type="submit">Buscar</button>
+        @if (terminoAplicado()) {
+          <button class="boton" type="button" (click)="limpiar()">Ver todos</button>
+        }
+      </div>
+      <span class="campo__ayuda">
+        Con menos de {{ minimoTermino }} caracteres la búsqueda devolvería media clínica y
+        dejaría de ser una búsqueda, así que el servidor la ignora y lo dice.
+      </span>
+    </label>
+  </form>
+</section>
+
+<!-- Este aviso es el motivo de que esta pantalla exista conectada al backend.
+     Sin él, quien atiende leería «sin coincidencias» y concluiría que el
+     paciente no está registrado, cuando en realidad nunca se le buscó. -->
+@if (terminoIgnorado()) {
+  <p class="aviso-termino" role="status">
+    El término «{{ terminoAplicado() }}» es demasiado corto y
+    <strong>la búsqueda no llegó a hacerse</strong>. Escriba al menos
+    {{ minimoTermino }} caracteres, o pulse «Ver todos» para volver al listado.
+  </p>
+}
+
+@if (cargando()) {
+  <app-cargando mensaje="Cargando pacientes..." />
+} @else if (error()) {
+  <app-error
+    titulo="No se pudo cargar el listado"
+    [mensaje]="error()!.message"
+    [codigo]="error()!.codigo"
+    [correlacion]="error()!.correlacionId ?? ''"
+    (reintentar)="cargar()"
+  />
+} @else if (pacientes().length === 0) {
+  <!-- Tres vacíos distintos, y confundirlos es el fallo que esta pantalla
+       existe para evitar. «No se buscó» no es «no hay coincidencias», y
+       ninguno de los dos es «su ámbito está vacío». -->
+  <div class="tarjeta">
+    @if (terminoIgnorado()) {
+      <app-vacio
+        titulo="La búsqueda no se realizó"
+        [detalle]="
+          'El término es demasiado corto, así que el servidor no buscó nada. Esto no
+           significa que el paciente no exista: escriba al menos ' +
+          minimoTermino +
+          ' caracteres.'
+        "
+      >
+        <button class="boton boton--principal" type="button" (click)="limpiar()">
+          Ver todos
+        </button>
+      </app-vacio>
+    } @else if (terminoAplicado()) {
+      <app-vacio
+        titulo="Sin coincidencias"
+        [detalle]="
+          'Ningún paciente de su ámbito coincide con «' +
+          terminoAplicado() +
+          '». Pruebe con el número de documento.'
+        "
+      >
+        <button class="boton" type="button" (click)="limpiar()">Ver todos</button>
+      </app-vacio>
+    } @else {
+      <app-vacio
+        titulo="No hay pacientes en su ámbito"
+        detalle="Su usuario no tiene pacientes asignados. Pida al administrador de la clínica que revise su ámbito."
+      />
+    }
+  </div>
+} @else {
+  <p class="recuento">
+    Mostrando <strong>{{ desde() + 1 }}–{{ hasta() }}</strong> de
+    <strong>{{ total() }}</strong> pacientes de su ámbito.
+  </p>
+
+  <div class="tabla-envoltorio">
+    <table class="tabla">
+      <thead>
+        <tr>
+          <th scope="col">Paciente</th>
+          <th scope="col">Documento</th>
+          <th scope="col">Contacto</th>
+          <th scope="col">Verificación</th>
+          <th scope="col"><span class="oculto-visual">Acciones</span></th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (paciente of pacientes(); track paciente.id) {
+          <tr>
+            <td>{{ paciente.apellido }}, {{ paciente.nombre }}</td>
+            <td class="numerico">
+              <span class="tipo-doc">{{ paciente.tipo_documento }}</span>
+              {{ paciente.numero_documento }}
+            </td>
+            <td>{{ contacto(paciente) }}</td>
+            <td>
+              <!-- No es decorativo: un teléfono sin verificar NO basta para
+                   dar información por WhatsApp, y quien atiende tiene que
+                   verlo antes de hablar, no después de abrir la ficha. -->
+              <span
+                class="verificacion"
+                [class]="'verificacion verificacion--' + verificacion(paciente.nivel_verificacion).tono"
+                [title]="verificacion(paciente.nivel_verificacion).detalle"
+              >
+                {{ verificacion(paciente.nivel_verificacion).texto }}
+              </span>
+            </td>
+            <td class="acciones">
+              <button class="boton boton--pequeno" type="button" (click)="abrir(paciente)">
+                Ver ficha
+              </button>
+            </td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  </div>
+
+  <nav class="paginacion" aria-label="Paginación de pacientes">
+    <button class="boton" type="button" [disabled]="!hayAnterior()" (click)="anterior()">
+      ← Anteriores
+    </button>
+    <button class="boton" type="button" [disabled]="!haySiguiente()" (click)="siguiente()">
+      Siguientes →
+    </button>
+  </nav>
+}
+
+<!-- ===================== Ficha ===================== -->
+@if (cargandoFicha()) {
+  <app-cargando mensaje="Abriendo la ficha..." />
+}
+
+@if (errorFicha()) {
+  <app-error
+    titulo="No se pudo abrir la ficha"
+    [mensaje]="errorFicha()!.message"
+    [codigo]="errorFicha()!.codigo"
+    [correlacion]="errorFicha()!.correlacionId ?? ''"
+    [reintentable]="false"
+  />
+}
+
+@if (seleccionado(); as ficha) {
+  <section class="tarjeta ficha" aria-label="Ficha del paciente">
+    <header class="ficha__cabecera">
+      <div>
+        <h2>{{ ficha.nombre }} {{ ficha.apellido }}</h2>
+        <p class="ficha__sub">
+          {{ ficha.tipo_documento }} {{ ficha.numero_documento }}
+          @if (!ficha.activo) {
+            <span class="inactivo">Inactivo</span>
+          }
+        </p>
+      </div>
+      <button class="boton" type="button" (click)="cerrarFicha()">Cerrar</button>
+    </header>
+
+    <dl class="ficha__datos">
+      <div>
+        <dt>Nacimiento</dt>
+        <dd>{{ nacimiento(ficha.fecha_nacimiento) }}</dd>
+      </div>
+      <div>
+        <dt>Sexo</dt>
+        <dd>{{ ficha.sexo ?? 'No registrado' }}</dd>
+      </div>
+      <div>
+        <dt>WhatsApp</dt>
+        <dd>{{ ficha.telefono_whatsapp ?? 'No registrado' }}</dd>
+      </div>
+      <div>
+        <dt>Correo</dt>
+        <dd>{{ ficha.correo ?? 'No registrado' }}</dd>
+      </div>
+      <div class="ficha__ancho">
+        <dt>Dirección</dt>
+        <dd>{{ ficha.direccion ?? 'No registrada' }}</dd>
+      </div>
+      <div class="ficha__ancho">
+        <dt>Verificación de identidad</dt>
+        <dd>
+          <span
+            [class]="'verificacion verificacion--' + verificacion(ficha.nivel_verificacion).tono"
+          >
+            {{ verificacion(ficha.nivel_verificacion).texto }}
+          </span>
+          <span class="ficha__nota">{{ verificacion(ficha.nivel_verificacion).detalle }}</span>
+        </dd>
+      </div>
+    </dl>
+
+    <!-- Se declara en la propia pantalla, no solo en la documentación: quien
+         la usa tiene que saber que esta ficha no es la historia clínica. -->
+    <p class="ficha__limite">
+      Esta ficha es <strong>administrativa</strong>. No incluye diagnósticos, medicación ni
+      motivo de consulta: esos datos viven en la historia clínica, exigen relación
+      asistencial con el paciente y cada lectura queda auditada.
+    </p>
+  </section>
+}
