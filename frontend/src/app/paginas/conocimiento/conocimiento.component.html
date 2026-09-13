@@ -1,0 +1,215 @@
+<h1>Base de conocimiento</h1>
+
+<!-- ===================== Buscador ===================== -->
+<section class="tarjeta buscador" aria-label="Buscar en la base de conocimiento">
+  <form (ngSubmit)="buscar()">
+    <label class="campo">
+      <span class="campo__etiqueta">¿Qué necesita consultar?</span>
+      <div class="buscador__fila">
+        <input
+          class="campo__control"
+          name="consulta"
+          autocomplete="off"
+          placeholder="Por ejemplo: cuántas horas de ayuno para el examen de sangre"
+          [(ngModel)]="consulta"
+        />
+        <button class="boton boton--principal" type="submit" [disabled]="consultaCorta()">
+          Buscar
+        </button>
+        @if (consultaAplicada()) {
+          <button class="boton" type="button" (click)="limpiarBusqueda()">Limpiar</button>
+        }
+      </div>
+      <span class="campo__ayuda">
+        Solo se consultan documentos <strong>aprobados o publicados y vigentes</strong>. Un
+        borrador no responde, aunque diga exactamente lo que busca.
+      </span>
+    </label>
+  </form>
+</section>
+
+@if (buscando()) {
+  <app-cargando mensaje="Buscando en los documentos aprobados..." />
+}
+
+@if (errorBusqueda()) {
+  <app-error
+    titulo="No se pudo completar la búsqueda"
+    [mensaje]="errorBusqueda()!.message"
+    [codigo]="errorBusqueda()!.codigo"
+    [correlacion]="errorBusqueda()!.correlacionId ?? ''"
+    (reintentar)="buscar()"
+  />
+}
+
+@if (respuesta(); as datos) {
+  <section class="respuesta" aria-label="Resultado de la búsqueda">
+    @if (!datos.hay_fuente) {
+      <!-- Esto es lo único que importa de verdad en esta pantalla: cuando no
+           hay fuente aprobada NO se muestran los resultados más parecidos. Un
+           extracto «casi relacionado» presentado como respuesta es como
+           alguien acaba repitiéndole a un paciente algo que la clínica nunca
+           aprobó. -->
+      <div class="tarjeta sin-fuente">
+        <h2>No hay información aprobada sobre esto</h2>
+        <p class="sin-fuente__mensaje">{{ datos.mensaje }}</p>
+        <p class="sin-fuente__nota">
+          No se muestran resultados aproximados a propósito. Si existiera un documento
+          parecido, enseñarlo aquí llevaría a repetirle al paciente algo que la clínica no
+          ha aprobado. Derive la consulta a un profesional.
+        </p>
+      </div>
+    } @else {
+      <p class="recuento">
+        <strong>{{ datos.resultados.length }}</strong> fragmento(s) de
+        <strong>{{ datos.documentos_citados.length }}</strong> documento(s) aprobado(s)
+        responden a «{{ consultaAplicada() }}».
+      </p>
+
+      @for (resultado of datos.resultados; track resultado.document_id + '-' + resultado.indice_fragmento) {
+        <article class="tarjeta fragmento">
+          <header class="fragmento__cabecera">
+            <h3>{{ tituloDe(resultado.document_id) }}</h3>
+            <span class="fragmento__meta">
+              versión {{ resultado.version }} · fragmento {{ resultado.indice_fragmento + 1 }}
+            </span>
+          </header>
+
+          <!-- Interpolación, nunca innerHTML: el texto de un documento es dato
+               citado, no instrucción ni marcado. Un innerHTML aquí convertiría
+               un PDF subido por cualquiera en ejecución de código en la sesión
+               de quien lo lee (ADR-0014). -->
+          <blockquote class="fragmento__texto">{{ resultado.extracto }}</blockquote>
+
+          <footer class="fragmento__pie">
+            <!-- Identificador interno del fragmento. Se muestra para que una
+                 consulta se pueda rastrear hasta su origen exacto en una
+                 revision, no porque sea legible. -->
+            <span class="fragmento__referencia" title="Identificador del fragmento citado">
+              ref. {{ resultado.referencia }}
+            </span>
+            @if (origen(resultado)) {
+              <span class="fragmento__origen">Encontrado {{ origen(resultado) }}</span>
+            }
+          </footer>
+        </article>
+      }
+    }
+  </section>
+}
+
+<!-- ===================== Documentos ===================== -->
+<section class="listado" aria-label="Documentos de la base de conocimiento">
+  <div class="listado__cabecera">
+    <h2>Documentos</h2>
+    <label class="campo campo--en-linea">
+      <span class="campo__etiqueta">Estado</span>
+      <select
+        class="campo__control"
+        name="estado"
+        [ngModel]="filtroEstado()"
+        (ngModelChange)="cambiarFiltro($event)"
+      >
+        <option value="">Todos</option>
+        @for (clave of ordenEstados; track clave) {
+          <option [value]="clave">{{ estado(clave).texto }}</option>
+        }
+      </select>
+    </label>
+  </div>
+
+  @if (cargando()) {
+    <app-cargando mensaje="Cargando documentos..." />
+  } @else if (error()) {
+    <app-error
+      titulo="No se pudo cargar el listado"
+      [mensaje]="error()!.message"
+      [codigo]="error()!.codigo"
+      [correlacion]="error()!.correlacionId ?? ''"
+      (reintentar)="cargar()"
+    />
+  } @else if (documentos().length === 0) {
+    <div class="tarjeta">
+      <app-vacio
+        titulo="No hay documentos"
+        detalle="No hay ningún documento en su ámbito con ese estado."
+      />
+    </div>
+  } @else {
+    <!-- Documentos marcados por la detección de inyección. Van arriba y
+         separados: aprobar uno sin mirarlo es como una instrucción hostil
+         entra en el corpus que alimenta al agente. -->
+    @if (marcados().length > 0) {
+      <div class="tarjeta marcados">
+        <h3>{{ marcados().length }} documento(s) esperan revisión de seguridad</h3>
+        <p>
+          Al ingerir su texto se detectó algo que parece un intento de dar instrucciones al
+          sistema. <strong>La aprobación está bloqueada</strong> hasta que una persona lo
+          revise. No es necesariamente un ataque —puede ser una cita o un ejemplo—, pero
+          tiene que mirarlo alguien.
+        </p>
+        <ul>
+          @for (documento of marcados(); track documento.id) {
+            <li>{{ documento.titulo }}</li>
+          }
+        </ul>
+      </div>
+    }
+
+    <div class="resumen">
+      @for (fila of resumen(); track fila.estado) {
+        <div class="resumen__celda" [class.resumen__celda--activa]="fila.recuperable">
+          <span class="resumen__cantidad">{{ fila.cantidad }}</span>
+          <span class="resumen__etiqueta">{{ fila.etiqueta }}</span>
+          <span class="resumen__nota">
+            {{ fila.recuperable ? 'responde consultas' : 'no responde' }}
+          </span>
+        </div>
+      }
+    </div>
+
+    <div class="tabla-envoltorio">
+      <table class="tabla">
+        <thead>
+          <tr>
+            <th scope="col">Título</th>
+            <th scope="col">Tipo</th>
+            <th scope="col">Estado</th>
+            <th scope="col">Versión</th>
+            <th scope="col">Vigencia</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (documento of documentos(); track documento.id) {
+            <tr [class.fila-marcada]="documento.requiere_revision">
+              <td>
+                {{ documento.titulo }}
+                @if (documento.requiere_revision) {
+                  <span class="marca-revision" title="Bloqueado hasta revisión de seguridad">
+                    revisión pendiente
+                  </span>
+                }
+              </td>
+              <td>{{ tipo(documento.tipo) }}</td>
+              <td>
+                <span
+                  [class]="'estado estado--' + estado(documento.status).tono"
+                  [title]="estado(documento.status).detalle"
+                >
+                  {{ estado(documento.status).texto }}
+                </span>
+              </td>
+              <td class="numerico">{{ documento.version_vigente ?? '—' }}</td>
+              <td class="vigencia">{{ vigencia(documento) }}</td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+
+    <p class="pie-listado">
+      Mostrando {{ documentos().length }} de {{ total() }} documentos de su ámbito. La
+      creación y edición de documentos todavía no está en esta pantalla.
+    </p>
+  }
+</section>

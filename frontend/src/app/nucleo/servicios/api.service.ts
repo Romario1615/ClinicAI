@@ -125,6 +125,89 @@ export interface DatosReserva {
   readonly notas_recepcion?: string | null;
 }
 
+// ---------------------------------------------------------------------------
+//  Conocimiento
+// ---------------------------------------------------------------------------
+export type EstadoDocumento =
+  | 'DRAFT'
+  | 'PENDING_REVIEW'
+  | 'APPROVED'
+  | 'PUBLISHED'
+  | 'ARCHIVED';
+
+export type TipoDocumento =
+  | 'PROTOCOLO'
+  | 'INSTRUCTIVO'
+  | 'PREPARACION_EXAMEN'
+  | 'POLITICA'
+  | 'PREGUNTA_FRECUENTE'
+  | 'TARIFARIO';
+
+export interface Documento {
+  readonly id: string;
+  readonly titulo: string;
+  readonly tipo: TipoDocumento;
+  readonly status: EstadoDocumento;
+  readonly version_vigente: number | null;
+  readonly sensitivity_level: string;
+  readonly branch_id: string | null;
+  readonly specialty_id: string | null;
+  readonly service_id: string | null;
+  readonly etiquetas: readonly string[];
+  readonly effective_from: string | null;
+  readonly effective_until: string | null;
+  readonly aprobado_por: string | null;
+  readonly aprobado_en: string | null;
+  readonly archivado_en: string | null;
+  /**
+   * Cierto cuando la ingesta detecto un intento de inyeccion en el texto.
+   *
+   * Bloquea la aprobacion hasta que una persona lo revise. En la interfaz se
+   * muestra siempre: un documento marcado y aprobado sin mirar es como entra
+   * una instruccion hostil en el corpus (ADR-0014).
+   */
+  readonly requiere_revision?: boolean;
+}
+
+export interface PaginaDocumentos {
+  readonly elementos: readonly Documento[];
+  readonly total: number;
+}
+
+export interface FiltroDocumentos {
+  readonly estado?: EstadoDocumento;
+  readonly limite?: number;
+  readonly desplazamiento?: number;
+}
+
+export interface ResultadoBusqueda {
+  readonly document_id: string;
+  readonly version: number;
+  readonly indice_fragmento: number;
+  /** Titulo y ubicacion del fragmento, para poder citarlo. */
+  readonly referencia: string;
+  readonly extracto: string;
+  readonly puntuacion: number;
+  /** Posicion en la rama vectorial de la fusion RRF. `null` si no aparecio. */
+  readonly posicion_vectorial: number | null;
+  /** Posicion en la rama textual. `null` si no aparecio. */
+  readonly posicion_textual: number | null;
+}
+
+export interface RespuestaBusqueda {
+  /**
+   * Falso cuando no hay ningun documento aprobado que responda.
+   *
+   * Es el campo que impide que la interfaz improvise: sin fuente no se
+   * responde, se ofrece derivar a una persona.
+   */
+  readonly hay_fuente: boolean;
+  /** Texto a mostrar cuando no hay fuente. `null` cuando si la hay. */
+  readonly mensaje: string | null;
+  readonly resultados: readonly ResultadoBusqueda[];
+  readonly documentos_citados: readonly string[];
+}
+
 @Injectable({ providedIn: 'root' })
 export class ApiService {
   private readonly http = inject(HttpClient);
@@ -209,6 +292,22 @@ export class ApiService {
 
   paciente(id: string): Observable<PacienteDetalle> {
     return this.get<PacienteDetalle>(`/pacientes/${id}`);
+  }
+
+  // --- Conocimiento ---
+  documentos(filtro: FiltroDocumentos = {}): Observable<PaginaDocumentos> {
+    return this.get<PaginaDocumentos>('/conocimiento/documentos', aConsulta(filtro));
+  }
+
+  /**
+   * Busca en la base de conocimiento.
+   *
+   * Es `POST` y no `GET` a proposito: la consulta de un paciente puede
+   * contener informacion sensible, y una cadena de consulta acaba en los
+   * registros del servidor y en el historial del navegador.
+   */
+  buscarConocimiento(consulta: string, limite?: number): Observable<RespuestaBusqueda> {
+    return this.post<RespuestaBusqueda>('/conocimiento/busqueda', { consulta, limite });
   }
 
   // --- Plomeria ---

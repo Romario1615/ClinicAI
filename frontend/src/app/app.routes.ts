@@ -93,12 +93,14 @@ export const routes: Routes = [
   },
   {
     path: 'conocimiento',
-    canActivate: [guardiaAutenticacion, guardiaSegundoFactor],
+    canActivate: [
+      guardiaAutenticacion,
+      guardiaSegundoFactor,
+      guardiaPermiso(PERMISOS.conocimientoLeer),
+    ],
     title: 'Conocimiento · Gestion clinica',
     loadComponent: () =>
-      import('./paginas/demostracion/paginas-demostracion.component').then(
-        (m) => m.ConocimientoComponent,
-      ),
+      import('./paginas/conocimiento/conocimiento.component').then((m) => m.ConocimientoComponent),
   },
   {
     path: 'catalogo',

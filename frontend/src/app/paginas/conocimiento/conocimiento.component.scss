@@ -1,0 +1,224 @@
+.buscador {
+  margin-bottom: var(--espacio-4);
+}
+
+.buscador__fila {
+  display: flex;
+  gap: var(--espacio-2);
+  align-items: stretch;
+  flex-wrap: wrap;
+}
+
+.buscador__fila .campo__control {
+  flex: 1 1 22rem;
+}
+
+/* ----- Respuesta ----- */
+.respuesta {
+  margin-bottom: var(--espacio-6);
+}
+
+.recuento {
+  margin: 0 0 var(--espacio-3);
+  color: var(--texto-suave);
+}
+
+/* El «no hay fuente» se trata como un resultado legítimo, no como un error:
+   que el sistema sepa decir que no sabe es la propiedad más valiosa que
+   tiene. Se le da el mismo peso visual que a una respuesta. */
+.sin-fuente {
+  border-left: 4px solid var(--aviso);
+}
+
+.sin-fuente h2 {
+  margin: 0 0 var(--espacio-3);
+  font-size: 1.1rem;
+}
+
+.sin-fuente__mensaje {
+  margin: 0 0 var(--espacio-3);
+  font-size: 1.02rem;
+}
+
+.sin-fuente__nota {
+  margin: 0;
+  padding-top: var(--espacio-3);
+  border-top: 1px solid var(--borde);
+  color: var(--texto-suave);
+  font-size: 0.9rem;
+}
+
+/* ----- Fragmento ----- */
+.fragmento {
+  margin-bottom: var(--espacio-3);
+}
+
+.fragmento__cabecera {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: var(--espacio-3);
+  flex-wrap: wrap;
+  margin-bottom: var(--espacio-3);
+}
+
+.fragmento__cabecera h3 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.fragmento__meta {
+  font-size: 0.82rem;
+  color: var(--texto-suave);
+  font-family: var(--fuente-mono);
+  white-space: nowrap;
+}
+
+.fragmento__texto {
+  margin: 0;
+  padding: var(--espacio-3) var(--espacio-4);
+  border-left: 3px solid var(--borde);
+  background: var(--fondo-suave, rgb(0 0 0 / 2%));
+  border-radius: var(--radio-1);
+  /* Texto de un documento: puede traer saltos de línea con sentido. */
+  white-space: pre-wrap;
+}
+
+.fragmento__pie {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--espacio-3);
+  flex-wrap: wrap;
+  margin-top: var(--espacio-3);
+  font-size: 0.85rem;
+  color: var(--texto-suave);
+}
+
+.fragmento__referencia {
+  font-family: var(--fuente-mono);
+}
+
+/* ----- Listado ----- */
+.listado__cabecera {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: var(--espacio-3);
+  flex-wrap: wrap;
+  margin-bottom: var(--espacio-3);
+}
+
+.listado__cabecera h2 {
+  margin: 0;
+}
+
+.campo--en-linea {
+  min-width: 12rem;
+}
+
+.marcados {
+  border-left: 4px solid var(--aviso);
+  margin-bottom: var(--espacio-4);
+}
+
+.marcados h3 {
+  margin: 0 0 var(--espacio-2);
+  font-size: 1rem;
+  color: var(--aviso);
+}
+
+.marcados ul {
+  margin: var(--espacio-2) 0 0;
+  padding-left: var(--espacio-5);
+}
+
+.resumen {
+  display: flex;
+  gap: var(--espacio-3);
+  flex-wrap: wrap;
+  margin-bottom: var(--espacio-4);
+}
+
+.resumen__celda {
+  flex: 1 1 8rem;
+  padding: var(--espacio-3);
+  border: 1px solid var(--borde);
+  border-radius: var(--radio-2);
+  text-align: center;
+}
+
+/* Los estados recuperables se distinguen: un borrador excelente no responde a
+   nadie, y quien lo escribió necesita verlo de un vistazo. */
+.resumen__celda--activa {
+  border-color: var(--exito);
+  background: var(--exito-fondo);
+}
+
+.resumen__cantidad {
+  display: block;
+  font-size: 1.5rem;
+  font-weight: 700;
+}
+
+.resumen__etiqueta {
+  display: block;
+  font-size: 0.88rem;
+  font-weight: 600;
+}
+
+.resumen__nota {
+  display: block;
+  font-size: 0.78rem;
+  color: var(--texto-suave);
+}
+
+.estado {
+  display: inline-block;
+  font-size: 0.78rem;
+  font-weight: 650;
+  padding: 2px var(--espacio-2);
+  border-radius: 999px;
+  border: 1px solid currentcolor;
+  white-space: nowrap;
+}
+
+.estado--exito {
+  color: var(--exito);
+  background: var(--exito-fondo);
+}
+
+.estado--aviso {
+  color: var(--aviso);
+  background: var(--aviso-fondo);
+}
+
+.estado--neutro {
+  color: var(--texto-suave);
+}
+
+.fila-marcada {
+  background: var(--aviso-fondo);
+}
+
+.marca-revision {
+  display: inline-block;
+  margin-left: var(--espacio-2);
+  font-size: 0.72rem;
+  font-weight: 650;
+  padding: 1px var(--espacio-2);
+  border-radius: 999px;
+  border: 1px solid var(--aviso);
+  color: var(--aviso);
+  white-space: nowrap;
+}
+
+.vigencia {
+  font-size: 0.88rem;
+  color: var(--texto-suave);
+}
+
+.pie-listado {
+  margin-top: var(--espacio-3);
+  color: var(--texto-suave);
+  font-size: 0.9rem;
+}

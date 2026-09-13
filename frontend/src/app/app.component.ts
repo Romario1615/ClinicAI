@@ -56,8 +56,8 @@ const NAVEGACION: readonly EnlaceNavegacion[] = [
   {
     ruta: '/conocimiento',
     etiqueta: 'Conocimiento',
-    permisos: [],
-    demostracion: true,
+    permisos: [PERMISOS.conocimientoLeer],
+    demostracion: false,
   },
   { ruta: '/catalogo', etiqueta: 'Catálogo', permisos: [], demostracion: true },
 ];
