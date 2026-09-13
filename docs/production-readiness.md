@@ -1,6 +1,6 @@
 # Estado de preparación para producción
 
-> **Última actualización:** 2026‑09‑12 · Fases 0, 0b, 3 y 4 (WhatsApp) cerradas.
+> **Última actualización:** 2026‑09‑12 · Fases 0, 0b, 3, 4 y 6 cerradas.
 >
 > **Veredicto actual: el sistema NO está preparado para producción y no puede usarse con
 > datos de pacientes reales.** No es una fórmula de cautela. Hay tres motivos concretos, y
@@ -20,23 +20,23 @@ funcionalidad no existe todavía; **no** significa que esté bien.
 
 | # | Criterio | Estado | Evidencia |
 |---|---|---|---|
-| 1 | No hay errores críticos | **parcial** | 984 pruebas en verde, `ruff`/`mypy --strict` sin hallazgos. Pero sin E2E, sin carga y sin DAST, «no hay errores críticos» es una afirmación que no se puede sostener |
+| 1 | No hay errores críticos | **parcial** | 1139 pruebas en verde, `ruff`/`mypy --strict` sin hallazgos. Pero sin E2E, sin carga y sin DAST, «no hay errores críticos» es una afirmación que no se puede sostener |
 | 2 | Sin vulnerabilidades críticas o altas pendientes | **parcial** | `pip-audit --strict` → sin vulnerabilidades conocidas; `bandit -r app -ll` sin hallazgos. 44 vulnerabilidades corregidas (ver informe). **Falta DAST y Trivy sobre imágenes construidas** |
 | 3 | No existen secretos en el repositorio | **parcial** | `.env` excluido, `.env.example` sin un valor real, secretos de prueba sintéticos. `gitleaks` **no está instalado localmente**; corre en el pipeline, que nunca se ha ejecutado |
 | 4 | Las reservas concurrentes no generan duplicados | **verificado** | Restricción de exclusión `gist`; prueba de concurrencia real con 50 participantes y `asyncio.Barrier` sobre conexiones separadas |
 | 5 | La lista de espera funciona automáticamente | **parcial** | Servicios y una sola oferta activa por turno verificados; **faltan rutas HTTP y el disparo automático al liberarse un turno** |
 | 6 | Los calendarios se sincronizan | **parcial** | El flujo completo esta verificado con adaptador sandbox: OAuth con `state` firmado y de un solo uso, tokens cifrados y ligados al profesional, publicacion, retirada y **reconciliacion de cambios externos** -- borrado y movimiento manual del profesional (85 pruebas). Lo que falta: el **adaptador real de Google** y la renovacion automatica del token de acceso (E‑19). `MODO_CALENDARIO=google` no arranca, a proposito |
 | 7 | Los recordatorios son persistentes y reintentables | **parcial** | El outbox está verificado: deduplicación por restricción única, retroceso exponencial con tope, recuperación de huérfanos, `FOR UPDATE SKIP LOCKED` (25 pruebas de integración). **Falta el planificador que crea los recordatorios** al confirmar una cita o una receta, y la entrega real contra Meta (E‑1) |
-| 8 | Los permisos impiden accesos indebidos | **verificado** | Permiso + ámbito de 4 dimensiones + relación asistencial, aplicados en el `WHERE`. 404 y no 403 fuera de ámbito. 419 pruebas con marcador `seguridad`. Tres fallos propios del filtro de ámbito encontrados y corregidos |
+| 8 | Los permisos impiden accesos indebidos | **verificado** | Permiso + ámbito de 4 dimensiones + relación asistencial, aplicados en el `WHERE`. 404 y no 403 fuera de ámbito. 504 pruebas con marcador `seguridad`. Tres fallos propios del filtro de ámbito encontrados y corregidos |
 | 9 | La historia clínica está protegida | **verificado** | Append‑only por disparador, versionado con autor y motivo, atacado con SQL directo en las pruebas |
 | 10 | Los medicamentos solo usan recetas aprobadas | **verificado** | Disparador `toma_exige_receta_confirmada`; los PRN no generan horarios fijos |
-| 11 | La IA no modifica datos sin autorización | **no evaluado** | Las herramientas del agente no existen todavía (Fase 6). Lo que sí existe: el servicio clínico rechaza a un principal con `es_agente`, y el webhook **no ejecuta ninguna intención que cambie una cita** (ADR‑0017) |
-| 12 | El RAG no filtra información entre pacientes | **no evaluado** | Fase 6. Diseñado en ADR‑0013 |
-| 13 | Los documentos vencidos no son recuperados | **no evaluado** | Fase 6 |
+| 11 | La IA no modifica datos sin autorización | **parcial** | Las herramientas del agente **siguen sin existir**: el agente conversacional no está implementado. Lo verificado: el servicio clínico rechaza a un principal con `es_agente`; el webhook **no ejecuta ninguna intención que cambie una cita** (ADR‑0017); y la capa de recuperación **solo lee**, con una prueba de arquitectura que verifica que ninguna otra vía consulta `knowledge_chunks` |
+| 12 | El RAG no filtra información entre pacientes | **verificado** | Los filtros van en el `WHERE` de una consulta única (ADR‑0013), con **21 pruebas de casos negativos** —otra clínica, otra sede, otra especialidad, por encima del nivel— cada una con su prueba de control. La historia clínica individual **no se indexa** en ningún índice vectorial (RF‑M07). Una prueba de arquitectura recorre el AST de `app/` y verifica que no hay otra vía de consulta |
+| 13 | Los documentos vencidos no son recuperados | **verificado** | Vigencia, estado y archivado filtran en el `WHERE`. Probado con el documento vencido, el que aún no entra en vigor, el archivado y el borrador, incluido el caso en que el texto del documento **son las palabras exactas de la consulta** |
 | 14 | Los respaldos se pueden restaurar | **no evaluado** | Fase 10. **Un respaldo sin restauración probada no cuenta** |
 | 15 | El sistema soporta las pruebas de carga definidas | **no evaluado** | Fase 10 |
 | 16 | El pipeline CI/CD está funcionando | **parcial** | 7 trabajos y puerta de fusión escritos; YAML validado y cada puerta comprobada a mano en local. **Nunca ejecutado en GitHub**: el repositorio no tiene remoto |
-| 17 | Existe documentación de operación | **parcial** | 19 documentos y 18 ADR. Faltan `monitoring.md`, `backup-and-restore.md`, `incident-response.md`, `rag.md` |
+| 17 | Existe documentación de operación | **parcial** | 20 documentos y 18 ADR. Faltan `monitoring.md`, `backup-and-restore.md`, `incident-response.md` |
 | 18 | Existe procedimiento de rollback | **parcial** | El rollback de esquema **sí está verificado** (`upgrade → downgrade -1 → upgrade` en cada migración). El rollback de despliegue está documentado y sin probar |
 | 19 | Existe procedimiento de restauración | **parcial** | Documentado, sin ejecutar |
 | 20 | Existe monitoreo | **no evaluado** | Fase 10. Ya hay eventos que exigen vigilancia y nadie los vigila: la cola `FALLIDO` del outbox, `limite_tasa.sin_contador.permitido` y `whatsapp.numero_sin_clinica` |
@@ -45,7 +45,7 @@ funcionalidad no existe todavía; **no** significa que esté bien.
 | 23 | Notificaciones sin datos clínicos | **verificado** | 40 pruebas recorren el catálogo completo de plantillas: ninguna admite ni menciona diagnóstico, medicamento ni motivo de consulta (regla 10, RF‑K07) |
 | 24 | Los eventos del calendario externo no contienen datos clínicos | **verificado** | RF‑I09. `construir_evento` **no acepta** paciente ni servicio, y una prueba inspecciona su firma para que siga siendo así. Comprobado también sobre lo que de verdad sale hacia el proveedor (ADR‑0018) |
 
-**Resumen: 7 de 24 verificados, 11 parciales, 6 sin evaluar.**
+**Resumen: 9 de 24 verificados, 11 parciales, 4 sin evaluar.**
 
 Los criterios 23 y 24 se añaden en la Fase 4: no estaban en la lista original y son
 condiciones de protección de datos que sí se pueden verificar, y se han verificado.
@@ -97,3 +97,4 @@ No se declarará el sistema listo hasta que **todas** se cumplan con evidencia:
 | 2026‑09‑12 | 0b, 2, 3, 7, 5 | **No preparado.** Infraestructura, modelo de datos (49 tablas), autenticación, RBAC con ámbito, agenda con anti doble‑reserva verificado bajo concurrencia real, historia clínica append‑only y lista de espera. Tres fallos propios del filtro de ámbito encontrados **ejerciendo el sistema** con la suite en verde |
 | 2026‑09‑12 | 4 (WhatsApp) | **No preparado.** Outbox de entrega, catálogo de plantillas sin datos clínicos y webhook con firma validada, verificados con 236 pruebas contra PostgreSQL real y 33 comprobaciones sobre la API arrancada. Ese ejercicio manual encontró, con 891 pruebas en verde, que **una `BAJA` por WhatsApp no daba de baja al paciente** por el formato del número; corregido con un índice funcional y 6 pruebas de regresión. **El camino real hacia Meta no está verificado** y así se declara (E‑1). Se corrigió además la medición de cobertura del proyecto, que llevaba varias fases mal medida por el greenlet de SQLAlchemy async |
 | 2026‑09‑12 | 4 (calendarios) | **No preparado.** OAuth con `state` firmado y de un solo uso, tokens cifrados con AES‑GCM ligados al profesional, publicación de eventos **sin datos clínicos** (ADR‑0018) y reconciliación de borrados y cambios externos, verificado con 85 pruebas y adaptador sandbox. **Falta el adaptador real de Google** y la renovación automática del token (E‑19); `MODO_CALENDARIO=google` no arranca, a propósito |
+| 2026‑09‑12 | 6 (conocimiento y RAG) | **No preparado.** Base de conocimiento con pgvector, búsqueda híbrida con los filtros de autorización dentro del SQL, ciclo de vida del documento y defensa anti inyección, con 80 pruebas `rag`. El arnés de evaluación destapó **dos fallos propios que se tapaban mutuamente**: el umbral de similitud no se aplicaba —la búsqueda nunca habría podido decir «no tengo información aprobada»— y la consulta textual unía los términos con `AND`, así que casi nunca coincidía. Corregidos y medidos: Hit@3 100 %, y una pregunta sin documentación devuelve **0** resultados (antes: el corpus entero). **La calidad se midió con el proveedor simulado, no con un modelo real** (E‑9) |

@@ -5,7 +5,7 @@ calendarios, lista de espera inteligente, historia clínica versionada, recetas 
 seguimiento de adherencia, base de conocimiento con RAG, pagos asistidos, dashboard y
 auditoría.
 
-> **Estado actual: fases 0, 0b, 3 y 4 cerradas. 1, 2, 5 y 7 en curso.**
+> **Estado actual: fases 0, 0b, 3, 4 y 6 cerradas. 1, 2, 5 y 7 en curso.**
 >
 > Implementado y verificado, con evidencia de ejecución real: infraestructura local
 > (PostgreSQL 16 + pgvector 0.8.6, Redis), **49 tablas** migradas y reversibles,
@@ -15,12 +15,13 @@ auditoría.
 > el webhook de WhatsApp**, y la **sincronización de calendarios con reconciliación de
 > cambios externos**. **42 operaciones HTTP** y 9 pantallas de Angular.
 >
-> **984 pruebas** y 91 % de cobertura en el backend; 67 y 95 % en el frontend.
+> **1139 pruebas** y 91,9 % de cobertura en el backend; 67 y 95 % en el frontend.
 >
 > **Lo que no está verificado, dicho sin rodeos:** ni un mensaje ha salido hacia Meta ni un
 > evento hacia Google —no hay credenciales y no se inventan—, no existe el adaptador real
-> de Google Calendar, no hay RAG, ni dashboard, ni pagos, ni pruebas de extremo a extremo,
-> ni restauración de copias probada, ni validación jurídica.
+> de Google Calendar, **no existe el agente conversacional** (hay base de conocimiento y
+> recuperación, pero nadie las usa todavía), ni dashboard, ni pagos, ni pruebas de extremo
+> a extremo, ni restauración de copias probada, ni validación jurídica.
 >
 > El estado real frente a los criterios de producción está en
 > [`docs/production-readiness.md`](docs/production-readiness.md), y los riesgos residuales
@@ -165,7 +166,7 @@ El plan de pruebas completo, con los escenarios obligatorios y los resultados de
 | [`docs/data-model.md`](docs/data-model.md) | Modelo de datos y diagrama de entidades |
 | [`docs/security.md`](docs/security.md) | Controles, política de acceso y retención |
 | [`docs/threat-model.md`](docs/threat-model.md) | Modelo de amenazas y matriz de riesgos |
-| `docs/rag.md` | Recuperación, permisos y anti prompt injection — **pendiente** |
+| [`docs/rag.md`](docs/rag.md) | Recuperación, permisos y anti prompt injection |
 | [`docs/whatsapp-integration.md`](docs/whatsapp-integration.md) | Webhooks, plantillas y entrega |
 | [`docs/calendar-integration.md`](docs/calendar-integration.md) | OAuth, sincronización y reconciliación |
 | [`docs/deployment.md`](docs/deployment.md) | Despliegue local, staging, producción y rollback |

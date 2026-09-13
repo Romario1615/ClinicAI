@@ -1,8 +1,9 @@
 # Informe de avance
 
-> **Fecha:** 2026‑09‑12 · 24 commits · Fases 0, 0b, 3 y **4 (WhatsApp)** cerradas;
-> 1, 2, 5 y 7 en curso. Del calendario externo queda pendiente el adaptador real de
-> Google y la renovación automática del token.
+> **Fecha:** 2026‑09‑12 · 27 commits · Fases 0, 0b, 3 y **4 (WhatsApp)** cerradas;
+> **Fase 6 (conocimiento y RAG) cerrada.** 1, 2, 5 y 7 en curso. Del calendario externo
+> queda pendiente el adaptador real de Google y la renovación automática del token; del
+> RAG, el agente que lo use.
 
 Este informe cubre los 18 puntos exigidos. Está escrito para ser contrastado: cada cifra
 procede de una ejecución real cuyo comando se indica, y lo que no se ha verificado se dice
@@ -29,7 +30,9 @@ que no se ha verificado.
 | Webhook de WhatsApp: firma HMAC, deduplicación, opt‑out, derivación a persona | completo |
 | Adaptador WhatsApp Cloud API | escrito · **camino real sin verificar** (E‑1) |
 | Calendario externo: OAuth, tokens cifrados, publicación, reconciliación de cambios externos | completo con sandbox · **adaptador real de Google no implementado** (E‑1, E‑19) |
-| API HTTP | **42 operaciones** en 40 caminos |
+| Base de conocimiento con pgvector: búsqueda híbrida con los filtros en el SQL, ciclo de vida, anti inyección | completo · **calidad medida con el proveedor simulado** (E‑9) |
+| Agente conversacional | **no existe** |
+| API HTTP | **48 operaciones** en 45 caminos |
 | Frontend Angular 19 PWA | 9 pantallas; agenda conectada al backend real |
 | CI/CD con puertas de fallo | completo, **sin ejecutar en GitHub** |
 
@@ -47,7 +50,10 @@ backend/app/
   api/           middleware · manejadores
   mensajeria/    plantillas · adaptadores · firma · carga_whatsapp · destinatarios
                  servicios (outbox) · rutas (webhook)
+  ia/            embeddings · saneamiento · recuperador
   modulos/calendario/  eventos · adaptadores · oauth · seleccion
+                 servicios · esquemas · rutas
+  modulos/conocimiento/  modelos · fragmentacion · repositorio
                  servicios · esquemas · rutas
   modulos/       agenda · auditoria · conversaciones · historia · lista_espera
                  organizacion · outbox · pacientes · profesionales · usuarios
@@ -59,7 +65,7 @@ frontend/src/app/
   paginas/       acceso · agenda · demostracion
 infra/           compose · docker (backend, worker, postgres) · scripts · wsl
 .github/workflows/ci.yml
-docs/            19 documentos + 18 ADR
+docs/            20 documentos + 18 ADR
 ```
 
 ---
@@ -99,12 +105,13 @@ Decisiones no cubiertas por ADR pero con consecuencia:
 
 ```
 cd backend
-uv run pytest --cov=app -q            984 passed · cobertura 91,37 %
-uv run pytest -m unitaria -q          508
-uv run pytest -m integracion -q       313
-uv run pytest -m api -q               161
+uv run pytest --cov=app -q            1139 passed · cobertura 91,90 %
+uv run pytest -m unitaria -q          583
+uv run pytest -m integracion -q       372
+uv run pytest -m api -q               182
 uv run pytest -m concurrencia -q       12
-uv run pytest -m seguridad -q         419
+uv run pytest -m seguridad -q         504
+uv run pytest -m rag -q                80
 uv run ruff check .                   All checks passed
 uv run ruff format --check .          132 files already formatted
 uv run mypy app                       no issues found in 79 source files
@@ -148,6 +155,20 @@ Los marcadores se solapan: una prueba de IDOR cuenta como `api` y como `segurida
 | `test_tareas_calendario.py` | 4 | El trabajo periódico completo e idempotente |
 | `test_seleccion_calendario.py` | 3 | Que en sandbox no se construye el adaptador real |
 
+**Y las 118 de conocimiento y RAG:**
+
+| Suite | Casos | Qué garantiza |
+|---|:--:|---|
+| `test_saneamiento.py` | 34 | Patrones de inyección, evasiones por formato e invisibles, y que el **texto clínico legítimo no se marca** |
+| `test_conocimiento.py` | 22 | Ciclo de vida y que la propagación a los fragmentos no deja una ventana |
+| `test_conocimiento_api.py` | 21 | Que **quien carga no aprueba**, y que quien sube no levanta su propia alerta |
+| `test_rag_fugas.py` | 21 | Siete casos negativos, cada uno con su prueba de control |
+| `test_fragmentacion.py` | 19 | Cortes, solape y parámetros inválidos |
+| `test_embeddings.py` | 13 | Determinismo, del que dependen todas las pruebas de recuperación |
+| `test_recuperador.py` | 9 | Contexto citado y la respuesta sin fuente |
+| `test_evaluacion_rag.py` | 7 | Hit@K y casos negativos deliberados |
+| `test_arquitectura_rag.py` | 5 | Que **no hay otra vía** de consulta a `knowledge_chunks` |
+
 Tres de esas pruebas son las que más valen, porque comprueban una **ausencia**:
 
 * `test_una_firma_invalida_no_produce_ningun_efecto` — no basta el 403: se verifica que no
@@ -176,7 +197,7 @@ paciente ajeno             404 RECURSO_NO_ENCONTRADO
 
 ## 5. Cobertura
 
-**Backend 91,37 %** (umbral del pipeline 80 %, RNF‑06). **Frontend 95,41 % sentencias,
+**Backend 91,90 %** (umbral del pipeline 80 %, RNF‑06). **Frontend 95,41 % sentencias,
 87,3 % ramas, 90,69 % funciones** (umbrales 80/70/80).
 
 ### La cifra anterior estaba mal medida
@@ -253,6 +274,32 @@ Los tres primeros aparecieron **ejerciendo el sistema**, no ejecutando la suite:
 el espacio entre lo que las fixtures suponían y lo que los datos reales tienen. Está
 anotado como principio en `test-plan.md`.
 
+### Los dos fallos que destapo medir el RAG
+
+El arnés de evaluación (RF‑O08) destapó que **una pregunta sin documentación que la
+cubriera devolvía el corpus entero**. Dos causas, y cada una tapaba a la otra:
+
+1. **`RAG_UMBRAL_SIMILITUD` estaba en la configuración desde la Fase 0 y no se aplicaba.**
+   Sin umbral, la rama vectorial ordena por distancia y entrega los `n` primeros por lejos
+   que estén: siempre devuelve algo. Eso significa que **«no tengo información aprobada»
+   (RF‑O06) no se habría disparado casi nunca**, y el agente habría citado como fuente el
+   documento menos irrelevante que encontrase. Es exactamente el fallo que esa regla existe
+   para impedir.
+
+2. **`websearch_to_tsquery` une los términos con `AND`.** La pregunta «cuántas horas de ayuno
+   necesito para el examen de sangre» solo encontraba un documento que contuviera *todas*
+   esas palabras —casi ninguno—. La rama textual no aportaba nada, y no se notaba porque la
+   vectorial devolvía todo.
+
+Al corregir el primero, las pruebas de fuga fallaron y eso dejó ver el segundo.
+
+**Medido después de las dos correcciones:** Hit@1 80 %, Hit@3 100 %, media de 2,5 resultados
+por consulta sobre un corpus de 5 documentos, y **0 resultados** para una pregunta sin
+documentación —antes, los 5—.
+
+Ninguno de los dos aparece ejecutando la suite: aparecen al **medir**. Es el mismo patrón que
+el fallo del formato del teléfono, con otra forma.
+
 ### El fallo que encontro ejercer el sistema
 
 Con **891 pruebas en verde**, arrancar la API y recorrer el flujo real contra las
@@ -312,7 +359,7 @@ Decisiones de seguridad que conviene poder contrastar:
 
 ## 7. Riesgos pendientes
 
-Los 16 riesgos residuales están en [`known-limitations.md`](known-limitations.md). Los que
+Los 22 riesgos residuales están en [`known-limitations.md`](known-limitations.md). Los que
 más pesan:
 
 * **E‑2** El cumplimiento legal no está validado. **El sistema no puede operar con
@@ -333,6 +380,11 @@ más pesan:
   justo después de entregar. Ventana: 15 minutos.
 * **E‑16** Los canales de correo y calendario usan el adaptador sandbox: un mensaje de
   canal `CORREO` se marca `ENTREGADO` **sin que salga nada**.
+* **E‑9** La calidad de recuperación del RAG está medida con el proveedor **simulado**.
+  Ese número mide el suelo, no la calidad; los casos negativos sí son concluyentes.
+  `RAG_UMBRAL_SIMILITUD` está hoy **fijado a ojo** y hay que recalibrarlo con el modelo real.
+* **E‑20** `knowledge_permissions` existe y **no se aplica**: un documento no se puede
+  restringir a un rol concreto ni marcar como «legible pero no citable por el agente».
 * **D‑1** El disco C: del equipo de desarrollo está al límite por causas ajenas al
   proyecto (`C:\Windows\WinSxS`).
 
@@ -389,7 +441,7 @@ válida**. Es la afirmación que más conviene no adelantar.
 | 4 · WhatsApp | **cerrada** · outbox, plantillas, webhook y adaptadores; camino real sin verificar (E‑1) |
 | 4b · Calendarios externos | en curso · flujo completo con sandbox. Faltan el **adaptador real de Google** y la renovación automática del token (E‑19) |
 | 5 · Lista de espera | en curso · faltan rutas HTTP y disparo automático; la oferta ya puede encolar por outbox |
-| 6 · Conocimiento y RAG | **no empezada** · 0 pruebas `rag` |
+| 6 · Conocimiento y RAG | **cerrada** · 80 pruebas `rag`. Falta el agente que use la recuperación |
 | 7 · Historia clínica | en curso · el outbox ya existe; faltan programar los recordatorios de toma y la pantalla real |
 | 8 · Dashboard y predicciones | **no empezada** |
 | 9 · Pagos | **no empezada** |
@@ -438,6 +490,9 @@ con esta fase.
 | Notificaciones sin datos clínicos | ✅ verificado sobre el catálogo completo |
 | Eventos de calendario sin datos clínicos | ✅ verificado en la firma y en lo que sale al proveedor |
 | Calendarios externos | ⚠️ flujo verificado con sandbox; **adaptador real no implementado** (E‑1, E‑19) |
+| RAG sin fugas entre pacientes y especialidades | ✅ verificado con 21 casos negativos y una prueba de arquitectura |
+| Calidad de recuperación | ⚠️ medida con el proveedor **simulado**, no con un modelo real (E‑9) |
+| Agente conversacional | ❌ no existe |
 | Historia clínica en la interfaz | ❌ maqueta |
 | Pruebas E2E, carga, DAST, recuperación | ❌ no existen |
 | Restauración de copias verificada | ❌ no existe |

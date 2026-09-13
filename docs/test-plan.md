@@ -1,6 +1,6 @@
 # Plan de pruebas
 
-> **Última actualización:** 2026‑09‑12 · Fases 0–4 cerradas · 984 pruebas.
+> **Última actualización:** 2026‑09‑12 · Fases 0–4 y 6 cerradas · 1139 pruebas.
 
 Este documento dice **qué se prueba, con qué, y por qué de esa forma**. No es un
 inventario de pruebas: el inventario está en el código. Lo que aquí importa son las
@@ -66,6 +66,20 @@ De ahí dos consecuencias para las pruebas de este repositorio:
   configuración con ese mismo valor para que 20 pruebas fallaran por datos ajenos. Igual con
   contar filas: `SELECT count(*)` sobre una tabla entera supone una base vacía, y la de
   desarrollo no lo está.
+
+**Una prueba que comprueba una ausencia necesita su prueba de control.** Las 21 pruebas de
+fuga del RAG afirman que un documento archivado, vencido o de otra sede **no** se recupera.
+Todas pasarían aunque la búsqueda estuviera rota y no devolviera nunca nada —que es la forma
+más fácil de tener una suite verde que no prueba nada—. Por eso cada bloque tiene una prueba
+que comprueba que el caso **permitido sí** devuelve datos.
+
+**Y hay cosas que solo aparecen al medir, no al ejecutar la suite.** En la Fase 6, el arnés de
+evaluación destapó que una pregunta sin documentación devolvía el corpus entero: el umbral de
+similitud no se aplicaba, y la consulta textual unía los términos con `AND` así que casi nunca
+coincidía. Cada fallo tapaba al otro, y **ninguna prueba de comportamiento los habría
+encontrado** —todas usaban preguntas que sí tenían respuesta—. De ahí que el arnés mida
+también lo que pasa cuando **no** hay respuesta, y que registre las cifras obtenidas para que
+una regresión se vea como un número que baja.
 
 **Un porcentaje de cobertura es una medición, y una medición puede estar mal.** Regla
 añadida en la Fase 4, al ver que `conversaciones/servicios.py` aparecía al 65 % con 26
