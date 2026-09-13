@@ -5,16 +5,26 @@ calendarios, lista de espera inteligente, historia clínica versionada, recetas 
 seguimiento de adherencia, base de conocimiento con RAG, pagos asistidos, dashboard y
 auditoría.
 
-> **Estado actual: Fase 2 en curso — modelo de datos y núcleo del backend.**
+> **Estado actual: fases 0, 0b, 3 y 4 cerradas. 1, 2, 5 y 7 en curso.**
 >
-> Implementado y verificado: infraestructura local (PostgreSQL 16 + pgvector, Redis),
-> 39 tablas migradas con `upgrade`/`downgrade` comprobados, el núcleo de seguridad y
-> autorización, y la **protección anti doble‑reserva a nivel de motor de base de datos**.
-> Todavía no hay API ni interfaz.
+> Implementado y verificado, con evidencia de ejecución real: infraestructura local
+> (PostgreSQL 16 + pgvector 0.8.6, Redis), **49 tablas** migradas y reversibles,
+> autenticación y RBAC con ámbito de cuatro dimensiones, la **protección anti
+> doble‑reserva en el motor de base de datos** —comprobada con 50 participantes
+> simultáneos—, historia clínica append‑only, lista de espera, el **outbox de entrega con
+> el webhook de WhatsApp**, y la **sincronización de calendarios con reconciliación de
+> cambios externos**. **42 operaciones HTTP** y 9 pantallas de Angular.
 >
-> Lo que está implementado y lo que no se declara en
-> [`docs/production-readiness.md`](docs/production-readiness.md) y
-> [`docs/known-limitations.md`](docs/known-limitations.md), con evidencia de pruebas.
+> **984 pruebas** y 91 % de cobertura en el backend; 67 y 95 % en el frontend.
+>
+> **Lo que no está verificado, dicho sin rodeos:** ni un mensaje ha salido hacia Meta ni un
+> evento hacia Google —no hay credenciales y no se inventan—, no existe el adaptador real
+> de Google Calendar, no hay RAG, ni dashboard, ni pagos, ni pruebas de extremo a extremo,
+> ni restauración de copias probada, ni validación jurídica.
+>
+> El estado real frente a los criterios de producción está en
+> [`docs/production-readiness.md`](docs/production-readiness.md), y los riesgos residuales
+> en [`docs/known-limitations.md`](docs/known-limitations.md).
 > Este sistema **no está aprobado para uso con datos de pacientes reales**.
 
 ---
@@ -28,7 +38,9 @@ auditoría.
   Los puntos que requieren revisión de un profesional jurídico están listados en
   [`docs/security.md`](docs/security.md).
 * La IA **no puede** modificar la base de datos por sí misma, ni crear o cambiar
-  recetas, dosis o tratamientos. Ver [`docs/rag.md`](docs/rag.md).
+  recetas, dosis o tratamientos. La frontera está en
+  [`CLAUDE.md`](CLAUDE.md) (reglas 4 y 5) y en
+  [`docs/decisiones/0017-frontera-de-la-automatizacion-entrante.md`](docs/decisiones/0017-frontera-de-la-automatizacion-entrante.md).
 
 ---
 
@@ -69,8 +81,8 @@ interfaces abstractas. Detalle completo en [`docs/architecture.md`](docs/archite
 En el equipo de desarrollo actual Docker Desktop **no es viable** (disco C: sin espacio) y
 pgvector **no compila de forma nativa** (sin MSVC). Por eso la infraestructura de datos se
 ejecuta dentro de **WSL2 con Docker Engine**, con el sistema de archivos en `D:`.
-El procedimiento está en [`docs/deployment.md`](docs/deployment.md) y los scripts en
-[`infra/wsl/`](infra/wsl/). Razonamiento en
+La distribución se llama **`clinica`**. El procedimiento está en
+[`docs/deployment.md`](docs/deployment.md) y los scripts en [`infra/wsl/`](infra/wsl/). Razonamiento en
 [`docs/decisiones/0002-infraestructura-local-wsl2-docker.md`](docs/decisiones/0002-infraestructura-local-wsl2-docker.md).
 
 ---
@@ -153,20 +165,19 @@ El plan de pruebas completo, con los escenarios obligatorios y los resultados de
 | [`docs/data-model.md`](docs/data-model.md) | Modelo de datos y diagrama de entidades |
 | [`docs/security.md`](docs/security.md) | Controles, política de acceso y retención |
 | [`docs/threat-model.md`](docs/threat-model.md) | Modelo de amenazas y matriz de riesgos |
-| [`docs/rag.md`](docs/rag.md) | Recuperación, permisos y anti prompt injection |
+| `docs/rag.md` | Recuperación, permisos y anti prompt injection — **pendiente** |
 | [`docs/whatsapp-integration.md`](docs/whatsapp-integration.md) | Webhooks, plantillas y entrega |
 | [`docs/calendar-integration.md`](docs/calendar-integration.md) | OAuth, sincronización y reconciliación |
 | [`docs/deployment.md`](docs/deployment.md) | Despliegue local, staging, producción y rollback |
-| [`docs/backup-and-restore.md`](docs/backup-and-restore.md) | Respaldo y restauración verificada |
-| [`docs/monitoring.md`](docs/monitoring.md) | Métricas, logs y alertas |
-| [`docs/incident-response.md`](docs/incident-response.md) | Respuesta a incidentes |
+| `docs/backup-and-restore.md` | Respaldo y restauración verificada — **pendiente** |
+| `docs/monitoring.md` | Métricas, logs y alertas — **pendiente** |
+| `docs/incident-response.md` | Respuesta a incidentes — **pendiente** |
 | [`docs/production-readiness.md`](docs/production-readiness.md) | Estado real frente a los criterios de producción |
-| [`docs/test-plan.md`](docs/test-plan.md) | Plan y evidencia de pruebas |
+| [`docs/test-plan.md`](docs/test-plan.md) | Qué se prueba, con qué, por qué de esa forma, y la evidencia de la última ejecución |
 | [`docs/known-limitations.md`](docs/known-limitations.md) | Limitaciones y riesgos residuales |
 | [`docs/backlog.md`](docs/backlog.md) | Backlog por fases con criterios de aceptación |
 | [`docs/decisiones/`](docs/decisiones/) | Registros de decisiones de arquitectura (ADR) |
 | [`docs/informe-avance.md`](docs/informe-avance.md) | **Estado real del proyecto**, con los 18 puntos exigidos y sus evidencias |
-| [`docs/test-plan.md`](docs/test-plan.md) | Qué se prueba, con qué y por qué de esa forma |
 
 ---
 
