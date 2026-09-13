@@ -1,4 +1,4 @@
-"""Indice funcional del telefono de WhatsApp normalizado.
+r"""Indice funcional del telefono de WhatsApp normalizado.
 
 Corrige un fallo real, no anade una optimizacion.
 
