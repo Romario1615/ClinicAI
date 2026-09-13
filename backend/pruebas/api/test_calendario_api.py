@@ -436,9 +436,7 @@ async def test_el_callback_valido_crea_la_conexion_con_tokens_cifrados(
 
     reloj = RelojFijo(INSTANTE_REFERENCIA)
     secreto = configuracion.clave_secreta.get_secret_value()  # type: ignore[attr-defined]
-    firmado = oauth.firmar_estado(
-        oauth.nuevo_estado(profesional.id, ahora=reloj.ahora()), secreto
-    )
+    firmado = oauth.firmar_estado(oauth.nuevo_estado(profesional.id, ahora=reloj.ahora()), secreto)
 
     async def _intercambio_simulado(**_argumentos: object) -> oauth.TokensObtenidos:
         return oauth.TokensObtenidos(
@@ -448,9 +446,7 @@ async def test_el_callback_valido_crea_la_conexion_con_tokens_cifrados(
             alcances="https://www.googleapis.com/auth/calendar.events",
         )
 
-    monkeypatch.setattr(
-        rutas_calendario.oauth, "intercambiar_codigo", _intercambio_simulado
-    )
+    monkeypatch.setattr(rutas_calendario.oauth, "intercambiar_codigo", _intercambio_simulado)
 
     respuesta = await cliente.get(
         f"{api}/calendario/oauth/callback",
@@ -463,9 +459,7 @@ async def test_el_callback_valido_crea_la_conexion_con_tokens_cifrados(
 
     fila = (
         await sesion.execute(
-            sa.select(CalendarioConexion).where(
-                CalendarioConexion.profesional_id == profesional.id
-            )
+            sa.select(CalendarioConexion).where(CalendarioConexion.profesional_id == profesional.id)
         )
     ).scalar_one()
     assert fila.estado_sincronizacion == EstadoSincronizacion.CONECTADO.value
@@ -493,9 +487,7 @@ async def test_el_mismo_estado_no_se_puede_usar_dos_veces(
 
     reloj = RelojFijo(INSTANTE_REFERENCIA)
     secreto = configuracion.clave_secreta.get_secret_value()  # type: ignore[attr-defined]
-    firmado = oauth.firmar_estado(
-        oauth.nuevo_estado(profesional.id, ahora=reloj.ahora()), secreto
-    )
+    firmado = oauth.firmar_estado(oauth.nuevo_estado(profesional.id, ahora=reloj.ahora()), secreto)
 
     llamadas = 0
 
@@ -509,9 +501,7 @@ async def test_el_mismo_estado_no_se_puede_usar_dos_veces(
             alcances=None,
         )
 
-    monkeypatch.setattr(
-        rutas_calendario.oauth, "intercambiar_codigo", _intercambio_simulado
-    )
+    monkeypatch.setattr(rutas_calendario.oauth, "intercambiar_codigo", _intercambio_simulado)
 
     primera = await cliente.get(
         f"{api}/calendario/oauth/callback",
