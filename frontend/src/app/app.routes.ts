@@ -87,8 +87,8 @@ export const routes: Routes = [
     ],
     title: 'Medicamentos · Gestion clinica',
     loadComponent: () =>
-      import('./paginas/historia-clinica/historia-clinica.component').then(
-        (m) => m.HistoriaClinicaComponent,
+      import('./paginas/medicamentos/medicamentos.component').then(
+        (m) => m.MedicamentosComponent,
       ),
   },
   {

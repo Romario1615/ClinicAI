@@ -12,7 +12,7 @@ import type { Paciente } from '../nucleo/modelos/dominio';
         <input [(ngModel)]="termino" [ngModelOptions]="{standalone: true}"
           placeholder="Nombre o apellido, al menos 3 letras" (keydown.enter)="buscar(); $event.preventDefault()" />
       </label>
-      <button type="button" class="boton boton--secundario" (click)="buscar()" [disabled]="cargando()">Buscar</button>
+      <button type="button" class="boton" (click)="buscar()" [disabled]="cargando()">Buscar</button>
       @if (error()) { <p role="alert">{{ error() }}</p> }
       <label>Paciente
         <select [(ngModel)]="id" [ngModelOptions]="{standalone: true}" (ngModelChange)="elegir()">

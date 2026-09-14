@@ -21,8 +21,8 @@ import { OperacionesService } from '../../nucleo/servicios/operaciones.service';
           <label>Dirección<input name="direccion" [(ngModel)]="direccion" maxlength="500" /></label>
         </div>
         @if (error()) { <p class="aviso-error" role="alert">{{ error() }}</p> }
-        <div class="acciones-demo"><button class="boton boton--primario" [disabled]="formulario.invalid || ocupado()">{{ ocupado() ? 'Guardando…' : 'Guardar paciente' }}</button>
-          <button type="button" class="boton boton--secundario" (click)="cerrar.emit()" [disabled]="ocupado()">Cerrar formulario</button></div>
+        <div class="acciones-demo"><button class="boton boton--principal" [disabled]="formulario.invalid || ocupado()">{{ ocupado() ? 'Guardando…' : 'Guardar paciente' }}</button>
+          <button type="button" class="boton" (click)="cerrar.emit()" [disabled]="ocupado()">Cerrar formulario</button></div>
       </form>
     </section>
   `,

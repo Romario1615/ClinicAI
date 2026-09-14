@@ -10,13 +10,13 @@ import { FalloApi } from '../../nucleo/servicios/api.service';
   selector: 'app-panel', standalone: true, imports: [FormsModule, RouterLink],
   template: `
     <div class="cabecera-pagina"><div><p class="ceja">GESTIÓN CLÍNICA</p><h1>Resumen de actividad</h1></div>
-      <a class="boton boton--primario" routerLink="/agenda">Abrir agenda</a></div>
+      <a class="boton boton--principal" routerLink="/agenda">Abrir agenda</a></div>
     <p>Datos de demostración guardados en la clínica local.</p>
     @if (sesion.tienePermiso('dashboard.leer')) {
       <form class="tarjeta filtros-demo" (ngSubmit)="cargar()">
         <label>Desde<input type="date" name="desde" [(ngModel)]="desde" required /></label>
         <label>Hasta (inclusive)<input type="date" name="hasta" [(ngModel)]="hasta" required /></label>
-        <button class="boton boton--secundario" [disabled]="cargando()">Actualizar resumen</button>
+        <button class="boton" [disabled]="cargando()">Actualizar resumen</button>
       </form>
       @if (error()) { <p class="aviso-error" role="alert">{{ error() }}</p> }
       @if (cargando()) { <p role="status">Consultando actividad…</p> }

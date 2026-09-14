@@ -23,30 +23,30 @@
         <div class='clearfix'>
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">2.32% </span>
+                <span class="strong">100% </span>
                 <span class="quiet">Statements</span>
-                <span class='fraction'>1/43</span>
+                <span class='fraction'>43/43</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">0% </span>
+                <span class="strong">100% </span>
                 <span class="quiet">Branches</span>
-                <span class='fraction'>0/32</span>
+                <span class='fraction'>32/32</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">0% </span>
+                <span class="strong">100% </span>
                 <span class="quiet">Functions</span>
-                <span class='fraction'>0/4</span>
+                <span class='fraction'>4/4</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">4.54% </span>
+                <span class="strong">100% </span>
                 <span class="quiet">Lines</span>
-                <span class='fraction'>1/22</span>
+                <span class='fraction'>22/22</span>
             </div>
         
             
@@ -61,7 +61,7 @@
             </div>
         </template>
     </div>
-    <div class='status-line low'></div>
+    <div class='status-line high'></div>
     <pre><table class="coverage">
 <tr><td class="line-count quiet"><a name='L1'></a><a href='#L1'>1</a>
 <a name='L2'></a><a href='#L2'>2</a>
@@ -152,32 +152,32 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-yes">1x</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-yes">10x</span>
+<span class="cline-any cline-yes">10x</span>
+<span class="cline-any cline-yes">10x</span>
+<span class="cline-any cline-yes">10x</span>
+<span class="cline-any cline-yes">10x</span>
+<span class="cline-any cline-yes">10x</span>
+<span class="cline-any cline-yes">10x</span>
+<span class="cline-any cline-yes">10x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-yes">11x</span>
+<span class="cline-any cline-yes">11x</span>
+<span class="cline-any cline-yes">11x</span>
+<span class="cline-any cline-yes">11x</span>
+<span class="cline-any cline-yes">11x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-yes">15x</span>
+<span class="cline-any cline-yes">14x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">14x</span>
+<span class="cline-any cline-yes">14x</span>
+<span class="cline-any cline-yes">14x</span>
+<span class="cline-any cline-yes">14x</span>
+<span class="cline-any cline-yes">12x</span>
+<span class="cline-any cline-yes">1x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -204,39 +204,39 @@ import { OperacionesService } from '../../nucleo/servicios/operaciones.service';
           &lt;label&gt;Dirección&lt;input name="direccion" [(ngModel)]="direccion" maxlength="500" /&gt;&lt;/label&gt;
         &lt;/div&gt;
         @if (error()) { &lt;p class="aviso-error" role="alert"&gt;{{ error() }}&lt;/p&gt; }
-        &lt;div class="acciones-demo"&gt;&lt;button class="boton boton--primario" [disabled]="formulario.invalid || ocupado()"&gt;{{ ocupado() ? 'Guardando…' : 'Guardar paciente' }}&lt;/button&gt;
-          &lt;button type="button" class="boton boton--secundario" (click)="cerrar.emit()" [disabled]="ocupado()"&gt;Cerrar formulario&lt;/button&gt;&lt;/div&gt;
+        &lt;div class="acciones-demo"&gt;&lt;button class="boton boton--principal" [disabled]="formulario.invalid || ocupado()"&gt;{{ ocupado() ? 'Guardando…' : 'Guardar paciente' }}&lt;/button&gt;
+          &lt;button type="button" class="boton" (click)="cerrar.emit()" [disabled]="ocupado()"&gt;Cerrar formulario&lt;/button&gt;&lt;/div&gt;
       &lt;/form&gt;
     &lt;/section&gt;
   `,
 })
 export class EditorPacienteComponent implements OnChanges {
-  private readonly api = <span class="cstat-no" title="statement not covered" >inject(OperacionesService);</span>
-  @Input() paciente: (Paciente &amp; { direccion?: string | null }) | null = <span class="cstat-no" title="statement not covered" >null;</span>
-  @Output() readonly guardado = <span class="cstat-no" title="statement not covered" >new EventEmitter&lt;Paciente&gt;();</span>
-  @Output() readonly cerrar = <span class="cstat-no" title="statement not covered" >new EventEmitter&lt;void&gt;();</span>
-  protected nombre = <span class="cstat-no" title="statement not covered" >'';</span> protected apellido = <span class="cstat-no" title="statement not covered" >'';</span> protected tipo = <span class="cstat-no" title="statement not covered" >'CEDULA';</span> protected numero = <span class="cstat-no" title="statement not covered" >'';</span>
-  protected nacimiento = <span class="cstat-no" title="statement not covered" >'';</span> protected telefono = <span class="cstat-no" title="statement not covered" >'';</span> protected correo = <span class="cstat-no" title="statement not covered" >'';</span> protected direccion = <span class="cstat-no" title="statement not covered" >'';</span>
-  protected readonly ocupado = <span class="cstat-no" title="statement not covered" >signal(false);</span> protected readonly error = <span class="cstat-no" title="statement not covered" >signal('');</span>
-  private clave = <span class="cstat-no" title="statement not covered" >crypto.randomUUID();</span> private ultimoCuerpo = <span class="cstat-no" title="statement not covered" >'';</span>
-<span class="fstat-no" title="function not covered" >  ngOnChanges(</span>): void {
-    const p = <span class="cstat-no" title="statement not covered" >this.paciente;</span>
-<span class="cstat-no" title="statement not covered" >    this.nombre = p?.nombre ?? ''; <span class="cstat-no" title="statement not covered" ></span>this.apellido = p?.apellido ?? ''; <span class="cstat-no" title="statement not covered" ></span>this.tipo = p?.tipo_documento ?? 'CEDULA';</span>
-<span class="cstat-no" title="statement not covered" >    this.numero = p?.numero_documento ?? ''; <span class="cstat-no" title="statement not covered" ></span>this.nacimiento = p?.fecha_nacimiento ?? '';</span>
-<span class="cstat-no" title="statement not covered" >    this.telefono = p?.telefono_whatsapp ?? ''; <span class="cstat-no" title="statement not covered" ></span>this.correo = p?.correo ?? ''; <span class="cstat-no" title="statement not covered" ></span>this.direccion = p?.direccion ?? '';</span>
-<span class="cstat-no" title="statement not covered" >    this.clave = crypto.randomUUID(); <span class="cstat-no" title="statement not covered" ></span>this.ultimoCuerpo = ''; <span class="cstat-no" title="statement not covered" ></span>this.error.set('');</span>
+  private readonly api = inject(OperacionesService);
+  @Input() paciente: (Paciente &amp; { direccion?: string | null }) | null = null;
+  @Output() readonly guardado = new EventEmitter&lt;Paciente&gt;();
+  @Output() readonly cerrar = new EventEmitter&lt;void&gt;();
+  protected nombre = ''; protected apellido = ''; protected tipo = 'CEDULA'; protected numero = '';
+  protected nacimiento = ''; protected telefono = ''; protected correo = ''; protected direccion = '';
+  protected readonly ocupado = signal(false); protected readonly error = signal('');
+  private clave = crypto.randomUUID(); private ultimoCuerpo = '';
+  ngOnChanges(): void {
+    const p = this.paciente;
+    this.nombre = p?.nombre ?? ''; this.apellido = p?.apellido ?? ''; this.tipo = p?.tipo_documento ?? 'CEDULA';
+    this.numero = p?.numero_documento ?? ''; this.nacimiento = p?.fecha_nacimiento ?? '';
+    this.telefono = p?.telefono_whatsapp ?? ''; this.correo = p?.correo ?? ''; this.direccion = p?.direccion ?? '';
+    this.clave = crypto.randomUUID(); this.ultimoCuerpo = ''; this.error.set('');
   }
-  protected <span class="fstat-no" title="function not covered" >guardar(</span>): void {
-<span class="cstat-no" title="statement not covered" >    <span class="missing-if-branch" title="if path not taken" >I</span>if (this.ocupado()) <span class="cstat-no" title="statement not covered" >return;</span></span>
-    const datos = <span class="cstat-no" title="statement not covered" >{ nombre: this.nombre.trim(), apellido: this.apellido.trim(), tipo_documento: this.tipo,</span>
+  protected guardar(): void {
+    if (this.ocupado()) return;
+    const datos = { nombre: this.nombre.trim(), apellido: this.apellido.trim(), tipo_documento: this.tipo,
       numero_documento: this.tipo === 'SIN_DOCUMENTO' ? null : this.numero.trim(), fecha_nacimiento: this.nacimiento || null,
       telefono_whatsapp: this.telefono.trim() || null, correo: this.correo.trim() || null, direccion: this.direccion.trim() || null };
-    const cuerpo = <span class="cstat-no" title="statement not covered" >JSON.stringify(datos);</span>
-<span class="cstat-no" title="statement not covered" >    <span class="missing-if-branch" title="if path not taken" >I</span>if (this.ultimoCuerpo &amp;&amp; cuerpo !== this.ultimoCuerpo) <span class="cstat-no" title="statement not covered" >this.clave = crypto.randomUUID();</span></span>
-<span class="cstat-no" title="statement not covered" >    this.ultimoCuerpo = cuerpo; <span class="cstat-no" title="statement not covered" ></span>this.ocupado.set(true); <span class="cstat-no" title="statement not covered" ></span>this.error.set('');</span>
-<span class="cstat-no" title="statement not covered" >    this.api.guardar&lt;Paciente&gt;(this.paciente ? `/pacientes/${this.paciente.id}` : '/pacientes/', datos, this.clave, !!this.paciente).subscribe({</span>
-      next: <span class="fstat-no" title="function not covered" >p </span>=&gt; { <span class="cstat-no" title="statement not covered" >this.ocupado.set(false); <span class="cstat-no" title="statement not covered" ></span>this.guardado.emit(p); </span>},
-      error: <span class="fstat-no" title="function not covered" >(e</span>: FalloApi) =&gt; { <span class="cstat-no" title="statement not covered" >this.error.set(e.message); <span class="cstat-no" title="statement not covered" ></span>this.ocupado.set(false); </span>},
+    const cuerpo = JSON.stringify(datos);
+    if (this.ultimoCuerpo &amp;&amp; cuerpo !== this.ultimoCuerpo) this.clave = crypto.randomUUID();
+    this.ultimoCuerpo = cuerpo; this.ocupado.set(true); this.error.set('');
+    this.api.guardar&lt;Paciente&gt;(this.paciente ? `/pacientes/${this.paciente.id}` : '/pacientes/', datos, this.clave, !!this.paciente).subscribe({
+      next: p =&gt; { this.ocupado.set(false); this.guardado.emit(p); },
+      error: (e: FalloApi) =&gt; { this.error.set(e.message); this.ocupado.set(false); },
     });
   }
 }
@@ -247,7 +247,7 @@ export class EditorPacienteComponent implements OnChanges {
             <div class='footer quiet pad2 space-top1 center small'>
                 Code coverage generated by
                 <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
-                at 2026-09-14T02:29:07.576Z
+                at 2026-09-14T02:40:37.640Z
             </div>
         <script src="../../../prettify.js"></script>
         <script>

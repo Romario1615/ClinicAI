@@ -23,30 +23,30 @@
         <div class='clearfix'>
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">25% </span>
+                <span class="strong">87.5% </span>
                 <span class="quiet">Statements</span>
-                <span class='fraction'>2/8</span>
+                <span class='fraction'>7/8</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">0% </span>
+                <span class="strong">50% </span>
                 <span class="quiet">Branches</span>
-                <span class='fraction'>0/4</span>
+                <span class='fraction'>2/4</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">0% </span>
+                <span class="strong">50% </span>
                 <span class="quiet">Functions</span>
-                <span class='fraction'>0/2</span>
+                <span class='fraction'>1/2</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">14.28% </span>
+                <span class="strong">85.71% </span>
                 <span class="quiet">Lines</span>
-                <span class='fraction'>1/7</span>
+                <span class='fraction'>6/7</span>
             </div>
         
             
@@ -61,7 +61,7 @@
             </div>
         </template>
     </div>
-    <div class='status-line low'></div>
+    <div class='status-line high'></div>
     <pre><table class="coverage">
 <tr><td class="line-count quiet"><a name='L1'></a><a href='#L1'>1</a>
 <a name='L2'></a><a href='#L2'>2</a>
@@ -136,8 +136,8 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-yes">1x</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-yes">10x</span>
+<span class="cline-any cline-yes">10x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
@@ -145,9 +145,9 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-yes">14x</span>
+<span class="cline-any cline-yes">14x</span>
+<span class="cline-any cline-yes">14x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -180,18 +180,18 @@ export interface Pagina&lt;T&gt; { elementos: T[]; total: number }
 &nbsp;
 @Injectable({ providedIn: 'root' })
 export class OperacionesService {
-  private readonly http = <span class="cstat-no" title="statement not covered" >inject(HttpClient);</span>
-  private readonly configuracion = <span class="cstat-no" title="statement not covered" >inject(CONFIGURACION);</span>
+  private readonly http = inject(HttpClient);
+  private readonly configuracion = inject(CONFIGURACION);
 &nbsp;
 <span class="fstat-no" title="function not covered" >  leer&lt;</span>T&gt;(ruta: string, parametros: Record&lt;string, string | number&gt; = <span class="branch-0 cbranch-no" title="branch not covered" >{})</span>: Observable&lt;T&gt; {
 <span class="cstat-no" title="statement not covered" >    return this.http.get&lt;T&gt;(this.configuracion.urlApi + ruta, { params: parametros })</span>
       .pipe(catchError(traducirFallo));
   }
 &nbsp;
-<span class="fstat-no" title="function not covered" >  guardar&lt;</span>T&gt;(ruta: string, datos: unknown, clave: string, editar = <span class="branch-0 cbranch-no" title="branch not covered" >false)</span>: Observable&lt;T&gt; {
-    const opciones = <span class="cstat-no" title="statement not covered" >{ headers: { 'Idempotency-Key': clave } };</span>
-    const url = <span class="cstat-no" title="statement not covered" >this.configuracion.urlApi + ruta;</span>
-<span class="cstat-no" title="statement not covered" >    return (editar ? this.http.put&lt;T&gt;(url, datos, opciones) : this.http.post&lt;T&gt;(url, datos, opciones))</span>
+  guardar&lt;T&gt;(ruta: string, datos: unknown, clave: string, editar = <span class="branch-0 cbranch-no" title="branch not covered" >false)</span>: Observable&lt;T&gt; {
+    const opciones = { headers: { 'Idempotency-Key': clave } };
+    const url = this.configuracion.urlApi + ruta;
+    return (editar ? this.http.put&lt;T&gt;(url, datos, opciones) : this.http.post&lt;T&gt;(url, datos, opciones))
       .pipe(catchError(traducirFallo));
   }
 }
@@ -202,7 +202,7 @@ export class OperacionesService {
             <div class='footer quiet pad2 space-top1 center small'>
                 Code coverage generated by
                 <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
-                at 2026-09-14T02:29:07.576Z
+                at 2026-09-14T02:40:37.640Z
             </div>
         <script src="../../../prettify.js"></script>
         <script>

@@ -25,6 +25,7 @@ registro real.
 from __future__ import annotations
 
 import uuid
+from datetime import timedelta
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Path, Query, status
@@ -41,8 +42,10 @@ from app.modulos.historia.esquemas import (
     ResultadoConfirmacion,
     ResultadoSuspension,
     SuspensionReceta,
+    TomaSalida,
 )
 from app.modulos.historia.modelos import NotaEvolucion, Receta, RecetaMedicamento
+from app.modulos.historia.repositorio import RepositorioHistoria
 from app.modulos.historia.servicios import DatosMedicamento, DatosNota
 from app.nucleo.autorizacion import Principal
 from app.nucleo.dependencias import (
@@ -381,6 +384,53 @@ async def suspender_receta(
 # ===========================================================================
 #  Tomas
 # ===========================================================================
+@enrutador.get(
+    "/pacientes/{paciente_id}/tomas",
+    response_model=list[TomaSalida],
+    summary="Calendario de tomas de un paciente",
+    responses={
+        403: {"description": "Sin permiso, o sin relacion asistencial con el paciente"},
+        422: {"description": "Rango invalido"},
+    },
+)
+async def listar_tomas(
+    principal: Annotated[Principal, Depends(exige_permiso("adherencia.leer", "receta.leer"))],
+    servicio: ServicioDeHistoria,
+    sesion: Sesion,
+    paciente_id: Annotated[uuid.UUID, Path()],
+    dias: Annotated[int, Query(ge=1, le=31)] = 7,
+) -> list[TomaSalida]:
+    """Tomas programadas alrededor de hoy, con el nombre de su medicamento.
+
+    Es una lectura administrativa del calendario, **no** una valoracion: no
+    dice si el tratamiento funciona ni si hay que cambiarlo. Esa lectura es del
+    profesional (CLAUDE.md, regla 5).
+
+    La ventana se centra en el momento actual y no empieza en el: quien atiende
+    necesita ver lo que quedo atras sin registrar, que es justo lo que importa
+    de la adherencia, y no solo lo que viene.
+    """
+    ahora = servicio.ahora()
+    filas = await RepositorioHistoria(sesion).listar_tomas(
+        principal=principal,
+        paciente_id=paciente_id,
+        desde=ahora - timedelta(days=dias),
+        hasta=ahora + timedelta(days=dias),
+        ahora=ahora,
+    )
+    return [
+        TomaSalida(
+            id=toma.id,
+            receta_medicamento_id=medicamento.id,
+            medicamento=medicamento.nombre,
+            programada_en=toma.programada_en,
+            estado=toma.estado,
+            registrada_en=toma.registrada_en,
+        )
+        for toma, medicamento in filas
+    ]
+
+
 @enrutador.post(
     "/tomas/{toma_id}/registro",
     status_code=status.HTTP_204_NO_CONTENT,

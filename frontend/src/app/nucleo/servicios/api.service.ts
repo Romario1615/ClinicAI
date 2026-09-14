@@ -263,6 +263,15 @@ export interface Receta {
   readonly medicamentos: readonly Medicamento[];
 }
 
+export interface Toma {
+  readonly id: string;
+  readonly receta_medicamento_id: string;
+  readonly medicamento: string;
+  readonly programada_en: string;
+  readonly estado: string;
+  readonly registrada_en: string | null;
+}
+
 export interface Adherencia {
   readonly alerta: Readonly<Record<string, unknown>> | null;
   readonly motivo: string | null;
@@ -364,6 +373,24 @@ export class ApiService {
 
   recetas(pacienteId: string): Observable<readonly Receta[]> {
     return this.get<readonly Receta[]>(`/historia/pacientes/${pacienteId}/recetas`);
+  }
+
+  /**
+   * Calendario de tomas alrededor de hoy.
+   *
+   * La ventana se centra en el momento actual y no empieza en el: lo que
+   * quedo atras sin registrar es justo lo que mide la adherencia.
+   */
+  tomas(pacienteId: string, dias = 7): Observable<readonly Toma[]> {
+    return this.get<readonly Toma[]>(`/historia/pacientes/${pacienteId}/tomas`, { dias });
+  }
+
+  /** Registra que una toma se hizo o se omitio. Devuelve 204. */
+  registrarToma(tomaId: string, tomada: boolean, nota?: string): Observable<void> {
+    return this.post<void>(`/historia/tomas/${tomaId}/registro`, {
+      tomada,
+      nota_paciente: nota ?? null,
+    });
   }
 
   adherencia(recetaId: string): Observable<Adherencia> {

@@ -73,7 +73,6 @@
 .formulario-demo, .filtros-demo { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 16px; margin: 16px 0; align-items: end; }
 .editor-demo label, .filtros-demo label { display: grid; gap: 6px; margin-bottom: 12px; }
 .editor-demo input, .editor-demo select, .editor-demo textarea, .filtros-demo input, .selector-paciente input, .selector-paciente select { width: 100%; min-height: 44px; padding: 8px 12px; border: 1px solid var(--borde); border-radius: var(--radio); background: var(--superficie-elevada); color: var(--texto); }
-.boton--primario { color: white; background: var(--acento); }
 .aviso-error { padding: 12px 16px; color: var(--peligro); background: var(--peligro-fondo); border-radius: var(--radio); }
 .ayuda-demo { color: var(--texto-suave); font-size: .9rem; }
 .ceja { color: var(--acento); font-size: .75rem; letter-spacing: .12em; font-weight: 700; }
