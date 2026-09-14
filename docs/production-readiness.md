@@ -39,7 +39,7 @@ funcionalidad no existe todavía; **no** significa que esté bien.
 | 12 | El RAG no filtra información entre pacientes | **verificado** | Los filtros van en el `WHERE` de una consulta única (ADR‑0013), con **21 pruebas de casos negativos** —otra clínica, otra sede, otra especialidad, por encima del nivel— cada una con su prueba de control. La historia clínica individual **no se indexa** en ningún índice vectorial (RF‑M07). Una prueba de arquitectura recorre el AST de `app/` y verifica que no hay otra vía de consulta |
 | 13 | Los documentos vencidos no son recuperados | **verificado** | Vigencia, estado y archivado filtran en el `WHERE`. Probado con el documento vencido, el que aún no entra en vigor, el archivado y el borrador, incluido el caso en que el texto del documento **son las palabras exactas de la consulta** |
 | 14 | Los respaldos se pueden restaurar | **verificado** | Ciclo completo **ejecutado** el 2026‑09‑13 con `infra/scripts/verificar-respaldo.sh`: 11 comprobaciones, 0 fallos. Volcado cifrado no legible en claro, clave incorrecta rechazada, recuentos idénticos uno a uno, `pgvector` 0.8.6 e índice HNSW restaurados, y **las 2 restricciones de exclusión siguen vigentes** — una restauración que las perdiera daría una base que acepta dos pacientes a la misma hora. Lo **no** cubierto se declara en [`backup-and-restore.md`](backup-and-restore.md): sin programación automática, sin retención, sin copia fuera del equipo, sin PITR, sin RTO/RPO medidos |
-| 15 | El sistema soporta las pruebas de carga definidas | **no evaluado** | Fase 10 |
+| 15 | El sistema soporta las pruebas de carga definidas | **parcial** | Ejecutada el 2026‑09‑14 ([`pruebas-carga/`](../pruebas-carga/README.md)): 2 314 peticiones, **0 errores inesperados**, y lo que de verdad importa — **0 reservas duplicadas** con 8 usuarios virtuales peleando por el mismo turno durante 30 s, que produjeron 37 rechazos correctos con 409. Latencia p95: 88 ms en disponibilidad, 161 ms en reserva. **Lo que estos números no dicen**: corren contra un portátil con una base de 384 KB. Faltan volumen representativo, carga sostenida de horas, el worker bajo carga y la búsqueda RAG |
 | 16 | El pipeline CI/CD está funcionando | **parcial** | 7 trabajos y puerta de fusión escritos; YAML validado y cada puerta comprobada a mano en local. **Nunca ejecutado en GitHub**: el repositorio no tiene remoto |
 | 17 | Existe documentación de operación | **parcial** | 24 documentos y 19 ADR. Ya existen `monitoring.md`, `backup-and-restore.md` e `incident-response.md`. Lo que falta no es documentación: **el procedimiento de incidentes no se ha ensayado** y no hay guardia definida |
 | 18 | Existe procedimiento de rollback | **parcial** | El rollback de esquema **sí está verificado** (`upgrade → downgrade -1 → upgrade` en cada migración). El rollback de despliegue está documentado y sin probar |
@@ -50,7 +50,7 @@ funcionalidad no existe todavía; **no** significa que esté bien.
 | 23 | Notificaciones sin datos clínicos | **verificado** | 40 pruebas recorren el catálogo completo de plantillas: ninguna admite ni menciona diagnóstico, medicamento ni motivo de consulta (regla 10, RF‑K07) |
 | 24 | Los eventos del calendario externo no contienen datos clínicos | **verificado** | RF‑I09. `construir_evento` **no acepta** paciente ni servicio, y una prueba inspecciona su firma para que siga siendo así. Comprobado también sobre lo que de verdad sale hacia el proveedor (ADR‑0018) |
 
-**Resumen: 10 de 24 verificados, 12 parciales, 1 sin evaluar, 1 hecho** (el 22, que no es
+**Resumen: 10 de 24 verificados, 13 parciales, 0 sin evaluar, 1 hecho** (el 22, que no es
 un criterio de funcionamiento sino de documentación).
 
 Se mueven en esta revisión: el criterio 14 y el 19 pasan a **verificado** con la
@@ -58,7 +58,9 @@ restauración ejecutada; el 20 y el 21 pasan de «no evaluado» a **parcial** �
 definición de qué vigilar, aunque nada vigile todavía, y ya hay 20 escenarios E2E, aunque
 falten los que dependen del agente y del worker.
 
-El único criterio que sigue **sin evaluar** es el 15, las pruebas de carga.
+El 15 también deja de estar sin evaluar: la prueba de carga se ejecutó. **Ya no queda
+ningún criterio sin evaluar**; los 13 parciales lo son por razones concretas que cada
+fila detalla, no por falta de medición.
 
 Los criterios 23 y 24 se añaden en la Fase 4: no estaban en la lista original y son
 condiciones de protección de datos que sí se pueden verificar, y se han verificado.
