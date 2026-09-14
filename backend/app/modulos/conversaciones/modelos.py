@@ -24,6 +24,7 @@ from __future__ import annotations
 import uuid
 from datetime import datetime
 from enum import StrEnum
+from typing import Any
 
 from sqlalchemy import (
     CheckConstraint,
@@ -96,6 +97,15 @@ class Conversacion(Base, MezclaIdentificador):
     creado_en: Mapped[datetime] = mapped_column(server_default=text("now()"))
     ultima_actividad_en: Mapped[datetime] = mapped_column(server_default=text("now()"))
     cerrada_en: Mapped[datetime | None] = mapped_column(default=None)
+    # Lista de pacientes ofrecida cuando el telefono corresponde a varios.
+    #
+    # Se guarda **con su orden**: reconstruirla al recibir la respuesta podria
+    # devolver otro -- por una ficha nueva con ese mismo numero -- y entonces
+    # el «2» de quien escribe seleccionaria a otra persona.
+    #
+    # Lleva su propia caducidad: una lista ofrecida ayer y respondida hoy con
+    # «2» es una respuesta a una pregunta que ya nadie recuerda.
+    seleccion_pendiente: Mapped[dict[str, Any] | None] = mapped_column(JSONB, default=None)
 
     __table_args__ = (
         # Un hilo abierto por numero y canal. Sin esto, dos mensajes casi

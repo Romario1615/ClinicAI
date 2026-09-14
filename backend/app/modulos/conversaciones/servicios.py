@@ -61,6 +61,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.mensajeria.carga_whatsapp import CargaWebhook, MensajeEntranteCrudo
 from app.mensajeria.destinatarios import normalizar_telefono
+from app.modulos.conversaciones.identificacion import (
+    Opciones,
+    identificar,
+    leer_eleccion,
+    texto_de_opciones,
+)
 from app.modulos.conversaciones.intenciones import reconocer
 from app.modulos.conversaciones.modelos import (
     Conversacion,
@@ -121,6 +127,10 @@ class ResumenEntrada:
     derivados: int = 0
     bajas: int = 0
     sin_clinica: int = 0
+    #: Mensajes que provocaron ofrecer la lista de pacientes del numero.
+    preguntas_identidad: int = 0
+    #: Mensajes que resolvieron una identidad eligiendo de esa lista.
+    identidades_resueltas: int = 0
 
 
 class ServicioConversaciones:
@@ -188,11 +198,129 @@ class ServicioConversaciones:
             )
             return _con(resumen, bajas=resumen.bajas + 1)
 
+        # --- Identidad ---
+        #
+        # Antes de derivar se intenta resolver de quien habla el hilo. Si ya
+        # hay una lista ofrecida y este mensaje es la respuesta, se resuelve.
+        # Si no hay identidad y el numero corresponde a varios pacientes, se
+        # pregunta y se espera: sin eleccion no hay paciente y no se ejecuta
+        # nada.
+        resuelto = self._resolver_seleccion(conversacion, crudo.texto)
+        if resuelto:
+            return _con(resumen, identidades_resueltas=resumen.identidades_resueltas + 1)
+
+        if conversacion.paciente_id is None and conversacion.seleccion_pendiente is None:
+            preguntado = await self._preguntar_identidad(conversacion, clinica_id, crudo.telefono)
+            if preguntado:
+                return _con(resumen, preguntas_identidad=resumen.preguntas_identidad + 1)
+
         conversacion.estado = EstadoConversacion.EN_HANDOFF.value
         conversacion.motivo_handoff = MOTIVOS_HANDOFF.get(
             intencion, MOTIVOS_HANDOFF[IntencionEntrante.DESCONOCIDA]
         )
         return _con(resumen, derivados=resumen.derivados + 1)
+
+    def _resolver_seleccion(self, conversacion: Conversacion, texto: str | None) -> bool:
+        """Aplica la respuesta a una lista ya ofrecida.
+
+        Devuelve si la identidad quedo resuelta con este mensaje.
+
+        Elegir de la lista **no verifica identidad**: desambigua. El
+        `nivel_verificacion` del paciente no cambia por haber pulsado «2», y
+        sigue gobernando que se puede hacer despues. Confundir las dos cosas
+        convertiria una pregunta de menu en una credencial.
+        """
+        opciones = Opciones.desde_json(conversacion.seleccion_pendiente)
+        if opciones is None:
+            return False
+
+        ahora = self._reloj.ahora()
+        if not opciones.vigente(ahora):
+            # Caducada: se descarta en silencio y el mensaje sigue su curso
+            # hacia una persona. Responder «esa lista ya vencio» a quien acaba
+            # de escribir «2» no le dice nada util.
+            conversacion.seleccion_pendiente = None
+            logger.info("whatsapp.seleccion_caducada", conversacion_id=str(conversacion.id))
+            return False
+
+        numero = leer_eleccion(texto)
+        if numero is None:
+            return False
+
+        paciente_id = opciones.elegir(numero)
+        if paciente_id is None:
+            # Un numero fuera de rango no se reintenta a ciegas: va a una
+            # persona, que es quien puede aclararlo.
+            logger.info(
+                "whatsapp.seleccion_fuera_de_rango",
+                conversacion_id=str(conversacion.id),
+                opciones=len(opciones.candidatos),
+            )
+            return False
+
+        conversacion.paciente_id = paciente_id
+        conversacion.seleccion_pendiente = None
+        conversacion.estado = EstadoConversacion.EN_HANDOFF.value
+        conversacion.motivo_handoff = (
+            "El paciente indico de quien habla. Continua la consulta original."
+        )
+        logger.info(
+            "whatsapp.identidad_resuelta",
+            conversacion_id=str(conversacion.id),
+            paciente_id=str(paciente_id),
+        )
+        return True
+
+    async def _preguntar_identidad(
+        self, conversacion: Conversacion, clinica_id: uuid.UUID, telefono: str
+    ) -> bool:
+        """Ofrece la lista de pacientes del numero, si procede.
+
+        Devuelve si se ofrecio. Cuando el numero corresponde a un solo paciente
+        la identidad se resuelve sin preguntar nada; cuando no corresponde a
+        ninguno, o a demasiados, se deriva sin enumerar.
+        """
+        ahora = self._reloj.ahora()
+        resultado = await identificar(
+            self._sesion, clinica_id=clinica_id, telefono=telefono, ahora=ahora
+        )
+
+        if resultado.resuelto:
+            conversacion.paciente_id = resultado.paciente_id
+            return False
+
+        if not resultado.hay_que_preguntar:
+            logger.info(
+                "whatsapp.identidad_sin_resolver",
+                conversacion_id=str(conversacion.id),
+                motivo=resultado.motivo_derivacion,
+            )
+            return False
+
+        opciones = resultado.opciones
+        assert opciones is not None
+        conversacion.seleccion_pendiente = opciones.a_json()
+        conversacion.estado = EstadoConversacion.EN_HANDOFF.value
+        conversacion.motivo_handoff = (
+            f"Numero asociado a {len(opciones.candidatos)} pacientes. "
+            "Se le pidio indicar a quien se refiere."
+        )
+        logger.info(
+            "whatsapp.identidad_preguntada",
+            conversacion_id=str(conversacion.id),
+            candidatos=len(opciones.candidatos),
+        )
+        return True
+
+    @staticmethod
+    def texto_para_preguntar(conversacion: Conversacion) -> str | None:
+        """Mensaje a enviar cuando hay una lista pendiente.
+
+        Se expone aparte para que quien orqueste el envio decida cuando sale:
+        este servicio no envia nada, escribe el estado.
+        """
+        opciones = Opciones.desde_json(conversacion.seleccion_pendiente)
+        return texto_de_opciones(opciones) if opciones else None
 
     async def derivar_a_humano(
         self,
@@ -313,6 +441,8 @@ def _con(resumen: ResumenEntrada, **cambios: int) -> ResumenEntrada:
         "derivados": resumen.derivados,
         "bajas": resumen.bajas,
         "sin_clinica": resumen.sin_clinica,
+        "preguntas_identidad": resumen.preguntas_identidad,
+        "identidades_resueltas": resumen.identidades_resueltas,
     }
     datos.update(cambios)
     return ResumenEntrada(**datos)

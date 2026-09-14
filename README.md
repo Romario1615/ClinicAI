@@ -50,6 +50,10 @@ auditoría.
   recetas, dosis o tratamientos. La frontera está en
   [`CLAUDE.md`](CLAUDE.md) (reglas 4 y 5) y en
   [`docs/decisiones/0017-frontera-de-la-automatizacion-entrante.md`](docs/decisiones/0017-frontera-de-la-automatizacion-entrante.md).
+* Un teléfono **no identifica a una persona**. Cuando un número corresponde a varios
+  pacientes, el sistema ofrece la lista y espera a que quien escribe elija; elegir
+  desambigua pero **no verifica identidad**
+  ([ADR‑0020](docs/decisiones/0020-identidad-de-quien-escribe-por-whatsapp.md)).
 
 ---
 
