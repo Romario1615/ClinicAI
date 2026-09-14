@@ -19,14 +19,15 @@ auditoría.
 >
 > **60 operaciones HTTP** y 9 pantallas de Angular, todas conectadas al backend real.
 >
-> **1267 pruebas** en el backend; **114** en el frontend.
+> **1267 pruebas** en el backend, **114** en el frontend y **20 de extremo a extremo**
+> contra navegador real.
 >
 > **Lo que no está verificado, dicho sin rodeos:** ni un mensaje ha salido hacia Meta ni un
 > evento hacia Google —no hay credenciales y no se inventan—, no existe el adaptador real
 > de Google Calendar, **ningún modelo de lenguaje ha invocado nunca las herramientas del
 > agente** (existe el recinto; el modelo todavía no está dentro), **nada vigila** los
-> eventos que el sistema emite, no hay pruebas de extremo a extremo ni de carga, el
-> procedimiento de incidentes **no se ha ensayado**, y no hay validación jurídica.
+> eventos que el sistema emite, **no hay pruebas de carga**, el procedimiento de
+> incidentes **no se ha ensayado**, y no hay validación jurídica.
 >
 > El estado real frente a los criterios de producción está en
 > [`docs/production-readiness.md`](docs/production-readiness.md), y los riesgos residuales

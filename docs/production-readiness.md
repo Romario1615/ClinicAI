@@ -25,7 +25,7 @@ funcionalidad no existe todavía; **no** significa que esté bien.
 
 | # | Criterio | Estado | Evidencia |
 |---|---|---|---|
-| 1 | No hay errores críticos | **parcial** | 1234 pruebas en verde, `ruff`/`mypy --strict` sin hallazgos. Pero sin E2E, sin carga y sin DAST, «no hay errores críticos» es una afirmación que no se puede sostener |
+| 1 | No hay errores críticos | **parcial** | 1267 pruebas de backend, 114 de frontend y 20 E2E en verde; `ruff`/`mypy --strict` sin hallazgos. Pero **sin pruebas de carga y sin DAST**, «no hay errores críticos» sigue siendo una afirmación que no se puede sostener |
 | 2 | Sin vulnerabilidades críticas o altas pendientes | **parcial** | `pip-audit --strict` → sin vulnerabilidades conocidas; `bandit -r app -ll` sin hallazgos. 44 vulnerabilidades corregidas (ver informe). **Falta DAST y Trivy sobre imágenes construidas** |
 | 3 | No existen secretos en el repositorio | **parcial** | `.env` excluido, `.env.example` sin un valor real, secretos de prueba sintéticos. `gitleaks` **no está instalado localmente**; corre en el pipeline, que nunca se ha ejecutado |
 | 4 | Las reservas concurrentes no generan duplicados | **verificado** | Restricción de exclusión `gist`; prueba de concurrencia real con 50 participantes y `asyncio.Barrier` sobre conexiones separadas |
@@ -45,17 +45,20 @@ funcionalidad no existe todavía; **no** significa que esté bien.
 | 18 | Existe procedimiento de rollback | **parcial** | El rollback de esquema **sí está verificado** (`upgrade → downgrade -1 → upgrade` en cada migración). El rollback de despliegue está documentado y sin probar |
 | 19 | Existe procedimiento de restauración | **verificado** | Documentado **y ejecutado** ([`backup-and-restore.md`](backup-and-restore.md), sección 3). Restaura sobre una base nueva, nunca sobre la dañada |
 | 20 | Existe monitoreo | **parcial** | [`monitoring.md`](monitoring.md) define qué vigilar y por qué, sobre los eventos que el sistema **ya emite** con `correlacion_id`. **Nada los vigila todavía**: falta recolección, agregación, reglas de alerta y destinatario. Las cuatro señales que deben despertar a alguien están enumeradas |
-| 21 | Pruebas de aceptación con escenarios de clínica | **no evaluado** | Fase 10. Los 21 escenarios E2E no existen |
+| 21 | Pruebas de aceptación con escenarios de clínica | **parcial** | **20 escenarios en verde** contra navegador, frontend, API y PostgreSQL reales ([`pruebas-e2e/`](../pruebas-e2e/README.md)): acceso y segundo factor, coincidencia entre el menú y los permisos reales, el token que **no** queda en el navegador, los tres vacíos de la búsqueda, notas versionadas y que **un PRN nunca aparece en el calendario de tomas**. **Faltan**: reserva completa desde la agenda, reserva por WhatsApp simulado (depende de E‑23), alerta por toma omitida y consulta RAG desde la interfaz |
 | 22 | Todas las limitaciones documentadas | **hecho** | 24 limitaciones estructurales y 9 restricciones deliberadas en [`known-limitations.md`](known-limitations.md) |
 | 23 | Notificaciones sin datos clínicos | **verificado** | 40 pruebas recorren el catálogo completo de plantillas: ninguna admite ni menciona diagnóstico, medicamento ni motivo de consulta (regla 10, RF‑K07) |
 | 24 | Los eventos del calendario externo no contienen datos clínicos | **verificado** | RF‑I09. `construir_evento` **no acepta** paciente ni servicio, y una prueba inspecciona su firma para que siga siendo así. Comprobado también sobre lo que de verdad sale hacia el proveedor (ADR‑0018) |
 
-**Resumen: 10 de 24 verificados, 11 parciales, 2 sin evaluar, 1 hecho** (el 22, que no es
+**Resumen: 10 de 24 verificados, 12 parciales, 1 sin evaluar, 1 hecho** (el 22, que no es
 un criterio de funcionamiento sino de documentación).
 
 Se mueven en esta revisión: el criterio 14 y el 19 pasan a **verificado** con la
-restauración ejecutada; el 20 pasa de «no evaluado» a **parcial** porque ya existe la
-definición de qué vigilar, aunque nada vigile todavía.
+restauración ejecutada; el 20 y el 21 pasan de «no evaluado» a **parcial** — ya existe la
+definición de qué vigilar, aunque nada vigile todavía, y ya hay 20 escenarios E2E, aunque
+falten los que dependen del agente y del worker.
+
+El único criterio que sigue **sin evaluar** es el 15, las pruebas de carga.
 
 Los criterios 23 y 24 se añaden en la Fase 4: no estaban en la lista original y son
 condiciones de protección de datos que sí se pueden verificar, y se han verificado.
