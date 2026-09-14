@@ -1,12 +1,17 @@
 # Estado de preparación para producción
 
-> **Última actualización:** 2026‑09‑13 · Fases 0, 0b, 3, 4 y 6 cerradas; capa de herramientas del agente construida.
+> **Última actualización:** 2026‑09‑14 · Fases 0, 0b, 3, 4 y 6 cerradas; capa de herramientas del agente, pagos, dashboard, lista de espera y restauración verificada.
 >
 > **Veredicto actual: el sistema NO está preparado para producción y no puede usarse con
 > datos de pacientes reales.** No es una fórmula de cautela. Hay tres motivos concretos, y
-> ninguno se resuelve escribiendo más código: el cumplimiento legal no está validado (E‑2),
-> la restauración de copias no está probada —y un respaldo sin restauración verificada no
-> cuenta—, y el camino real de WhatsApp no se ha ejecutado nunca contra Meta (E‑1).
+> ninguno se resuelve escribiendo más código: el cumplimiento legal **no está validado**
+> (E‑2), el camino real de WhatsApp **no se ha ejecutado nunca contra Meta** (E‑1), y
+> **nada vigila** los eventos que el sistema emite —la cola `FALLIDO` del outbox puede
+> crecer un fin de semana entero sin que nadie lo note.
+>
+> La restauración **sí** está verificada desde el 2026‑09‑13: era el tercer bloqueo y ha
+> dejado de serlo. El procedimiento de incidentes, en cambio, está escrito y **sin
+> ensayar**.
 >
 > La tabla siguiente refleja el estado **verificado**, no el planificado. `parcial` significa
 > que hay evidencia de una parte y no del resto; se detalla cuál en cada fila.
@@ -33,19 +38,24 @@ funcionalidad no existe todavía; **no** significa que esté bien.
 | 11 | La IA no modifica datos sin autorización | **parcial** | La **capa de herramientas** ya existe y está verificada (94 pruebas, [ADR‑0019](decisiones/0019-la-frontera-de-las-herramientas-del-agente.md)): catálogo cerrado de siete herramientas, ninguna toca contenido clínico; el principal viaja fuera de los argumentos y una prueba recorre los siete esquemas JSON para que siga siendo así; el ámbito se verifica contra PostgreSQL real intentando leer y cancelar la cita de otro paciente; toda invocación —incluida la denegada— queda auditada como `AGENTE_IA`. Lo que falta: **el bucle del modelo no existe**, así que ningún LLM ha invocado nunca estas herramientas. El webhook sigue sin ejecutar intenciones que cambien una cita (ADR‑0017) |
 | 12 | El RAG no filtra información entre pacientes | **verificado** | Los filtros van en el `WHERE` de una consulta única (ADR‑0013), con **21 pruebas de casos negativos** —otra clínica, otra sede, otra especialidad, por encima del nivel— cada una con su prueba de control. La historia clínica individual **no se indexa** en ningún índice vectorial (RF‑M07). Una prueba de arquitectura recorre el AST de `app/` y verifica que no hay otra vía de consulta |
 | 13 | Los documentos vencidos no son recuperados | **verificado** | Vigencia, estado y archivado filtran en el `WHERE`. Probado con el documento vencido, el que aún no entra en vigor, el archivado y el borrador, incluido el caso en que el texto del documento **son las palabras exactas de la consulta** |
-| 14 | Los respaldos se pueden restaurar | **no evaluado** | Fase 10. **Un respaldo sin restauración probada no cuenta** |
+| 14 | Los respaldos se pueden restaurar | **verificado** | Ciclo completo **ejecutado** el 2026‑09‑13 con `infra/scripts/verificar-respaldo.sh`: 11 comprobaciones, 0 fallos. Volcado cifrado no legible en claro, clave incorrecta rechazada, recuentos idénticos uno a uno, `pgvector` 0.8.6 e índice HNSW restaurados, y **las 2 restricciones de exclusión siguen vigentes** — una restauración que las perdiera daría una base que acepta dos pacientes a la misma hora. Lo **no** cubierto se declara en [`backup-and-restore.md`](backup-and-restore.md): sin programación automática, sin retención, sin copia fuera del equipo, sin PITR, sin RTO/RPO medidos |
 | 15 | El sistema soporta las pruebas de carga definidas | **no evaluado** | Fase 10 |
 | 16 | El pipeline CI/CD está funcionando | **parcial** | 7 trabajos y puerta de fusión escritos; YAML validado y cada puerta comprobada a mano en local. **Nunca ejecutado en GitHub**: el repositorio no tiene remoto |
-| 17 | Existe documentación de operación | **parcial** | 21 documentos y 19 ADR. Faltan `monitoring.md`, `backup-and-restore.md`, `incident-response.md` |
+| 17 | Existe documentación de operación | **parcial** | 24 documentos y 19 ADR. Ya existen `monitoring.md`, `backup-and-restore.md` e `incident-response.md`. Lo que falta no es documentación: **el procedimiento de incidentes no se ha ensayado** y no hay guardia definida |
 | 18 | Existe procedimiento de rollback | **parcial** | El rollback de esquema **sí está verificado** (`upgrade → downgrade -1 → upgrade` en cada migración). El rollback de despliegue está documentado y sin probar |
-| 19 | Existe procedimiento de restauración | **parcial** | Documentado, sin ejecutar |
-| 20 | Existe monitoreo | **no evaluado** | Fase 10. Ya hay eventos que exigen vigilancia y nadie los vigila: la cola `FALLIDO` del outbox, `limite_tasa.sin_contador.permitido` y `whatsapp.numero_sin_clinica` |
+| 19 | Existe procedimiento de restauración | **verificado** | Documentado **y ejecutado** ([`backup-and-restore.md`](backup-and-restore.md), sección 3). Restaura sobre una base nueva, nunca sobre la dañada |
+| 20 | Existe monitoreo | **parcial** | [`monitoring.md`](monitoring.md) define qué vigilar y por qué, sobre los eventos que el sistema **ya emite** con `correlacion_id`. **Nada los vigila todavía**: falta recolección, agregación, reglas de alerta y destinatario. Las cuatro señales que deben despertar a alguien están enumeradas |
 | 21 | Pruebas de aceptación con escenarios de clínica | **no evaluado** | Fase 10. Los 21 escenarios E2E no existen |
 | 22 | Todas las limitaciones documentadas | **hecho** | 24 limitaciones estructurales y 9 restricciones deliberadas en [`known-limitations.md`](known-limitations.md) |
 | 23 | Notificaciones sin datos clínicos | **verificado** | 40 pruebas recorren el catálogo completo de plantillas: ninguna admite ni menciona diagnóstico, medicamento ni motivo de consulta (regla 10, RF‑K07) |
 | 24 | Los eventos del calendario externo no contienen datos clínicos | **verificado** | RF‑I09. `construir_evento` **no acepta** paciente ni servicio, y una prueba inspecciona su firma para que siga siendo así. Comprobado también sobre lo que de verdad sale hacia el proveedor (ADR‑0018) |
 
-**Resumen: 9 de 24 verificados, 11 parciales, 4 sin evaluar.**
+**Resumen: 10 de 24 verificados, 11 parciales, 2 sin evaluar, 1 hecho** (el 22, que no es
+un criterio de funcionamiento sino de documentación).
+
+Se mueven en esta revisión: el criterio 14 y el 19 pasan a **verificado** con la
+restauración ejecutada; el 20 pasa de «no evaluado» a **parcial** porque ya existe la
+definición de qué vigilar, aunque nada vigile todavía.
 
 Los criterios 23 y 24 se añaden en la Fase 4: no estaban en la lista original y son
 condiciones de protección de datos que sí se pueden verificar, y se han verificado.

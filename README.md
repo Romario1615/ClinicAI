@@ -5,23 +5,28 @@ calendarios, lista de espera inteligente, historia clínica versionada, recetas 
 seguimiento de adherencia, base de conocimiento con RAG, pagos asistidos, dashboard y
 auditoría.
 
-> **Estado actual: fases 0, 0b, 3, 4 y 6 cerradas. 1, 2, 5 y 7 en curso.**
+> **Estado actual: fases 0, 0b, 3, 4 y 6 cerradas. 1, 2, 5, 7, 8 y 9 en curso.**
 >
 > Implementado y verificado, con evidencia de ejecución real: infraestructura local
-> (PostgreSQL 16 + pgvector 0.8.6, Redis), **49 tablas** migradas y reversibles,
-> autenticación y RBAC con ámbito de cuatro dimensiones, la **protección anti
-> doble‑reserva en el motor de base de datos** —comprobada con 50 participantes
-> simultáneos—, historia clínica append‑only, lista de espera, el **outbox de entrega con
-> el webhook de WhatsApp**, y la **sincronización de calendarios con reconciliación de
-> cambios externos**. **42 operaciones HTTP** y 9 pantallas de Angular.
+> (PostgreSQL 16 + pgvector 0.8.6, Redis), migraciones reversibles, autenticación y RBAC
+> con ámbito de cuatro dimensiones, la **protección anti doble‑reserva en el motor de base
+> de datos** —comprobada con 50 participantes simultáneos—, historia clínica append‑only,
+> recetas con calendario de tomas, lista de espera, el **outbox de entrega con el webhook
+> de WhatsApp**, la **sincronización de calendarios con reconciliación de cambios
+> externos**, la base de conocimiento con RAG que **sabe decir que no sabe**, la **capa de
+> herramientas del agente** con su frontera clínica, pagos administrativos, dashboard, y la
+> **restauración de respaldos verificada de extremo a extremo**.
 >
-> **1139 pruebas** y 91,9 % de cobertura en el backend; 67 y 95 % en el frontend.
+> **60 operaciones HTTP** y 9 pantallas de Angular, todas conectadas al backend real.
+>
+> **1267 pruebas** en el backend; **114** en el frontend.
 >
 > **Lo que no está verificado, dicho sin rodeos:** ni un mensaje ha salido hacia Meta ni un
 > evento hacia Google —no hay credenciales y no se inventan—, no existe el adaptador real
-> de Google Calendar, **no existe el agente conversacional** (hay base de conocimiento y
-> recuperación, pero nadie las usa todavía), ni dashboard, ni pagos, ni pruebas de extremo
-> a extremo, ni restauración de copias probada, ni validación jurídica.
+> de Google Calendar, **ningún modelo de lenguaje ha invocado nunca las herramientas del
+> agente** (existe el recinto; el modelo todavía no está dentro), **nada vigila** los
+> eventos que el sistema emite, no hay pruebas de extremo a extremo ni de carga, el
+> procedimiento de incidentes **no se ha ensayado**, y no hay validación jurídica.
 >
 > El estado real frente a los criterios de producción está en
 > [`docs/production-readiness.md`](docs/production-readiness.md), y los riesgos residuales
@@ -168,6 +173,9 @@ El plan de pruebas completo, con los escenarios obligatorios y los resultados de
 | [`docs/threat-model.md`](docs/threat-model.md) | Modelo de amenazas y matriz de riesgos |
 | [`docs/rag.md`](docs/rag.md) | Recuperación, permisos y anti prompt injection |
 | [`docs/agente.md`](docs/agente.md) | Las siete herramientas, la frontera clínica y lo que aún falta |
+| [`docs/backup-and-restore.md`](docs/backup-and-restore.md) | Respaldo cifrado y la restauración **ya verificada** |
+| [`docs/monitoring.md`](docs/monitoring.md) | Qué vigilar y por qué; qué emite ya el sistema |
+| [`docs/incident-response.md`](docs/incident-response.md) | Clasificación por daño al paciente y guías por tipo |
 | [`docs/whatsapp-integration.md`](docs/whatsapp-integration.md) | Webhooks, plantillas y entrega |
 | [`docs/calendar-integration.md`](docs/calendar-integration.md) | OAuth, sincronización y reconciliación |
 | [`docs/deployment.md`](docs/deployment.md) | Despliegue local, staging, producción y rollback |
