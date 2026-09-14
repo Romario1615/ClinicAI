@@ -16,6 +16,14 @@ export interface EntradaEspera {
   profesional_id: string | null; prioridad: string; estado: string;
   horas_antelacion_minima: number; oferta_id: string | null;
   oferta_inicio: string | null; oferta_expira_en: string | null;
+  /**
+   * Si al paciente se le pudo avisar del turno por un canal automatico.
+   *
+   * `null` cuando no hay oferta activa. `false` significa que hay un turno
+   * reservado para el que **no sabe nada**: alguien tiene que llamarle antes
+   * de que la oferta venza y el hueco vuelva a la cola.
+   */
+  oferta_avisada: boolean | null;
 }
 
 export interface ResumenPanel {
@@ -30,7 +38,7 @@ export class OperacionesService {
   private readonly http = inject(HttpClient);
   private readonly configuracion = inject(CONFIGURACION);
 
-  leer<T>(ruta: string, parametros: Record<string, string | number> = {}): Observable<T> {
+  leer<T>(ruta: string, parametros: Record<string, string | number | boolean> = {}): Observable<T> {
     return this.http.get<T>(this.configuracion.urlApi + ruta, { params: parametros })
       .pipe(catchError(traducirFallo));
   }

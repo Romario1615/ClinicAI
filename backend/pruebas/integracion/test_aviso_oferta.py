@@ -34,6 +34,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modulos.agenda.modelos import Cita, EstadoCita
 from app.modulos.lista_espera.modelos import EstadoEspera, EstadoOferta
+from app.modulos.lista_espera.panel import listar_espera
 from app.modulos.lista_espera.servicios import (
     MAXIMO_OFERTAS_VENCIDAS,
     ServicioListaEspera,
@@ -320,3 +321,106 @@ class TestPenalizacion:
         await sesion.refresh(entrada)
         assert entrada.ofertas_vencidas == 0
         assert entrada.estado == EstadoEspera.ACTIVA.value
+
+
+# ===========================================================================
+#  La cola de llamadas pendientes
+# ===========================================================================
+class TestColaSinAvisar:
+    """El filtro que convierte una oferta invisible en trabajo accionable.
+
+    Sin el, una oferta que no se pudo comunicar retiene el turno hasta que
+    vence y **nadie sabe que hay que llamar** (E-27).
+    """
+
+    async def test_una_oferta_sin_avisar_aparece_en_la_cola(
+        self,
+        sesion: AsyncSession,
+        servicio_espera: ServicioListaEspera,
+        principal: Principal,
+        turno_liberado: Cita,
+        segundo_paciente,  # type: ignore[no-untyped-def]
+        sede,  # type: ignore[no-untyped-def]
+        especialidad,  # type: ignore[no-untyped-def]
+    ) -> None:
+        entrada = await _anotar(
+            servicio_espera, principal, segundo_paciente.id, sede.id, especialidad.id
+        )
+        await servicio_espera.ofrecer_turno(turno_liberado, principal=principal)
+        await sesion.flush()
+
+        pagina = await listar_espera(sesion, principal, 50, 0, solo_sin_avisar=True)
+
+        identificadores = [e.id for e in pagina.elementos]
+        assert entrada.id in identificadores
+        fila = next(e for e in pagina.elementos if e.id == entrada.id)
+        assert fila.oferta_avisada is False
+        assert fila.oferta_inicio is not None, "Hace falta la hora para poder llamar."
+
+    async def test_una_oferta_avisada_no_aparece(
+        self,
+        sesion: AsyncSession,
+        servicio_espera: ServicioListaEspera,
+        principal: Principal,
+        turno_liberado: Cita,
+        segundo_paciente,  # type: ignore[no-untyped-def]
+        sede,  # type: ignore[no-untyped-def]
+        especialidad,  # type: ignore[no-untyped-def]
+    ) -> None:
+        """A quien ya recibio el mensaje no hay que llamarle."""
+        await _consentir(sesion, segundo_paciente.id)
+        entrada = await _anotar(
+            servicio_espera, principal, segundo_paciente.id, sede.id, especialidad.id
+        )
+        await servicio_espera.ofrecer_turno(turno_liberado, principal=principal)
+        await sesion.flush()
+
+        pagina = await listar_espera(sesion, principal, 50, 0, solo_sin_avisar=True)
+
+        assert entrada.id not in [e.id for e in pagina.elementos]
+
+    async def test_el_listado_completo_marca_cuales_no_se_avisaron(
+        self,
+        sesion: AsyncSession,
+        servicio_espera: ServicioListaEspera,
+        principal: Principal,
+        turno_liberado: Cita,
+        segundo_paciente,  # type: ignore[no-untyped-def]
+        sede,  # type: ignore[no-untyped-def]
+        especialidad,  # type: ignore[no-untyped-def]
+    ) -> None:
+        """El filtro es una comodidad; la marca tiene que estar siempre."""
+        entrada = await _anotar(
+            servicio_espera, principal, segundo_paciente.id, sede.id, especialidad.id
+        )
+        await servicio_espera.ofrecer_turno(turno_liberado, principal=principal)
+        await sesion.flush()
+
+        pagina = await listar_espera(sesion, principal, 50, 0)
+
+        fila = next(e for e in pagina.elementos if e.id == entrada.id)
+        assert fila.oferta_avisada is False
+
+    async def test_una_entrada_sin_oferta_no_dice_nada_del_aviso(
+        self,
+        sesion: AsyncSession,
+        servicio_espera: ServicioListaEspera,
+        principal: Principal,
+        segundo_paciente,  # type: ignore[no-untyped-def]
+        sede,  # type: ignore[no-untyped-def]
+        especialidad,  # type: ignore[no-untyped-def]
+    ) -> None:
+        """`None` y no `False`: no hay oferta, asi que no hay nada que avisar.
+
+        Devolver `False` la pondria en la cola de llamadas pendientes sin que
+        haya ningun turno que ofrecer.
+        """
+        entrada = await _anotar(
+            servicio_espera, principal, segundo_paciente.id, sede.id, especialidad.id
+        )
+        await sesion.flush()
+
+        pagina = await listar_espera(sesion, principal, 50, 0)
+
+        fila = next(e for e in pagina.elementos if e.id == entrada.id)
+        assert fila.oferta_avisada is None

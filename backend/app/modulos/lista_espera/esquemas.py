@@ -31,6 +31,12 @@ class RespuestaEspera(BaseModel):
     oferta_id: uuid.UUID | None = None
     oferta_inicio: datetime | None = None
     oferta_expira_en: datetime | None = None
+    # Falso cuando al paciente no se le pudo avisar por un canal automatico:
+    # no tiene consentimiento vigente para mensajes.
+    #
+    # Es el dato que convierte una oferta invisible en trabajo accionable. Sin
+    # el, el turno se retiene hasta que vence y nadie sabe que hay que llamar.
+    oferta_avisada: bool | None = None
 
 
 class PaginaEspera(BaseModel):

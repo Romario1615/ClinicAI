@@ -11,7 +11,7 @@ from app.modulos.lista_espera.esquemas import (
     PaginaEspera,
     RespuestaEspera,
 )
-from app.modulos.lista_espera.modelos import EntradaListaEspera, OfertaTurno
+from app.modulos.lista_espera.modelos import EntradaListaEspera, EstadoOferta, OfertaTurno
 from app.modulos.lista_espera.repositorio import RepositorioListaEspera
 from app.modulos.lista_espera.servicios import ServicioListaEspera
 from app.nucleo.auditoria import AccionAuditada, construir_entrada
@@ -22,9 +22,31 @@ from app.nucleo.reloj import Reloj
 
 
 async def listar_espera(
-    sesion: AsyncSession, principal: Principal, limite: int, desplazamiento: int
+    sesion: AsyncSession,
+    principal: Principal,
+    limite: int,
+    desplazamiento: int,
+    *,
+    solo_sin_avisar: bool = False,
 ) -> PaginaEspera:
+    """Pagina de la cola de espera, con la oferta activa de cada entrada.
+
+    `solo_sin_avisar` deja las que tienen una oferta viva que **no se pudo
+    comunicar**. El filtro va en el `WHERE`, no sobre la pagina ya traida:
+    filtrar despues de paginar daria paginas medio vacias y ocultaria entradas
+    que si cumplen.
+    """
     consulta = RepositorioListaEspera(sesion).consulta(principal)
+    if solo_sin_avisar:
+        pendientes = (
+            select(OfertaTurno.lista_espera_id)
+            .where(
+                OfertaTurno.estado == EstadoOferta.OFRECIDA.value,
+                OfertaTurno.aviso_enviado.is_(False),
+            )
+            .scalar_subquery()
+        )
+        consulta = consulta.where(EntradaListaEspera.id.in_(pendientes))
     total = int(
         (await sesion.execute(select(func.count()).select_from(consulta.subquery()))).scalar_one()
     )
@@ -45,7 +67,7 @@ async def listar_espera(
             .join(Cita, Cita.id == OfertaTurno.cita_liberada_id)
             .where(
                 OfertaTurno.lista_espera_id.in_([e.id for e in filas]),
-                OfertaTurno.estado == "OFRECIDA",
+                OfertaTurno.estado == EstadoOferta.OFRECIDA.value,
             )
         )
     ).all()
@@ -58,6 +80,7 @@ async def listar_espera(
             respuesta.oferta_id = oferta.id
             respuesta.oferta_inicio = inicio
             respuesta.oferta_expira_en = oferta.expira_en
+            respuesta.oferta_avisada = oferta.aviso_enviado
         resultados.append(respuesta)
     return PaginaEspera(elementos=resultados, total=total)
 

@@ -1,4 +1,4 @@
-import { Component, inject, signal } from '@angular/core';
+import { Component, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { forkJoin } from 'rxjs';
 
@@ -21,13 +21,31 @@ import type { Paciente, Sede, Servicio } from '../../nucleo/modelos/dominio';
     </section>
     @if (error()) { <p class="aviso-error" role="alert">{{ error() }}</p> }
     @if (aviso()) { <p role="status">{{ aviso() }}</p> }
-    <div class="cabecera-pagina"><h2>Entradas · {{ total() }}</h2><button class="boton" (click)="cargar()" [disabled]="ocupado()">Actualizar ofertas</button></div>
+    <div class="cabecera-pagina"><h2>Entradas · {{ total() }}</h2>
+      <div class="acciones-demo">
+        <label class="campo campo--en-linea"><input type="checkbox" name="pendientes" [ngModel]="soloSinAvisar()" (ngModelChange)="alternarPendientes($event)" /> Solo pendientes de llamar</label>
+        <button class="boton" (click)="cargar()" [disabled]="ocupado()">Actualizar ofertas</button>
+      </div>
+    </div>
+    <!-- Una oferta sin avisar retiene el turno y nadie lo sabe: el paciente no
+         tiene consentimiento para mensajes automáticos, así que si nadie llama,
+         el hueco se pierde al vencer. Va arriba porque es lo único de esta
+         pantalla que hay que hacer ahora. -->
+    @if (sinAvisar().length > 0 && !soloSinAvisar()) {
+      <p class="aviso-llamar" role="status">
+        <strong>{{ sinAvisar().length }} paciente(s) esperan una llamada.</strong>
+        Tienen un turno reservado del que no se les pudo avisar por mensaje. Si nadie
+        llama antes de que venza, el hueco vuelve a la cola.
+      </p>
+    }
     @if (cargando()) { <p role="status">Consultando lista…</p> }
     @if (!cargando() && entradas().length === 0) { <p class="tarjeta">Todavía no hay pacientes en lista de espera.</p> }
     @for (e of entradas(); track e.id) {
       <article class="tarjeta fila-demo"><div><h3>{{ nombreServicio(e.servicio_id) }}</h3><p>Paciente {{ nombres[e.paciente_id] || e.paciente_id.slice(0, 8) }} · {{ e.estado }}</p>
         <small>Antelación mínima: {{ e.horas_antelacion_minima }} horas</small>
-        @if (e.oferta_id) { <p><strong>Turno ofrecido: {{ fecha(e.oferta_inicio) }}</strong></p><p>Responder hasta {{ fecha(e.oferta_expira_en) }}</p> }
+        @if (e.oferta_id) { <p><strong>Turno ofrecido: {{ fecha(e.oferta_inicio) }}</strong></p><p>Responder hasta {{ fecha(e.oferta_expira_en) }}</p>
+          @if (e.oferta_avisada === false) { <p class="marca-llamar">Sin avisar: hay que llamar a este paciente</p> }
+        }
       </div><div class="acciones-demo">
         @if (e.oferta_id) { <button class="boton boton--principal" [disabled]="ocupado()" (click)="resolver(e, 'aceptar')">Aceptar oferta</button><button class="boton" [disabled]="ocupado()" (click)="resolver(e, 'rechazar')">Rechazar oferta</button> }
         @if (e.estado === 'ACTIVA' || e.estado === 'OFERTADA') { <button class="boton" [disabled]="ocupado()" (click)="resolver(e, 'cancelar')">Retirar de la lista</button> }
@@ -47,9 +65,22 @@ export class ListaEsperaComponent {
     forkJoin({ sedes: this.catalogo.sedes(), servicios: this.catalogo.servicios() }).subscribe({ next: r => { this.sedes.set(r.sedes); this.servicios.set(r.servicios); }, error: () => this.error.set('No se pudo cargar el catálogo.') });
     this.cargar();
   }
+  protected readonly soloSinAvisar = signal(false);
+
+  /** Entradas con un turno reservado del que el paciente no sabe nada. */
+  protected readonly sinAvisar = computed(() =>
+    this.entradas().filter((e) => e.oferta_avisada === false),
+  );
+
+  protected alternarPendientes(valor: boolean): void {
+    this.soloSinAvisar.set(valor);
+    this.pagina.set(0);
+    this.cargar();
+  }
+
   protected cargar(): void {
     this.cargando.set(true); this.error.set('');
-    this.api.leer<Pagina<EntradaEspera>>('/lista-espera/', { limite: 25, desplazamiento: this.pagina() * 25 }).subscribe({
+    this.api.leer<Pagina<EntradaEspera>>('/lista-espera/', { limite: 25, desplazamiento: this.pagina() * 25, solo_sin_avisar: this.soloSinAvisar() }).subscribe({
       next: r => { this.entradas.set(r.elementos); this.total.set(r.total); this.cargando.set(false);
         for (const id of new Set(r.elementos.map(e => e.paciente_id))) {
           this.api.leer<Paciente>(`/pacientes/${id}`).subscribe({ next: p => { this.nombres = { ...this.nombres, [id]: `${p.nombre} ${p.apellido}` }; }, error: () => { /* El identificador queda visible si falta permiso de ficha. */ } });

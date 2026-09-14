@@ -24,8 +24,26 @@ async def listar(
     sesion: Sesion,
     limite: Annotated[int, Query(ge=1, le=100)] = 25,
     desplazamiento: Annotated[int, Query(ge=0)] = 0,
+    solo_sin_avisar: Annotated[
+        bool,
+        Query(
+            description=(
+                "Solo las entradas con una oferta activa que no se pudo comunicar. "
+                "Es la cola de llamadas pendientes de recepcion."
+            )
+        ),
+    ] = False,
 ) -> PaginaEspera:
-    return await panel.listar_espera(sesion, principal, limite, desplazamiento)
+    """Lista la cola de espera.
+
+    `solo_sin_avisar` existe porque una oferta que no se pudo comunicar
+    **retiene el turno y no la ve nadie**: el paciente no recibio nada -- no
+    tiene consentimiento para mensajes automaticos -- y sin este filtro hay que
+    rebuscarla entre las demas. Con el, es una lista de llamadas por hacer.
+    """
+    return await panel.listar_espera(
+        sesion, principal, limite, desplazamiento, solo_sin_avisar=solo_sin_avisar
+    )
 
 
 @enrutador.post("/", response_model=RespuestaEspera, status_code=201)
