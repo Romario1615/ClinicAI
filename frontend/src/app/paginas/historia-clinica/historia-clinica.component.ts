@@ -40,7 +40,11 @@ import {
   ErrorComponent,
   VacioComponent,
 } from '../../compartido/estados.component';
-import { ApiService, FalloApi } from '../../nucleo/servicios/api.service';
+import {
+  ApiService,
+  FalloApi,
+  filtroBusquedaPaciente,
+} from '../../nucleo/servicios/api.service';
 import type {
   Medicamento,
   Nota,
@@ -161,7 +165,7 @@ export class HistoriaClinicaComponent {
     this.errorPacientes.set(null);
 
     const termino = this.termino.trim();
-    this.api.pacientes({ termino: termino || undefined, limite: 50 }).subscribe({
+    this.api.pacientes({ ...filtroBusquedaPaciente(termino), limite: 50 }).subscribe({
       next: (pagina) => {
         this.pacientes.set(pagina.elementos);
         this.cargandoPacientes.set(false);

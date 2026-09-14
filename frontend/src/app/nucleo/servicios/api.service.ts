@@ -277,6 +277,27 @@ export interface Adherencia {
   readonly motivo: string | null;
 }
 
+/**
+ * Convierte lo que alguien escribe en el buscador en el filtro correcto.
+ *
+ * El backend tiene dos parametros distintos: `termino` busca por nombre y
+ * apellido, y `documento` busca por numero de documento. Enviar siempre
+ * `termino` hacia que buscar una cedula no devolviera nada, aunque la etiqueta
+ * del campo prometiera lo contrario -- y dar una cedula es justo lo que hace un
+ * paciente cuando llega al mostrador.
+ *
+ * La heuristica es deliberadamente simple: si lo escrito son solo digitos, es
+ * un documento. Un nombre no se escribe con digitos, y un documento no lleva
+ * letras en los tipos que el sistema admite.
+ */
+export function filtroBusquedaPaciente(termino: string): FiltroPacientes {
+  const limpio = termino.trim();
+  if (!limpio) {
+    return {};
+  }
+  return /^\d+$/.test(limpio) ? { documento: limpio } : { termino: limpio };
+}
+
 @Injectable({ providedIn: 'root' })
 export class ApiService {
   private readonly http = inject(HttpClient);

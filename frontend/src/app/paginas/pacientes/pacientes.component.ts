@@ -36,7 +36,11 @@ import {
   ErrorComponent,
   VacioComponent,
 } from '../../compartido/estados.component';
-import { ApiService, FalloApi } from '../../nucleo/servicios/api.service';
+import {
+  ApiService,
+  FalloApi,
+  filtroBusquedaPaciente,
+} from '../../nucleo/servicios/api.service';
 import type { PacienteDetalle } from '../../nucleo/servicios/api.service';
 import type { Paciente } from '../../nucleo/modelos/dominio';
 import { formatearFechaLarga } from '../../nucleo/utilidades/fechas';
@@ -137,7 +141,7 @@ export class PacientesComponent {
     const termino = this.termino.trim();
     this.api
       .pacientes({
-        termino: termino || undefined,
+        ...filtroBusquedaPaciente(termino),
         limite: POR_PAGINA,
         desplazamiento: this.desde(),
       })

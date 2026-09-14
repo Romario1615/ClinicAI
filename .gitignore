@@ -83,3 +83,7 @@ tmp/
 temporal/
 *.log
 !docs/**/*.log.md
+
+# Informe de cobertura generado. Se regenera con `npm run test:ci`; versionarlo
+# ensucia cada diff con ~20 ficheros HTML que nadie revisa.
+frontend/cobertura/
