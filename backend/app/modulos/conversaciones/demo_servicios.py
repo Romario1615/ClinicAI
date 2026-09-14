@@ -5,8 +5,9 @@ from datetime import timedelta
 from sqlalchemy import inspect, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.ia.conversacion import ProveedorDemostracion, ejecutar_turno
+from app.ia.conversacion import ejecutar_turno
 from app.ia.herramientas.contrato import ContextoHerramienta
+from app.ia.seleccion_llm import FabricaConversacional
 from app.modulos.conversaciones.demo_esquemas import AbrirDemo, RespuestaDemo
 from app.modulos.conversaciones.demo_modelos import SesionDemo
 from app.modulos.conversaciones.modelos import Conversacion
@@ -104,6 +105,7 @@ async def responder(
     identificador: uuid.UUID,
     texto: str,
     clave: str,
+    fabrica: FabricaConversacional,
 ) -> RespuestaDemo:
     demo = await obtener(sesion, principal, reloj, identificador)
     registro = await iniciar_operacion(
@@ -145,7 +147,7 @@ async def responder(
     memoria = dict(demo.memoria)
     contexto = ContextoHerramienta(actor, sesion, reloj, demo.conversacion_id)
     resultado, herramientas = await ejecutar_turno(
-        ProveedorDemostracion(), texto, memoria, demo.negocio, contexto
+        fabrica(), texto, memoria, demo.negocio, contexto
     )
     # Una colision de agenda puede deshacer la transaccion. Recuperamos el
     # registro del canal sin perder la respuesta segura que tradujo la herramienta.

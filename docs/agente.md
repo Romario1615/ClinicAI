@@ -1,9 +1,13 @@
 # El agente conversacional
 
-> **Estado (2026-09-13):** la **capa de herramientas** esta construida y probada.
-> El **bucle del modelo no existe todavia**: no hay prompt de sistema, no hay
-> conversacion con un LLM y ningun modelo ha invocado nunca estas herramientas.
-> Lo que hay es el recinto; el modelo aun no esta dentro.
+> **Estado (2026-09-14):** la capa de herramientas y el **bucle del modelo**
+> estan construidos y probados. Un modelo real (`ProveedorClaude`) invoca las
+> siete herramientas, verificado contra la API y contra PostgreSQL.
+> Lo que **no** esta medido es si el modelo elige bien: eso exige su propia
+> evaluacion y es la limitacion E-23.
+>
+> El bucle solo es alcanzable hoy desde el endpoint de demostracion, que esta
+> restringido al entorno local.
 >
 > El webhook de WhatsApp sigue rigiendose por [ADR-0017](decisiones/0017-frontera-de-la-automatizacion-entrante.md):
 > reconoce intenciones, **ejecuta solo la baja de consentimiento** y deriva todo
@@ -180,23 +184,94 @@ Los turnos se ofrecen con `fin_consulta`, no con `fin`: el intervalo reservado
 incluye la preparacion, y decirle al paciente que su consulta de 30 minutos
 dura 40 le hace calcular mal a que hora sale.
 
-## 8. Lo que falta
+## 8. El proveedor del modelo
+
+`ProveedorConversacional` es la costura, y hay dos implementaciones:
+
+| Proveedor | `PROVEEDOR_LLM` | Que hace |
+|---|---|---|
+| `ProveedorDemostracion` | `mock` | Guion de cadenas fijas. Sin red ni credenciales; es el que usa el CI |
+| `ProveedorClaude` | `anthropic` | Messages API de Anthropic con el catalogo publicado como herramientas |
+
+Un valor no implementado —hoy `ollama`— **falla al arrancar** en lugar de caer
+al proveedor simulado. Una clinica que cree tener un agente conversacional y
+tiene un guion de cadenas fijas no lo descubre por un error, lo descubre por
+las quejas.
+
+### Que garantias sobreviven al modelo real
+
+Ninguna de las de la seccion 3 depende de que el modelo se porte bien:
+
+* el principal no viaja en los argumentos, lo pone `ContextoHerramienta`;
+* el catalogo es cerrado: el modelo puede pedir `delete_patient`, lo que no
+  puede es que exista;
+* el limite clinico se evalua **antes** del bucle, asi que un mensaje sobre una
+  reaccion adversa nunca llega al modelo;
+* `MAXIMO_PASOS` acota el bucle y termina derivando.
+
+### Decisiones de la peticion
+
+* **Una herramienta por paso** (`disable_parallel_tool_use`). El bucle ejecuta
+  una y devuelve un `tool_result`; con llamadas paralelas quedarian
+  invocaciones sin responder.
+* **Razonamiento adaptativo con esfuerzo `low`** (`LLM_ESFUERZO`). Elegir entre
+  siete herramientas administrativas no necesita mas, y el limite clinico no
+  depende de lo que el modelo razone.
+* **Sin parametros de muestreo.** Los modelos actuales rechazan `temperature`
+  con el razonamiento activo. `LLM_TEMPERATURA` se conserva para un proveedor
+  local futuro y hoy no se envia.
+* **El prompt y el catalogo se cachean.** Son el prefijo estable de todas las
+  peticiones de una conversacion.
+* **Una instancia por turno.** La transcripcion vive en el proveedor, asi que
+  la fabrica entrega uno nuevo en cada turno y comparte solo el cliente HTTP.
+
+### Que sale hacia la API
+
+Solo lo administrativo: los identificadores de la gestion, los horarios
+ofrecidos y el texto que escribio el paciente, delimitado y saneado como dato
+citado (ADR-0014). Los resultados de herramienta se recortan a una lista blanca
+de campos en lugar de volcarse enteros, para que un campo nuevo en un servicio
+no acabe saliendo del pais sin que nadie lo decida. Es un tratamiento de datos
+personales por un encargado extranjero y esta declarado como tal (E-2).
+
+### Cuando el modelo responde algo que no se puede usar
+
+Respuesta vacia, truncada por `max_tokens`, rechazada por el propio modelo, con
+dos invocaciones a la vez, o un fallo de red: **todas derivan a una persona**.
+Ninguna deja a quien escribe sin respuesta ni propaga una excepcion al canal.
+
+## 9. Lo que falta
 
 | Pendiente | Por que importa |
 |---|---|
-| **El bucle del modelo** | Prompt de sistema, memoria de conversacion, eleccion de herramienta. Sin esto el agente no existe de cara al paciente |
-| **Resolver la identidad del paciente** | Un telefono no identifica a una persona: una madre gestiona las citas de tres hijos desde el mismo numero. Sin resolverlo, el agente no puede operar por WhatsApp (ADR-0017) |
+| **Resolver la identidad del paciente en el webhook** | La desambiguacion existe (ADR-0020) pero el webhook aun no invoca el bucle |
 | **Conectar el webhook** | Hoy el webhook deriva; no invoca herramientas |
 | **Herramienta de consulta de conocimiento** | El RAG existe y esta probado, pero el agente no tiene herramienta para consultarlo |
 | **Evaluacion del comportamiento del modelo** | Que el recinto sea correcto no dice nada sobre si el modelo elige bien dentro de el |
 
-## 9. Pruebas
+## 10. Pruebas
 
 ```bash
 uv run pytest pruebas/unitarias/test_arquitectura_agente.py -q   # 35
 uv run pytest pruebas/unitarias/test_limites_agente.py -q        # 42
 uv run pytest pruebas/integracion/test_herramientas_agente.py -q # 17
+uv run pytest pruebas/unitarias/test_proveedor_claude.py -q      # 18
+uv run pytest pruebas/unitarias/test_seleccion_llm.py -q         # 5
 ```
+
+Las del proveedor usan un doble del cliente: una llamada real cuesta dinero,
+necesita red y no da el mismo resultado dos veces. No miden si el modelo
+acierta —eso se evalua aparte—, sino que una respuesta rara no rompa el canal y
+que lo que sale hacia la API este acotado.
+
+El camino completo con el modelo real, contra PostgreSQL, se ejecuta a mano:
+
+```bash
+PRUEBAS_LLM_REAL=1 PROVEEDOR_LLM=anthropic   uv run pytest pruebas/integracion/test_agente_modelo_real.py -q  # 3
+```
+
+Esta apagada por defecto porque cuesta dinero, necesita red y su resultado
+varia entre ejecuciones: las tres cosas la descalifican para el pipeline.
 
 Las de arquitectura recorren el AST de `app/ia/herramientas/` y fallan si
 alguna construye SQL o toca la sesion. Las de integracion corren contra

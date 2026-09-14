@@ -118,6 +118,10 @@ class Configuracion(BaseSettings):
     modelo_llm: str = "claude-sonnet-5"
     llm_max_tokens: Annotated[int, Field(ge=64, le=32000)] = 2048
     llm_temperatura: Annotated[float, Field(ge=0.0, le=1.0)] = 0.2
+    # Profundidad de razonamiento del modelo. `low` es lo adecuado para elegir
+    # entre siete herramientas administrativas: el limite clinico no depende de
+    # lo que el modelo razone, se evalua antes del bucle.
+    llm_esfuerzo: Literal["low", "medium", "high", "xhigh", "max"] = "low"
     llm_timeout_segundos: Annotated[int, Field(ge=1, le=300)] = 30
     ollama_url: str = "http://localhost:11434"
 

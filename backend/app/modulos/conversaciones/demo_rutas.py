@@ -1,8 +1,9 @@
 import uuid
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Header
+from fastapi import APIRouter, Depends, Header, Request
 
+from app.ia.seleccion_llm import FabricaConversacional
 from app.modulos.conversaciones import demo_servicios
 from app.modulos.conversaciones.demo_esquemas import AbrirDemo, MensajeDemo, RespuestaDemo
 from app.nucleo.autorizacion import Principal
@@ -19,6 +20,14 @@ enrutador = APIRouter(
     prefix="/agente-demo", tags=["demostracion del agente"], dependencies=[Depends(solo_local)]
 )
 PuedeSimular = Annotated[Principal, Depends(exige_permiso("conversacion.responder"))]
+
+
+def _fabrica(peticion: Request) -> FabricaConversacional:
+    """La fabrica que construyo el arranque, segun `PROVEEDOR_LLM`."""
+    fabrica: FabricaConversacional = peticion.app.state.fabrica_conversacional
+    return fabrica
+
+
 Clave = Annotated[str, Header(alias="Idempotency-Key", min_length=8, max_length=200)]
 
 
@@ -37,6 +46,7 @@ async def abrir(
 
 @enrutador.post("/sesiones/{identificador}/mensajes", response_model=RespuestaDemo)
 async def responder(
+    peticion: Request,
     identificador: uuid.UUID,
     datos: MensajeDemo,
     principal: PuedeSimular,
@@ -45,7 +55,7 @@ async def responder(
     clave: Clave,
 ) -> RespuestaDemo:
     respuesta = await demo_servicios.responder(
-        sesion, principal, reloj, identificador, datos.texto, clave
+        sesion, principal, reloj, identificador, datos.texto, clave, _fabrica(peticion)
     )
     await sesion.commit()
     return respuesta

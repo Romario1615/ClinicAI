@@ -37,6 +37,7 @@ from fastapi.responses import JSONResponse
 from app.api.manejadores import registrar_manejadores
 from app.api.middleware import MiddlewareCorrelacion
 from app.ia.embeddings import construir_proveedor_embeddings
+from app.ia.seleccion_llm import construir_fabrica_conversacional
 from app.mensajeria import rutas as rutas_whatsapp
 from app.modulos.agenda import rutas as rutas_agenda
 from app.modulos.calendario import rutas as rutas_calendario
@@ -110,6 +111,9 @@ async def _ciclo_de_vida(aplicacion: FastAPI) -> AsyncIterator[None]:
     yield
 
     await gestor.cerrar()
+    fabrica = getattr(aplicacion.state, "fabrica_conversacional", None)
+    if fabrica is not None:
+        await fabrica.cerrar()
     cliente = getattr(aplicacion.state, "redis", None)
     if cliente is not None:
         cerrar = getattr(cliente, "aclose", None) or getattr(cliente, "close", None)
@@ -179,6 +183,10 @@ def crear_aplicacion(
         dimension=configuracion.dimension_embeddings,
         ruta_cache=str(configuracion.ruta_cache_embeddings),
     )
+    # Fabrica del proveedor conversacional. Es una fabrica y no una instancia
+    # porque el proveedor real guarda la transcripcion del turno; el cliente
+    # HTTP, que es lo caro, si se comparte (ver `ia/seleccion_llm.py`).
+    aplicacion.state.fabrica_conversacional = construir_fabrica_conversacional(configuracion)
 
     # --- Middleware ---
     #
