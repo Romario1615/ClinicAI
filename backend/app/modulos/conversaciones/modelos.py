@@ -113,7 +113,12 @@ class Conversacion(Base, MezclaIdentificador):
             "estado IN ('ABIERTA', 'EN_HANDOFF', 'CERRADA')",
             name="estado_valido",
         ),
-        CheckConstraint("canal IN ('WHATSAPP')", name="canal_valido"),
+        # `DEMO` existe para que un hilo de simulacion **no sea
+        # indistinguible** de uno real. Sin un canal propio habria que
+        # marcarlo por el formato del telefono, y cualquier consulta que
+        # olvidara ese detalle trataria la simulacion como un paciente al que
+        # se le puede escribir.
+        CheckConstraint("canal IN ('WHATSAPP', 'DEMO')", name="canal_valido"),
         CheckConstraint(
             "estado <> 'EN_HANDOFF' OR motivo_handoff IS NOT NULL",
             name="handoff_con_motivo",

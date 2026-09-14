@@ -184,6 +184,45 @@ class RepositorioHistoria:
         )
         return list((await self._sesion.execute(consulta)).scalars())
 
+    async def listar_tomas(
+        self,
+        *,
+        principal: Principal,
+        paciente_id: uuid.UUID,
+        desde: datetime,
+        hasta: datetime,
+        ahora: datetime,
+        limite: int = 200,
+    ) -> list[tuple[Toma, RecetaMedicamento]]:
+        """Tomas programadas de un paciente en una ventana, con su medicamento.
+
+        Pasa por `_acotar_receta`, el mismo filtro que el resto del modulo: el
+        acceso a la medicacion de alguien exige ambito **y** relacion
+        asistencial, igual que su historia. Una via de consulta que no lo
+        aplicara seria una fuga por la puerta de al lado.
+
+        Se devuelve el medicamento junto a la toma porque una toma sin saber de
+        que es no le sirve a nadie, y resolverlo despues obligaria a una
+        consulta por fila.
+
+        El limite tiene techo: una pauta larga produce cientos de tomas y una
+        consulta sin cota agotaria la memoria del proceso.
+        """
+        limite = max(1, min(limite, 500))
+        consulta = (
+            select(Toma, RecetaMedicamento)
+            .join(RecetaMedicamento, RecetaMedicamento.id == Toma.receta_medicamento_id)
+            .join(Receta, Receta.id == RecetaMedicamento.receta_id)
+            .where(
+                Toma.paciente_id == paciente_id,
+                Toma.programada_en >= desde,
+                Toma.programada_en < hasta,
+            )
+        )
+        consulta = self._acotar_receta(consulta, principal, ahora)
+        consulta = consulta.order_by(Toma.programada_en).limit(limite)
+        return [(fila[0], fila[1]) for fila in (await self._sesion.execute(consulta)).all()]
+
     async def contar_tomas(
         self, receta_id: uuid.UUID, *, desde: datetime, hasta: datetime
     ) -> tuple[int, int]:

@@ -137,6 +137,10 @@ class RepositorioAgenda:
     # ------------------------------------------------------------------
     #  Lecturas de citas
     # ------------------------------------------------------------------
+    def consulta_autorizada(self, principal: Principal) -> Select[Any]:
+        """Base compartida por informes y pagos: conserva las cuatro dimensiones."""
+        return self._filtrar_por_ambito(select(Cita), principal)
+
     async def obtener_cita(self, cita_id: uuid.UUID, *, principal: Principal) -> Cita | None:
         """Devuelve una cita si cae dentro del ambito del principal.
 

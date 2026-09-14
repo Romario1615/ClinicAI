@@ -27,7 +27,7 @@ interface EnlaceNavegacion {
 }
 
 const NAVEGACION: readonly EnlaceNavegacion[] = [
-  { ruta: '/panel', etiqueta: 'Panel', permisos: [], demostracion: true },
+  { ruta: '/panel', etiqueta: 'Panel', permisos: [], demostracion: false },
   { ruta: '/agenda', etiqueta: 'Agenda', permisos: [PERMISOS.agendaLeer], demostracion: false },
   {
     ruta: '/pacientes',
@@ -38,8 +38,8 @@ const NAVEGACION: readonly EnlaceNavegacion[] = [
   {
     ruta: '/lista-espera',
     etiqueta: 'Lista de espera',
-    permisos: [PERMISOS.agendaLeer],
-    demostracion: true,
+    permisos: [PERMISOS.listaEsperaGestionar],
+    demostracion: false,
   },
   {
     ruta: '/historia-clinica',
@@ -50,8 +50,8 @@ const NAVEGACION: readonly EnlaceNavegacion[] = [
   {
     ruta: '/medicamentos',
     etiqueta: 'Medicamentos',
-    permisos: [PERMISOS.historiaLeer, PERMISOS.pacienteLeer],
-    demostracion: true,
+    permisos: [PERMISOS.recetaLeer],
+    demostracion: false,
   },
   {
     ruta: '/conocimiento',
@@ -59,7 +59,8 @@ const NAVEGACION: readonly EnlaceNavegacion[] = [
     permisos: [PERMISOS.conocimientoLeer],
     demostracion: false,
   },
-  { ruta: '/catalogo', etiqueta: 'Catálogo', permisos: [], demostracion: true },
+  { ruta: '/catalogo', etiqueta: 'Catálogo', permisos: [PERMISOS.agendaLeer], demostracion: false },
+  { ruta: '/pagos', etiqueta: 'Pagos', permisos: ['pago.leer'], demostracion: false },
 ];
 
 @Component({

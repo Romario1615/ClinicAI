@@ -36,7 +36,7 @@ import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -48,6 +48,8 @@ from app.modulos.lista_espera.modelos import (
     OfertaTurno,
     PrioridadEspera,
 )
+from app.modulos.lista_espera.repositorio import RepositorioListaEspera
+from app.modulos.organizacion.modelos import Servicio
 from app.nucleo.auditoria import AccionAuditada, EntradaAuditoria, construir_entrada
 from app.nucleo.autorizacion import Principal
 from app.nucleo.bd import tomar_bloqueo_consultivo
@@ -123,6 +125,10 @@ class ServicioListaEspera:
             # 404 y no 403: un 403 confirmaria que la sede existe.
             raise RecursoNoEncontrado("La sede solicitada no existe.")
 
+        await RepositorioListaEspera(self._sesion).validar_alta(
+            principal, paciente_id, sede_id, especialidad_id, servicio_id, profesional_id
+        )
+
         entrada = EntradaListaEspera(
             clinica_id=principal.clinica_id,
             paciente_id=paciente_id,
@@ -182,6 +188,9 @@ class ServicioListaEspera:
             self._sesion, espacio=ESPACIO_BLOQUEO_OFERTA, clave=str(cita_liberada.id)
         )
 
+        if cita_liberada.estado != EstadoCita.CANCELLED.value or cita_liberada.inicio <= ahora:
+            return ResultadoOferta()
+
         # Con el bloqueo tomado, se comprueba que nadie se haya adelantado.
         if await self._existe_oferta_activa(cita_liberada.id):
             return ResultadoOferta()
@@ -230,9 +239,8 @@ class ServicioListaEspera:
         """
         ahora = self._reloj.ahora()
 
-        oferta = await self._sesion.get(OfertaTurno, oferta_id, with_for_update=True)
-        if oferta is None:
-            raise RecursoNoEncontrado("La oferta solicitada no existe.")
+        self._exigir(principal, "lista_espera.gestionar")
+        oferta = await RepositorioListaEspera(self._sesion).oferta(oferta_id, principal)
 
         # El bloqueo va sobre el TURNO, no sobre la oferta: lo que se disputa
         # es el hueco, y dos ofertas distintas del mismo hueco no deberian
@@ -327,9 +335,8 @@ class ServicioListaEspera:
         lo hace.
         """
         ahora = self._reloj.ahora()
-        oferta = await self._sesion.get(OfertaTurno, oferta_id, with_for_update=True)
-        if oferta is None:
-            raise RecursoNoEncontrado("La oferta solicitada no existe.")
+        self._exigir(principal, "lista_espera.gestionar")
+        oferta = await RepositorioListaEspera(self._sesion).oferta(oferta_id, principal)
         if oferta.estado != EstadoOferta.OFRECIDA.value:
             raise OfertaYaResuelta("Esta oferta ya fue respondida.")
 
@@ -429,6 +436,20 @@ class ServicioListaEspera:
                 EntradaListaEspera.clinica_id == cita.clinica_id,
                 EntradaListaEspera.horas_antelacion_minima <= limite_antelacion,
                 EntradaListaEspera.ofertas_vencidas < MAXIMO_OFERTAS_VENCIDAS,
+                EntradaListaEspera.especialidad_id
+                == select(Servicio.especialidad_id)
+                .where(Servicio.id == cita.servicio_id)
+                .scalar_subquery(),
+                or_(
+                    EntradaListaEspera.servicio_id.is_(None),
+                    EntradaListaEspera.servicio_id == cita.servicio_id,
+                ),
+                ~select(OfertaTurno.id)
+                .where(
+                    OfertaTurno.lista_espera_id == EntradaListaEspera.id,
+                    OfertaTurno.cita_liberada_id == cita.id,
+                )
+                .exists(),
             )
             .order_by(
                 # `ALTA` < `NORMAL` alfabeticamente, asi que el orden
@@ -444,6 +465,9 @@ class ServicioListaEspera:
         candidatos = list((await self._sesion.execute(consulta)).scalars())
 
         for candidato in candidatos:
+            # Las preferencias no interpretadas exigen gestion humana.
+            if candidato.preferencias:
+                continue
             if candidato.profesional_id and candidato.profesional_id != cita.profesional_id:
                 continue
             if candidato.disponible_desde and cita.inicio.date() < candidato.disponible_desde:
@@ -476,12 +500,7 @@ class ServicioListaEspera:
     async def _obtener_entrada(
         self, entrada_id: uuid.UUID, principal: Principal
     ) -> EntradaListaEspera:
-        entrada = await self._sesion.get(EntradaListaEspera, entrada_id)
-        if entrada is None or entrada.clinica_id != principal.clinica_id:
-            raise RecursoNoEncontrado("La entrada solicitada no existe.")
-        if not principal.ambito.cubre_sede(entrada.sede_id):
-            raise RecursoNoEncontrado("La entrada solicitada no existe.")
-        return entrada
+        return await RepositorioListaEspera(self._sesion).obtener(entrada_id, principal)
 
     def _exigir(self, principal: Principal, permiso: str) -> None:
         if not principal.tiene_permiso(permiso):

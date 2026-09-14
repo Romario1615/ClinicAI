@@ -42,9 +42,13 @@ from app.modulos.agenda import rutas as rutas_agenda
 from app.modulos.calendario import rutas as rutas_calendario
 from app.modulos.calendario.seleccion import construir_proveedores
 from app.modulos.conocimiento import rutas as rutas_conocimiento
+from app.modulos.conversaciones import demo_rutas
+from app.modulos.dashboard import rutas as rutas_dashboard
 from app.modulos.historia import rutas as rutas_historia
+from app.modulos.lista_espera import rutas as rutas_espera
 from app.modulos.organizacion import rutas as rutas_catalogo
 from app.modulos.pacientes import rutas as rutas_pacientes
+from app.modulos.pagos import rutas as rutas_pagos
 from app.modulos.usuarios import rutas as rutas_usuarios
 from app.nucleo.bd import GestorBaseDatos
 from app.nucleo.configuracion import Configuracion
@@ -205,6 +209,10 @@ def _registrar_rutas(aplicacion: FastAPI) -> None:
     aplicacion.include_router(rutas_agenda.enrutador, prefix=PREFIJO_API)
     aplicacion.include_router(rutas_catalogo.enrutador, prefix=PREFIJO_API)
     aplicacion.include_router(rutas_pacientes.enrutador, prefix=PREFIJO_API)
+    aplicacion.include_router(rutas_pagos.enrutador, prefix=PREFIJO_API)
+    aplicacion.include_router(rutas_dashboard.enrutador, prefix=PREFIJO_API)
+    aplicacion.include_router(rutas_espera.enrutador, prefix=PREFIJO_API)
+    aplicacion.include_router(demo_rutas.enrutador, prefix=PREFIJO_API)
     aplicacion.include_router(rutas_historia.enrutador, prefix=PREFIJO_API)
     # El webhook no lleva autenticacion: lo protege la firma HMAC, no un
     # token. Ver el encabezado de app/mensajeria/rutas.py.

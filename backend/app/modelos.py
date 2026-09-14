@@ -41,6 +41,7 @@ from app.modulos.conocimiento.modelos import (
     PrincipalConocimiento,
     TipoDocumentoConocimiento,
 )
+from app.modulos.conversaciones.demo_modelos import SesionDemo
 from app.modulos.conversaciones.modelos import (
     Conversacion,
     EstadoConversacion,
@@ -100,6 +101,7 @@ from app.modulos.pacientes.modelos import (
     TipoConsentimiento,
     TipoDocumento,
 )
+from app.modulos.pagos.modelos import Pago
 from app.modulos.profesionales.modelos import (
     AgendaPlantilla,
     CalendarioConexion,
@@ -184,6 +186,7 @@ __all__ = [
     "OutboxMensaje",
     "Paciente",
     "PacienteContacto",
+    "Pago",
     "Permiso",
     "PrincipalConocimiento",
     "PrioridadEspera",
@@ -200,6 +203,7 @@ __all__ = [
     "Sede",
     "Servicio",
     "Sesion",
+    "SesionDemo",
     "SeveridadAlergia",
     "SeveridadAlerta",
     "TipoBloqueo",

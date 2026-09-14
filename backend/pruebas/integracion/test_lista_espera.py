@@ -37,7 +37,7 @@ from app.modulos.lista_espera.servicios import (
     MAXIMO_OFERTAS_VENCIDAS,
     ServicioListaEspera,
 )
-from app.modulos.profesionales.modelos import Profesional
+from app.modulos.profesionales.modelos import Profesional, ProfesionalSede
 from app.nucleo.auditoria import AccionAuditada
 from app.nucleo.autorizacion import Ambito, Principal, TipoActor, principal_sistema
 from app.nucleo.errores import (
@@ -366,6 +366,10 @@ class TestOferta:
             numero_registro_profesional=f"REG-OTRO-{uuid.uuid4().hex[:6]}",
         )
         sesion.add(otro)
+        await sesion.flush()
+
+        # El alta ahora valida tambien que el profesional atienda en la sede.
+        sesion.add(ProfesionalSede(profesional_id=otro.id, sede_id=sede.id))
         await sesion.flush()
 
         await _anotar(

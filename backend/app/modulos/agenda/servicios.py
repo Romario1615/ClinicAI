@@ -44,13 +44,14 @@ from app.modulos.agenda.modelos import (
     OrigenCita,
 )
 from app.modulos.agenda.repositorio import RepositorioAgenda, rango_de_dias
+from app.modulos.lista_espera.servicios import ServicioListaEspera
 from app.nucleo.auditoria import (
     AccionAuditada,
     EntradaAuditoria,
     ResultadoAuditoria,
     construir_entrada,
 )
-from app.nucleo.autorizacion import Principal, TipoActor
+from app.nucleo.autorizacion import Principal, TipoActor, principal_sistema
 from app.nucleo.errores import (
     BloqueoExpirado,
     PermisoDenegado,
@@ -524,7 +525,10 @@ class ServicioAgenda:
             estado_anterior=estado_anterior,
         )
 
-        return ResultadoOperacion(cita, (entrada,))
+        oferta = await ServicioListaEspera(self._sesion, self._reloj).ofrecer_turno(
+            cita, principal=principal_sistema(cita.clinica_id)
+        )
+        return ResultadoOperacion(cita, (entrada, *oferta.auditoria))
 
     # ==================================================================
     #  Reprogramacion

@@ -47,7 +47,7 @@ export const CONFIGURACION = new InjectionToken<ConfiguracionCliente>('Configura
 
 export const CONFIGURACION_POR_DEFECTO: ConfiguracionCliente = {
   urlApi: 'http://127.0.0.1:8000/api/v1',
-  origenDatos: 'hibrido',
+  origenDatos: 'api',
   clinicaPorDefecto: '',
   zonaHorariaPorDefecto: 'America/Guayaquil',
 };
@@ -78,5 +78,5 @@ export const PERMISOS = {
   adherenciaLeer: 'adherencia.leer',
   listaEsperaGestionar: 'lista_espera.gestionar',
   conocimientoLeer: 'conocimiento.leer',
-  metricasLeer: 'metricas.leer',
+  metricasLeer: 'dashboard.leer',
 } as const;

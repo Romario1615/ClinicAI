@@ -34,7 +34,7 @@ export const routes: Routes = [
     canActivate: [guardiaAutenticacion, guardiaSegundoFactor],
     title: 'Panel · Gestion clinica',
     loadComponent: () =>
-      import('./paginas/demostracion/paginas-demostracion.component').then(
+      import('./paginas/panel/panel.component').then(
         (m) => m.PanelComponent,
       ),
   },
@@ -58,10 +58,10 @@ export const routes: Routes = [
   },
   {
     path: 'lista-espera',
-    canActivate: [guardiaAutenticacion, guardiaSegundoFactor, guardiaPermiso(PERMISOS.agendaLeer)],
+    canActivate: [guardiaAutenticacion, guardiaSegundoFactor, guardiaPermiso(PERMISOS.listaEsperaGestionar)],
     title: 'Lista de espera · Gestion clinica',
     loadComponent: () =>
-      import('./paginas/demostracion/paginas-demostracion.component').then(
+      import('./paginas/lista-espera/lista-espera.component').then(
         (m) => m.ListaEsperaComponent,
       ),
   },
@@ -83,12 +83,12 @@ export const routes: Routes = [
     canActivate: [
       guardiaAutenticacion,
       guardiaSegundoFactor,
-      guardiaPermiso(PERMISOS.historiaLeer, PERMISOS.pacienteLeer),
+      guardiaPermiso(PERMISOS.recetaLeer),
     ],
     title: 'Medicamentos · Gestion clinica',
     loadComponent: () =>
-      import('./paginas/demostracion/paginas-demostracion.component').then(
-        (m) => m.MedicamentosComponent,
+      import('./paginas/historia-clinica/historia-clinica.component').then(
+        (m) => m.HistoriaClinicaComponent,
       ),
   },
   {
@@ -107,9 +107,15 @@ export const routes: Routes = [
     canActivate: [guardiaAutenticacion, guardiaSegundoFactor],
     title: 'Catalogo · Gestion clinica',
     loadComponent: () =>
-      import('./paginas/demostracion/paginas-demostracion.component').then(
-        (m) => m.CatalogoDemoComponent,
+      import('./paginas/catalogo/catalogo.component').then(
+        (m) => m.CatalogoComponent,
       ),
+  },
+  {
+    path: 'pagos',
+    canActivate: [guardiaAutenticacion, guardiaSegundoFactor, guardiaPermiso('pago.leer')],
+    title: 'Pagos · Gestión clínica',
+    loadComponent: () => import('./paginas/pagos/pagos.component').then(m => m.PagosComponent),
   },
   {
     path: 'sin-permiso',

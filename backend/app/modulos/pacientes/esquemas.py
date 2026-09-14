@@ -21,7 +21,32 @@ from __future__ import annotations
 import uuid
 from datetime import date
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field, model_validator
+
+from app.modulos.pacientes.modelos import TipoDocumento
+
+
+class DatosPaciente(BaseModel):
+    """Ficha administrativa. El nivel de identidad no lo decide este formulario."""
+
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    nombre: str = Field(min_length=1, max_length=100)
+    apellido: str = Field(min_length=1, max_length=100)
+    tipo_documento: TipoDocumento = TipoDocumento.CEDULA
+    numero_documento: str | None = Field(default=None, min_length=3, max_length=32)
+    fecha_nacimiento: date | None = None
+    telefono_whatsapp: str | None = Field(default=None, pattern=r"^\+?[0-9 ()-]{7,32}$")
+    correo: str | None = Field(default=None, max_length=200, pattern=r"^[^\s@]+@[^\s@]+\.[^\s@]+$")
+    direccion: str | None = Field(default=None, max_length=500)
+
+    @model_validator(mode="after")
+    def documento_coherente(self) -> DatosPaciente:
+        if self.tipo_documento != TipoDocumento.SIN_DOCUMENTO and not self.numero_documento:
+            raise ValueError("Indique el numero de documento.")
+        if self.tipo_documento == TipoDocumento.SIN_DOCUMENTO and self.numero_documento:
+            raise ValueError("Sin documento no admite un numero de documento.")
+        return self
 
 
 class RespuestaPaciente(BaseModel):

@@ -1,5 +1,13 @@
 <h1>Pacientes</h1>
 
+@if (sesion.tienePermiso('paciente.crear')) {
+  <button type="button" class="boton boton--principal" (click)="nuevoPaciente()">Registrar paciente</button>
+}
+@if (avisoGuardado()) { <p role="status">{{ avisoGuardado() }}</p> }
+@if (editando()) {
+  <app-editor-paciente [paciente]="paraEditar()" (cerrar)="editando.set(false)" (guardado)="pacienteGuardado()" />
+}
+
 <section class="tarjeta buscador" aria-label="Buscar pacientes">
   <form (ngSubmit)="buscar()">
     <label class="campo">
@@ -170,6 +178,9 @@
         </p>
       </div>
       <button class="boton" type="button" (click)="cerrarFicha()">Cerrar</button>
+      @if (sesion.tienePermiso('paciente.editar')) {
+        <button class="boton" type="button" (click)="editarPaciente()">Editar ficha</button>
+      }
     </header>
 
     <dl class="ficha__datos">

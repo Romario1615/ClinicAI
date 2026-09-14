@@ -24,15 +24,17 @@ from __future__ import annotations
 import uuid
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Path, Query, Request
+from fastapi import APIRouter, Depends, Header, Path, Query, Request
 
 from app.modulos.pacientes.esquemas import (
+    DatosPaciente,
     PaginaPacientes,
     RespuestaPaciente,
     RespuestaPacienteDetalle,
 )
 from app.modulos.pacientes.modelos import Paciente
 from app.modulos.pacientes.repositorio import LIMITE_MAXIMO, LONGITUD_MINIMA_BUSQUEDA
+from app.modulos.pacientes.servicios import guardar_paciente
 from app.nucleo.auditoria import AccionAuditada, construir_entrada
 from app.nucleo.autorizacion import NivelSensibilidad, Principal
 from app.nucleo.dependencias import (
@@ -47,6 +49,36 @@ from app.nucleo.errores import RecursoNoEncontrado
 enrutador = APIRouter(prefix="/pacientes", tags=["pacientes"])
 
 PuedeLeerPacientes = Annotated[Principal, Depends(exige_permiso("paciente.leer_administrativo"))]
+PuedeCrearPacientes = Annotated[Principal, Depends(exige_permiso("paciente.crear"))]
+PuedeEditarPacientes = Annotated[Principal, Depends(exige_permiso("paciente.editar"))]
+ClaveEscritura = Annotated[str, Header(alias="Idempotency-Key", min_length=8, max_length=200)]
+
+
+@enrutador.post("/", response_model=RespuestaPaciente, status_code=201)
+async def crear_paciente(
+    datos: DatosPaciente,
+    principal: PuedeCrearPacientes,
+    sesion: Sesion,
+    reloj: RelojActual,
+    clave: ClaveEscritura,
+) -> RespuestaPaciente:
+    paciente = await guardar_paciente(sesion, principal, reloj, datos, clave)
+    await sesion.commit()
+    return _a_respuesta(paciente)
+
+
+@enrutador.put("/{paciente_id}", response_model=RespuestaPaciente)
+async def editar_paciente(
+    paciente_id: uuid.UUID,
+    datos: DatosPaciente,
+    principal: PuedeEditarPacientes,
+    sesion: Sesion,
+    reloj: RelojActual,
+    clave: ClaveEscritura,
+) -> RespuestaPaciente:
+    paciente = await guardar_paciente(sesion, principal, reloj, datos, clave, paciente_id)
+    await sesion.commit()
+    return _a_respuesta(paciente)
 
 
 def _a_respuesta(paciente: Paciente) -> RespuestaPaciente:

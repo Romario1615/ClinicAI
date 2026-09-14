@@ -40,6 +40,8 @@ import { ApiService, FalloApi } from '../../nucleo/servicios/api.service';
 import type { PacienteDetalle } from '../../nucleo/servicios/api.service';
 import type { Paciente } from '../../nucleo/modelos/dominio';
 import { formatearFechaLarga } from '../../nucleo/utilidades/fechas';
+import { EditorPacienteComponent } from './editor-paciente.component';
+import { SesionService } from '../../nucleo/servicios/sesion.service';
 
 /** Cuantas fichas por pagina. */
 const POR_PAGINA = 25;
@@ -80,12 +82,20 @@ const VERIFICACION: Record<string, { texto: string; detalle: string; tono: strin
 @Component({
   selector: 'app-pacientes',
   standalone: true,
-  imports: [FormsModule, CargandoComponent, ErrorComponent, VacioComponent],
+  imports: [FormsModule, CargandoComponent, ErrorComponent, VacioComponent, EditorPacienteComponent],
   templateUrl: './pacientes.component.html',
   styleUrl: './pacientes.component.scss',
 })
 export class PacientesComponent {
   private readonly api = inject(ApiService);
+  protected readonly sesion = inject(SesionService);
+  protected readonly editando = signal(false);
+  protected readonly paraEditar = signal<PacienteDetalle | null>(null);
+  protected readonly avisoGuardado = signal('');
+
+  protected nuevoPaciente(): void { this.paraEditar.set(null); this.editando.set(true); this.avisoGuardado.set(''); }
+  protected editarPaciente(): void { this.paraEditar.set(this.seleccionado()); this.editando.set(true); this.avisoGuardado.set(''); }
+  protected pacienteGuardado(): void { this.editando.set(false); this.seleccionado.set(null); this.avisoGuardado.set('Paciente guardado correctamente.'); this.cargar(); }
 
   // --- Busqueda ---
   protected termino = '';

@@ -436,7 +436,7 @@ function aParametros(consulta?: Readonly<Record<string, unknown>>): HttpParams {
   return params;
 }
 
-function traducirFallo(error: unknown): Observable<never> {
+export function traducirFallo(error: unknown): Observable<never> {
   if (!(error instanceof HttpErrorResponse)) {
     return throwError(() => error);
   }

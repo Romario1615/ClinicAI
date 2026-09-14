@@ -109,7 +109,7 @@ describe('AppComponent', () => {
     expect(enlaces.some((texto) => texto.includes('Historia'))).toBeFalse();
   });
 
-  it('marca las secciones que aun usan datos de demostracion', () => {
+  it('no anuncia como demostracion ninguna seccion que ya usa datos reales', () => {
     sesion.establecerTokens({
       token_acceso: 't',
       token_refresco: 'r',
@@ -120,8 +120,14 @@ describe('AppComponent', () => {
     sesion.establecerIdentidad(identidadCon(['agenda.leer']));
     fixture.detectChanges();
 
-    // El panel es de demostracion; la agenda, no.
+    // Todas las secciones de la navegacion estan conectadas al backend, asi
+    // que no debe aparecer ninguna marca. La comprobacion no es trivial: una
+    // marca olvidada en una pantalla ya real le dice a quien atiende que los
+    // datos que ve son inventados, y dejaria de fiarse de ellos.
+    //
+    // El mecanismo de la marca sigue en la plantilla a proposito: la Fase 8 y
+    // la 9 traeran pantallas nuevas, y algunas naceran con datos sinteticos.
     const marcas = fixture.nativeElement.querySelectorAll('.navegacion__demo');
-    expect(marcas.length).toBeGreaterThan(0);
+    expect(marcas.length).toBe(0);
   });
 });

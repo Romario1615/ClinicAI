@@ -75,7 +75,14 @@ class Auditoria(Base, MezclaIdentificador):
             name="actor_tipo_valido",
         ),
         CheckConstraint("resultado IN ('EXITO', 'DENEGADO', 'ERROR')", name="resultado_valido"),
-        CheckConstraint("origen IN ('WEB', 'API', 'WHATSAPP', 'WORKER')", name="origen_valido"),
+        # `DEMO_LOCAL` marca lo que hizo el agente en una simulacion. Sin un
+        # origen propio, una revision de auditoria no podria distinguir una
+        # reserva simulada de una real, que es justo para lo que existe este
+        # campo. Solo aparece en el entorno local.
+        CheckConstraint(
+            "origen IN ('WEB', 'API', 'WHATSAPP', 'WORKER', 'DEMO_LOCAL')",
+            name="origen_valido",
+        ),
         CheckConstraint(
             "nivel_sensibilidad IS NULL OR nivel_sensibilidad IN ('N0', 'N1', 'N2', 'N3')",
             name="nivel_valido",
