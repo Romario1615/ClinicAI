@@ -1,0 +1,81 @@
+<header class="cabecera-pagina">
+  <div><p class="ceja">DEMOSTRACIÓN LOCAL</p><h1>Agente demo</h1></div>
+  <span class="modo">Modo simulado</span>
+</header>
+<p class="introduccion">Pruebe una conversación administrativa con datos sintéticos. Las reservas se guardan en la agenda local. Este asistente sigue un guion, sin un modelo de lenguaje ni conexión a WhatsApp.</p>
+
+@if (cargando()) {
+  <app-cargando mensaje="Preparando la demostración…" />
+} @else {
+  @if (error()) { <p class="aviso-error" role="alert">{{ error() }}</p> }
+  @if (!sesionId()) {
+    <section class="tarjeta editor-demo" aria-labelledby="preparar-demo">
+      <h2 id="preparar-demo">Prepare una conversación</h2>
+      <form (ngSubmit)="iniciar()">
+        <fieldset [disabled]="ocupado()">
+          <app-selector-paciente (seleccion)="paciente.set($event)" />
+          <div class="formulario-demo">
+            <label>Sede<select name="sede" [ngModel]="sedeId()" (ngModelChange)="sedeId.set($event); cambiarSeleccion()" required>
+              @for (s of sedes(); track s.id) { <option [value]="s.id">{{ s.nombre }}</option> }
+            </select></label>
+            <label>Servicio<select name="servicio" [ngModel]="servicioId()" (ngModelChange)="servicioId.set($event); cambiarSeleccion()" required>
+              @for (s of servicios(); track s.id) { <option [value]="s.id">{{ s.nombre }}</option> }
+            </select></label>
+            <label>Profesional<select name="profesional" [(ngModel)]="profesionalId" required>
+              @for (p of profesionales(); track p.id) { <option [value]="p.id">{{ p.nombre }} {{ p.apellido }}</option> }
+            </select></label>
+            <label>Buscar desde<input type="date" name="fecha" [(ngModel)]="fecha" required /></label>
+          </div>
+          <p class="ayuda-demo">Se consultarán siete días en la zona {{ zona() }}.</p>
+          @if (!profesionales().length && !cargandoProfesionales()) { <p>No hay profesionales disponibles para esta sede y servicio.</p> }
+          <button class="boton boton--principal" type="submit" [disabled]="!paciente() || !profesionalId || !fecha || ocupado() || cargandoProfesionales()">{{ ocupado() ? 'Iniciando…' : 'Iniciar simulación' }}</button>
+        </fieldset>
+      </form>
+      @if (error()) { <button class="boton" type="button" (click)="cargar()" [disabled]="ocupado()">Recargar catálogo</button> }
+    </section>
+  } @else {
+    <section class="tarjeta conversacion" aria-labelledby="conversacion-demo">
+      <div class="cabecera-pagina">
+        <div><h2 id="conversacion-demo">{{ paciente()?.nombre }} {{ paciente()?.apellido }}</h2><small>Horarios en {{ zona() }}</small></div>
+        <button class="boton" type="button" (click)="nueva()" [disabled]="ocupado()">Nueva simulación</button>
+      </div>
+      <div class="mensajes" role="log" aria-label="Conversación simulada" aria-live="polite">
+        @for (mensaje of mensajes(); track $index) {
+          <article class="mensaje" [class.mensaje--propio]="mensaje.autor === 'Usted'">
+            <strong>{{ mensaje.autor }}</strong><p>{{ mensaje.texto }}</p>
+            @if (mensaje.respuesta?.datos?.inicio; as inicio) { <p class="detalle-cita">{{ fechaHora(inicio) }}</p> }
+            @if (mensaje.respuesta?.datos?.expira_en; as expira) { <small>Apartado hasta {{ fechaHora(expira) }}. Confirme antes de ese momento.</small> }
+            @for (cita of mensaje.respuesta?.datos?.citas ?? []; track cita.cita_id) {
+              <div class="cita-demo"><span>{{ fechaHora(cita.inicio) }}</span><app-insignia-estado [estado]="cita.estado" /></div>
+            }
+          </article>
+        }
+      </div>
+      @if (ocupado()) { <p role="status">Procesando…</p> }
+      @if (requiereHumano()) {
+        <div class="derivacion" role="status"><strong>Atención del personal requerida</strong><p>La conversación quedó derivada. Inicie otra simulación para probar un nuevo recorrido.</p></div>
+      } @else if (pendiente() && !ocupado()) {
+        <p>No se recibió una respuesta. Reintente el mismo envío para comprobar su resultado.</p>
+        <button class="boton boton--principal" type="button" (click)="enviar(pendiente()!.texto)">Reintentar envío</button>
+      } @else {
+        @if (turnos().length) {
+          <div class="horarios" aria-label="Horarios disponibles">
+            @for (turno of turnos(); track turno.inicio; let i = $index) {
+              <button class="boton" type="button" [disabled]="ocupado()" (click)="elegir(i)">Elegir {{ i + 1 }} · {{ fechaHora(turno.inicio) }}</button>
+            }
+          </div>
+        }
+        <div class="acciones-demo">
+          <button class="boton" type="button" [disabled]="ocupado()" (click)="enviar('buscar horarios')">Buscar horarios</button>
+          @if (puedeConfirmar()) { <button class="boton boton--principal" type="button" [disabled]="ocupado()" (click)="enviar('confirmar')">Confirmar cita</button> }
+          <button class="boton" type="button" [disabled]="ocupado()" (click)="enviar('mis citas')">Mis citas</button>
+          <button class="boton" type="button" [disabled]="ocupado()" (click)="enviar('hablar con una persona')">Hablar con una persona</button>
+        </div>
+        <form class="compositor" (ngSubmit)="enviar()">
+          <label class="campo"><span class="campo__etiqueta">Mensaje</span><textarea class="campo__control" name="mensaje" [(ngModel)]="texto" maxlength="1000" [disabled]="ocupado()" placeholder="Escriba buscar horarios, mis citas o humano"></textarea></label>
+          <button class="boton boton--principal" type="submit" [disabled]="ocupado() || !texto.trim()">Enviar mensaje</button>
+        </form>
+      }
+    </section>
+  }
+}

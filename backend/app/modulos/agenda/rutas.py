@@ -483,6 +483,7 @@ async def reprogramar_cita(
     sesion: Sesion,
     auditor: Auditor,
     cita_id: Annotated[uuid.UUID, Path()],
+    clave_idempotencia: ClaveIdempotencia = None,
 ) -> RespuestaCita:
     """Mueve la cita, conservando su identificador.
 
@@ -499,6 +500,7 @@ async def reprogramar_cita(
         motivo=datos.motivo,
         nuevo_profesional_id=datos.nuevo_profesional_id,
         nuevo_consultorio_id=datos.nuevo_consultorio_id,
+        clave_idempotencia=clave_idempotencia,
     )
     return await _persistir(resultado, sesion, auditor)
 

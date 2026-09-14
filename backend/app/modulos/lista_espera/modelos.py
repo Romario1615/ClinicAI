@@ -179,6 +179,16 @@ class OfertaTurno(Base, MezclaIdentificador, MezclaAuditoria):
     # tan perdido como antes de ofrecerlo.
     expira_en: Mapped[datetime] = mapped_column()
 
+    # Si se le pudo avisar al paciente por un canal automatico.
+    #
+    # Falso cuando no tiene consentimiento vigente: la oferta se crea igual
+    # -- recepcion puede llamarle por telefono -- pero **no puede contar en su
+    # contra al vencer**. Penalizar a alguien por no responder a un mensaje que
+    # nunca recibio lo acaba sacando de la lista de espera sin haber hecho nada
+    # mal.
+    aviso_enviado: Mapped[bool] = mapped_column(
+        Boolean, default=False, server_default=text("false")
+    )
     respondida_en: Mapped[datetime | None] = mapped_column(default=None)
     motivo_rechazo: Mapped[str | None] = mapped_column(Text, default=None)
     cita_creada_id: Mapped[uuid.UUID | None] = mapped_column(

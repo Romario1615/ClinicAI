@@ -32,6 +32,7 @@ import {
   VacioComponent,
 } from '../../compartido/estados.component';
 import { InsigniaEstadoComponent } from '../../compartido/insignia-estado.component';
+import { ReprogramarCitaComponent } from './reprogramar-cita.component';
 import { ApiService, FalloApi } from '../../nucleo/servicios/api.service';
 import { CatalogoService } from '../../nucleo/servicios/catalogo.service';
 import { PERMISOS } from '../../nucleo/servicios/configuracion';
@@ -75,6 +76,7 @@ const MOTIVOS: Record<string, string> = {
     ErrorComponent,
     VacioComponent,
     InsigniaEstadoComponent,
+    ReprogramarCitaComponent,
   ],
   templateUrl: './agenda.component.html',
   styleUrl: './agenda.component.scss',
@@ -128,6 +130,7 @@ export class AgendaComponent {
   // --- Cancelación ---
   protected readonly citaACancelar = signal<Cita | null>(null);
   protected motivoCancelacion = '';
+  protected readonly citaAReprogramar = signal<Cita | null>(null);
 
   protected readonly zona = computed(
     () => this.sedes().find((sede) => sede.id === this.sedeId())?.zona_horaria ?? 'America/Guayaquil',
@@ -477,6 +480,13 @@ export class AgendaComponent {
     this.ejecutar(() => this.api.confirmarCita(cita.id), 'Cita confirmada.');
   }
 
+  protected alReprogramar(cita: Cita): void {
+    this.citaAReprogramar.set(null);
+    this.fecha.set(new Intl.DateTimeFormat('en-CA', { timeZone: this.zona(), year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(cita.inicio)));
+    this.mensajeExito.set('Cita reprogramada. El cambio quedó registrado en su historial.');
+    this.cargarAgenda();
+  }
+
   protected completarCita(cita: Cita): void {
     this.ejecutar(() => this.api.completarCita(cita.id), 'Cita marcada como atendida.');
   }
@@ -503,6 +513,7 @@ export class AgendaComponent {
   protected accionesDe(cita: Cita): {
     confirmar: boolean;
     cancelar: boolean;
+    reprogramar: boolean;
     completar: boolean;
     inasistencia: boolean;
   } {
@@ -511,6 +522,7 @@ export class AgendaComponent {
     return {
       confirmar: abierta && this.puedeCrear(),
       cancelar: viva && this.puedeCancelar(),
+      reprogramar: (cita.estado === 'CONFIRMED' || cita.estado === 'RESCHEDULED') && this.sesion.tienePermiso(PERMISOS.citaReprogramar),
       completar:
         (cita.estado === 'CONFIRMED' || cita.estado === 'RESCHEDULED') && this.puedeCompletar(),
       inasistencia:

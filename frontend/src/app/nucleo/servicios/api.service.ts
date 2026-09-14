@@ -363,8 +363,9 @@ export class ApiService {
   reprogramarCita(
     id: string,
     datos: { nuevo_inicio: string; motivo: string; nuevo_profesional_id?: string | null },
+    claveIdempotencia?: string,
   ): Observable<Cita> {
-    return this.post<Cita>(`/agenda/citas/${id}/reprogramacion`, datos);
+    return this.post<Cita>(`/agenda/citas/${id}/reprogramacion`, datos, claveIdempotencia);
   }
 
   completarCita(id: string): Observable<Cita> {

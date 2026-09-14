@@ -35,12 +35,17 @@ from __future__ import annotations
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo
 
-from sqlalchemy import or_, select
+from sqlalchemy import func, or_, select
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.mensajeria.adaptadores import RegistroCanales
+from app.mensajeria.servicios import ServicioOutbox, SolicitudEnvio
 from app.modulos.agenda.modelos import Cita, EstadoCita
+from app.modulos.agenda.repositorio import RepositorioAgenda
 from app.modulos.lista_espera.modelos import (
     EntradaListaEspera,
     EstadoEspera,
@@ -49,18 +54,24 @@ from app.modulos.lista_espera.modelos import (
     PrioridadEspera,
 )
 from app.modulos.lista_espera.repositorio import RepositorioListaEspera
-from app.modulos.organizacion.modelos import Servicio
+from app.modulos.organizacion.modelos import Clinica, Sede, Servicio
+from app.modulos.outbox.modelos import CanalOutbox, TipoMensajeOutbox
+from app.modulos.pacientes.modelos import Paciente
+from app.modulos.profesionales.modelos import Profesional
 from app.nucleo.auditoria import AccionAuditada, EntradaAuditoria, construir_entrada
-from app.nucleo.autorizacion import Principal
+from app.nucleo.autorizacion import Principal, TipoActor, principal_sistema
 from app.nucleo.bd import tomar_bloqueo_consultivo
 from app.nucleo.errores import (
     ConflictoEstado,
+    ConsentimientoRequerido,
     OfertaExpirada,
     OfertaYaResuelta,
     PermisoDenegado,
     RecursoNoEncontrado,
 )
 from app.nucleo.errores_bd import traducir_o_propagar
+from app.nucleo.idempotencia import calcular_clave_deduplicacion
+from app.nucleo.registro import obtener_logger
 from app.nucleo.reloj import Reloj
 
 # Espacio de nombres del bloqueo consultivo. Separarlo evita que este uso
@@ -70,6 +81,8 @@ ESPACIO_BLOQUEO_OFERTA = 7301
 # A quien deja vencer tantas ofertas se le deja de ofrecer. No es un castigo:
 # cada oferta ignorada retiene el turno hasta que vence, y el hueco se pierde
 # igual pero mas tarde y para todos.
+logger = obtener_logger(__name__)
+
 MAXIMO_OFERTAS_VENCIDAS = 3
 
 
@@ -181,6 +194,16 @@ class ServicioListaEspera:
         nadie esperando esa especialidad.
         """
         ahora = self._reloj.ahora()
+        self._exigir(principal, "lista_espera.gestionar")
+        if principal.actor_tipo == TipoActor.SISTEMA and principal.clinica_id is None:
+            principal = principal_sistema(cita_liberada.clinica_id)
+        if (
+            await RepositorioAgenda(self._sesion).obtener_cita(
+                cita_liberada.id, principal=principal
+            )
+            is None
+        ):
+            raise RecursoNoEncontrado("La cita solicitada no existe.")
 
         # Serializa a quien compita por ESTE turno, sin tocar el resto de la
         # agenda. Ver la nota del encabezado.
@@ -195,15 +218,32 @@ class ServicioListaEspera:
         if await self._existe_oferta_activa(cita_liberada.id):
             return ResultadoOferta()
 
-        candidato = await self._siguiente_candidato(cita_liberada, ahora=ahora)
+        if await self._turno_ocupado(cita_liberada):
+            return ResultadoOferta()
+
+        candidato = await self._siguiente_candidato(cita_liberada, ahora=ahora, principal=principal)
         if candidato is None:
             return ResultadoOferta()
+
+        expira_en = min(ahora + timedelta(minutes=self._minutos), cita_liberada.inicio)
+
+        # Se avisa al paciente. La oferta se crea en cualquier caso: si no
+        # tiene consentimiento para mensajes automaticos, recepcion todavia
+        # puede llamarle por telefono, y bloquear la oferta lo dejaria fuera de
+        # la lista de espera para siempre.
+        #
+        # Lo que **no** puede pasar es que una oferta que nunca se comunico
+        # cuente en su contra al vencer. Ver `aviso_enviado`.
+        avisado = await self._avisar(
+            candidato, cita_liberada, expira_en=expira_en, clinica_id=cita_liberada.clinica_id
+        )
 
         oferta = OfertaTurno(
             lista_espera_id=candidato.id,
             cita_liberada_id=cita_liberada.id,
             estado=EstadoOferta.OFRECIDA.value,
-            expira_en=ahora + timedelta(minutes=self._minutos),
+            expira_en=expira_en,
+            aviso_enviado=avisado,
             creado_por=principal.actor_id,
         )
         self._sesion.add(oferta)
@@ -379,11 +419,14 @@ class ServicioListaEspera:
             self._exigir(principal, "lista_espera.gestionar")
 
         ahora = self._reloj.ahora()
+        consulta = select(OfertaTurno)
+        if not principal.es_sistema or principal.clinica_id is not None:
+            entradas = RepositorioListaEspera(self._sesion).consulta(principal).subquery()
+            consulta = consulta.where(OfertaTurno.lista_espera_id.in_(select(entradas.c.id)))
         vencidas = list(
             (
                 await self._sesion.execute(
-                    select(OfertaTurno)
-                    .where(
+                    consulta.where(
                         OfertaTurno.estado == EstadoOferta.OFRECIDA.value,
                         OfertaTurno.expira_en <= ahora,
                     )
@@ -399,10 +442,19 @@ class ServicioListaEspera:
             entrada = await self._sesion.get(EntradaListaEspera, oferta.lista_espera_id)
             if entrada is None:
                 continue
+            if not oferta.aviso_enviado:
+                # No se le pudo avisar por un canal automatico. La oferta vence
+                # igual -- el turno tiene que volver a la cola -- pero **no
+                # cuenta en su contra**: nadie puede responder a un mensaje que
+                # no recibio, y penalizarlo lo sacaria de la lista de espera sin
+                # haber hecho nada mal.
+                entrada.estado = EstadoEspera.ACTIVA.value
+                continue
+
             entrada.ofertas_vencidas += 1
-            # A quien nunca responde se le deja de ofrecer: cada oferta
-            # ignorada retiene un turno hasta que vence, y el hueco se pierde
-            # igual pero mas tarde y para todos los demas.
+            # A quien no responde se le deja de ofrecer: cada oferta ignorada
+            # retiene un turno hasta que vence, y el hueco se pierde igual pero
+            # mas tarde y para todos los demas.
             entrada.estado = (
                 EstadoEspera.EXPIRADA.value
                 if entrada.ofertas_vencidas >= MAXIMO_OFERTAS_VENCIDAS
@@ -417,7 +469,7 @@ class ServicioListaEspera:
     #  Auxiliares
     # ==================================================================
     async def _siguiente_candidato(
-        self, cita: Cita, *, ahora: datetime
+        self, cita: Cita, *, ahora: datetime, principal: Principal
     ) -> EntradaListaEspera | None:
         """Primero de la cola que puede aceptar este turno.
 
@@ -427,15 +479,39 @@ class ServicioListaEspera:
         recibir la oferta.
         """
         limite_antelacion = (cita.inicio - ahora).total_seconds() / 3600
+        zona = await self._sesion.scalar(
+            select(func.coalesce(Sede.zona_horaria, Clinica.zona_horaria))
+            .join(Clinica, Clinica.id == Sede.clinica_id)
+            .where(Sede.id == cita.sede_id)
+        )
+        fecha_local = cita.inicio.astimezone(ZoneInfo(zona or "America/Guayaquil")).date()
 
         consulta = (
-            select(EntradaListaEspera)
+            RepositorioListaEspera(self._sesion)
+            .consulta(principal)
             .where(
                 EntradaListaEspera.estado == EstadoEspera.ACTIVA.value,
                 EntradaListaEspera.sede_id == cita.sede_id,
                 EntradaListaEspera.clinica_id == cita.clinica_id,
                 EntradaListaEspera.horas_antelacion_minima <= limite_antelacion,
                 EntradaListaEspera.ofertas_vencidas < MAXIMO_OFERTAS_VENCIDAS,
+                or_(
+                    EntradaListaEspera.profesional_id.is_(None),
+                    EntradaListaEspera.profesional_id == cita.profesional_id,
+                ),
+                or_(
+                    EntradaListaEspera.disponible_desde.is_(None),
+                    EntradaListaEspera.disponible_desde <= fecha_local,
+                ),
+                or_(
+                    EntradaListaEspera.disponible_hasta.is_(None),
+                    EntradaListaEspera.disponible_hasta >= fecha_local,
+                ),
+                or_(
+                    EntradaListaEspera.preferencias.is_(None),
+                    EntradaListaEspera.preferencias == JSONB.NULL,
+                    EntradaListaEspera.preferencias == {},
+                ),
                 EntradaListaEspera.especialidad_id
                 == select(Servicio.especialidad_id)
                 .where(Servicio.id == cita.servicio_id)
@@ -460,22 +536,109 @@ class ServicioListaEspera:
                 EntradaListaEspera.creado_en.asc(),
             )
             .with_for_update(skip_locked=True)
-            .limit(20)
+            .limit(1)
         )
-        candidatos = list((await self._sesion.execute(consulta)).scalars())
+        return (await self._sesion.execute(consulta)).scalar_one_or_none()
 
-        for candidato in candidatos:
-            # Las preferencias no interpretadas exigen gestion humana.
-            if candidato.preferencias:
-                continue
-            if candidato.profesional_id and candidato.profesional_id != cita.profesional_id:
-                continue
-            if candidato.disponible_desde and cita.inicio.date() < candidato.disponible_desde:
-                continue
-            if candidato.disponible_hasta and cita.inicio.date() > candidato.disponible_hasta:
-                continue
-            return candidato
-        return None
+    async def _avisar(
+        self,
+        candidato: EntradaListaEspera,
+        cita: Cita,
+        *,
+        expira_en: datetime,
+        clinica_id: uuid.UUID,
+    ) -> bool:
+        """Encola el aviso del turno liberado. Devuelve si se pudo.
+
+        Devuelve `False` cuando el paciente no tiene consentimiento vigente
+        para este tipo de mensaje. La oferta se crea igualmente -- recepcion
+        puede llamarle -- pero queda marcada, y al vencer no cuenta en su
+        contra.
+
+        El texto sale de la plantilla aprobada y **no lleva ningun dato
+        clinico**: fecha, hora, sede y profesional, nada de servicio ni motivo
+        de consulta (CLAUDE.md, regla 10).
+        """
+        datos = (
+            await self._sesion.execute(
+                select(
+                    Paciente.nombre,
+                    Sede.nombre,
+                    Sede.zona_horaria,
+                    Clinica.zona_horaria,
+                    Profesional.nombre,
+                    Profesional.apellido,
+                )
+                .select_from(Cita)
+                .join(Paciente, Paciente.id == candidato.paciente_id)
+                .join(Sede, Sede.id == Cita.sede_id)
+                .join(Clinica, Clinica.id == Cita.clinica_id)
+                .join(Profesional, Profesional.id == Cita.profesional_id)
+                .where(Cita.id == cita.id)
+            )
+        ).first()
+        if datos is None:
+            return False
+
+        nombre, sede, zona_sede, zona_clinica, prof_nombre, prof_apellido = datos
+        zona = ZoneInfo(zona_sede or zona_clinica or "America/Guayaquil")
+        inicio_local = cita.inicio.astimezone(zona)
+        vence_local = expira_en.astimezone(zona)
+
+        solicitud = SolicitudEnvio(
+            tipo=TipoMensajeOutbox.OFERTA_TURNO,
+            canal=CanalOutbox.WHATSAPP,
+            destino_tipo="PACIENTE",
+            destino_id=candidato.paciente_id,
+            # Una por entrada de lista y turno: si la misma oferta se intentara
+            # dos veces, el paciente no recibe dos mensajes.
+            clave_deduplicacion=calcular_clave_deduplicacion(
+                "oferta_turno", str(candidato.id), str(cita.id)
+            ),
+            variables={
+                "nombre": (nombre or "").split(" ")[0],
+                "fecha": inicio_local.strftime("%d/%m/%Y"),
+                "hora": inicio_local.strftime("%H:%M"),
+                "sede": sede or "",
+                "profesional": f"{prof_nombre} {prof_apellido}".strip(),
+                "vence_hora": vence_local.strftime("%H:%M"),
+            },
+            clinica_id=clinica_id,
+            entidad_origen_tipo="lista_espera",
+            entidad_origen_id=candidato.id,
+        )
+
+        try:
+            await ServicioOutbox(self._sesion, self._reloj, RegistroCanales()).encolar(solicitud)
+        except ConsentimientoRequerido:
+            # No es un error del sistema: es el paciente que no acepto recibir
+            # mensajes. Se registra y se pasa al siguiente en la proxima vuelta.
+            logger.info(
+                "lista_espera.sin_consentimiento",
+                lista_espera_id=str(candidato.id),
+                cita_id=str(cita.id),
+            )
+            return False
+        return True
+
+    async def _turno_ocupado(self, cita: Cita) -> bool:
+        recurso = Cita.profesional_id == cita.profesional_id
+        if cita.consultorio_id:
+            recurso = or_(recurso, Cita.consultorio_id == cita.consultorio_id)
+        return bool(
+            await self._sesion.scalar(
+                select(
+                    select(Cita.id)
+                    .where(
+                        Cita.clinica_id == cita.clinica_id,
+                        recurso,
+                        Cita.estado.in_([e.value for e in EstadoCita if e.ocupa_turno]),
+                        Cita.rango.op("&&")(cita.rango),
+                    )
+                    .exists()
+                )
+            )
+        )
 
     async def _existe_oferta_activa(self, cita_id: uuid.UUID) -> bool:
         return (

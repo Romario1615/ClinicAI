@@ -118,6 +118,12 @@ export const routes: Routes = [
     loadComponent: () => import('./paginas/pagos/pagos.component').then(m => m.PagosComponent),
   },
   {
+    path: 'agente-demo',
+    canActivate: [guardiaAutenticacion, guardiaSegundoFactor, guardiaPermiso(PERMISOS.conversacionResponder)],
+    title: 'Agente demo · Gestión clínica',
+    loadComponent: () => import('./paginas/agente-demo/agente-demo.component').then(m => m.AgenteDemoComponent),
+  },
+  {
     path: 'sin-permiso',
     canActivate: [guardiaAutenticacion],
     title: 'Sin acceso · Gestion clinica',

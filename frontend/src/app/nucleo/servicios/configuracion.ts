@@ -79,4 +79,5 @@ export const PERMISOS = {
   listaEsperaGestionar: 'lista_espera.gestionar',
   conocimientoLeer: 'conocimiento.leer',
   metricasLeer: 'dashboard.leer',
+  conversacionResponder: 'conversacion.responder',
 } as const;

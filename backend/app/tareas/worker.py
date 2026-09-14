@@ -31,6 +31,7 @@ from app.nucleo.configuracion import Configuracion
 from app.tareas.agenda import expirar_bloqueos
 from app.tareas.calendario import reconciliar_calendarios, sincronizar_calendarios
 from app.tareas.contexto import al_arrancar, al_parar
+from app.tareas.lista_espera import expirar_ofertas
 from app.tareas.outbox import procesar_outbox, recuperar_mensajes_huerfanos
 
 
@@ -43,6 +44,7 @@ class ConfiguracionWorker:
 
     functions: list[Any] = [  # noqa: RUF012
         expirar_bloqueos,
+        expirar_ofertas,
         procesar_outbox,
         recuperar_mensajes_huerfanos,
         sincronizar_calendarios,
@@ -50,6 +52,7 @@ class ConfiguracionWorker:
     ]
 
     cron_jobs: list[Any] = [  # noqa: RUF012
+        cron(expirar_ofertas, minute=set(range(60)), unique=True, timeout=120, max_tries=1),
         # Cada minuto. Es la resolucion util: el bloqueo dura minutos, y
         # barrer cada cinco significaria que un turno abandonado sigue
         # retenido hasta cinco minutos de mas. La consulta esta indexada por

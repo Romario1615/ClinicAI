@@ -63,6 +63,7 @@ from app.nucleo.errores import (
 )
 from app.nucleo.errores_bd import es_reintentable, traducir_o_propagar
 from app.nucleo.idempotencia import validar_clave_cliente
+from app.nucleo.operaciones import completar_operacion, iniciar_operacion
 from app.nucleo.reloj import Reloj
 
 # Un solo reintento.  Mas de uno alargaria la espera del paciente sin mejorar
@@ -542,6 +543,7 @@ class ServicioAgenda:
         motivo: str,
         nuevo_profesional_id: uuid.UUID | None = None,
         nuevo_consultorio_id: uuid.UUID | None = None,
+        clave_idempotencia: str | None = None,
     ) -> ResultadoOperacion:
         """Mueve una cita a otro horario, y opcionalmente a otro profesional.
 
@@ -566,6 +568,25 @@ class ServicioAgenda:
         cita = await self._repo.obtener_cita_para_actualizar(cita_id, principal=principal)
         if cita is None:
             raise RecursoNoEncontrado("La cita solicitada no existe.")
+
+        registro = None
+        if clave_idempotencia:
+            registro = await iniciar_operacion(
+                self._sesion,
+                principal,
+                self._reloj,
+                "cita.reprogramar",
+                clave_idempotencia,
+                {
+                    "id": cita_id,
+                    "inicio": nuevo_inicio,
+                    "motivo": motivo_limpio,
+                    "profesional": nuevo_profesional_id,
+                    "consultorio": nuevo_consultorio_id,
+                },
+            )
+            if registro.respuesta:
+                return ResultadoOperacion(cita, (), era_reintento=True)
 
         self._validar_transicion(cita, EstadoCita.RESCHEDULED)
 
@@ -631,6 +652,8 @@ class ServicioAgenda:
             estado_anterior=estado_anterior,
         )
 
+        if registro is not None:
+            completar_operacion(registro, {"id": str(cita.id)}, self._reloj)
         return ResultadoOperacion(cita, (entrada,))
 
     # ==================================================================

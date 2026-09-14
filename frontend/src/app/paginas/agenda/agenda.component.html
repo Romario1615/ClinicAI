@@ -159,6 +159,9 @@
                     <td><app-insignia-estado [estado]="cita.estado" /></td>
                     <td>
                       <div class="acciones">
+                        @if (accionesDe(cita).reprogramar) {
+                          <button type="button" class="boton boton--pequeno" (click)="citaAReprogramar.set(cita)">Reprogramar</button>
+                        }
                         @if (accionesDe(cita).confirmar) {
                           <button type="button" class="boton boton--pequeno" (click)="confirmarCita(cita)">
                             Confirmar
@@ -335,5 +338,8 @@
         </div>
       </div>
     </div>
+  }
+  @if (citaAReprogramar(); as cita) {
+    <app-reprogramar-cita [cita]="cita" [zona]="zona()" (cerrar)="citaAReprogramar.set(null)" (guardada)="alReprogramar($event)" />
   }
 }

@@ -61,6 +61,7 @@ const NAVEGACION: readonly EnlaceNavegacion[] = [
   },
   { ruta: '/catalogo', etiqueta: 'Catálogo', permisos: [PERMISOS.agendaLeer], demostracion: false },
   { ruta: '/pagos', etiqueta: 'Pagos', permisos: ['pago.leer'], demostracion: false },
+  { ruta: '/agente-demo', etiqueta: 'Agente demo', permisos: [PERMISOS.conversacionResponder], demostracion: true },
 ];
 
 @Component({

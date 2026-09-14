@@ -15,7 +15,7 @@ from app.modulos.lista_espera.modelos import EntradaListaEspera, OfertaTurno
 from app.modulos.lista_espera.repositorio import RepositorioListaEspera
 from app.modulos.lista_espera.servicios import ServicioListaEspera
 from app.nucleo.auditoria import AccionAuditada, construir_entrada
-from app.nucleo.autorizacion import Principal
+from app.nucleo.autorizacion import Principal, principal_sistema
 from app.nucleo.errores import ConflictoEstado
 from app.nucleo.operaciones import completar_operacion, iniciar_operacion
 from app.nucleo.reloj import Reloj
@@ -112,6 +112,11 @@ async def resolver(
     if registro.respuesta:
         return RespuestaEspera.model_validate(entrada)
     servicio = ServicioListaEspera(sesion, reloj)
+    oferta = await sesion.scalar(
+        select(OfertaTurno).where(
+            OfertaTurno.lista_espera_id == entrada.id, OfertaTurno.estado == "OFRECIDA"
+        )
+    )
     if datos.accion == "cancelar":
         await servicio.cancelar(entrada_id, principal=principal)
         await RepositorioAuditoria(sesion).registrar(
@@ -126,13 +131,6 @@ async def resolver(
             ]
         )
     else:
-        oferta = (
-            await sesion.execute(
-                select(OfertaTurno).where(
-                    OfertaTurno.lista_espera_id == entrada.id, OfertaTurno.estado == "OFRECIDA"
-                )
-            )
-        ).scalar_one_or_none()
         if oferta is None:
             raise ConflictoEstado("La entrada no tiene una oferta activa.")
         operacion = (
@@ -140,5 +138,12 @@ async def resolver(
         )
         resultado = await operacion(oferta.id, principal=principal)
         await RepositorioAuditoria(sesion).registrar(resultado.auditoria)
+    if oferta is not None and datos.accion in {"cancelar", "rechazar"}:
+        liberada = await sesion.get(Cita, oferta.cita_liberada_id)
+        if liberada is not None:
+            siguiente = await servicio.ofrecer_turno(
+                liberada, principal=principal_sistema(liberada.clinica_id)
+            )
+            await RepositorioAuditoria(sesion).registrar(siguiente.auditoria)
     completar_operacion(registro, {"id": str(entrada.id)}, reloj)
     return RespuestaEspera.model_validate(entrada)

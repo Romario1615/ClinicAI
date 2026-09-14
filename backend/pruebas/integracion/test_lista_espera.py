@@ -37,6 +37,7 @@ from app.modulos.lista_espera.servicios import (
     MAXIMO_OFERTAS_VENCIDAS,
     ServicioListaEspera,
 )
+from app.modulos.pacientes.modelos import Consentimiento, TipoConsentimiento
 from app.modulos.profesionales.modelos import Profesional, ProfesionalSede
 from app.nucleo.auditoria import AccionAuditada
 from app.nucleo.autorizacion import Ambito, Principal, TipoActor, principal_sistema
@@ -107,6 +108,27 @@ async def turno_liberado(
     sesion.add(cita)
     await sesion.flush()
     return cita
+
+
+async def _consentir(sesion: AsyncSession, paciente_id: uuid.UUID) -> None:
+    """Da consentimiento de comunicacion al paciente.
+
+    Hace falta para que la oferta se **comunique**. Y solo una oferta
+    comunicada puede contar en contra del paciente al vencer: penalizar a quien
+    nunca recibio el mensaje lo sacaria de la lista de espera sin haber hecho
+    nada mal.
+    """
+    sesion.add(
+        Consentimiento(
+            paciente_id=paciente_id,
+            tipo=TipoConsentimiento.COMUNICACION_WHATSAPP.value,
+            otorgado=True,
+            version_texto="v1",
+            texto_hash="0" * 64,
+            canal="PANEL",
+        )
+    )
+    await sesion.flush()
 
 
 async def _anotar(
@@ -562,7 +584,11 @@ class TestBarrido:
         sede,  # type: ignore[no-untyped-def]
         especialidad,  # type: ignore[no-untyped-def]
         reloj_fijo: RelojFijo,
+        sesion: AsyncSession,
     ):  # type: ignore[no-untyped-def]
+        # Con consentimiento: estas pruebas miden la penalizacion por no
+        # responder, y solo se penaliza a quien si recibio el aviso.
+        await _consentir(sesion, segundo_paciente.id)
         await _anotar(
             servicio_espera,
             principal_recepcion,
