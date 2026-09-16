@@ -45,6 +45,8 @@ import type { PacienteDetalle } from '../../nucleo/servicios/api.service';
 import type { Paciente } from '../../nucleo/modelos/dominio';
 import { formatearFechaLarga } from '../../nucleo/utilidades/fechas';
 import { EditorPacienteComponent } from './editor-paciente.component';
+import { FichaPacienteComponent } from '../../compartido/ficha-paciente.component';
+import { VentanaFlotanteComponent } from '../../compartido/ventana-flotante.component';
 import { SesionService } from '../../nucleo/servicios/sesion.service';
 
 /** Cuantas fichas por pagina. */
@@ -86,7 +88,15 @@ const VERIFICACION: Record<string, { texto: string; detalle: string; tono: strin
 @Component({
   selector: 'app-pacientes',
   standalone: true,
-  imports: [FormsModule, CargandoComponent, ErrorComponent, VacioComponent, EditorPacienteComponent],
+  imports: [
+    FormsModule,
+    CargandoComponent,
+    ErrorComponent,
+    VacioComponent,
+    EditorPacienteComponent,
+    FichaPacienteComponent,
+    VentanaFlotanteComponent,
+  ],
   templateUrl: './pacientes.component.html',
   styleUrl: './pacientes.component.scss',
 })
@@ -98,8 +108,20 @@ export class PacientesComponent {
   protected readonly avisoGuardado = signal('');
 
   protected nuevoPaciente(): void { this.paraEditar.set(null); this.editando.set(true); this.avisoGuardado.set(''); }
-  protected editarPaciente(): void { this.paraEditar.set(this.seleccionado()); this.editando.set(true); this.avisoGuardado.set(''); }
-  protected pacienteGuardado(): void { this.editando.set(false); this.seleccionado.set(null); this.avisoGuardado.set('Paciente guardado correctamente.'); this.cargar(); }
+  protected editarPaciente(paciente: Paciente): void {
+    // Se pide el detalle completo: el editor necesita `direccion` y `sexo`,
+    // que el listado no devuelve.
+    this.api.paciente(paciente.id).subscribe({
+      next: (detalle) => {
+        this.paraEditar.set(detalle);
+        this.pacienteEnFicha.set(null);
+        this.editando.set(true);
+        this.avisoGuardado.set('');
+      },
+      error: () => this.avisoGuardado.set('No se pudo abrir el formulario de edicion.'),
+    });
+  }
+  protected pacienteGuardado(): void { this.editando.set(false); this.pacienteEnFicha.set(null); this.avisoGuardado.set('Paciente guardado correctamente.'); this.cargar(); }
 
   // --- Busqueda ---
   protected termino = '';
@@ -115,9 +137,8 @@ export class PacientesComponent {
   protected readonly error = signal<FalloApi | null>(null);
 
   // --- Ficha ---
-  protected readonly seleccionado = signal<PacienteDetalle | null>(null);
-  protected readonly cargandoFicha = signal(false);
-  protected readonly errorFicha = signal<FalloApi | null>(null);
+  /** A quien se le esta viendo la ficha, si a alguien. */
+  protected readonly pacienteEnFicha = signal<Paciente | null>(null);
 
   protected readonly desde = computed(() => this.pagina() * POR_PAGINA);
   protected readonly hasta = computed(() =>
@@ -165,7 +186,7 @@ export class PacientesComponent {
   /** Una busqueda nueva siempre vuelve a la primera pagina. */
   protected buscar(): void {
     this.pagina.set(0);
-    this.seleccionado.set(null);
+    this.pacienteEnFicha.set(null);
     this.cargar();
   }
 
@@ -202,25 +223,15 @@ export class PacientesComponent {
    * de quien consulto a quien.
    */
   protected abrir(paciente: Paciente): void {
-    this.cargandoFicha.set(true);
-    this.errorFicha.set(null);
-    this.seleccionado.set(null);
-
-    this.api.paciente(paciente.id).subscribe({
-      next: (detalle) => {
-        this.seleccionado.set(detalle);
-        this.cargandoFicha.set(false);
-      },
-      error: (fallo: FalloApi) => {
-        this.errorFicha.set(fallo);
-        this.cargandoFicha.set(false);
-      },
-    });
+    // Solo se guarda a quien mirar. La peticion del detalle la hace la ficha
+    // compartida al montarse, que es donde vive el manejo de su carga y de su
+    // error; la lectura sigue quedando auditada igual, porque sigue habiendo
+    // una peticion por ficha abierta.
+    this.pacienteEnFicha.set(paciente);
   }
 
   protected cerrarFicha(): void {
-    this.seleccionado.set(null);
-    this.errorFicha.set(null);
+    this.pacienteEnFicha.set(null);
   }
 
   // ======================================================================

@@ -150,79 +150,27 @@
   </nav>
 }
 
-<!-- ===================== Ficha ===================== -->
-@if (cargandoFicha()) {
-  <app-cargando mensaje="Abriendo la ficha..." />
-}
+<!-- ===================== Ficha, en ventana flotante =====================
+     Antes se pintaba al final de la tabla: con veinticinco filas, pulsar «Ver
+     ficha» parecia no hacer nada porque el detalle aparecia fuera de la
+     pantalla. Ahora se abre encima y la tabla no se mueve. -->
+@if (pacienteEnFicha(); as elegido) {
+  <app-ventana-flotante
+    ceja="Ficha del paciente"
+    [titulo]="elegido.apellido + ', ' + elegido.nombre"
+    forma="lateral"
+    [anchoMaximo]="480"
+    (cerrar)="cerrarFicha()"
+  >
+    <app-ficha-paciente [pacienteId]="elegido.id" [sinCabecera]="true" />
 
-@if (errorFicha()) {
-  <app-error
-    titulo="No se pudo abrir la ficha"
-    [mensaje]="errorFicha()!.message"
-    [codigo]="errorFicha()!.codigo"
-    [correlacion]="errorFicha()!.correlacionId ?? ''"
-    [reintentable]="false"
-  />
-}
-
-@if (seleccionado(); as ficha) {
-  <section class="tarjeta ficha" aria-label="Ficha del paciente">
-    <header class="ficha__cabecera">
-      <div>
-        <h2>{{ ficha.nombre }} {{ ficha.apellido }}</h2>
-        <p class="ficha__sub">
-          {{ ficha.tipo_documento }} {{ ficha.numero_documento }}
-          @if (!ficha.activo) {
-            <span class="inactivo">Inactivo</span>
-          }
-        </p>
+    <!-- La accion va al pie de la ventana, no suelta entre el contenido. -->
+    @if (sesion.tienePermiso('paciente.editar')) {
+      <div class="acciones acciones--final" pie>
+        <button class="boton" type="button" (click)="editarPaciente(elegido)">
+          Editar ficha
+        </button>
       </div>
-      <button class="boton" type="button" (click)="cerrarFicha()">Cerrar</button>
-      @if (sesion.tienePermiso('paciente.editar')) {
-        <button class="boton" type="button" (click)="editarPaciente()">Editar ficha</button>
-      }
-    </header>
-
-    <dl class="ficha__datos">
-      <div>
-        <dt>Nacimiento</dt>
-        <dd>{{ nacimiento(ficha.fecha_nacimiento) }}</dd>
-      </div>
-      <div>
-        <dt>Sexo</dt>
-        <dd>{{ ficha.sexo ?? 'No registrado' }}</dd>
-      </div>
-      <div>
-        <dt>WhatsApp</dt>
-        <dd>{{ ficha.telefono_whatsapp ?? 'No registrado' }}</dd>
-      </div>
-      <div>
-        <dt>Correo</dt>
-        <dd>{{ ficha.correo ?? 'No registrado' }}</dd>
-      </div>
-      <div class="ficha__ancho">
-        <dt>Dirección</dt>
-        <dd>{{ ficha.direccion ?? 'No registrada' }}</dd>
-      </div>
-      <div class="ficha__ancho">
-        <dt>Verificación de identidad</dt>
-        <dd>
-          <span
-            [class]="'verificacion verificacion--' + verificacion(ficha.nivel_verificacion).tono"
-          >
-            {{ verificacion(ficha.nivel_verificacion).texto }}
-          </span>
-          <span class="ficha__nota">{{ verificacion(ficha.nivel_verificacion).detalle }}</span>
-        </dd>
-      </div>
-    </dl>
-
-    <!-- Se declara en la propia pantalla, no solo en la documentación: quien
-         la usa tiene que saber que esta ficha no es la historia clínica. -->
-    <p class="ficha__limite">
-      Esta ficha es <strong>administrativa</strong>. No incluye diagnósticos, medicación ni
-      motivo de consulta: esos datos viven en la historia clínica, exigen relación
-      asistencial con el paciente y cada lectura queda auditada.
-    </p>
-  </section>
+    }
+  </app-ventana-flotante>
 }

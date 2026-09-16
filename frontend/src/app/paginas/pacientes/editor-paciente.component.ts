@@ -1,30 +1,136 @@
 import { Component, EventEmitter, Input, OnChanges, Output, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 
+import { VentanaFlotanteComponent } from '../../compartido/ventana-flotante.component';
 import type { Paciente } from '../../nucleo/modelos/dominio';
 import { FalloApi } from '../../nucleo/servicios/api.service';
 import { OperacionesService } from '../../nucleo/servicios/operaciones.service';
 
+/**
+ * Alta y edicion de un paciente, en una ventana flotante.
+ *
+ * Por que flotante y no en la pagina
+ * ----------------------------------
+ * El formulario se pintaba encima del listado y lo empujaba hacia abajo: al
+ * abrirlo, la fila que se iba a editar dejaba de estar donde estaba, y al
+ * guardar habia que volver a buscarla. Ahora el listado no se mueve.
+ *
+ * No se cierra al pulsar fuera: son diez campos, y perderlos por un clic
+ * despistado se paga en una recepcion con prisa.
+ */
 @Component({
-  selector: 'app-editor-paciente', standalone: true, imports: [FormsModule],
+  selector: 'app-editor-paciente',
+  standalone: true,
+  imports: [FormsModule, VentanaFlotanteComponent],
   template: `
-    <section class="tarjeta editor-demo"><h2>{{ paciente ? 'Editar paciente' : 'Registrar paciente' }}</h2>
+    <app-ventana-flotante
+      ceja="Paciente"
+      [titulo]="paciente ? 'Editar paciente' : 'Registrar paciente'"
+      forma="centrada"
+      [anchoMaximo]="640"
+      [cierraAlPulsarFuera]="false"
+      (cerrar)="cerrar.emit()"
+    >
       <form #formulario="ngForm" (ngSubmit)="guardar()">
-        <div class="formulario-demo">
-          <label>Nombres<input name="nombre" [(ngModel)]="nombre" required maxlength="100" /></label>
-          <label>Apellidos<input name="apellido" [(ngModel)]="apellido" required maxlength="100" /></label>
-          <label>Tipo de documento<select name="tipo" [(ngModel)]="tipo"><option>CEDULA</option><option>PASAPORTE</option><option>RUC</option><option>SIN_DOCUMENTO</option></select></label>
-          @if (tipo !== 'SIN_DOCUMENTO') { <label>Número de documento<input name="numero" [(ngModel)]="numero" required minlength="3" maxlength="32" /></label> }
-          <label>Fecha de nacimiento<input type="date" name="nacimiento" [(ngModel)]="nacimiento" /></label>
-          <label>WhatsApp<input type="tel" name="telefono" [(ngModel)]="telefono" maxlength="32" placeholder="Código de país y número" /></label>
-          <label>Correo<input type="email" name="correo" [(ngModel)]="correo" email maxlength="200" /></label>
-          <label>Dirección<input name="direccion" [(ngModel)]="direccion" maxlength="500" /></label>
+        <div class="rejilla-campos">
+          <label class="campo">
+            <span class="campo__etiqueta">Nombres</span>
+            <input class="campo__control" name="nombre" [(ngModel)]="nombre" required maxlength="100" />
+          </label>
+          <label class="campo">
+            <span class="campo__etiqueta">Apellidos</span>
+            <input class="campo__control" name="apellido" [(ngModel)]="apellido" required maxlength="100" />
+          </label>
+          <label class="campo">
+            <span class="campo__etiqueta">Tipo de documento</span>
+            <select class="campo__control" name="tipo" [(ngModel)]="tipo">
+              <option>CEDULA</option>
+              <option>PASAPORTE</option>
+              <option>RUC</option>
+              <option>SIN_DOCUMENTO</option>
+            </select>
+          </label>
+          @if (tipo !== 'SIN_DOCUMENTO') {
+            <label class="campo">
+              <span class="campo__etiqueta">Número de documento</span>
+              <input
+                class="campo__control"
+                name="numero"
+                [(ngModel)]="numero"
+                required
+                minlength="3"
+                maxlength="32"
+              />
+            </label>
+          }
+          <label class="campo">
+            <span class="campo__etiqueta">Fecha de nacimiento</span>
+            <input class="campo__control" type="date" name="nacimiento" [(ngModel)]="nacimiento" />
+          </label>
+          <label class="campo">
+            <span class="campo__etiqueta">WhatsApp</span>
+            <input
+              class="campo__control"
+              type="tel"
+              name="telefono"
+              [(ngModel)]="telefono"
+              maxlength="32"
+              placeholder="Código de país y número"
+            />
+            <span class="campo__ayuda">Sin teléfono no recibe recordatorios ni ofertas.</span>
+          </label>
+          <label class="campo">
+            <span class="campo__etiqueta">Correo</span>
+            <input
+              class="campo__control"
+              type="email"
+              name="correo"
+              [(ngModel)]="correo"
+              email
+              maxlength="200"
+            />
+          </label>
+          <label class="campo">
+            <span class="campo__etiqueta">Dirección</span>
+            <input class="campo__control" name="direccion" [(ngModel)]="direccion" maxlength="500" />
+          </label>
         </div>
-        @if (error()) { <p class="aviso-error" role="alert">{{ error() }}</p> }
-        <div class="acciones-demo"><button class="boton boton--principal" [disabled]="formulario.invalid || ocupado()">{{ ocupado() ? 'Guardando…' : 'Guardar paciente' }}</button>
-          <button type="button" class="boton" (click)="cerrar.emit()" [disabled]="ocupado()">Cerrar formulario</button></div>
+
+        @if (error()) {
+          <p class="aviso-error" role="alert">{{ error() }}</p>
+        }
+
+        <div class="acciones acciones--final">
+          <button type="button" class="boton" (click)="cerrar.emit()" [disabled]="ocupado()">
+            Cancelar
+          </button>
+          <button
+            type="submit"
+            class="boton boton--principal"
+            [disabled]="formulario.invalid || ocupado()"
+          >
+            {{ ocupado() ? 'Guardando…' : 'Guardar paciente' }}
+          </button>
+        </div>
       </form>
-    </section>
+    </app-ventana-flotante>
+  `,
+  styles: `
+    .rejilla-campos {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: var(--espacio-4);
+    }
+
+    .rejilla-campos .campo {
+      margin-bottom: 0;
+    }
+
+    .acciones {
+      margin-top: var(--espacio-5);
+      padding-top: var(--espacio-4);
+      border-top: 1px solid var(--borde);
+    }
   `,
 })
 export class EditorPacienteComponent implements OnChanges {

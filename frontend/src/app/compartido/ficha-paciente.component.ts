@@ -633,6 +633,7 @@ export class FichaPacienteComponent implements OnInit {
     return [
       { campo: 'WhatsApp', valor: p.telefono_whatsapp ?? 'sin registrar' },
       { campo: 'Correo', valor: p.correo ?? 'sin registrar' },
+      { campo: 'Sexo', valor: p.sexo ?? 'sin registrar' },
       {
         campo: 'Nacimiento',
         valor: p.fecha_nacimiento ? this.fecha(p.fecha_nacimiento) : 'sin registrar',

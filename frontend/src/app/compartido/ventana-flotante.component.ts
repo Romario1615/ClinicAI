@@ -89,11 +89,9 @@ import { IconoComponent } from './icono.component';
         <div class="ventana__cuerpo">
           <ng-content />
         </div>
-        @if (hayPie()) {
-          <footer class="ventana__pie">
-            <ng-content select="[pie]" />
-          </footer>
-        }
+        <footer class="ventana__pie">
+          <ng-content select="[pie]" />
+        </footer>
       </div>
     </div>
   `,
@@ -185,10 +183,18 @@ import { IconoComponent } from './icono.component';
 
     .ventana__pie {
       display: flex;
-      gap: var(--espacio-2);
+      gap: var(--espacio-3);
       padding: var(--espacio-3) var(--espacio-4);
       border-top: 1px solid var(--borde);
       background: var(--superficie);
+    }
+
+    /* Sin nada proyectado no hay pie. Se resuelve por CSS y no con un bloque
+       condicional: un condicional alrededor de un ng-content con selector no
+       oculta el pie, hace DESAPARECER lo proyectado, porque el selector ya lo
+       ha sacado de la ranura por defecto y se queda sin sitio donde ir. */
+    .ventana__pie:empty {
+      display: none;
     }
 
     @keyframes aparecer {
@@ -233,8 +239,6 @@ export class VentanaFlotanteComponent implements AfterViewInit, OnDestroy {
   readonly ceja = input('');
   readonly forma = input<'lateral' | 'centrada'>('lateral');
   readonly anchoMaximo = input(460);
-  /** Cierto cuando quien la usa proyecta contenido en el pie. */
-  readonly hayPie = input(false);
   /**
    * Si pulsar el fondo cierra.
    *

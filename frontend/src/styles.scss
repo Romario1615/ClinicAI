@@ -422,6 +422,62 @@ textarea.campo__control {
   min-width: 150px;
 }
 
+/* Una casilla con su texto al lado, en una sola linea.
+ *
+ * Vivia dentro de `conocimiento.component.scss`, que es de ambito de
+ * componente: lista de espera la usaba y no le hacia nada, asi que la casilla
+ * quedaba pegada al boton de al lado. Una clase que aparenta ser compartida
+ * tiene que estar donde de verdad lo es. */
+.campo--en-linea {
+  display: flex;
+  align-items: center;
+  gap: var(--espacio-2);
+  margin-bottom: 0;
+  cursor: pointer;
+}
+
+/* Un grupo de botones hermanos.
+ *
+ * Existe para que la separacion entre botones no dependa de los espacios del
+ * codigo fuente. `<button/><button/>` sin nada en medio quedan pegados, y
+ * `<button/> <button/>` deja un espacio que cambia con la fuente y que
+ * desaparece al reformatear la plantilla. Con `gap` la distancia es un token y
+ * sobrevive a cualquier reordenacion. */
+.acciones {
+  display: flex;
+  align-items: center;
+  gap: var(--espacio-3);
+  flex-wrap: wrap;
+}
+
+/* Acciones alineadas al final: lo que cierra un formulario o una ventana. */
+.acciones--final {
+  justify-content: flex-end;
+}
+
+/* Acciones separadas: lo destructivo lejos de lo habitual, para que no se
+   pulse por inercia. */
+.acciones--separadas {
+  justify-content: space-between;
+}
+
+/* Un boton nunca se estira por accidente.
+ *
+ * Como hijo de un `grid` o de un `flex` con `stretch`, un boton ocupa toda la
+ * columna: en lista de espera, «Buscar» medía 1110 px. Estirarse tiene que ser
+ * una decision explicita (`.boton--ancho`), no el valor por defecto. */
+.acciones > .boton,
+.campo > .boton {
+  justify-self: start;
+  align-self: center;
+  flex: 0 0 auto;
+}
+
+.boton--ancho {
+  width: 100%;
+  flex: 1 1 auto;
+}
+
 /* Capa de un panel lateral: se abre encima de la pantalla y no navega, asi
    que al cerrarlo lo de debajo sigue donde estaba. */
 .capa-lateral {

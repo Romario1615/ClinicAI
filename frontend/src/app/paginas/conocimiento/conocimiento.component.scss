@@ -112,10 +112,8 @@
   margin: 0;
 }
 
-.campo--en-linea {
-  min-width: 12rem;
-}
-
+/* `.campo--en-linea` vive ahora en los estilos globales: se usaba desde otra
+   pantalla, donde esta copia de ambito de componente no llegaba. */
 .marcados {
   border-left: 4px solid var(--aviso);
   margin-bottom: var(--espacio-4);

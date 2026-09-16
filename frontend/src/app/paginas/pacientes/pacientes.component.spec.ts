@@ -159,14 +159,30 @@ describe('PacientesComponent', () => {
     responderCargaInicial(pagina([paciente('1')]));
 
     fixture.componentInstance['abrir'](paciente('1'));
+    fixture.detectChanges();
+
     // Cada lectura de una ficha queda auditada; reutilizar la fila ahorraria
     // la peticion y perderia el registro de quien consulto a quien.
+    //
+    // La peticion la hace ahora la ficha compartida al montarse dentro de la
+    // ventana flotante, no esta pantalla. Lo que importa se conserva: hay una
+    // peticion por ficha abierta, asi que la lectura sigue quedando registrada.
     const detalle = http.expectOne(`${BASE}/pacientes/id-1`);
     detalle.flush({ ...paciente('1'), sexo: 'F', direccion: 'Calle sintetica', activo: true });
     fixture.detectChanges();
 
-    expect(texto()).toContain('Calle sintetica');
-    expect(texto()).toContain('administrativa');
+    // La ficha trae ademas el historial de citas del paciente.
+    http
+      .expectOne((p) => p.url === `${BASE}/agenda/citas`)
+      .flush({ elementos: [], total: 0, limite: 50, desplazamiento: 0 });
+    fixture.detectChanges();
+
+    // Se abre encima, no al final de la tabla.
+    expect(
+      (fixture.nativeElement as HTMLElement).querySelector('[role="dialog"]'),
+    ).not.toBeNull();
+    // Y declara su limite de ambito en la propia pantalla.
+    expect(texto()).toContain('administrativo');
   });
 
   it('un error al cargar se muestra con su codigo, sin dejar la tabla a medias', () => {
