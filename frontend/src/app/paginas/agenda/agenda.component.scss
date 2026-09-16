@@ -105,7 +105,11 @@
   display: grid;
   grid-template-columns: minmax(0, 1fr) 392px;
   gap: var(--espacio-5);
-  align-items: start;
+  align-items: stretch;
+  /* Llena lo que queda de ventana: la cabecera, la barra de filtros y el
+     resumen ocupan unos 260 px, y el resto es del dia. Sin esto, un dia con
+     dos citas dejaba media pantalla en blanco y parecia que no habia cargado. */
+  min-height: calc(100vh - 290px);
 }
 
 @media (max-width: 1100px) {
@@ -116,6 +120,9 @@
 
 /* --- El día --- */
 .dia {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
   border: 1px solid var(--borde);
   border-radius: var(--radio);
   background: var(--superficie-elevada);
@@ -155,6 +162,11 @@
   list-style: none;
   margin: 0;
   padding: 0;
+  flex: 1 1 auto;
+  min-height: 0;
+  /* La columna de horas se desplaza sola: la cabecera «El día, en orden» y el
+     panel de la derecha se quedan fijos. */
+  overflow-y: auto;
 }
 
 .dia__nota {
@@ -293,6 +305,8 @@
 .panel {
   position: sticky;
   top: 80px;
+  align-self: start;
+  max-height: calc(100vh - 290px);
   display: flex;
   flex-direction: column;
   border: 1px solid var(--borde);
@@ -303,8 +317,17 @@
 }
 
 @media (max-width: 1100px) {
+  .columnas {
+    min-height: 0;
+  }
+
   .panel {
     position: static;
+    max-height: none;
+  }
+
+  .dia__filas {
+    overflow-y: visible;
   }
 }
 
@@ -339,6 +362,9 @@
 }
 
 .panel__cuerpo {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
   padding: var(--espacio-4);
   display: flex;
   flex-direction: column;
@@ -472,4 +498,26 @@
   padding-left: var(--espacio-5);
   color: var(--texto-suave);
   font-size: 0.9rem;
+}
+
+.dialogo__contexto {
+  margin: 0 0 var(--espacio-4);
+  color: var(--texto-suave);
+}
+
+/* Cierre de la columna del dia: por que no hay mas huecos y que hacer. */
+.dia__cierre {
+  padding: var(--espacio-4);
+  border-top: 1px solid var(--borde);
+  background: var(--superficie);
+}
+
+.dia__cierre-titulo {
+  margin: 0 0 var(--espacio-2);
+  font-weight: 650;
+  color: var(--texto-suave);
+}
+
+.dia__cierre .motivos {
+  margin-bottom: var(--espacio-2);
 }

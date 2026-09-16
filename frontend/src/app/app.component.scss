@@ -17,12 +17,13 @@
   display: flex;
   align-items: center;
   gap: var(--espacio-4);
-  padding: var(--espacio-3) var(--espacio-5);
+  padding: var(--espacio-2) var(--espacio-5);
+  /* El buscador despliega sus resultados anclados a la cabecera. */
+  position: sticky;
   background: var(--superficie-elevada);
   border-bottom: 1px solid var(--borde);
   /* Se mantiene visible al desplazar: el nombre del usuario conectado es la
    * forma de detectar que alguien dejó la sesión de otra persona abierta. */
-  position: sticky;
   top: 0;
   z-index: 10;
 }
@@ -84,6 +85,37 @@
   font-weight: 550;
 }
 
+.navegacion__texto {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+/* El icono pesa menos que la palabra: acompaña a la lectura, no compite con
+   ella. En el enlace activo se tiñe con el texto, por `currentColor`. */
+.navegacion__enlace app-icono {
+  color: var(--texto-tenue);
+}
+
+.navegacion__enlace--activo app-icono {
+  color: var(--acento);
+}
+
+/* El numero de tareas con plazo. Ambar y cifra: el tono acompaña, la cifra
+   informa. */
+.navegacion__pendientes {
+  min-width: 22px;
+  padding: 0 6px;
+  border: 1px solid var(--aviso);
+  border-radius: 999px;
+  background: var(--aviso-fondo);
+  color: var(--aviso);
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-align: center;
+}
+
 .navegacion__enlace:hover {
   background: var(--superficie-hundida);
 }
@@ -107,10 +139,17 @@
   color: var(--aviso);
 }
 
+/* El contenido ocupa el ancho disponible con un tope generoso: a 1440 px, un
+   limite de 1200 dejaba una franja muerta a la derecha justo donde vive el
+   panel contextual de la agenda. */
 .contenido {
   grid-area: contenido;
   padding: var(--espacio-5);
-  max-width: 1200px;
+  max-width: 1600px;
+  /* Que el contenido pueda llenar el alto: una lista corta con media pantalla
+     vacia debajo se lee como si algo no hubiera cargado. */
+  min-height: 0;
+  min-width: 0;
 }
 
 .contenido--suelto {

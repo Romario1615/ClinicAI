@@ -65,7 +65,8 @@ type Pestana = 'resumen' | 'citas' | 'contacto';
   standalone: true,
   imports: [InsigniaEstadoComponent],
   template: `
-    <aside class="ficha" role="complementary" [attr.aria-label]="'Ficha de ' + nombre()">
+    <aside class="ficha" [class.ficha--embebida]="sinCabecera()" [attr.aria-label]="sinCabecera() ? null : 'Ficha de ' + nombre()">
+      @if (!sinCabecera()) {
       <header class="ficha__cabecera">
         <div class="ficha__identidad">
           <span class="ficha__inicial" aria-hidden="true">{{ iniciales() }}</span>
@@ -92,12 +93,23 @@ type Pestana = 'resumen' | 'citas' | 'contacto';
           </button>
         </div>
 
-        @if (verificacion(); as v) {
-          <p class="ficha__verificacion" [class.ficha__verificacion--alerta]="v.alerta">
-            <strong>{{ v.etiqueta }}.</strong> {{ v.consecuencia }}
-          </p>
-        }
       </header>
+      }
+
+      @if (verificacion(); as v) {
+        <p class="ficha__verificacion" [class.ficha__verificacion--alerta]="v.alerta">
+          <strong>{{ v.etiqueta }}.</strong> {{ v.consecuencia }}
+        </p>
+      }
+
+      @if (sinCabecera() && paciente(); as p) {
+        <p class="ficha__documento numerico">
+          {{ p.tipo_documento }} {{ p.numero_documento }}
+          @if (edad()) {
+            <span> · {{ edad() }}</span>
+          }
+        </p>
+      }
 
       @if (cargando()) {
         <p class="ficha__aviso" role="status">Cargando la ficha…</p>
@@ -230,6 +242,26 @@ type Pestana = 'resumen' | 'citas' | 'contacto';
       background: var(--superficie-elevada);
       box-shadow: var(--sombra-2);
       overflow: hidden;
+    }
+
+    /* Dentro de una ventana flotante no lleva marco propio: seria un borde
+       dentro de otro borde a dos pixeles de distancia. */
+    .ficha--embebida {
+      border: 0;
+      border-radius: 0;
+      box-shadow: none;
+      margin: calc(var(--espacio-4) * -1);
+    }
+
+    .ficha__documento {
+      margin: 0;
+      padding: var(--espacio-3) var(--espacio-4) 0;
+      color: var(--texto-suave);
+      font-size: 0.9rem;
+    }
+
+    .ficha--embebida .ficha__verificacion {
+      margin: var(--espacio-4) var(--espacio-4) 0;
     }
 
     .ficha__cabecera {
@@ -475,6 +507,13 @@ export class FichaPacienteComponent implements OnInit {
   private readonly api = inject(ApiService);
 
   readonly pacienteId = input.required<string>();
+  /**
+   * Cierto cuando va dentro de una ventana flotante, que ya pone su cabecera.
+   *
+   * Sin esto habria dos titulos y dos botones de cerrar, y el de dentro no
+   * cerraria nada.
+   */
+  readonly sinCabecera = input(false);
   /** Zona de presentación de la sede, nunca la del equipo. */
   readonly zona = input('America/Guayaquil');
   readonly cerrar = output<void>();

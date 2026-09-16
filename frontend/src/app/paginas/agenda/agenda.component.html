@@ -147,9 +147,13 @@
       <span class="resumen-dia__separador" aria-hidden="true"></span>
       <span class="numerico">{{ resumenDia().ocupado }} de consulta comprometida</span>
       <span class="resumen-dia__separador" aria-hidden="true"></span>
-      <span class="numerico">
-        {{ resumenDia().libre }} libre en {{ resumenDia().tramosLibres }} tramo(s)
-      </span>
+      @if (resumenDia().tramosLibres === 0) {
+        <span>sin huecos libres</span>
+      } @else {
+        <span class="numerico">
+          {{ resumenDia().libre }} libre en {{ resumenDia().tramosLibres }} tramo(s)
+        </span>
+      }
       <label class="campo campo--linea resumen-dia__filtro">
         <input
           type="checkbox"
@@ -249,6 +253,27 @@
               </li>
             }
           </ul>
+          <!-- Un dia con citas pero sin huecos necesita explicarse igual que un
+               dia vacio: si no, quien atiende no sabe si insistir otro dia o
+               llamar por telefono. Antes esto solo salia con la lista vacia. -->
+          @if (resumenDia().tramosLibres === 0 && !seleccionIncompleta()) {
+            <div class="dia__cierre">
+              <p class="dia__cierre-titulo">No queda ningún hueco libre este día.</p>
+              @if (motivosSinTurno().length > 0) {
+                <ul class="motivos">
+                  @for (motivo of motivosSinTurno(); track motivo.motivo) {
+                    <li>
+                      <strong class="numerico">{{ motivo.cantidad }}</strong> {{ motivo.motivo }}
+                    </li>
+                  }
+                </ul>
+              }
+              <p class="campo__ayuda">
+                Pruebe otro día con las flechas, otro profesional, o anote al paciente en la
+                lista de espera para que reciba el primer hueco que se libere.
+              </p>
+            </div>
+          }
           @if (!puedeCrear()) {
             <p class="campo__ayuda dia__nota">Su rol no permite crear citas.</p>
           }
@@ -467,55 +492,61 @@
     </div>
   }
 
-  <!-- La ficha se abre encima y no navega: al cerrarla la agenda sigue en el
-       mismo día y con la misma selección. -->
+  <!-- La ficha se abre en una ventana flotante: la agenda no se mueve, no
+       pierde el sitio y al cerrarla sigue en el mismo día. -->
   @if (pacienteEnFicha(); as pacienteId) {
-    <div class="capa-lateral">
-      <app-ficha-paciente
-        [pacienteId]="pacienteId"
-        [zona]="zona()"
-        (cerrar)="cerrarFicha()"
-      />
-    </div>
+    <app-ventana-flotante
+      ceja="Ficha del paciente"
+      [titulo]="nombrePaciente(pacienteId)"
+      forma="lateral"
+      [anchoMaximo]="460"
+      (cerrar)="cerrarFicha()"
+    >
+      <app-ficha-paciente [pacienteId]="pacienteId" [zona]="zona()" [sinCabecera]="true" />
+    </app-ventana-flotante>
   }
 
   @if (citaACancelar(); as cita) {
-    <div class="dialogo" role="dialog" aria-modal="true" aria-labelledby="titulo-cancelar">
-      <div class="tarjeta dialogo__panel">
-        <h3 id="titulo-cancelar">Cancelar la cita de las {{ hora(cita.inicio) }}</h3>
-        <p>{{ nombrePaciente(cita.paciente_id) }} · {{ nombreServicio(cita.servicio_id) }}</p>
+    <app-ventana-flotante
+      ceja="Cancelar cita"
+      [titulo]="hora(cita.inicio) + ' · ' + nombrePaciente(cita.paciente_id)"
+      forma="centrada"
+      [anchoMaximo]="520"
+      [cierraAlPulsarFuera]="false"
+      (cerrar)="descartarCancelacion()"
+    >
+      <p class="dialogo__contexto">{{ nombreServicio(cita.servicio_id) }}</p>
 
-        <label class="campo">
-          <span class="campo__etiqueta">Motivo de la cancelación</span>
-          <textarea
-            class="campo__control"
-            name="motivo"
-            minlength="3"
-            maxlength="500"
-            [(ngModel)]="motivoCancelacion"
-          ></textarea>
-          <!-- El motivo es obligatorio y lo exige también la base de datos:
-               sin él, ante una reclamación no se puede explicar por qué un
-               paciente no fue atendido. -->
-          <span class="campo__ayuda">
-            Obligatorio. Queda registrado y es lo que permite explicar después por qué se
-            anuló esta cita.
-          </span>
-        </label>
+      <label class="campo">
+        <span class="campo__etiqueta">Motivo de la cancelación</span>
+        <textarea
+          class="campo__control"
+          name="motivo"
+          minlength="3"
+          maxlength="500"
+          [(ngModel)]="motivoCancelacion"
+        ></textarea>
+        <!-- El motivo es obligatorio y lo exige también la base de datos:
+             sin él, ante una reclamación no se puede explicar por qué un
+             paciente no fue atendido. -->
+        <span class="campo__ayuda">
+          Obligatorio. Queda registrado y es lo que permite explicar después por qué se
+          anuló esta cita.
+        </span>
+      </label>
 
-        <div class="fila">
-          <button
-            type="button"
-            class="boton boton--peligro"
-            [disabled]="motivoCancelacion.trim().length < 3"
-            (click)="confirmarCancelacion()"
-          >
-            Cancelar la cita
-          </button>
-          <button type="button" class="boton" (click)="descartarCancelacion()">Volver</button>
-        </div>
+      <div class="fila">
+        <button
+          type="button"
+          class="boton boton--peligro"
+          [disabled]="motivoCancelacion.trim().length < 3"
+          (click)="confirmarCancelacion()"
+        >
+          Cancelar la cita
+        </button>
+        <button type="button" class="boton" (click)="descartarCancelacion()">Volver</button>
       </div>
-    </div>
+    </app-ventana-flotante>
   }
   @if (citaAReprogramar(); as cita) {
     <app-reprogramar-cita

@@ -18,6 +18,10 @@
 
       <span class="cabecera__marca">Gestión clínica</span>
 
+      <!-- Buscar un paciente desde cualquier pantalla, y verlo sin salir de
+           ella: la ficha se abre en una ventana flotante. -->
+      <app-buscador-global />
+
       <div class="cabecera__usuario">
         <span class="cabecera__nombre">{{ sesion.nombreCompleto() }}</span>
         @if (roles(); as listaRoles) {
@@ -45,7 +49,20 @@
               class="navegacion__enlace"
               (click)="cerrarMenu()"
             >
-              {{ enlace.etiqueta }}
+              <span class="navegacion__texto">
+                <app-icono [nombre]="enlace.icono" [tamano]="19" />
+                {{ enlace.etiqueta }}
+              </span>
+              @if (enlace.llevaInsignia && pendientes.cuenta() > 0) {
+                <!-- El número, no un punto: «3» dice cuánto trabajo hay; un
+                     punto solo dice que hay algo. -->
+                <span
+                  class="navegacion__pendientes numerico"
+                  [attr.aria-label]="pendientes.cuenta() + ' tareas con plazo'"
+                >
+                  {{ pendientes.cuenta() }}
+                </span>
+              }
               @if (enlace.demostracion) {
                 <!-- Marca visible en la propia navegación: quien entra sabe
                      antes de pulsar que esa sección todavía no está

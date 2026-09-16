@@ -35,6 +35,7 @@ import {
 import { ColaTrabajoComponent } from '../../compartido/cola-trabajo.component';
 import { FichaPacienteComponent } from '../../compartido/ficha-paciente.component';
 import { InsigniaEstadoComponent } from '../../compartido/insignia-estado.component';
+import { VentanaFlotanteComponent } from '../../compartido/ventana-flotante.component';
 import { ReprogramarCitaComponent } from './reprogramar-cita.component';
 import { ApiService, FalloApi } from '../../nucleo/servicios/api.service';
 import { CatalogoService } from '../../nucleo/servicios/catalogo.service';
@@ -106,6 +107,7 @@ const MOTIVOS: Record<string, string> = {
     FichaPacienteComponent,
     InsigniaEstadoComponent,
     ReprogramarCitaComponent,
+    VentanaFlotanteComponent,
   ],
   templateUrl: './agenda.component.html',
   styleUrl: './agenda.component.scss',
