@@ -1,5 +1,7 @@
+/* Separacion arriba y abajo. Sin el margen superior, el borde de esta tarjeta
+   quedaba pegado al borde del boton de la cabecera. */
 .buscador {
-  margin-bottom: var(--espacio-4);
+  margin: var(--espacio-4) 0;
 }
 
 .buscador__fila {

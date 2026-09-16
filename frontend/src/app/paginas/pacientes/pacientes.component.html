@@ -1,11 +1,32 @@
-<h1>Pacientes</h1>
+<!-- La cabecera es la misma forma que en el resto de las pantallas: ceja,
+     titulo y las acciones a la derecha. Antes el boton «Registrar paciente»
+     iba suelto debajo del titulo, y su borde inferior quedaba a CERO pixeles
+     del borde de la tarjeta de busqueda: no se solapaban, pero se tocaban, y
+     eso se lee exactamente igual de mal. -->
+<div class="cabecera-pagina">
+  <div>
+    <p class="ceja">PACIENTES</p>
+    <h1>Pacientes de su ámbito</h1>
+  </div>
+  @if (sesion.tienePermiso('paciente.crear')) {
+    <button type="button" class="boton boton--principal" (click)="nuevoPaciente()">
+      Registrar paciente
+    </button>
+  }
+</div>
 
-@if (sesion.tienePermiso('paciente.crear')) {
-  <button type="button" class="boton boton--principal" (click)="nuevoPaciente()">Registrar paciente</button>
+@if (avisoGuardado()) {
+  <p class="exito" role="status">{{ avisoGuardado() }}</p>
 }
-@if (avisoGuardado()) { <p role="status">{{ avisoGuardado() }}</p> }
+
+<!-- El formulario de alta y edicion es una ventana flotante: el listado no se
+     mueve al abrirlo. -->
 @if (editando()) {
-  <app-editor-paciente [paciente]="paraEditar()" (cerrar)="editando.set(false)" (guardado)="pacienteGuardado()" />
+  <app-editor-paciente
+    [paciente]="paraEditar()"
+    (cerrar)="editando.set(false)"
+    (guardado)="pacienteGuardado()"
+  />
 }
 
 <section class="tarjeta buscador" aria-label="Buscar pacientes">
