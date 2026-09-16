@@ -1,0 +1,260 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <style>
+    body {
+      margin: 0;
+      font-family: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+      font-size: 16px;
+      line-height: 1.55;
+      color: #16202e;
+      background: #eceef2;
+      text-rendering: optimizeLegibility;
+      -webkit-font-smoothing: antialiased;
+    }
+    * { box-sizing: border-box; }
+    a { color: #15557a; text-underline-offset: 2px; }
+    a:hover { color: #0f4160; }
+    button { font: inherit; color: inherit; cursor: pointer; }
+    .num { font-variant-numeric: tabular-nums; }
+    .cita-mini:hover { background: #f7f8fa; }
+  </style>
+</helmet>
+
+<div style="display: flex; flex-direction: column; width: 440px; height: 900px; background: #ffffff; border-left: 1px solid #d4d8e0; box-shadow: -4px 0 12px rgb(22 32 46 / 10%); overflow: hidden">
+
+  <!-- ===================== Identidad ===================== -->
+  <header style="padding: 16px 20px 14px; border-bottom: 1px solid #d4d8e0; background: #ffffff">
+    <div style="display: flex; align-items: flex-start; gap: 12px">
+      <span style="display: inline-flex; align-items: center; justify-content: center; width: 44px; height: 44px; flex: 0 0 44px; border-radius: 999px; background: #e4eef5; color: #0f4160; font-weight: 700; letter-spacing: -0.01em">{{paciente.iniciales}}</span>
+      <div style="flex: 1 1 auto; min-width: 0">
+        <h1 style="margin: 0; font-size: 1.25rem; font-weight: 650; letter-spacing: -0.01em; line-height: 1.25">{{paciente.nombre}}</h1>
+        <p class="num" style="margin: 2px 0 0; color: #566175; font-size: 0.88rem">{{paciente.documento}} · {{paciente.edad}}</p>
+      </div>
+      <button type="button" aria-label="Cerrar la ficha" style="display: inline-flex; align-items: center; justify-content: center; width: 36px; height: 36px; flex: 0 0 36px; border: 1px solid transparent; border-radius: 8px; background: transparent; color: #566175">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"></path></svg>
+      </button>
+    </div>
+
+    <!-- Nivel de verificación: elegir de una lista NO verifica identidad -->
+    <div style="display: flex; align-items: center; gap: 8px; margin-top: 12px; padding: 9px 11px; border: 1px solid #8a5800; border-left-width: 4px; border-radius: 8px; background: #fdf3e0">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#8a5800" stroke-width="2.1" stroke-linecap="round" style="flex: 0 0 16px" aria-hidden="true"><path d="M12 3l8 4v5c0 5-3.4 8.2-8 9-4.6-.8-8-4-8-9V7z"></path><path d="M12 9v3.5M12 15.5h.01"></path></svg>
+      <span style="color: #8a5800; font-size: 0.88rem"><strong style="font-weight: 650">Verificación: teléfono.</strong> No cancele ni reprograme sin confirmar identidad en persona.</span>
+    </div>
+  </header>
+
+  <!-- ===================== Pestañas ===================== -->
+  <div style="display: flex; gap: 2px; padding: 0 12px; border-bottom: 1px solid #d4d8e0; background: #ffffff">
+    <sc-for list="{{pestanas}}" as="tab" hint-placeholder-count="3">
+      <button type="button" onClick="{{tab.elegir}}" style="{{tab.estilo}}">
+        {{tab.etiqueta}}
+        <sc-if value="{{tab.tieneCuenta}}" hint-placeholder-val="{{true}}">
+          <span class="num" style="margin-left: 6px; padding: 0 6px; border-radius: 999px; background: #eceef2; color: #566175; font-size: 0.75rem; font-weight: 700">{{tab.cuenta}}</span>
+        </sc-if>
+      </button>
+    </sc-for>
+  </div>
+
+  <div style="flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 16px 20px 20px; display: flex; flex-direction: column; gap: 18px">
+
+    <!-- ---------- Resumen ---------- -->
+    <sc-if value="{{esResumen}}" hint-placeholder-val="{{true}}">
+      <section>
+        <h2 style="margin: 0 0 8px; font-size: 0.85rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: #566175">Próxima cita</h2>
+        <div style="padding: 13px 14px; border: 1px solid #d4d8e0; border-radius: 8px; background: #ffffff; box-shadow: 0 1px 2px rgb(22 32 46 / 8%)">
+          <div style="display: flex; align-items: center; gap: 10px">
+            <span class="num" style="font-size: 1.15rem; font-weight: 650">Mié 16 · 10:30</span>
+            <span style="display: inline-block; padding: 2px 9px; border-radius: 999px; border: 1px solid #8a5800; background: #fdf3e0; color: #8a5800; font-size: 0.8rem; font-weight: 650">Bloqueada</span>
+          </div>
+          <p style="margin: 4px 0 0; color: #566175; font-size: 0.9rem">Control · Dr. Tudela · Sede Norte</p>
+          <p style="margin: 8px 0 0; color: #8a5800; font-size: 0.87rem; font-weight: 600">Caduca en 6 minutos si no se confirma.</p>
+          <div style="display: flex; gap: 8px; margin-top: 11px">
+            <button type="button" style="flex: 1 1 auto; min-height: 40px; border: 1px solid {{acento}}; border-radius: 8px; background: {{acento}}; color: #ffffff; font-weight: 600; font-size: 0.92rem">Confirmar</button>
+            <button type="button" style="min-height: 40px; padding: 0 14px; border: 1px solid #b3bac6; border-radius: 8px; background: #ffffff; font-weight: 550; font-size: 0.92rem">Reprogramar</button>
+          </div>
+        </div>
+      </section>
+
+      <section>
+        <h2 style="margin: 0 0 8px; font-size: 0.85rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: #566175">Cómo tratarle</h2>
+        <div style="display: flex; flex-direction: column; gap: 1px">
+          <sc-for list="{{banderas}}" as="b" hint-placeholder-count="4">
+            <div style="display: flex; align-items: flex-start; gap: 10px; padding: 9px 0; border-bottom: 1px solid #eceef2">
+              <span style="display: inline-flex; flex: 0 0 18px; margin-top: 2px; color: {{b.color}}">
+                <sc-if value="{{b.si}}" hint-placeholder-val="{{true}}">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"></path></svg>
+                </sc-if>
+                <sc-if value="{{b.no}}" hint-placeholder-val="{{false}}">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"></path></svg>
+                </sc-if>
+              </span>
+              <span style="flex: 1 1 auto; min-width: 0">
+                <span style="display: block; font-weight: 600; font-size: 0.92rem">{{b.titulo}}</span>
+                <span style="display: block; color: #566175; font-size: 0.86rem">{{b.detalle}}</span>
+              </span>
+            </div>
+          </sc-for>
+        </div>
+      </section>
+
+      <!-- El límite de ámbito, dicho en la interfaz y no solo en la documentación -->
+      <section style="padding: 12px 14px; border: 1px dashed #b3bac6; border-radius: 8px; background: #f7f8fa">
+        <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 4px">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#566175" stroke-width="2" stroke-linecap="round" aria-hidden="true"><rect x="4" y="10" width="16" height="10" rx="2"></rect><path d="M8 10V7a4 4 0 0 1 8 0v3"></path></svg>
+          <span style="font-weight: 650; font-size: 0.9rem; color: #566175">Sin información clínica</span>
+        </div>
+        <p style="margin: 0; color: #566175; font-size: 0.86rem">Esta ficha muestra lo administrativo. El historial, los diagnósticos y la medicación no están aquí porque su rol no los alcanza, no porque falten.</p>
+        <p style="margin: 8px 0 0; color: #7c8699; font-size: 0.84rem">Cada lectura de datos clínicos queda registrada con nombre y hora.</p>
+      </section>
+    </sc-if>
+
+    <!-- ---------- Citas ---------- -->
+    <sc-if value="{{esCitas}}" hint-placeholder-val="{{false}}">
+      <section>
+        <h2 style="margin: 0 0 8px; font-size: 0.85rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: #566175">Historial de citas</h2>
+        <div style="border: 1px solid #d4d8e0; border-radius: 8px; background: #ffffff; overflow: hidden">
+          <sc-for list="{{citas}}" as="cita" hint-placeholder-count="6">
+            <div class="cita-mini" style="display: flex; align-items: center; gap: 12px; padding: 11px 14px; border-bottom: 1px solid #eceef2; transition: background-color 120ms ease">
+              <span class="num" style="flex: 0 0 84px; color: #16202e; font-weight: 600; font-size: 0.88rem">{{cita.fecha}}</span>
+              <span style="flex: 1 1 auto; min-width: 0">
+                <span style="display: block; font-size: 0.9rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{cita.servicio}}</span>
+                <span style="display: block; color: #7c8699; font-size: 0.82rem">{{cita.profesional}}</span>
+              </span>
+              <span style="{{cita.insignia}}">{{cita.estado}}</span>
+            </div>
+          </sc-for>
+        </div>
+        <p style="margin: 10px 0 0; color: #566175; font-size: 0.87rem"><strong style="font-weight: 650">2 inasistencias en 12 meses.</strong> Conviene llamar para confirmar en lugar de solo enviar el recordatorio.</p>
+      </section>
+    </sc-if>
+
+    <!-- ---------- Contacto ---------- -->
+    <sc-if value="{{esContacto}}" hint-placeholder-val="{{false}}">
+      <section>
+        <h2 style="margin: 0 0 8px; font-size: 0.85rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: #566175">Contacto</h2>
+        <div style="display: flex; flex-direction: column; gap: 1px">
+          <sc-for list="{{contacto}}" as="c" hint-placeholder-count="4">
+            <div style="display: flex; gap: 12px; padding: 9px 0; border-bottom: 1px solid #eceef2">
+              <span style="flex: 0 0 120px; color: #7c8699; font-size: 0.88rem">{{c.campo}}</span>
+              <span class="num" style="flex: 1 1 auto; font-size: 0.92rem">{{c.valor}}</span>
+            </div>
+          </sc-for>
+        </div>
+      </section>
+
+      <section>
+        <h2 style="margin: 0 0 8px; font-size: 0.85rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: #566175">Avisos automáticos</h2>
+        <p style="margin: 0; color: #566175; font-size: 0.87rem">Ningún recordatorio automático incluye diagnóstico, medicamento ni motivo de consulta.</p>
+        <p style="margin: 8px 0 0; padding: 10px 12px; border: 1px dashed #b3bac6; border-radius: 8px; background: #f7f8fa; color: #7c8699; font-size: 0.85rem">El estado del consentimiento para mensajes automáticos <strong style="font-weight: 650">no se muestra todavía</strong>: el modelo de paciente no expone ese campo. Sin él, la pantalla solo puede decir si hay teléfono registrado.</p>
+      </section>
+    </sc-if>
+  </div>
+
+  <!-- ===================== Acciones ===================== -->
+  <footer style="display: flex; gap: 10px; padding: 14px 20px; border-top: 1px solid #d4d8e0; background: #f7f8fa">
+    <button type="button" style="flex: 1 1 auto; min-height: 44px; border: 1px solid {{acento}}; border-radius: 8px; background: {{acento}}; color: #ffffff; font-weight: 600">Agendar cita</button>
+    <button type="button" style="min-height: 44px; padding: 0 16px; border: 1px solid #b3bac6; border-radius: 8px; background: #ffffff; font-weight: 550">Ficha completa</button>
+  </footer>
+</div>
+</x-dc>
+
+<script data-dc-script data-props='{
+  "acento": {"editor": "color", "default": "#15557a", "options": ["#15557a", "#1c6b45", "#0f4160", "#5b3a86"], "section": "Marca"},
+  "$preview": {"width": 440, "height": 900}
+}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { tab: 'resumen' };
+  }
+
+  insignia(color, fondo) {
+    return 'display: inline-block; padding: 2px 9px; border-radius: 999px; border: 1px solid ' + color +
+      '; background: ' + fondo + '; color: ' + color +
+      '; font-size: 0.78rem; font-weight: 650; white-space: nowrap; flex: 0 0 auto';
+  }
+
+  renderVals() {
+    const acento = this.props.acento || '#15557a';
+    const tab = this.state.tab;
+
+    const pestanas = [
+      { clave: 'resumen', etiqueta: 'Resumen' },
+      { clave: 'citas', etiqueta: 'Citas', cuenta: '9' },
+      { clave: 'contacto', etiqueta: 'Contacto' }
+    ].map((t) => ({
+      etiqueta: t.etiqueta,
+      cuenta: t.cuenta || '',
+      tieneCuenta: !!t.cuenta,
+      elegir: () => this.setState({ tab: t.clave }),
+      estilo: 'display: inline-flex; align-items: center; min-height: 44px; padding: 0 14px; border: 0; background: transparent; font-weight: 600; font-size: 0.92rem; ' +
+        (t.clave === tab
+          ? 'color: #0f4160; box-shadow: inset 0 -3px 0 ' + acento + ';'
+          : 'color: #566175;')
+    }));
+
+    // Datos sinteticos. El documento va completo: la minimizacion de ADR-0020
+    // se aplica al menu que el agente ofrece por WhatsApp a quien tenga el
+    // telefono, no a este panel, que lo abre personal con permiso de ficha.
+    const paciente = {
+      nombre: 'Reyna Jurado Silva',
+      iniciales: 'RJ',
+      documento: '1712345640',
+      edad: '34 anos'
+    };
+
+    const banderas = [
+      { titulo: 'Habla por WhatsApp desde un numero compartido', detalle: 'El mismo telefono gestiona 3 fichas. El agente pregunta a quien atender antes de ejecutar nada.', si: true, no: false, color: '#1e5081' },
+      { titulo: 'Sin correo registrado', detalle: 'El unico canal es el telefono. Si no contesta, no hay segunda via.', si: false, no: true, color: '#8a5800' },
+      { titulo: '2 inasistencias en los ultimos 12 meses', detalle: 'Confirmar por llamada da mejor resultado que el recordatorio.', si: false, no: true, color: '#8a5800' },
+      { titulo: 'En lista de espera para un control mas cercano', detalle: 'Alta el 11 sep. Acepta cualquier hora de la tarde.', si: true, no: false, color: '#1c6b45' }
+    ];
+
+    const verde = this.insignia('#1c6b45', '#e3f2ea');
+    const gris = this.insignia('#566175', '#eceef2');
+    const rojo = this.insignia('#a52320', '#fbe9e8');
+    const ambar = this.insignia('#8a5800', '#fdf3e0');
+    const azul = this.insignia('#1e5081', '#e7effa');
+
+    const citas = [
+      { fecha: '16 sep 26', servicio: 'Control', profesional: 'Dr. Tudela', estado: 'Bloqueada', insignia: ambar },
+      { fecha: '02 sep 26', servicio: 'Control', profesional: 'Dr. Tudela', estado: 'Atendida', insignia: gris },
+      { fecha: '19 ago 26', servicio: 'Control', profesional: 'Dr. Tudela', estado: 'No asistio', insignia: rojo },
+      { fecha: '05 ago 26', servicio: 'Control', profesional: 'Dra. Bravo', estado: 'Reprogramada', insignia: azul },
+      { fecha: '22 jul 26', servicio: 'Primera consulta', profesional: 'Dra. Bravo', estado: 'Atendida', insignia: gris },
+      { fecha: '08 jul 26', servicio: 'Primera consulta', profesional: 'Dra. Bravo', estado: 'Cancelada', insignia: rojo },
+      { fecha: '24 jun 26', servicio: 'Control', profesional: 'Dr. Tudela', estado: 'Atendida', insignia: gris },
+      { fecha: '10 jun 26', servicio: 'Control', profesional: 'Dr. Tudela', estado: 'No asistio', insignia: rojo },
+      { fecha: '27 may 26', servicio: 'Control', profesional: 'Dr. Tudela', estado: 'Confirmada', insignia: verde }
+    ];
+
+    const contacto = [
+      { campo: 'Telefono', valor: '+593 987 654 118' },
+      { campo: 'Canal habitual', valor: 'WhatsApp' },
+      { campo: 'Correo', valor: 'sin registrar' },
+      { campo: 'Sede habitual', valor: 'Norte' },
+      { campo: 'Alta en la clinica', valor: '14 mar 2024' }
+    ];
+
+    return {
+      acento: acento,
+      paciente: paciente,
+      pestanas: pestanas,
+      banderas: banderas,
+      citas: citas,
+      contacto: contacto,
+      esResumen: tab === 'resumen',
+      esCitas: tab === 'citas',
+      esContacto: tab === 'contacto'
+    };
+  }
+}
+</script>
+</body>
+</html>

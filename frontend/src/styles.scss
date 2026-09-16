@@ -74,6 +74,9 @@
 .editor-demo label, .filtros-demo label { display: grid; gap: 6px; margin-bottom: 12px; }
 .editor-demo input, .editor-demo select, .editor-demo textarea, .filtros-demo input, .selector-paciente input, .selector-paciente select { width: 100%; min-height: 44px; padding: 8px 12px; border: 1px solid var(--borde); border-radius: var(--radio); background: var(--superficie-elevada); color: var(--texto); }
 .aviso-error { padding: 12px 16px; color: var(--peligro); background: var(--peligro-fondo); border-radius: var(--radio); }
+/* Contrapartida de `.aviso-error`: una operacion que salio bien. Con texto y
+   no solo con el tono verde. */
+.exito { padding: 12px 16px; margin-bottom: var(--espacio-4); color: var(--exito); background: var(--exito-fondo); border-radius: var(--radio); font-weight: 550; }
 .ayuda-demo { color: var(--texto-suave); font-size: .9rem; }
 .ceja { color: var(--acento); font-size: .75rem; letter-spacing: .12em; font-weight: 700; }
 
@@ -401,4 +404,56 @@ textarea.campo__control {
   color: var(--aviso);
   font-size: .78rem;
   font-weight: 650;
+}
+
+/* ---------------------------------------------------------------------------
+ *  Primitivos de disposicion que usa mas de una pantalla
+ *
+ *  Viven aqui y no en un componente porque un dialogo y un panel lateral no
+ *  son de la agenda: son formas de la aplicacion. Tenerlos duplicados en cada
+ *  pantalla es como acaban divergiendo.
+ * ------------------------------------------------------------------------- */
+
+/* Un campo dentro de una fila de filtros: sin el margen inferior que lleva en
+   un formulario apilado. */
+.campo--linea {
+  margin-bottom: 0;
+  flex: 1 1 180px;
+  min-width: 150px;
+}
+
+/* Capa de un panel lateral: se abre encima de la pantalla y no navega, asi
+   que al cerrarlo lo de debajo sigue donde estaba. */
+.capa-lateral {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: flex;
+  justify-content: flex-end;
+  padding: var(--espacio-4);
+  background: rgb(22 32 46 / 32%);
+}
+
+.capa-lateral > * {
+  display: block;
+  width: 440px;
+  max-width: 100%;
+  max-height: 100%;
+}
+
+/* Dialogo modal centrado. */
+.dialogo {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--espacio-4);
+  background: rgb(22 32 46 / 45%);
+}
+
+.dialogo__panel {
+  width: 100%;
+  max-width: 520px;
 }

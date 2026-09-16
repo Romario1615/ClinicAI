@@ -1,0 +1,616 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <style>
+    body {
+      margin: 0;
+      font-family: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+      font-size: 16px;
+      line-height: 1.55;
+      color: #16202e;
+      background: #f7f8fa;
+      text-rendering: optimizeLegibility;
+      -webkit-font-smoothing: antialiased;
+    }
+    * { box-sizing: border-box; }
+    a { color: #15557a; text-underline-offset: 2px; }
+    a:hover { color: #0f4160; }
+    button { font: inherit; color: inherit; cursor: pointer; }
+    .num { font-variant-numeric: tabular-nums; }
+    .fila-dia:hover .marca-hueco { border-color: #15557a; color: #15557a; }
+    .item-cola:hover { background: #eceef2; }
+  </style>
+</helmet>
+
+<div style="display: grid; grid-template-columns: 232px 1fr; grid-template-rows: 57px 1fr; grid-template-areas: 'cab cab' 'nav con'; width: 1440px; height: 900px; background: #f7f8fa; overflow: hidden">
+
+  <!-- ===================== Cabecera ===================== -->
+  <header style="grid-area: cab; display: flex; align-items: center; gap: 16px; padding: 12px 24px; background: #ffffff; border-bottom: 1px solid #d4d8e0">
+    <span style="font-weight: 700; letter-spacing: -0.01em">Gestión clínica</span>
+
+    <div style="display: flex; align-items: center; gap: 8px; margin-left: 24px; padding: 4px 12px 4px 8px; border: 1px solid #d4d8e0; border-radius: 999px; background: #f7f8fa; color: #566175; font-size: 0.85rem">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#7c8699" stroke-width="1.8" stroke-linecap="round" aria-hidden="true">
+        <circle cx="11" cy="11" r="7"></circle><path d="M16.5 16.5 21 21"></path>
+      </svg>
+      <span>Buscar paciente, cita o documento</span>
+      <span class="num" style="padding: 0 5px; border: 1px solid #d4d8e0; border-radius: 4px; background: #ffffff; font-size: 0.75rem; color: #7c8699">/</span>
+    </div>
+
+    <div style="margin-left: auto; display: flex; flex-direction: column; align-items: flex-end; line-height: 1.25">
+      <span style="font-weight: 600; font-size: 0.95rem">Rita Recepción</span>
+      <span style="font-size: 0.8rem; color: #7c8699">Recepción · Sede Norte</span>
+    </div>
+    <button type="button" style="display: inline-flex; align-items: center; justify-content: center; min-height: 34px; padding: 0 12px; border: 1px solid #b3bac6; border-radius: 8px; background: #ffffff; font-weight: 550; font-size: 0.9rem">Cerrar sesión</button>
+  </header>
+
+  <!-- ===================== Navegación ===================== -->
+  <nav style="grid-area: nav; padding: 16px 12px; background: #ffffff; border-right: 1px solid #d4d8e0">
+    <ul style="list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px">
+      <sc-for list="{{enlaces}}" as="enlace" hint-placeholder-count="7">
+        <li>
+          <a href="#" style="{{enlace.estilo}}">
+            <span style="display: flex; align-items: center; gap: 10px">
+              <span style="display: inline-flex; width: 20px; height: 20px" data-icono="{{enlace.icono}}">
+                <sc-if value="{{enlace.esAgenda}}" hint-placeholder-val="{{true}}">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"></rect><path d="M3 10h18M8 3v4M16 3v4"></path></svg>
+                </sc-if>
+                <sc-if value="{{enlace.esPanel}}" hint-placeholder-val="{{false}}">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1.5"></rect><rect x="14" y="3" width="7" height="7" rx="1.5"></rect><rect x="3" y="14" width="7" height="7" rx="1.5"></rect><rect x="14" y="14" width="7" height="7" rx="1.5"></rect></svg>
+                </sc-if>
+                <sc-if value="{{enlace.esPacientes}}" hint-placeholder-val="{{false}}">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="9" cy="8" r="3.5"></circle><path d="M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6"></path><path d="M16 5.5a3.5 3.5 0 0 1 0 7M18 20c0-2.2-.9-4.2-2.4-5.6"></path></svg>
+                </sc-if>
+                <sc-if value="{{enlace.esEspera}}" hint-placeholder-val="{{false}}">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M12 7.5V12l3 2"></path></svg>
+                </sc-if>
+                <sc-if value="{{enlace.esHistoria}}" hint-placeholder-val="{{false}}">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M6 3h8l4 4v14H6z"></path><path d="M14 3v4h4M9 12h6M9 16h4"></path></svg>
+                </sc-if>
+                <sc-if value="{{enlace.esMedicamentos}}" hint-placeholder-val="{{false}}">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><rect x="2.5" y="8.5" width="19" height="7" rx="3.5" transform="rotate(-45 12 12)"></rect><path d="M9.5 9.5 14.5 14.5"></path></svg>
+                </sc-if>
+                <sc-if value="{{enlace.esConocimiento}}" hint-placeholder-val="{{false}}">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H19v15H6.5A2.5 2.5 0 0 0 4 20.5z"></path><path d="M19 18v3H6.5"></path></svg>
+                </sc-if>
+              </span>
+              <span>{{enlace.etiqueta}}</span>
+            </span>
+            <sc-if value="{{enlace.tieneAviso}}" hint-placeholder-val="{{true}}">
+              <span class="num" style="min-width: 22px; padding: 0 6px; border-radius: 999px; background: #fdf3e0; border: 1px solid #8a5800; color: #8a5800; font-size: 0.75rem; font-weight: 700; text-align: center">{{enlace.aviso}}</span>
+            </sc-if>
+          </a>
+        </li>
+      </sc-for>
+    </ul>
+  </nav>
+
+  <!-- ===================== Contenido ===================== -->
+  <main style="grid-area: con; padding: 20px 24px 24px; display: flex; flex-direction: column; gap: 12px; min-height: 0; overflow: hidden">
+
+    <!-- Título + contexto -->
+    <div style="display: flex; align-items: flex-end; justify-content: space-between; gap: 16px">
+      <div>
+        <p style="margin: 0; color: #15557a; font-size: 0.75rem; letter-spacing: 0.12em; font-weight: 700">AGENDA</p>
+        <h1 style="margin: 0; font-size: 1.6rem; font-weight: 650; letter-spacing: -0.01em; line-height: 1.25">{{dia.titulo}}</h1>
+      </div>
+      <p style="margin: 0; color: #566175; font-size: 0.9rem">Horario de <strong style="font-weight: 600">{{zona}}</strong></p>
+    </div>
+
+    <!-- Barra de contexto: filtros en una línea, no cuatro campos apilados -->
+    <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 10px 12px; border: 1px solid #d4d8e0; border-radius: 8px; background: #ffffff; box-shadow: 0 1px 2px rgb(22 32 46 / 8%)">
+      <sc-for list="{{filtros}}" as="filtro" hint-placeholder-count="4">
+        <button type="button" style="{{filtro.estilo}}">
+          <span style="color: #7c8699; font-size: 0.78rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em">{{filtro.campo}}</span>
+          <span style="font-weight: 600">{{filtro.valor}}</span>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#7c8699" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="m6 9 6 6 6-6"></path></svg>
+        </button>
+      </sc-for>
+
+      <div style="margin-left: auto; display: flex; align-items: center; gap: 6px">
+        <button type="button" onClick="{{diaAnterior}}" aria-label="Día anterior" style="display: inline-flex; align-items: center; justify-content: center; width: 44px; height: 40px; border: 1px solid #b3bac6; border-radius: 8px; background: #ffffff">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#16202e" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="m14 6-6 6 6 6"></path></svg>
+        </button>
+        <button type="button" onClick="{{irAHoy}}" style="height: 40px; padding: 0 14px; border: 1px solid #b3bac6; border-radius: 8px; background: #ffffff; font-weight: 600">Hoy</button>
+        <button type="button" onClick="{{diaSiguiente}}" aria-label="Día siguiente" style="display: inline-flex; align-items: center; justify-content: center; width: 44px; height: 40px; border: 1px solid #b3bac6; border-radius: 8px; background: #ffffff">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#16202e" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="m10 6 6 6-6 6"></path></svg>
+        </button>
+      </div>
+    </div>
+
+    <!-- Resumen del día: ocupación real, no un recuento suelto -->
+    <div style="display: flex; align-items: center; gap: 20px; flex-wrap: wrap; padding: 10px 14px; border: 1px solid #d4d8e0; border-radius: 8px; background: #ffffff">
+      <div style="display: flex; align-items: baseline; gap: 7px">
+        <strong class="num" style="font-size: 1.35rem; font-weight: 650">{{dia.citas}}</strong>
+        <span style="color: #566175; font-size: 0.9rem">citas</span>
+      </div>
+      <div style="width: 1px; height: 26px; background: #d4d8e0"></div>
+      <div style="flex: 1 1 260px; min-width: 200px">
+        <div style="display: flex; justify-content: space-between; margin-bottom: 5px; font-size: 0.82rem; color: #566175">
+          <span>Ocupación de la jornada</span>
+          <span class="num"><strong style="color: #16202e; font-weight: 650">{{dia.ocupadas}}</strong> de {{dia.jornada}}</span>
+        </div>
+        <div style="height: 8px; border-radius: 999px; background: #eceef2; overflow: hidden">
+          <div style="height: 8px; width: {{dia.ocupacionPct}}; border-radius: 999px; background: {{acento}}"></div>
+        </div>
+      </div>
+      <div style="width: 1px; height: 26px; background: #d4d8e0"></div>
+      <div style="display: flex; align-items: center; gap: 8px">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#8a5800" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 3 2.5 20h19z"></path><path d="M12 9v5M12 17h.01"></path></svg>
+        <span style="color: #8a5800; font-weight: 600; font-size: 0.9rem"><span class="num">{{dia.pendientes}}</span> necesitan acción</span>
+      </div>
+    </div>
+
+    <!-- ===================== Cuerpo: el día + el panel ===================== -->
+    <div style="display: grid; grid-template-columns: minmax(0, 1fr) 392px; gap: 20px; flex: 1 1 auto; min-height: 0">
+
+      <!-- El día como secuencia: las citas y los huecos, en orden -->
+      <section style="display: flex; flex-direction: column; min-height: 0; border: 1px solid #d4d8e0; border-radius: 8px; background: #ffffff; box-shadow: 0 1px 2px rgb(22 32 46 / 8%); overflow: hidden">
+        <div style="display: flex; align-items: center; justify-content: space-between; padding: 10px 16px; border-bottom: 1px solid #d4d8e0; background: #eceef2">
+          <h2 style="margin: 0; font-size: 0.85rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: #566175">El día, en orden</h2>
+          <span style="font-size: 0.82rem; color: #7c8699">Un hueco se pulsa para reservarlo</span>
+        </div>
+
+        <div style="flex: 1 1 auto; min-height: 0; overflow-y: auto">
+          <sc-for list="{{filas}}" as="fila" hint-placeholder-count="8">
+
+            <!-- Cita -->
+            <sc-if value="{{fila.esCita}}" hint-placeholder-val="{{true}}">
+              <button type="button" onClick="{{fila.abrir}}" class="fila-dia" style="{{fila.estilo}}">
+                <span class="num" style="width: 52px; flex: 0 0 52px; text-align: right; font-weight: 650; color: #16202e">{{fila.hora}}</span>
+                <span style="width: 4px; flex: 0 0 4px; align-self: stretch; border-radius: 999px; background: {{fila.barra}}"></span>
+                <span style="flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 1px; text-align: left">
+                  <span style="font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{fila.paciente}}</span>
+                  <span style="color: #566175; font-size: 0.85rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{fila.servicio}} · {{fila.profesional}}</span>
+                </span>
+                <sc-if value="{{fila.urgente}}" hint-placeholder-val="{{true}}">
+                  <span style="display: inline-flex; align-items: center; gap: 5px; padding: 2px 9px; border: 1px solid #8a5800; border-radius: 999px; background: #fdf3e0; color: #8a5800; font-size: 0.78rem; font-weight: 650; white-space: nowrap">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M12 7.5V12l3 2"></path></svg>
+                    {{fila.nota}}
+                  </span>
+                </sc-if>
+                <span style="{{fila.insignia}}">{{fila.estado}}</span>
+              </button>
+            </sc-if>
+
+            <!-- Hueco libre -->
+            <sc-if value="{{fila.esHueco}}" hint-placeholder-val="{{false}}">
+              <button type="button" onClick="{{fila.abrir}}" class="fila-dia" style="{{fila.estilo}}">
+                <span class="num" style="width: 52px; flex: 0 0 52px; text-align: right; color: #7c8699">{{fila.hora}}</span>
+                <span style="width: 4px; flex: 0 0 4px"></span>
+                <span class="marca-hueco" style="flex: 1 1 auto; display: flex; align-items: center; gap: 10px; padding: 7px 12px; border: 1px dashed #b3bac6; border-radius: 8px; color: #566175; transition: border-color 120ms ease, color 120ms ease">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>
+                  <span style="font-weight: 600">{{fila.duracion}} libre</span>
+                  <span class="num" style="color: #7c8699; font-size: 0.85rem">{{fila.nota}}</span>
+                </span>
+              </button>
+            </sc-if>
+
+            <!-- Bloqueo (descanso, vacaciones) -->
+            <sc-if value="{{fila.esBloqueo}}" hint-placeholder-val="{{false}}">
+              <div style="display: flex; align-items: center; gap: 12px; padding: 9px 16px; border-bottom: 1px solid #eceef2; background: repeating-linear-gradient(135deg, #f7f8fa, #f7f8fa 7px, #eceef2 7px, #eceef2 14px)">
+                <span class="num" style="width: 52px; flex: 0 0 52px; text-align: right; color: #7c8699">{{fila.hora}}</span>
+                <span style="width: 4px; flex: 0 0 4px"></span>
+                <span style="color: #566175; font-weight: 600">{{fila.paciente}}</span>
+                <span style="color: #7c8699; font-size: 0.85rem">{{fila.duracion}}</span>
+              </div>
+            </sc-if>
+
+          </sc-for>
+        </div>
+      </section>
+
+      <!-- Panel contextual: una sola columna que cambia de trabajo -->
+      <aside style="display: flex; flex-direction: column; min-height: 0; border: 1px solid #d4d8e0; border-radius: 8px; background: #ffffff; box-shadow: 0 1px 2px rgb(22 32 46 / 8%); overflow: hidden">
+
+        <!-- ---------- Cola de trabajo (estado por defecto) ---------- -->
+        <sc-if value="{{vistaAtencion}}" hint-placeholder-val="{{true}}">
+          <div style="padding: 10px 16px; border-bottom: 1px solid #d4d8e0; background: #eceef2">
+            <h2 style="margin: 0; font-size: 0.85rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: #566175">Necesita acción</h2>
+          </div>
+          <div style="flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 12px; display: flex; flex-direction: column; gap: 10px">
+            <sc-for list="{{cola}}" as="tarea" hint-placeholder-count="3">
+              <article class="item-cola" style="padding: 12px; border: 1px solid {{tarea.borde}}; border-left-width: 4px; border-radius: 8px; background: {{tarea.fondo}}; transition: background-color 120ms ease">
+                <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 4px">
+                  <span style="color: {{tarea.color}}; font-weight: 700; font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.04em">{{tarea.etiqueta}}</span>
+                  <span class="num" style="margin-left: auto; color: {{tarea.color}}; font-weight: 650; font-size: 0.82rem">{{tarea.plazo}}</span>
+                </div>
+                <p style="margin: 0 0 3px; font-weight: 600">{{tarea.titulo}}</p>
+                <p style="margin: 0 0 10px; color: #566175; font-size: 0.88rem">{{tarea.detalle}}</p>
+                <div style="display: flex; gap: 8px; flex-wrap: wrap">
+                  <button type="button" onClick="{{tarea.principal}}" style="min-height: 36px; padding: 0 14px; border: 1px solid {{acento}}; border-radius: 8px; background: {{acento}}; color: #ffffff; font-weight: 600; font-size: 0.9rem">{{tarea.accion}}</button>
+                  <button type="button" style="min-height: 36px; padding: 0 12px; border: 1px solid #b3bac6; border-radius: 8px; background: #ffffff; font-weight: 550; font-size: 0.9rem">{{tarea.secundaria}}</button>
+                </div>
+              </article>
+            </sc-for>
+
+            <p style="margin: 6px 4px 0; color: #7c8699; font-size: 0.85rem">Cuando no queda nada aquí, la jornada está al día. Este panel se convierte en el formulario de reserva al pulsar un hueco, y en el detalle de la cita al pulsar una fila.</p>
+          </div>
+        </sc-if>
+
+        <!-- ---------- Reservar un hueco ---------- -->
+        <sc-if value="{{vistaReservar}}" hint-placeholder-val="{{false}}">
+          <div style="display: flex; align-items: center; gap: 10px; padding: 10px 12px 10px 16px; border-bottom: 1px solid #d4d8e0; background: #e4eef5">
+            <h2 style="margin: 0; font-size: 0.85rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: #0f4160">Reservar</h2>
+            <button type="button" onClick="{{volver}}" style="margin-left: auto; display: inline-flex; align-items: center; gap: 6px; min-height: 34px; padding: 0 10px; border: 1px solid transparent; border-radius: 8px; background: transparent; color: #0f4160; font-weight: 600; font-size: 0.88rem">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"></path></svg>
+              Descartar
+            </button>
+          </div>
+          <div style="flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 14px">
+            <div>
+              <p class="num" style="margin: 0; font-size: 1.45rem; font-weight: 650; letter-spacing: -0.01em">{{seleccion.hora}}</p>
+              <p style="margin: 2px 0 0; color: #566175; font-size: 0.9rem">{{seleccion.detalle}}</p>
+            </div>
+
+            <fieldset style="margin: 0; padding: 0; border: 0">
+              <legend style="padding: 0; margin-bottom: 4px; font-size: 0.9rem; font-weight: 550; color: #566175">Hora de inicio</legend>
+              <div style="display: flex; flex-wrap: wrap; gap: 8px">
+                <sc-for list="{{arranques}}" as="arranque" hint-placeholder-count="4">
+                  <button type="button" onClick="{{arranque.elegir}}" class="num" style="{{arranque.estilo}}">{{arranque.hora}}</button>
+                </sc-for>
+              </div>
+              <p style="margin: 6px 0 0; color: #7c8699; font-size: 0.875rem">El tramo es un rango; la cita es un punto. Se elige el arranque en lugar de dar por bueno el primero.</p>
+            </fieldset>
+
+            <label style="display: block">
+              <span style="display: block; margin-bottom: 4px; font-size: 0.9rem; font-weight: 550; color: #566175">Paciente</span>
+              <span style="display: flex; align-items: center; gap: 8px; width: 100%; min-height: 44px; padding: 0 12px; border: 1px solid #b3bac6; border-radius: 8px; background: #ffffff">
+                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#7c8699" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="M16.5 16.5 21 21"></path></svg>
+                <span style="color: #7c8699">Nombre, apellido o documento…</span>
+              </span>
+              <span style="display: block; margin-top: 4px; font-size: 0.875rem; color: #7c8699">Buscar aquí evita abrir la ficha en otra pantalla.</span>
+            </label>
+
+            <div style="padding: 10px 12px; border: 1px solid #d4d8e0; border-radius: 8px; background: #f7f8fa">
+              <p style="margin: 0 0 6px; font-size: 0.82rem; font-weight: 650; color: #566175; text-transform: uppercase; letter-spacing: 0.04em">Sugeridos de la lista de espera</p>
+              <sc-for list="{{sugeridos}}" as="sug" hint-placeholder-count="2">
+                <div style="display: flex; align-items: center; gap: 10px; padding: 7px 0; border-bottom: 1px solid #eceef2">
+                  <span style="flex: 1 1 auto; min-width: 0">
+                    <span style="display: block; font-weight: 600; font-size: 0.92rem">{{sug.nombre}}</span>
+                    <span style="display: block; color: #7c8699; font-size: 0.82rem">{{sug.motivo}}</span>
+                  </span>
+                  <button type="button" style="min-height: 34px; padding: 0 12px; border: 1px solid #b3bac6; border-radius: 8px; background: #ffffff; font-weight: 550; font-size: 0.88rem">Elegir</button>
+                </div>
+              </sc-for>
+            </div>
+
+            <label style="display: block">
+              <span style="display: block; margin-bottom: 4px; font-size: 0.9rem; font-weight: 550; color: #566175">Notas de recepción (opcional)</span>
+              <span style="display: block; width: 100%; min-height: 64px; padding: 10px 12px; border: 1px solid #b3bac6; border-radius: 8px; background: #ffffff; color: #7c8699">Ej.: viene acompañada, necesita rampa</span>
+              <span style="display: flex; gap: 6px; margin-top: 5px; font-size: 0.875rem; color: #8a5800">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="flex: 0 0 15px; margin-top: 3px" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M12 8v5M12 16h.01"></path></svg>
+                <span>Texto administrativo. Sin información clínica: lo ve todo el personal de agenda.</span>
+              </span>
+            </label>
+
+            <div style="display: flex; gap: 10px; margin-top: auto; padding-top: 8px">
+              <button type="button" style="flex: 1 1 auto; min-height: 44px; border: 1px solid #b3bac6; border-radius: 8px; background: #ffffff; color: #7c8699; font-weight: 600; opacity: 0.55">Confirmar cita</button>
+            </div>
+            <p style="margin: 0; text-align: center; color: #7c8699; font-size: 0.85rem">Elija un paciente para poder confirmar.</p>
+          </div>
+        </sc-if>
+
+        <!-- ---------- Detalle de una cita ---------- -->
+        <sc-if value="{{vistaCita}}" hint-placeholder-val="{{false}}">
+          <div style="display: flex; align-items: center; gap: 10px; padding: 10px 12px 10px 16px; border-bottom: 1px solid #d4d8e0; background: #eceef2">
+            <h2 style="margin: 0; font-size: 0.85rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: #566175">Cita</h2>
+            <button type="button" onClick="{{volver}}" style="margin-left: auto; display: inline-flex; align-items: center; gap: 6px; min-height: 34px; padding: 0 10px; border: 1px solid transparent; border-radius: 8px; background: transparent; color: #15557a; font-weight: 600; font-size: 0.88rem">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"></path></svg>
+              Cerrar
+            </button>
+          </div>
+          <div style="flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 14px">
+            <div>
+              <div style="display: flex; align-items: center; gap: 10px">
+                <p class="num" style="margin: 0; font-size: 1.45rem; font-weight: 650; letter-spacing: -0.01em">{{seleccion.hora}}</p>
+                <span style="{{seleccion.insignia}}">{{seleccion.estado}}</span>
+              </div>
+              <p style="margin: 4px 0 0; font-size: 1.05rem; font-weight: 650">{{seleccion.paciente}}</p>
+              <p style="margin: 2px 0 0; color: #566175; font-size: 0.9rem">{{seleccion.detalle}}</p>
+            </div>
+
+            <sc-if value="{{seleccion.urgente}}" hint-placeholder-val="{{true}}">
+              <div style="padding: 10px 12px; border: 1px solid #8a5800; border-left-width: 4px; border-radius: 8px; background: #fdf3e0; color: #8a5800">
+                <p style="margin: 0; font-weight: 650; font-size: 0.92rem">{{seleccion.aviso}}</p>
+                <p style="margin: 3px 0 0; font-size: 0.88rem">{{seleccion.avisoDetalle}}</p>
+              </div>
+            </sc-if>
+
+            <div style="display: flex; flex-direction: column; gap: 1px">
+              <sc-for list="{{seleccion.datos}}" as="dato" hint-placeholder-count="4">
+                <div style="display: flex; gap: 12px; padding: 7px 0; border-bottom: 1px solid #eceef2">
+                  <span style="flex: 0 0 116px; color: #7c8699; font-size: 0.88rem">{{dato.campo}}</span>
+                  <span style="flex: 1 1 auto; font-size: 0.92rem">{{dato.valor}}</span>
+                </div>
+              </sc-for>
+            </div>
+
+            <div style="display: flex; flex-direction: column; gap: 8px; margin-top: auto">
+              <button type="button" style="min-height: 44px; border: 1px solid {{acento}}; border-radius: 8px; background: {{acento}}; color: #ffffff; font-weight: 600">{{seleccion.accion}}</button>
+              <div style="display: flex; gap: 8px">
+                <button type="button" style="flex: 1 1 auto; min-height: 44px; border: 1px solid #b3bac6; border-radius: 8px; background: #ffffff; font-weight: 550">Reprogramar</button>
+                <button type="button" style="flex: 1 1 auto; min-height: 44px; border: 1px solid #b3bac6; border-radius: 8px; background: #ffffff; font-weight: 550">No asistió</button>
+              </div>
+              <button type="button" style="min-height: 44px; border: 1px solid #a52320; border-radius: 8px; background: #ffffff; color: #a52320; font-weight: 550">Cancelar la cita</button>
+              <p style="margin: 0; color: #7c8699; font-size: 0.85rem">Cancelar pide un motivo: es lo que permite explicar después por qué no se atendió.</p>
+            </div>
+          </div>
+        </sc-if>
+
+      </aside>
+    </div>
+  </main>
+</div>
+</x-dc>
+
+<script data-dc-script data-props='{
+  "acento": {"editor": "color", "default": "#15557a", "options": ["#15557a", "#1c6b45", "#0f4160", "#5b3a86"], "section": "Marca"},
+  "densidad": {"editor": "enum", "options": ["comoda", "compacta"], "default": "comoda", "section": "Densidad"},
+  "$preview": {"width": 1440, "height": 900}
+}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    // Estado del prototipo: que dia se mira y que ocupa el panel derecho.
+    this.state = { dia: 1, vista: 'atencion', clave: null, arranque: null };
+  }
+
+  // --- Datos sinteticos. Ningun nombre corresponde a una persona real. ---
+  dias() {
+    return [
+      { titulo: 'Martes 15 de septiembre', citas: 6, ocupadas: '4 h 00', jornada: '9 h 00', ocupacionPct: '44%', pendientes: 1 },
+      { titulo: 'Miercoles 16 de septiembre', citas: 8, ocupadas: '5 h 45', jornada: '9 h 00', ocupacionPct: '64%', pendientes: 3 },
+      { titulo: 'Jueves 17 de septiembre', citas: 4, ocupadas: '2 h 30', jornada: '9 h 00', ocupacionPct: '28%', pendientes: 0 }
+    ];
+  }
+
+  crudas() {
+    const dia0 = [
+      { t: 'cita', hora: '08:30', paciente: 'Genoveva Torralba', servicio: 'Control', profesional: 'Dra. Bravo', estado: 'CONFIRMED' },
+      { t: 'hueco', hora: '09:00', duracion: '1 h 00', nota: '4 turnos de 15 min' },
+      { t: 'cita', hora: '10:00', paciente: 'Maximiano Rico', servicio: 'Primera consulta', profesional: 'Dra. Bravo', estado: 'PENDING', urgente: true, nota: 'sin confirmar' },
+      { t: 'cita', hora: '10:45', paciente: 'Amor Roman', servicio: 'Control', profesional: 'Dra. Bravo', estado: 'CONFIRMED' },
+      { t: 'bloqueo', hora: '13:00', paciente: 'Descanso', duracion: '1 h 00' },
+      { t: 'cita', hora: '14:00', paciente: 'Ignacio Sedano', servicio: 'Control', profesional: 'Dra. Bravo', estado: 'COMPLETED' },
+      { t: 'hueco', hora: '14:30', duracion: '2 h 30', nota: '10 turnos de 15 min' },
+      { t: 'cita', hora: '17:00', paciente: 'Ana Valenzuela', servicio: 'Control', profesional: 'Dra. Bravo', estado: 'CANCELLED' }
+    ];
+    const dia1 = [
+      { t: 'hueco', hora: '08:00', duracion: '30 min', nota: '2 turnos de 15 min' },
+      { t: 'cita', hora: '08:30', paciente: 'Carmina Bravo Nunez', servicio: 'Control', profesional: 'Dr. Tudela', estado: 'CONFIRMED' },
+      { t: 'cita', hora: '09:00', paciente: 'Luis Mendoza Pardo', servicio: 'Primera consulta', profesional: 'Dr. Tudela', estado: 'PENDING', urgente: true, nota: 'sin confirmar' },
+      { t: 'hueco', hora: '09:45', duracion: '45 min', nota: '3 turnos de 15 min' },
+      { t: 'cita', hora: '10:30', paciente: 'Reyna Jurado Silva', servicio: 'Control', profesional: 'Dr. Tudela', estado: 'HELD', urgente: true, nota: 'caduca en 6 min' },
+      { t: 'cita', hora: '11:00', paciente: 'Donato Jimenez Vera', servicio: 'Control', profesional: 'Dr. Tudela', estado: 'CONFIRMED' },
+      { t: 'hueco', hora: '11:30', duracion: '1 h 30', nota: '6 turnos de 15 min' },
+      { t: 'bloqueo', hora: '13:00', paciente: 'Descanso', duracion: '1 h 00' },
+      { t: 'cita', hora: '14:00', paciente: 'Saturnina Morales', servicio: 'Primera consulta', profesional: 'Dr. Tudela', estado: 'CONFIRMED' },
+      { t: 'cita', hora: '14:45', paciente: 'Vicenta Estrada Lara', servicio: 'Control', profesional: 'Dr. Tudela', estado: 'RESCHEDULED' },
+      { t: 'hueco', hora: '15:15', duracion: '45 min', nota: '3 turnos de 15 min' },
+      { t: 'cita', hora: '16:00', paciente: 'Angelino Silva Cruz', servicio: 'Control', profesional: 'Dr. Tudela', estado: 'PENDING', urgente: true, nota: 'sin confirmar' },
+      { t: 'cita', hora: '16:30', paciente: 'Ruth Bosch Aguirre', servicio: 'Control', profesional: 'Dr. Tudela', estado: 'CONFIRMED' },
+      { t: 'hueco', hora: '17:00', duracion: '1 h 00', nota: '4 turnos de 15 min' }
+    ];
+    const dia2 = [
+      { t: 'hueco', hora: '08:00', duracion: '2 h 00', nota: '8 turnos de 15 min' },
+      { t: 'cita', hora: '10:00', paciente: 'Heriberto Vendrell', servicio: 'Primera consulta', profesional: 'Dra. Salgado', estado: 'CONFIRMED' },
+      { t: 'cita', hora: '10:45', paciente: 'Jose Francisco Pujol', servicio: 'Control', profesional: 'Dra. Salgado', estado: 'CONFIRMED' },
+      { t: 'bloqueo', hora: '13:00', paciente: 'Descanso', duracion: '1 h 00' },
+      { t: 'hueco', hora: '14:00', duracion: '1 h 30', nota: '6 turnos de 15 min' },
+      { t: 'cita', hora: '15:30', paciente: 'Agustina Salgado Ruiz', servicio: 'Control', profesional: 'Dra. Salgado', estado: 'CONFIRMED' },
+      { t: 'cita', hora: '16:00', paciente: 'Nadia Arjona Belmonte', servicio: 'Control', profesional: 'Dra. Salgado', estado: 'CONFIRMED' },
+      { t: 'hueco', hora: '16:30', duracion: '1 h 30', nota: '6 turnos de 15 min' }
+    ];
+    return [dia0, dia1, dia2][this.state.dia] || [];
+  }
+
+  // Los estados se guardan en ingles y se traducen solo para mostrarlos.
+  presentacion(estado) {
+    const mapa = {
+      PENDING:     { etiqueta: 'Pendiente',    color: '#566175', fondo: '#eceef2', barra: '#b3bac6' },
+      HELD:        { etiqueta: 'Bloqueada',    color: '#8a5800', fondo: '#fdf3e0', barra: '#8a5800' },
+      CONFIRMED:   { etiqueta: 'Confirmada',   color: '#1c6b45', fondo: '#e3f2ea', barra: '#1c6b45' },
+      RESCHEDULED: { etiqueta: 'Reprogramada', color: '#1e5081', fondo: '#e7effa', barra: '#1e5081' },
+      CANCELLED:   { etiqueta: 'Cancelada',    color: '#a52320', fondo: '#fbe9e8', barra: '#a52320' },
+      COMPLETED:   { etiqueta: 'Atendida',     color: '#566175', fondo: '#eceef2', barra: '#7c8699' },
+      NO_SHOW:     { etiqueta: 'No asistio',   color: '#a52320', fondo: '#fbe9e8', barra: '#a52320' }
+    };
+    return mapa[estado] || mapa.PENDING;
+  }
+
+  insigniaEstilo(p) {
+    return 'display: inline-block; padding: 2px 9px; border-radius: 999px; border: 1px solid ' + p.color +
+      '; background: ' + p.fondo + '; color: ' + p.color +
+      '; font-size: 0.8rem; font-weight: 650; white-space: nowrap; flex: 0 0 auto';
+  }
+
+  renderVals() {
+    const acento = this.props.acento || '#15557a';
+    const compacta = (this.props.densidad || 'comoda') === 'compacta';
+    const padFila = compacta ? '6px 16px' : '10px 16px';
+    const dia = this.dias()[this.state.dia];
+
+    const enlaces = [
+      { etiqueta: 'Panel', clave: 'panel' },
+      { etiqueta: 'Agenda', clave: 'agenda' },
+      { etiqueta: 'Lista de espera', clave: 'espera', aviso: '1' },
+      { etiqueta: 'Pacientes', clave: 'pacientes' },
+      { etiqueta: 'Historia clinica', clave: 'historia' },
+      { etiqueta: 'Medicamentos', clave: 'medicamentos' },
+      { etiqueta: 'Conocimiento', clave: 'conocimiento' }
+    ].map((e) => {
+      const activo = e.clave === 'agenda';
+      return {
+        etiqueta: e.etiqueta,
+        aviso: e.aviso || '',
+        tieneAviso: !!e.aviso,
+        esAgenda: e.clave === 'agenda',
+        esPanel: e.clave === 'panel',
+        esPacientes: e.clave === 'pacientes',
+        esEspera: e.clave === 'espera',
+        esHistoria: e.clave === 'historia',
+        esMedicamentos: e.clave === 'medicamentos',
+        esConocimiento: e.clave === 'conocimiento',
+        estilo: 'display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 44px; padding: 0 12px; border-radius: 8px; text-decoration: none; font-weight: 550; ' +
+          (activo
+            ? 'background: #e4eef5; color: #0f4160; box-shadow: inset 3px 0 0 ' + acento + ';'
+            : 'color: #16202e;')
+      };
+    });
+
+    const filtros = [
+      { campo: 'Sede', valor: 'Norte' },
+      { campo: 'Especialidad', valor: 'Dermatologia' },
+      { campo: 'Servicio', valor: 'Control · 30 min' },
+      { campo: 'Profesional', valor: 'Dr. Tudela' }
+    ].map((f) => ({
+      campo: f.campo,
+      valor: f.valor,
+      estilo: 'display: inline-flex; align-items: center; gap: 8px; min-height: 40px; padding: 0 12px; border: 1px solid #d4d8e0; border-radius: 8px; background: #f7f8fa; text-align: left'
+    }));
+
+    const filas = this.crudas().map((f, i) => {
+      const clave = 'f' + i;
+      const elegida = this.state.clave === clave;
+      const base = 'display: flex; align-items: center; gap: 12px; width: 100%; padding: ' + padFila +
+        '; border: 0; border-bottom: 1px solid #eceef2; border-left: 3px solid ' +
+        (elegida ? acento : 'transparent') + '; background: ' + (elegida ? '#e4eef5' : '#ffffff') +
+        '; text-align: left; transition: background-color 120ms ease';
+      if (f.t === 'cita') {
+        const p = this.presentacion(f.estado);
+        return {
+          esCita: true, esHueco: false, esBloqueo: false,
+          hora: f.hora, paciente: f.paciente, servicio: f.servicio, profesional: f.profesional,
+          estado: p.etiqueta, barra: p.barra, insignia: this.insigniaEstilo(p),
+          urgente: !!f.urgente, nota: f.nota || '', duracion: '',
+          estilo: base,
+          abrir: () => this.setState({ vista: 'cita', clave: clave })
+        };
+      }
+      if (f.t === 'hueco') {
+        return {
+          esCita: false, esHueco: true, esBloqueo: false,
+          hora: f.hora, duracion: f.duracion, nota: f.nota,
+          paciente: '', servicio: '', profesional: '', estado: '', barra: 'transparent',
+          insignia: '', urgente: false,
+          estilo: base,
+          abrir: () => this.setState({ vista: 'reservar', clave: clave, arranque: null })
+        };
+      }
+      return {
+        esCita: false, esHueco: false, esBloqueo: true,
+        hora: f.hora, paciente: f.paciente, duracion: f.duracion,
+        servicio: '', profesional: '', estado: '', barra: 'transparent', insignia: '',
+        urgente: false, nota: '', estilo: base, abrir: () => {}
+      };
+    });
+
+    // La cola de trabajo: plazos, no estadisticas.
+    const cola = [
+      {
+        etiqueta: 'Caduca', plazo: '6 min',
+        titulo: 'Turno bloqueado de Reyna Jurado S.',
+        detalle: 'Las 10:30 estan apartadas sin confirmar. Al caducar, el hueco vuelve a la agenda.',
+        accion: 'Confirmar', secundaria: 'Liberar',
+        color: '#8a5800', fondo: '#fdf3e0', borde: '#8a5800'
+      },
+      {
+        etiqueta: 'Nadie ha llamado', plazo: 'hace 22 min',
+        titulo: 'Oferta de lista de espera sin avisar',
+        detalle: 'Sin consentimiento para mensajes automaticos: la oferta existe pero hay que llamar por telefono.',
+        accion: 'Marcar llamada hecha', secundaria: 'Ver entrada',
+        color: '#8a5800', fondo: '#fdf3e0', borde: '#8a5800'
+      },
+      {
+        etiqueta: 'Sin confirmar', plazo: '2 citas hoy',
+        titulo: 'Luis Mendoza P. y Angelino Silva C.',
+        detalle: 'Creadas pero nunca confirmadas. Son las que acaban en inasistencia.',
+        accion: 'Confirmar ambas', secundaria: 'Ver una a una',
+        color: '#566175', fondo: '#ffffff', borde: '#d4d8e0'
+      }
+    ];
+
+    const sugeridos = [
+      { nombre: 'Epifanio Quiros M.', motivo: 'En espera desde el 9 sep · prefiere mañanas' },
+      { nombre: 'Lola Blanch Ferrer', motivo: 'En espera desde el 11 sep · cualquier hora' }
+    ];
+
+    // Lo que ocupa el panel derecho depende de la fila elegida.
+    const elegida = filas.filter((f) => this.state.clave !== null)[0];
+    const fila = filas[Number(String(this.state.clave || 'f0').slice(1))] || filas[0] || {};
+    const pHeld = this.presentacion('HELD');
+
+    const seleccion = this.state.vista === 'reservar'
+      ? {
+          hora: fila.hora ? fila.hora + ' · ' + (fila.duracion || '') + ' libre' : '—',
+          detalle: 'Control de 30 min con Dr. Tudela · Sede Norte',
+          estado: '', insignia: '', paciente: '', urgente: false, aviso: '', avisoDetalle: '',
+          datos: [], accion: ''
+        }
+      : {
+          hora: fila.hora || '—',
+          paciente: fila.paciente || '',
+          estado: fila.estado || '',
+          insignia: fila.insignia || this.insigniaEstilo(pHeld),
+          detalle: (fila.servicio || '') + ' · ' + (fila.profesional || '') + ' · Sede Norte',
+          urgente: !!fila.urgente,
+          aviso: fila.nota ? 'Este turno ' + fila.nota : '',
+          avisoDetalle: 'Un bloqueo que caduca devuelve el hueco a la agenda automaticamente.',
+          accion: fila.estado === 'Bloqueada' ? 'Confirmar la cita' : 'Marcar como atendida',
+          datos: [
+            { campo: 'Documento', valor: '17XXXXXX92' },
+            { campo: 'Telefono', valor: '+593 9XX XXX 118' },
+            { campo: 'Origen', valor: 'WhatsApp · agente' },
+            { campo: 'Creada', valor: '14 sep, 18:42 por el agente' },
+            { campo: 'Recordatorios', valor: '1 enviado · 1 programado' }
+          ]
+        };
+
+    // Arranques posibles dentro del tramo elegido.
+    const minutos = fila.duracion && fila.duracion.indexOf('h') >= 0 ? 90 : 45;
+    const base = (fila.hora || '08:00').split(':');
+    const arranques = [0, 15, 30, 45, 60, 75]
+      .filter((desfase) => desfase + 30 <= minutos)
+      .map((desfase) => {
+        const total = Number(base[0]) * 60 + Number(base[1]) + desfase;
+        const hora = String(Math.floor(total / 60)).padStart(2, '0') + ':' + String(total % 60).padStart(2, '0');
+        const elegido = this.state.arranque === null ? desfase === 0 : this.state.arranque === desfase;
+        return {
+          hora: hora,
+          elegir: () => this.setState({ arranque: desfase }),
+          estilo: 'min-height: 34px; padding: 0 12px; border-radius: 8px; font-weight: 600; font-size: 0.9rem; border: 1px solid ' +
+            (elegido ? acento : '#b3bac6') + '; background: ' + (elegido ? acento : '#ffffff') +
+            '; color: ' + (elegido ? '#ffffff' : '#16202e') + ';'
+        };
+      });
+
+    return {
+      acento: acento,
+      arranques: arranques,
+      zona: 'America/Guayaquil',
+      dia: dia,
+      enlaces: enlaces,
+      filtros: filtros,
+      filas: filas,
+      cola: cola,
+      sugeridos: sugeridos,
+      seleccion: seleccion,
+      vistaAtencion: this.state.vista === 'atencion',
+      vistaReservar: this.state.vista === 'reservar',
+      vistaCita: this.state.vista === 'cita',
+      volver: () => this.setState({ vista: 'atencion', clave: null }),
+      irAHoy: () => this.setState({ dia: 1, vista: 'atencion', clave: null }),
+      diaAnterior: () => this.setState({ dia: Math.max(0, this.state.dia - 1), vista: 'atencion', clave: null }),
+      diaSiguiente: () => this.setState({ dia: Math.min(2, this.state.dia + 1), vista: 'atencion', clave: null })
+    };
+  }
+}
+</script>
+</body>
+</html>

@@ -23,20 +23,36 @@
  * «error inesperado».
  */
 import { Component, computed, inject, signal } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormsModule } from '@angular/forms';
-import { forkJoin } from 'rxjs';
+import { Subject, catchError, forkJoin, map, of, switchMap, type Observable } from 'rxjs';
 
 import {
   CargandoComponent,
   ErrorComponent,
   VacioComponent,
 } from '../../compartido/estados.component';
+import { ColaTrabajoComponent } from '../../compartido/cola-trabajo.component';
+import { FichaPacienteComponent } from '../../compartido/ficha-paciente.component';
 import { InsigniaEstadoComponent } from '../../compartido/insignia-estado.component';
 import { ReprogramarCitaComponent } from './reprogramar-cita.component';
 import { ApiService, FalloApi } from '../../nucleo/servicios/api.service';
 import { CatalogoService } from '../../nucleo/servicios/catalogo.service';
 import { PERMISOS } from '../../nucleo/servicios/configuracion';
+import {
+  OperacionesService,
+  type EntradaEspera,
+  type Pagina,
+} from '../../nucleo/servicios/operaciones.service';
 import { SesionService } from '../../nucleo/servicios/sesion.service';
+import {
+  cargaPorProfesional,
+  construirSecuencia,
+  duracionLegible,
+  minutosEntre,
+  type FilaDia,
+} from '../../nucleo/utilidades/secuencia-dia';
+import { derivarPendientes, type TareaPendiente } from '../../nucleo/utilidades/pendientes';
 import type {
   Cita,
   Disponibilidad,
@@ -54,6 +70,17 @@ import {
   rangoDelDia,
   sumarDias,
 } from '../../nucleo/utilidades/fechas';
+
+/**
+ * Resultado de cargar un dia: o los datos, o el fallo ya traducido.
+ *
+ * El fallo viaja como valor y no como error del observable porque con
+ * `switchMap` un error propagado termina la suscripcion, y la pantalla dejaria
+ * de recargarse para siempre tras el primer 500.
+ */
+type CargaDelDia =
+  | { readonly citas: readonly Cita[]; readonly disponibilidad: Disponibilidad | null }
+  | { readonly fallo: FalloApi };
 
 /** Traducción de los motivos por los que un hueco no se ofrece. */
 const MOTIVOS: Record<string, string> = {
@@ -75,6 +102,8 @@ const MOTIVOS: Record<string, string> = {
     CargandoComponent,
     ErrorComponent,
     VacioComponent,
+    ColaTrabajoComponent,
+    FichaPacienteComponent,
     InsigniaEstadoComponent,
     ReprogramarCitaComponent,
   ],
@@ -84,6 +113,7 @@ const MOTIVOS: Record<string, string> = {
 export class AgendaComponent {
   private readonly api = inject(ApiService);
   private readonly catalogo = inject(CatalogoService);
+  private readonly operaciones = inject(OperacionesService);
   protected readonly sesion = inject(SesionService);
 
   // --- Catálogo ---
@@ -132,6 +162,67 @@ export class AgendaComponent {
   protected motivoCancelacion = '';
   protected readonly citaAReprogramar = signal<Cita | null>(null);
 
+  // --- Panel contextual ---
+  //
+  // La columna derecha hace tres trabajos y nunca dos a la vez: la cola de
+  // pendientes mientras no hay nada elegido, el formulario de reserva al
+  // pulsar un hueco, y el detalle al pulsar una cita. Eso es lo que permite
+  // quitar la columna de cinco botones por fila que tenía la tabla.
+  protected readonly huecoElegido = signal<(FilaDia & { tipo: 'hueco' }) | null>(null);
+  protected readonly citaSeleccionada = signal<Cita | null>(null);
+  /** Ficha lateral abierta, si hay alguna. */
+  protected readonly pacienteEnFicha = signal<string | null>(null);
+  /**
+   * Las canceladas se ocultan por defecto: su turno ya aparece como libre, y
+   * dos filas para la misma hora se leen como un error de la pantalla.
+   */
+  protected readonly verCanceladas = signal(false);
+  /** Ofertas de lista de espera que nadie pudo comunicar. */
+  protected readonly ofertasSinAvisar = signal<readonly EntradaEspera[]>([]);
+
+  protected readonly panelActivo = computed<'atencion' | 'reservar' | 'cita'>(() => {
+    if (this.huecoElegido()) {
+      return 'reservar';
+    }
+    return this.citaSeleccionada() ? 'cita' : 'atencion';
+  });
+
+  /** El día entero en una sola columna: citas y huecos, en orden de reloj. */
+  protected readonly secuencia = computed(() =>
+    construirSecuencia(this.citas(), this.turnos(), this.verCanceladas()),
+  );
+
+  protected readonly pendientes = computed<readonly TareaPendiente[]>(() =>
+    derivarPendientes({
+      citas: this.citas(),
+      ofertasSinAvisar: this.ofertasSinAvisar(),
+      ahora: new Date(),
+      nombrePaciente: (id) => this.nombrePaciente(id),
+    }),
+  );
+
+  /**
+   * Lo que se puede afirmar del día sin inventar la capacidad.
+   *
+   * Cuántas citas hay y cuántos minutos de consulta ocupan es un hecho. El
+   * porcentaje de ocupación de la jornada NO se muestra: haría falta el
+   * horario de atención, que hoy no expone ninguna API, y un porcentaje con un
+   * denominador supuesto es peor que ninguno.
+   */
+  protected readonly resumenDia = computed(() => {
+    const vivas = this.citas().filter((cita) => cita.estado !== 'CANCELLED');
+    const ocupados = [...cargaPorProfesional(vivas).values()].reduce((a, b) => a + b, 0);
+    const libres = this.secuencia()
+      .filter((fila): fila is FilaDia & { tipo: 'hueco' } => fila.tipo === 'hueco')
+      .reduce((total, hueco) => total + minutosEntre(hueco.inicio, hueco.fin), 0);
+    return {
+      citas: vivas.length,
+      ocupado: duracionLegible(ocupados),
+      libre: duracionLegible(libres),
+      tramosLibres: this.secuencia().filter((fila) => fila.tipo === 'hueco').length,
+    };
+  });
+
   protected readonly zona = computed(
     () => this.sedes().find((sede) => sede.id === this.sedeId())?.zona_horaria ?? 'America/Guayaquil',
   );
@@ -179,8 +270,87 @@ export class AgendaComponent {
       .sort((a, b) => b.cantidad - a.cantidad);
   });
 
+  /**
+   * Disparador de la carga del dia.
+   *
+   * Por que un `Subject` con `switchMap` y no una suscripcion por llamada
+   * ------------------------------------------------------------------------
+   * Cambiar sede, especialidad, servicio y profesional son cuatro cambios
+   * seguidos, y recepcion los hace en menos de un segundo. Con una suscripcion
+   * por llamada, las cuatro peticiones vuelan a la vez y **gana la que llega
+   * ultima, no la ultima pedida**: la pantalla acaba mostrando las citas de una
+   * combinacion de filtros que ya no esta seleccionada.
+   *
+   * No es teorico: se reprodujo mostrando cero citas en un dia que tenia
+   * cuatro. `switchMap` cancela la peticion anterior, asi que solo se aplica la
+   * respuesta de la seleccion vigente.
+   */
+  private readonly recargar = new Subject<void>();
+
   constructor() {
+    this.recargar
+      .pipe(
+        switchMap(() => this.peticionDelDia()),
+        takeUntilDestroyed(),
+      )
+      .subscribe((resultado) => {
+        this.cargandoAgenda.set(false);
+        if ('fallo' in resultado) {
+          this.errorAgenda.set(resultado.fallo);
+          return;
+        }
+        this.citas.set(resultado.citas);
+        this.disponibilidad.set(resultado.disponibilidad);
+      });
     this.cargarCatalogo();
+  }
+
+  /**
+   * La peticion del dia: citas siempre, disponibilidad solo si se puede.
+   *
+   * Sin servicio ni profesional se puede mostrar la agenda del dia, pero no
+   * calcular huecos: el motor necesita saber de que servicio y de quien.
+   */
+  private peticionDelDia(): Observable<CargaDelDia> {
+    const { desde, hasta } = rangoDelDia(this.fecha(), this.zona());
+    const citas$ = this.api.citas({
+      desde,
+      hasta,
+      sede_id: this.sedeId(),
+      profesional_id: this.profesionalId() || undefined,
+      limite: 200,
+    });
+
+    const peticion$: Observable<CargaDelDia> = this.seleccionIncompleta()
+      ? citas$.pipe(
+          map(
+            (pagina): CargaDelDia => ({ citas: pagina.elementos, disponibilidad: null }),
+          ),
+        )
+      : forkJoin({
+          citas: citas$,
+          disponibilidad: this.api.disponibilidad({
+            profesional_id: this.profesionalId(),
+            servicio_id: this.servicioId(),
+            sede_id: this.sedeId(),
+            desde,
+            hasta,
+            // Se piden los motivos de descarte para poder explicar la ausencia
+            // de turnos en lugar de decir «no hay disponibilidad».
+            explicar: true,
+          }),
+        }).pipe(
+          map(
+            (datos): CargaDelDia => ({
+              citas: datos.citas.elementos,
+              disponibilidad: datos.disponibilidad,
+            }),
+          ),
+        );
+
+    return peticion$.pipe(
+      catchError((fallo: unknown): Observable<CargaDelDia> => of({ fallo: this.aFallo(fallo) })),
+    );
   }
 
   // ======================================================================
@@ -238,62 +408,106 @@ export class AgendaComponent {
     if (!this.sedeId() || !this.fecha()) {
       return;
     }
-
     this.cargandoAgenda.set(true);
     this.errorAgenda.set(null);
-    this.turnoElegido.set(null);
+    this.cerrarPanel();
+    this.cargarOfertasSinAvisar();
+    // El `switchMap` del constructor cancela la carga anterior: solo se aplica
+    // la respuesta de la seleccion vigente.
+    this.recargar.next();
+  }
 
-    const { desde, hasta } = rangoDelDia(this.fecha(), this.zona());
-
-    const citas$ = this.api.citas({
-      desde,
-      hasta,
-      sede_id: this.sedeId(),
-      profesional_id: this.profesionalId() || undefined,
-      limite: 200,
-    });
-
-    if (this.seleccionIncompleta()) {
-      // Sin servicio ni profesional se puede mostrar la agenda del día, pero
-      // no calcular disponibilidad: el motor necesita saber de qué servicio
-      // y de quién.
-      citas$.subscribe({
-        next: (pagina) => {
-          this.citas.set(pagina.elementos);
-          this.disponibilidad.set(null);
-          this.cargandoAgenda.set(false);
-        },
-        error: (fallo: unknown) => {
-          this.cargandoAgenda.set(false);
-          this.errorAgenda.set(this.aFallo(fallo));
-        },
-      });
+  /**
+   * Ofertas de lista de espera que no se pudieron comunicar.
+   *
+   * Un fallo aquí **no** rompe la agenda: quien no tiene permiso de lista de
+   * espera sigue necesitando ver su día. La cola de pendientes simplemente
+   * queda sin esa entrada.
+   */
+  private cargarOfertasSinAvisar(): void {
+    if (!this.sesion.tienePermiso(PERMISOS.listaEsperaGestionar)) {
+      this.ofertasSinAvisar.set([]);
       return;
     }
+    this.operaciones
+      .leer<Pagina<EntradaEspera>>('/lista-espera/', { limite: 25, solo_sin_avisar: true })
+      .subscribe({
+        next: (pagina) => this.ofertasSinAvisar.set(pagina.elementos),
+        error: () => this.ofertasSinAvisar.set([]),
+      });
+  }
 
-    forkJoin({
-      citas: citas$,
-      disponibilidad: this.api.disponibilidad({
-        profesional_id: this.profesionalId(),
-        servicio_id: this.servicioId(),
-        sede_id: this.sedeId(),
-        desde,
-        hasta,
-        // Se piden los motivos de descarte para poder explicar la ausencia
-        // de turnos en lugar de decir «no hay disponibilidad».
-        explicar: true,
-      }),
-    }).subscribe({
-      next: (datos) => {
-        this.citas.set(datos.citas.elementos);
-        this.disponibilidad.set(datos.disponibilidad);
-        this.cargandoAgenda.set(false);
-      },
-      error: (fallo: unknown) => {
-        this.cargandoAgenda.set(false);
-        this.errorAgenda.set(this.aFallo(fallo));
-      },
-    });
+  // ======================================================================
+  //  Panel contextual
+  // ======================================================================
+  protected abrirHueco(fila: FilaDia): void {
+    if (fila.tipo !== 'hueco' || !this.puedeCrear()) {
+      return;
+    }
+    this.citaSeleccionada.set(null);
+    this.huecoElegido.set(fila);
+    // El tramo es un rango; la reserva necesita un punto. Se preselecciona el
+    // primer arranque y se dejan los demás a un clic.
+    this.elegirTurno(fila.turnos[0]);
+  }
+
+  protected abrirCita(cita: Cita): void {
+    this.huecoElegido.set(null);
+    this.turnoElegido.set(null);
+    this.citaSeleccionada.set(cita);
+  }
+
+  protected cerrarPanel(): void {
+    this.huecoElegido.set(null);
+    this.citaSeleccionada.set(null);
+    this.turnoElegido.set(null);
+    this.pacienteId = '';
+    this.notas = '';
+    this.errorReserva.set(null);
+  }
+
+  protected abrirFicha(pacienteId: string): void {
+    this.pacienteEnFicha.set(pacienteId);
+  }
+
+  protected cerrarFicha(): void {
+    this.pacienteEnFicha.set(null);
+  }
+
+  /** El botón principal de una tarea de la cola. */
+  protected atenderTarea(tarea: TareaPendiente): void {
+    if (tarea.clase === 'llamar') {
+      // La gestión de llamadas vive en la pantalla de lista de espera, que es
+      // donde está el botón que marca la oferta como comunicada.
+      this.mensajeExito.set(
+        'Abra «Lista de espera» y filtre por «solo pendientes de llamar» para marcar la llamada.',
+      );
+      return;
+    }
+    const primera = this.citas().find((cita) => cita.id === tarea.citas[0]);
+    if (!primera) {
+      return;
+    }
+    if (tarea.citas.length === 1) {
+      this.confirmarCita(primera);
+      return;
+    }
+    this.abrirCita(primera);
+  }
+
+  /** Lleva la vista a la primera cita de la tarea, sin ejecutar nada. */
+  protected localizarTarea(tarea: TareaPendiente): void {
+    const primera = this.citas().find((cita) => cita.id === tarea.citas[0]);
+    if (primera) {
+      this.abrirCita(primera);
+    }
+  }
+
+  /** Duración de un tramo libre, en palabras. */
+  protected duracionHueco(fila: FilaDia): string {
+    return fila.tipo === 'hueco'
+      ? duracionLegible(minutosEntre(fila.inicio, fila.fin))
+      : '';
   }
 
   // ======================================================================
@@ -377,10 +591,7 @@ export class AgendaComponent {
   }
 
   protected cancelarReserva(): void {
-    this.turnoElegido.set(null);
-    this.pacienteId = '';
-    this.notas = '';
-    this.errorReserva.set(null);
+    this.cerrarPanel();
   }
 
   protected confirmarReserva(): void {

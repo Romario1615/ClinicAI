@@ -1,0 +1,390 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <style>
+    body {
+      margin: 0;
+      font-family: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+      font-size: 16px;
+      line-height: 1.55;
+      color: #16202e;
+      background: #f7f8fa;
+      text-rendering: optimizeLegibility;
+      -webkit-font-smoothing: antialiased;
+    }
+    * { box-sizing: border-box; }
+    a { color: #15557a; text-underline-offset: 2px; }
+    a:hover { color: #0f4160; }
+    button { font: inherit; color: inherit; cursor: pointer; }
+    .num { font-variant-numeric: tabular-nums; }
+    .fila-prof:hover { background: #f7f8fa; }
+    .fila-prof:hover .barra-relleno { filter: brightness(0.92); }
+  </style>
+</helmet>
+
+<div style="display: grid; grid-template-columns: 232px 1fr; grid-template-rows: 57px 1fr; grid-template-areas: 'cab cab' 'nav con'; width: 1440px; height: 900px; background: #f7f8fa; overflow: hidden">
+
+  <!-- ===================== Cabecera ===================== -->
+  <header style="grid-area: cab; display: flex; align-items: center; gap: 16px; padding: 12px 24px; background: #ffffff; border-bottom: 1px solid #d4d8e0">
+    <span style="font-weight: 700; letter-spacing: -0.01em">Gestión clínica</span>
+    <div style="display: flex; align-items: center; gap: 8px; margin-left: 24px; padding: 4px 12px 4px 8px; border: 1px solid #d4d8e0; border-radius: 999px; background: #f7f8fa; color: #566175; font-size: 0.85rem">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#7c8699" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="M16.5 16.5 21 21"></path></svg>
+      <span>Buscar paciente, cita o documento</span>
+      <span class="num" style="padding: 0 5px; border: 1px solid #d4d8e0; border-radius: 4px; background: #ffffff; font-size: 0.75rem; color: #7c8699">/</span>
+    </div>
+    <div style="margin-left: auto; display: flex; flex-direction: column; align-items: flex-end; line-height: 1.25">
+      <span style="font-weight: 600; font-size: 0.95rem">Ana Administradora</span>
+      <span style="font-size: 0.8rem; color: #7c8699">Administradora de clínica</span>
+    </div>
+    <button type="button" style="display: inline-flex; align-items: center; justify-content: center; min-height: 34px; padding: 0 12px; border: 1px solid #b3bac6; border-radius: 8px; background: #ffffff; font-weight: 550; font-size: 0.9rem">Cerrar sesión</button>
+  </header>
+
+  <!-- ===================== Navegación ===================== -->
+  <nav style="grid-area: nav; padding: 16px 12px; background: #ffffff; border-right: 1px solid #d4d8e0">
+    <ul style="list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px">
+      <sc-for list="{{enlaces}}" as="enlace" hint-placeholder-count="7">
+        <li>
+          <a href="#" style="{{enlace.estilo}}">
+            <span style="display: flex; align-items: center; gap: 10px">
+              <span style="display: inline-flex; width: 20px; height: 20px">
+                <sc-if value="{{enlace.esPanel}}" hint-placeholder-val="{{true}}">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1.5"></rect><rect x="14" y="3" width="7" height="7" rx="1.5"></rect><rect x="3" y="14" width="7" height="7" rx="1.5"></rect><rect x="14" y="14" width="7" height="7" rx="1.5"></rect></svg>
+                </sc-if>
+                <sc-if value="{{enlace.esAgenda}}" hint-placeholder-val="{{false}}">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"></rect><path d="M3 10h18M8 3v4M16 3v4"></path></svg>
+                </sc-if>
+                <sc-if value="{{enlace.esEspera}}" hint-placeholder-val="{{false}}">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M12 7.5V12l3 2"></path></svg>
+                </sc-if>
+                <sc-if value="{{enlace.esPacientes}}" hint-placeholder-val="{{false}}">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="9" cy="8" r="3.5"></circle><path d="M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6"></path><path d="M16 5.5a3.5 3.5 0 0 1 0 7M18 20c0-2.2-.9-4.2-2.4-5.6"></path></svg>
+                </sc-if>
+                <sc-if value="{{enlace.esHistoria}}" hint-placeholder-val="{{false}}">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M6 3h8l4 4v14H6z"></path><path d="M14 3v4h4M9 12h6M9 16h4"></path></svg>
+                </sc-if>
+                <sc-if value="{{enlace.esMedicamentos}}" hint-placeholder-val="{{false}}">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><rect x="2.5" y="8.5" width="19" height="7" rx="3.5" transform="rotate(-45 12 12)"></rect><path d="M9.5 9.5 14.5 14.5"></path></svg>
+                </sc-if>
+                <sc-if value="{{enlace.esConocimiento}}" hint-placeholder-val="{{false}}">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H19v15H6.5A2.5 2.5 0 0 0 4 20.5z"></path><path d="M19 18v3H6.5"></path></svg>
+                </sc-if>
+              </span>
+              <span>{{enlace.etiqueta}}</span>
+            </span>
+            <sc-if value="{{enlace.tieneAviso}}" hint-placeholder-val="{{true}}">
+              <span class="num" style="min-width: 22px; padding: 0 6px; border-radius: 999px; background: #fdf3e0; border: 1px solid #8a5800; color: #8a5800; font-size: 0.75rem; font-weight: 700; text-align: center">{{enlace.aviso}}</span>
+            </sc-if>
+          </a>
+        </li>
+      </sc-for>
+    </ul>
+  </nav>
+
+  <!-- ===================== Contenido ===================== -->
+  <main style="grid-area: con; padding: 20px 24px 24px; display: flex; flex-direction: column; gap: 14px; min-height: 0; overflow-y: auto">
+
+    <div style="display: flex; align-items: flex-end; justify-content: space-between; gap: 16px">
+      <div>
+        <p style="margin: 0; color: #15557a; font-size: 0.75rem; letter-spacing: 0.12em; font-weight: 700">GESTIÓN CLÍNICA</p>
+        <h1 style="margin: 0; font-size: 1.6rem; font-weight: 650; letter-spacing: -0.01em; line-height: 1.25">Inicio de turno</h1>
+        <p style="margin: 2px 0 0; color: #566175; font-size: 0.9rem">Miércoles 16 de septiembre · Sede Norte · horario de America/Guayaquil</p>
+      </div>
+      <div style="display: flex; gap: 4px; padding: 3px; border: 1px solid #d4d8e0; border-radius: 8px; background: #ffffff">
+        <sc-for list="{{periodos}}" as="p" hint-placeholder-count="3">
+          <button type="button" onClick="{{p.elegir}}" style="{{p.estilo}}">{{p.etiqueta}}</button>
+        </sc-for>
+      </div>
+    </div>
+
+    <!-- =============== 1. Lo que hay que hacer ahora =============== -->
+    <section>
+      <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 8px">
+        <h2 style="margin: 0; font-size: 0.85rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: #566175">Lo primero</h2>
+        <span style="flex: 1 1 auto; height: 1px; background: #d4d8e0"></span>
+        <span class="num" style="color: #7c8699; font-size: 0.85rem">3 tareas con plazo</span>
+      </div>
+
+      <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px">
+        <sc-for list="{{tareas}}" as="tarea" hint-placeholder-count="3">
+          <article style="display: flex; flex-direction: column; gap: 6px; padding: 14px; border: 1px solid {{tarea.borde}}; border-left-width: 4px; border-radius: 8px; background: {{tarea.fondo}}; box-shadow: 0 1px 2px rgb(22 32 46 / 8%)">
+            <div style="display: flex; align-items: center; gap: 8px">
+              <span style="display: inline-flex; color: {{tarea.color}}">
+                <sc-if value="{{tarea.esPlazo}}" hint-placeholder-val="{{true}}">
+                  <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M12 7.5V12l3 2"></path></svg>
+                </sc-if>
+                <sc-if value="{{tarea.esLlamada}}" hint-placeholder-val="{{false}}">
+                  <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" aria-hidden="true"><path d="M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a1.5 1.5 0 0 1-1.7 1.5C10.8 19.6 4.4 13.2 3.5 5.7A1.5 1.5 0 0 1 5 4z"></path></svg>
+                </sc-if>
+                <sc-if value="{{tarea.esRevisar}}" hint-placeholder-val="{{false}}">
+                  <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"></path></svg>
+                </sc-if>
+              </span>
+              <span style="color: {{tarea.color}}; font-weight: 700; font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.04em">{{tarea.etiqueta}}</span>
+              <span class="num" style="margin-left: auto; color: {{tarea.color}}; font-weight: 650; font-size: 0.82rem">{{tarea.plazo}}</span>
+            </div>
+            <p style="margin: 0; font-weight: 650">{{tarea.titulo}}</p>
+            <p style="margin: 0; color: #566175; font-size: 0.88rem; flex: 1 1 auto">{{tarea.detalle}}</p>
+            <div style="display: flex; gap: 8px; margin-top: 2px">
+              <button type="button" style="min-height: 38px; padding: 0 14px; border: 1px solid {{acento}}; border-radius: 8px; background: {{acento}}; color: #ffffff; font-weight: 600; font-size: 0.9rem">{{tarea.accion}}</button>
+              <button type="button" style="min-height: 38px; padding: 0 12px; border: 1px solid #b3bac6; border-radius: 8px; background: #ffffff; font-weight: 550; font-size: 0.9rem">{{tarea.secundaria}}</button>
+            </div>
+          </article>
+        </sc-for>
+      </div>
+    </section>
+
+    <!-- =============== 2. Quién tiene hueco · 3. Los números =============== -->
+    <div style="display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr); gap: 20px; flex: 1 1 auto; min-height: 0">
+
+      <!-- Ocupación: ordenada por quién tiene más hueco, no alfabéticamente -->
+      <section style="display: flex; flex-direction: column; border: 1px solid #d4d8e0; border-radius: 8px; background: #ffffff; box-shadow: 0 1px 2px rgb(22 32 46 / 8%); overflow: hidden">
+        <div style="padding: 12px 16px; border-bottom: 1px solid #d4d8e0">
+          <h2 style="margin: 0; font-size: 1.05rem; font-weight: 650">Carga de hoy</h2>
+          <p style="margin: 2px 0 0; color: #7c8699; font-size: 0.85rem">Minutos de consulta comprometidos, de más cargado a menos.</p>
+        </div>
+
+        <div style="flex: 1 1 auto; padding: 8px 16px 12px; display: flex; flex-direction: column">
+          <sc-for list="{{profesionales}}" as="prof" hint-placeholder-count="5">
+            <div class="fila-prof" title="{{prof.tooltip}}" style="display: grid; grid-template-columns: 150px minmax(0, 1fr) 96px; gap: 14px; align-items: center; padding: 9px 8px; margin: 0 -8px; border-radius: 8px; transition: background-color 120ms ease">
+              <div style="min-width: 0">
+                <span style="display: block; font-weight: 600; font-size: 0.92rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{prof.nombre}}</span>
+                <span style="display: block; color: #7c8699; font-size: 0.8rem">{{prof.especialidad}}</span>
+              </div>
+
+              <div>
+                <div style="height: 10px; border-radius: 0 999px 999px 0; background: #eceef2; overflow: hidden">
+                  <div class="barra-relleno" style="height: 10px; width: {{prof.pct}}; border-radius: 0 4px 4px 0; background: {{acento}}; transition: filter 120ms ease"></div>
+                </div>
+                <span class="num" style="display: block; margin-top: 4px; color: #566175; font-size: 0.8rem">{{prof.citas}} cita(s)</span>
+              </div>
+
+              <div style="text-align: right">
+                <span class="num" style="display: block; font-weight: 650; font-size: 1.05rem">{{prof.ocupadas}}</span>
+              </div>
+            </div>
+          </sc-for>
+
+          <p style="margin: auto 0 0; padding-top: 10px; border-top: 1px solid #eceef2; color: #7c8699; font-size: 0.85rem">La barra mide horas de consulta, no número de citas: una primera consulta ocupa el doble que un control. <strong style="font-weight: 650">No hay porcentaje de ocupación</strong>: haría falta el horario de cada profesional, que ninguna API expone todavía, y un porcentaje con denominador supuesto es peor que ninguno.</p>
+        </div>
+      </section>
+
+      <!-- Los números, en su sitio: contexto, no titular -->
+      <section style="display: flex; flex-direction: column; gap: 14px; min-height: 0">
+
+        <!-- El único número que exige decidir algo -->
+        <div style="padding: 14px 16px; border: 1px solid #d4d8e0; border-radius: 8px; background: #ffffff; box-shadow: 0 1px 2px rgb(22 32 46 / 8%)">
+          <p style="margin: 0; font-size: 0.85rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: #566175">Inasistencia · {{periodoEtiqueta}}</p>
+          <div style="display: flex; align-items: flex-end; gap: 12px; margin-top: 6px">
+            <strong class="num" style="font-size: 2.4rem; font-weight: 650; line-height: 1; letter-spacing: -0.02em">{{inasistencia.valor}}</strong>
+            <span style="display: inline-flex; align-items: center; gap: 5px; padding: 2px 9px; border: 1px solid {{inasistencia.color}}; border-radius: 999px; background: {{inasistencia.fondo}}; color: {{inasistencia.color}}; font-size: 0.82rem; font-weight: 650">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" aria-hidden="true"><path d="{{inasistencia.flecha}}"></path></svg>
+              {{inasistencia.delta}}
+            </span>
+          </div>
+          <p style="margin: 6px 0 0; color: #566175; font-size: 0.88rem">{{inasistencia.lectura}}</p>
+        </div>
+
+        <!-- Estados: color acompañado siempre de texto y cifra -->
+        <div style="flex: 1 1 auto; min-height: 0; padding: 14px 16px; border: 1px solid #d4d8e0; border-radius: 8px; background: #ffffff; box-shadow: 0 1px 2px rgb(22 32 46 / 8%); display: flex; flex-direction: column">
+          <p style="margin: 0 0 10px; font-size: 0.85rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: #566175">Citas del periodo · <span class="num">{{total}}</span></p>
+
+          <div style="display: flex; flex-direction: column; gap: 9px">
+            <sc-for list="{{estados}}" as="est" hint-placeholder-count="5">
+              <div style="display: grid; grid-template-columns: 116px minmax(0, 1fr) 46px; gap: 10px; align-items: center">
+                <span style="display: flex; align-items: center; gap: 7px; min-width: 0">
+                  <span style="width: 10px; height: 10px; flex: 0 0 10px; border-radius: 3px; border: 1px solid {{est.color}}; background: {{est.color}}"></span>
+                  <span style="font-size: 0.88rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{est.etiqueta}}</span>
+                </span>
+                <span style="height: 8px; border-radius: 0 999px 999px 0; background: #eceef2; overflow: hidden">
+                  <span style="display: block; height: 8px; width: {{est.pct}}; border-radius: 0 4px 4px 0; background: {{est.color}}"></span>
+                </span>
+                <span class="num" style="text-align: right; font-weight: 600; font-size: 0.9rem">{{est.cantidad}}</span>
+              </div>
+            </sc-for>
+          </div>
+
+          <div style="margin: auto 0 0; padding-top: 12px; border-top: 1px solid #eceef2; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px">
+            <sc-for list="{{apoyo}}" as="dato" hint-placeholder-count="2">
+              <div>
+                <span class="num" style="display: block; font-size: 1.3rem; font-weight: 650">{{dato.valor}}</span>
+                <span style="display: block; color: #566175; font-size: 0.85rem">{{dato.etiqueta}}</span>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+      </section>
+    </div>
+  </main>
+</div>
+</x-dc>
+
+<script data-dc-script data-props='{
+  "acento": {"editor": "color", "default": "#15557a", "options": ["#15557a", "#1c6b45", "#0f4160", "#5b3a86"], "section": "Marca"},
+  "$preview": {"width": 1440, "height": 900}
+}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { periodo: 'hoy' };
+  }
+
+  renderVals() {
+    const acento = this.props.acento || '#15557a';
+    const periodo = this.state.periodo;
+
+    const enlaces = [
+      { etiqueta: 'Panel', clave: 'panel' },
+      { etiqueta: 'Agenda', clave: 'agenda' },
+      { etiqueta: 'Lista de espera', clave: 'espera', aviso: '1' },
+      { etiqueta: 'Pacientes', clave: 'pacientes' },
+      { etiqueta: 'Historia clinica', clave: 'historia' },
+      { etiqueta: 'Medicamentos', clave: 'medicamentos' },
+      { etiqueta: 'Conocimiento', clave: 'conocimiento' }
+    ].map((e) => {
+      const activo = e.clave === 'panel';
+      return {
+        etiqueta: e.etiqueta,
+        aviso: e.aviso || '',
+        tieneAviso: !!e.aviso,
+        esPanel: e.clave === 'panel',
+        esAgenda: e.clave === 'agenda',
+        esEspera: e.clave === 'espera',
+        esPacientes: e.clave === 'pacientes',
+        esHistoria: e.clave === 'historia',
+        esMedicamentos: e.clave === 'medicamentos',
+        esConocimiento: e.clave === 'conocimiento',
+        estilo: 'display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 44px; padding: 0 12px; border-radius: 8px; text-decoration: none; font-weight: 550; ' +
+          (activo
+            ? 'background: #e4eef5; color: #0f4160; box-shadow: inset 3px 0 0 ' + acento + ';'
+            : 'color: #16202e;')
+      };
+    });
+
+    const periodos = [
+      { clave: 'hoy', etiqueta: 'Hoy' },
+      { clave: '7', etiqueta: '7 dias' },
+      { clave: '30', etiqueta: '30 dias' }
+    ].map((p) => ({
+      etiqueta: p.etiqueta,
+      elegir: () => this.setState({ periodo: p.clave }),
+      estilo: 'min-height: 36px; padding: 0 14px; border: 0; border-radius: 6px; font-weight: 600; font-size: 0.9rem; ' +
+        (p.clave === periodo
+          ? 'background: ' + acento + '; color: #ffffff;'
+          : 'background: transparent; color: #566175;')
+    }));
+
+    // Las tres tareas con plazo. Las mismas que la agenda muestra en su panel:
+    // el panel es donde se ven todas juntas antes de empezar el turno.
+    const tareas = [
+      {
+        etiqueta: 'Caduca pronto', plazo: '6 min',
+        titulo: '1 turno bloqueado sin confirmar',
+        detalle: 'Las 10:30 de Reyna Jurado S. Al caducar, el hueco vuelve a la agenda y el paciente se queda sin cita.',
+        accion: 'Revisar', secundaria: 'Ver agenda',
+        color: '#8a5800', fondo: '#fdf3e0', borde: '#8a5800',
+        esPlazo: true, esLlamada: false, esRevisar: false
+      },
+      {
+        etiqueta: 'Nadie ha llamado', plazo: 'hace 22 min',
+        titulo: '1 oferta de lista de espera sin avisar',
+        detalle: 'El paciente no tiene consentimiento para mensajes automaticos. La oferta caduca sola si nadie llama.',
+        accion: 'Abrir la cola', secundaria: 'Marcar hecha',
+        color: '#8a5800', fondo: '#fdf3e0', borde: '#8a5800',
+        esPlazo: false, esLlamada: true, esRevisar: false
+      },
+      {
+        etiqueta: 'Sin confirmar', plazo: '2 citas hoy',
+        titulo: 'Confirmaciones pendientes',
+        detalle: 'Creadas y nunca confirmadas. Son las que acaban en inasistencia; confirmarlas es la medida mas barata.',
+        accion: 'Confirmar', secundaria: 'Ver lista',
+        color: '#566175', fondo: '#ffffff', borde: '#d4d8e0',
+        esPlazo: false, esLlamada: false, esRevisar: true
+      }
+    ];
+
+    // Ocupacion en horas de consulta, ordenada por hueco disponible.
+    const crudos = [
+      { nombre: 'Dra. Carmina Bravo', especialidad: 'Dermatologia', ocupadas: 8.0, citas: 11 },
+      { nombre: 'Dra. Lola Blanch', especialidad: 'Nutricion', ocupadas: 6.5, citas: 13 },
+      { nombre: 'Dr. Jose M. Tudela', especialidad: 'Dermatologia', ocupadas: 5.75, citas: 8 },
+      { nombre: 'Dr. Donato Jimenez', especialidad: 'Medicina general', ocupadas: 4.0, citas: 6 },
+      { nombre: 'Dra. Agustina Salgado', especialidad: 'Pediatria', ocupadas: 2.5, citas: 5 }
+    ];
+    const horas = (n) => {
+      const h = Math.floor(n);
+      const m = Math.round((n - h) * 60);
+      return m === 0 ? h + ' h 00' : h + ' h ' + String(m).padStart(2, '0');
+    };
+    // La barra se escala contra el mayor del dia, no contra una jornada
+    // inventada: mide comparacion relativa, no ocupacion.
+    const mayorCarga = Math.max.apply(null, crudos.map((p) => p.ocupadas));
+    const profesionales = crudos
+      .map((p) => ({
+        nombre: p.nombre,
+        especialidad: p.especialidad,
+        ocupadas: horas(p.ocupadas),
+        citas: p.citas,
+        pct: Math.round((p.ocupadas / mayorCarga) * 100) + '%',
+        carga: p.ocupadas,
+        tooltip: p.nombre + ' — ' + horas(p.ocupadas) + ' de consulta en ' + p.citas + ' citas'
+      }))
+      .sort((a, b) => b.carga - a.carga);
+
+    // Cifras por periodo.
+    const porPeriodo = {
+      hoy:  { total: 31, etiqueta: 'hoy',     ausencia: '6,5 %', delta: '1,2 pt', sube: false, primeras: 9,  agente: '38 %' },
+      '7':  { total: 214, etiqueta: '7 dias', ausencia: '8,4 %', delta: '0,9 pt', sube: true,  primeras: 61, agente: '41 %' },
+      '30': { total: 918, etiqueta: '30 dias', ausencia: '7,9 %', delta: '0,4 pt', sube: false, primeras: 247, agente: '35 %' }
+    };
+    const p = porPeriodo[periodo] || porPeriodo.hoy;
+
+    const reparto = [
+      { etiqueta: 'Confirmada',   frac: 0.62, color: '#1c6b45' },
+      { etiqueta: 'Pendiente',    frac: 0.14, color: '#7c8699' },
+      { etiqueta: 'Reprogramada', frac: 0.09, color: '#1e5081' },
+      { etiqueta: 'Cancelada',    frac: 0.08, color: '#a52320' },
+      { etiqueta: 'No asistio',   frac: 0.07, color: '#8a5800' }
+    ];
+    const mayor = Math.max.apply(null, reparto.map((e) => e.frac));
+    const estados = reparto.map((e) => ({
+      etiqueta: e.etiqueta,
+      color: e.color,
+      cantidad: Math.round(e.frac * p.total),
+      pct: Math.round((e.frac / mayor) * 100) + '%'
+    }));
+
+    return {
+      acento: acento,
+      enlaces: enlaces,
+      periodos: periodos,
+      periodoEtiqueta: p.etiqueta,
+      tareas: tareas,
+      profesionales: profesionales,
+      total: p.total,
+      estados: estados,
+      inasistencia: {
+        valor: p.ausencia,
+        delta: p.delta,
+        lectura: p.sube
+          ? 'Sube respecto al periodo anterior. Las citas sin confirmar son el primer sitio donde mirar.'
+          : 'Baja respecto al periodo anterior. Los recordatorios estan llegando.',
+        color: p.sube ? '#a52320' : '#1c6b45',
+        fondo: p.sube ? '#fbe9e8' : '#e3f2ea',
+        flecha: p.sube ? 'M12 19V5M6 11l6-6 6 6' : 'M12 5v14M6 13l6 6 6-6'
+      },
+      apoyo: [
+        { valor: p.primeras, etiqueta: 'Primeras consultas' },
+        { valor: p.agente, etiqueta: 'Agendadas por el agente' }
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>

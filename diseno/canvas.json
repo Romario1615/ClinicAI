@@ -1,0 +1,38 @@
+{
+  "artboards": [
+    { "file": "Main.dc.html", "x": 0, "y": 0, "w": 1440, "h": 900, "title": "Agenda", "is_interactive": true },
+    { "file": "Panel.dc.html", "x": 1560, "y": 0, "w": 1440, "h": 900, "title": "Panel — inicio de turno", "is_interactive": true },
+    { "file": "Paciente.dc.html", "x": 3120, "y": 0, "w": 440, "h": 900, "title": "Ficha del paciente", "is_interactive": true }
+  ],
+  "annotations": [
+    {
+      "id": "nota-agenda",
+      "x": 0,
+      "y": -210,
+      "w": 620,
+      "text": "AGENDA — dos cambios de fondo\n\n1. El dia se lee en orden, con los huecos como filas propias. La tabla actual oculta donde queda sitio, que es justo lo que recepcion necesita saber.\n\n2. La columna de acciones desaparece. Se pulsa una fila y el panel derecho se convierte en su detalle; se pulsa un hueco y se convierte en la reserva.\n\nPruebelo: pulse un hueco, luego una cita, y use las flechas de dia."
+    },
+    {
+      "id": "nota-panel",
+      "x": 1560,
+      "y": -210,
+      "w": 620,
+      "text": "PANEL — de cuatro numeros a una cola de trabajo\n\nLo que hoy muestra («128 citas del periodo») no le dice a nadie que hacer al empezar el turno. Arriba van las tareas con plazo; los numeros quedan como contexto.\n\n«Quien tiene hueco hoy» esta ordenado por hueco disponible, no alfabeticamente, y mide horas de consulta: una primera consulta ocupa el doble que un control."
+    },
+    {
+      "id": "nota-paciente",
+      "x": 3120,
+      "y": -210,
+      "w": 440,
+      "text": "FICHA — se abre sobre la agenda, sin cambiar de pantalla\n\nDice en la propia interfaz lo que hoy solo esta en la documentacion: el nivel de verificacion, el consentimiento que falta, y que no hay datos clinicos porque el ambito del rol no los alcanza.\n\nEl documento va enmascarado a proposito."
+    },
+    {
+      "id": "nota-datos",
+      "x": 0,
+      "y": 990,
+      "w": 900,
+      "text": "Todos los nombres, telefonos, documentos y cifras son sinteticos. Ningun dato corresponde a una persona real (CLAUDE.md, regla 1).\n\nLos colores, radios, tipografia, alturas de control (44 px) y las etiquetas de estado salen de src/styles.scss y de insignia-estado.component.ts; no se ha inventado ningun valor nuevo. El estado se sigue guardando en ingles y se traduce solo para mostrarlo."
+    }
+  ],
+  "launch": { "view": "canvas" }
+}

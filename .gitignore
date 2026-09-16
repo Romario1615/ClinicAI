@@ -87,3 +87,8 @@ temporal/
 # Informe de cobertura generado. Se regenera con `npm run test:ci`; versionarlo
 # ensucia cada diff con ~20 ficheros HTML que nadie revisa.
 frontend/cobertura/
+
+# Lienzo de diseno ya ensamblado.  Se genera desde diseno/*.dc.html y pesa
+# unos 2 MB de editor minificado: lo que se versiona son los artboards.
+diseno/*.html
+!diseno/*.dc.html

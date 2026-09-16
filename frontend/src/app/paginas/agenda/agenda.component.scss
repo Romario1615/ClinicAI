@@ -1,150 +1,475 @@
-.filtros {
-  margin-bottom: var(--espacio-4);
-}
+/* ---------------------------------------------------------------------------
+ *  Agenda.
+ *
+ *  La decisión de fondo: el día es UNA columna, no dos listas.
+ *  ---------------------------------------------------------
+ *  Antes había una tabla de citas y, en otra columna, una rejilla de botones
+ *  con los turnos libres. Eso responde bien a «quién viene» y muy mal a «dónde
+ *  queda sitio», que es la pregunta que hace recepción con un paciente
+ *  delante. Aquí las citas y los huecos comparten columna y orden de reloj.
+ *
+ *  La segunda decisión: no hay columna de acciones.
+ *  -----------------------------------------------
+ *  Cinco botones por fila multiplicados por diez filas eran cincuenta objetos
+ *  pulsables compitiendo. Ahora se pulsa la fila y las acciones aparecen en el
+ *  panel derecho, una sola vez y con sitio para explicar lo que hacen.
+ * ------------------------------------------------------------------------- */
 
-.filtros__rejilla {
-  display: grid;
-  gap: var(--espacio-3);
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-}
-
-.filtros__rejilla .campo {
-  margin-bottom: 0;
-}
-
-.filtros__dia {
+.cabecera-agenda {
   display: flex;
-  align-items: center;
-  gap: var(--espacio-2);
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--espacio-4);
   flex-wrap: wrap;
-  margin-top: var(--espacio-4);
-  padding-top: var(--espacio-4);
-  border-top: 1px solid var(--borde);
+  margin-bottom: var(--espacio-4);
+
+  h1 {
+    margin: 0;
+  }
+
+  .ceja {
+    margin: 0;
+  }
 }
 
-.filtros__fecha {
-  margin-bottom: 0;
-  width: auto;
-}
-
-.filtros__fecha .campo__control {
-  width: auto;
-}
-
-.filtros__zona {
-  margin-left: auto;
+.cabecera-agenda__zona {
+  margin: 0;
   color: var(--texto-suave);
   font-size: 0.9rem;
 }
 
+/* --- Barra de contexto: los filtros en una línea --- */
+.barra-contexto {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--espacio-3);
+  flex-wrap: wrap;
+  padding: var(--espacio-3);
+  margin-bottom: var(--espacio-3);
+  border: 1px solid var(--borde);
+  border-radius: var(--radio);
+  background: var(--superficie-elevada);
+  box-shadow: var(--sombra-1);
+}
+
+.barra-contexto__dia {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--espacio-2);
+  margin-left: auto;
+
+  .campo--linea {
+    flex: 0 0 auto;
+    min-width: 150px;
+  }
+}
+
+/* --- Resumen del día --- */
+.resumen-dia {
+  display: flex;
+  align-items: center;
+  gap: var(--espacio-4);
+  flex-wrap: wrap;
+  padding: var(--espacio-3) var(--espacio-4);
+  margin-bottom: var(--espacio-4);
+  border: 1px solid var(--borde);
+  border-radius: var(--radio);
+  background: var(--superficie-elevada);
+  color: var(--texto-suave);
+  font-size: 0.9rem;
+}
+
+.resumen-dia__cifra strong {
+  font-size: 1.3rem;
+  color: var(--texto);
+}
+
+.resumen-dia__separador {
+  width: 1px;
+  height: 24px;
+  background: var(--borde);
+}
+
+.resumen-dia__filtro {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: var(--espacio-2);
+  flex: 0 0 auto;
+  min-width: 0;
+  cursor: pointer;
+}
+
+/* --- Dos columnas: el día y el panel --- */
 .columnas {
   display: grid;
+  grid-template-columns: minmax(0, 1fr) 392px;
   gap: var(--espacio-5);
-  /* La agenda del día pesa más que los turnos libres: se le da más ancho
-   * porque es lo que se consulta continuamente durante la jornada. */
-  grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
   align-items: start;
 }
 
-@media (max-width: 1000px) {
+@media (max-width: 1100px) {
   .columnas {
     grid-template-columns: 1fr;
   }
 }
 
-.acciones {
-  display: flex;
-  gap: var(--espacio-1);
-  flex-wrap: wrap;
+/* --- El día --- */
+.dia {
+  border: 1px solid var(--borde);
+  border-radius: var(--radio);
+  background: var(--superficie-elevada);
+  box-shadow: var(--sombra-1);
+  overflow: hidden;
 }
 
-.turnos {
+.dia__cabecera {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--espacio-3);
+  padding: var(--espacio-3) var(--espacio-4);
+  border-bottom: 1px solid var(--borde);
+  background: var(--superficie-hundida);
+
+  h2 {
+    margin: 0;
+    font-size: 0.85rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--texto-suave);
+  }
+}
+
+.dia__pista {
+  color: var(--texto-tenue);
+  font-size: 0.82rem;
+}
+
+.dia__vacio {
+  padding: var(--espacio-4);
+}
+
+.dia__filas {
   list-style: none;
   margin: 0;
   padding: 0;
-  display: grid;
-  gap: var(--espacio-2);
-  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
 }
 
-.turnos__boton {
+.dia__nota {
+  padding: var(--espacio-3) var(--espacio-4);
+}
+
+/* --- Una fila del día --- */
+.fila-dia {
+  display: flex;
+  align-items: center;
+  gap: var(--espacio-3);
   width: 100%;
-  flex-direction: column;
-  gap: 0;
-  padding: var(--espacio-2);
+  padding: var(--espacio-3) var(--espacio-4);
+  border: 0;
+  border-bottom: 1px solid var(--superficie-hundida);
+  /* La barra izquierda marca la fila elegida sin depender del color: se ve
+     aunque no se perciba el tono. */
+  border-left: 3px solid transparent;
+  background: var(--superficie-elevada);
+  text-align: left;
+  cursor: pointer;
+  transition: background-color 120ms ease;
+
+  &:hover:not(:disabled) {
+    background: var(--acento-suave);
+  }
+
+  &:disabled {
+    cursor: not-allowed;
+    opacity: 0.6;
+  }
 }
 
-.turnos__boton--elegido {
-  background: var(--acento);
+.fila-dia--elegida {
+  border-left-color: var(--acento);
+  background: var(--acento-suave);
+}
+
+/* Lo que ya pasó pesa menos, pero sigue legible: es el historial del día. */
+.fila-dia--pasada .fila-dia__paciente,
+.fila-dia--pasada .fila-dia__detalle {
+  color: var(--texto-suave);
+}
+
+.fila-dia__hora {
+  flex: 0 0 52px;
+  text-align: right;
+  font-weight: 650;
+}
+
+.fila-dia__barra {
+  flex: 0 0 4px;
+  align-self: stretch;
+  min-height: 32px;
+  border-radius: 999px;
+  background: var(--borde-fuerte);
+
+  /* El estado se reconoce por su insignia de texto; esta barra solo ayuda a
+     recorrer la columna de un vistazo. */
+  &[data-estado='CONFIRMED'] {
+    background: var(--exito);
+  }
+  &[data-estado='RESCHEDULED'] {
+    background: var(--info);
+  }
+  &[data-estado='HELD'] {
+    background: var(--aviso);
+  }
+  &[data-estado='CANCELLED'],
+  &[data-estado='NO_SHOW'] {
+    background: var(--peligro);
+  }
+}
+
+.fila-dia__quien {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.fila-dia__paciente {
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.fila-dia__detalle {
+  color: var(--texto-suave);
+  font-size: 0.85rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* --- Un hueco libre --- */
+.fila-dia--hueco {
+  background: var(--superficie);
+}
+
+.hueco {
+  flex: 1 1 auto;
+  display: flex;
+  align-items: center;
+  gap: var(--espacio-3);
+  padding: var(--espacio-2) var(--espacio-3);
+  border: 1px dashed var(--borde-fuerte);
+  border-radius: var(--radio);
+  color: var(--texto-suave);
+  transition: border-color 120ms ease, color 120ms ease;
+
+  .fila-dia:hover:not(:disabled) & {
+    border-color: var(--acento);
+    color: var(--acento-fuerte);
+  }
+}
+
+.hueco__mas {
+  font-weight: 700;
+  font-size: 1.1rem;
+  line-height: 1;
+}
+
+.hueco__duracion {
+  font-weight: 600;
+}
+
+.hueco__turnos {
+  color: var(--texto-tenue);
+  font-size: 0.85rem;
+}
+
+/* --- Panel contextual --- */
+.panel {
+  position: sticky;
+  top: 80px;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--borde);
+  border-radius: var(--radio);
+  background: var(--superficie-elevada);
+  box-shadow: var(--sombra-1);
+  overflow: hidden;
+}
+
+@media (max-width: 1100px) {
+  .panel {
+    position: static;
+  }
+}
+
+.panel__cabecera {
+  display: flex;
+  align-items: center;
+  gap: var(--espacio-3);
+  padding: var(--espacio-3) var(--espacio-4);
+  border-bottom: 1px solid var(--borde);
+  background: var(--superficie-hundida);
+
+  h2 {
+    margin: 0;
+    font-size: 0.85rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--texto-suave);
+  }
+
+  .boton {
+    margin-left: auto;
+  }
+}
+
+.panel__cabecera--accion {
+  background: var(--acento-suave);
+
+  h2 {
+    color: var(--acento-fuerte);
+  }
+}
+
+.panel__cuerpo {
+  padding: var(--espacio-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--espacio-3);
+}
+
+.panel__titular {
+  display: flex;
+  align-items: center;
+  gap: var(--espacio-2);
+  flex-wrap: wrap;
+  margin: 0;
+  font-size: 1.3rem;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+}
+
+.panel__subtitulo {
+  margin: 0;
+  color: var(--texto-suave);
+  font-size: 0.9rem;
+}
+
+.panel__pista {
+  margin: 0;
+}
+
+/* El nombre del paciente es pulsable: abre la ficha sin salir de la agenda. */
+.panel__paciente {
+  display: flex;
+  align-items: baseline;
+  gap: var(--espacio-2);
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--acento);
+  font-size: 1.05rem;
+  font-weight: 650;
+  text-align: left;
+  cursor: pointer;
+
+  &:hover {
+    color: var(--acento-fuerte);
+    text-decoration: underline;
+  }
+}
+
+.panel__paciente-pista {
+  color: var(--texto-tenue);
+  font-size: 0.8rem;
+  font-weight: 550;
+}
+
+.panel__datos {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--espacio-2);
+
+  div {
+    display: flex;
+    gap: var(--espacio-3);
+    padding-bottom: var(--espacio-2);
+    border-bottom: 1px solid var(--superficie-hundida);
+  }
+
+  dt {
+    flex: 0 0 96px;
+    color: var(--texto-tenue);
+    font-size: 0.88rem;
+  }
+
+  dd {
+    margin: 0;
+    font-size: 0.92rem;
+  }
+}
+
+.panel__acciones {
+  display: flex;
+  flex-direction: column;
+  gap: var(--espacio-2);
+
+  .boton--principal,
+  .boton--peligro {
+    width: 100%;
+  }
+
+  .fila .boton {
+    flex: 1 1 auto;
+  }
+}
+
+/* --- Arranques posibles dentro de un hueco --- */
+.arranques {
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.arranques__lista {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--espacio-2);
+  margin-top: var(--espacio-1);
+}
+
+.arranques__elegido {
   border-color: var(--acento);
+  background: var(--acento);
   color: var(--acento-texto);
 }
 
-.turnos__fin {
-  font-size: 0.8rem;
-  opacity: 0.85;
+.reserva__error {
+  margin: 0;
+  padding: var(--espacio-3);
+  color: var(--peligro);
+  background: var(--peligro-fondo);
+  border-radius: var(--radio);
+  font-weight: 550;
 }
 
 .motivos__intro {
-  margin-bottom: var(--espacio-2);
+  margin: var(--espacio-3) 0 var(--espacio-1);
+  color: var(--texto-suave);
+  font-size: 0.9rem;
 }
 
 .motivos {
-  list-style: none;
   margin: 0;
-  padding: 0;
-  display: inline-block;
-  text-align: left;
-}
-
-.motivos li {
-  margin-bottom: var(--espacio-1);
-}
-
-.reserva {
-  margin-top: var(--espacio-4);
-  border-left: 4px solid var(--acento);
-}
-
-.reserva__detalle {
+  padding-left: var(--espacio-5);
   color: var(--texto-suave);
-  font-size: 0.92rem;
-}
-
-.reserva__error {
-  padding: var(--espacio-2) var(--espacio-3);
-  border-radius: var(--radio);
-  background: var(--peligro-fondo);
-  color: var(--peligro);
-  font-weight: 550;
-}
-
-.exito {
-  padding: var(--espacio-3) var(--espacio-4);
-  margin-bottom: var(--espacio-4);
-  border: 1px solid var(--exito);
-  border-left-width: 4px;
-  border-radius: var(--radio);
-  background: var(--exito-fondo);
-  color: var(--exito);
-  font-weight: 550;
-}
-
-/* Diálogo modal. No se usa <dialog> nativo para no depender de su
- * comportamiento en las tabletas antiguas que puede haber en recepción. */
-.dialogo {
-  position: fixed;
-  inset: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: var(--espacio-4);
-  background: rgb(22 32 46 / 45%);
-  z-index: 50;
-}
-
-.dialogo__panel {
-  width: 100%;
-  max-width: 480px;
-  box-shadow: var(--sombra-2);
+  font-size: 0.9rem;
 }
