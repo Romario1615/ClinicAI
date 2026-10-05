@@ -64,8 +64,10 @@ services:
       - work_mem=16MB
       - -c
       - maintenance_work_mem=128MB
+      # 200: las pruebas de concurrencia abren 50 conexiones y en desarrollo
+      # conviven la API, el worker y servidores de pruebas con su propio pool.
       - -c
-      - max_connections=100
+      - max_connections=200
       - -c
       - timezone=UTC
       # Registro de consultas lentas: util para las pruebas de carga
