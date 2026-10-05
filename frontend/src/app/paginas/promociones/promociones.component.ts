@@ -35,10 +35,11 @@ const ESTADOS: Record<EstadoCampana, { texto: string; tono: string }> = {
 
 type Audiencia = 'todos' | 'reactivar' | 'recientes';
 
+import { ResumenModuloComponent } from '../../compartido/resumen-modulo.component';
 @Component({
   selector: 'app-promociones',
   standalone: true,
-  imports: [DatePipe, FormsModule, IconoComponent],
+  imports: [ResumenModuloComponent, DatePipe, FormsModule, IconoComponent],
   templateUrl: './promociones.component.html',
   styleUrl: './promociones.component.scss',
 })

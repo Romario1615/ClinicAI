@@ -66,10 +66,11 @@ export interface TomaPresentada {
   readonly futura: boolean;
 }
 
+import { ResumenModuloComponent } from '../../compartido/resumen-modulo.component';
 @Component({
   selector: 'app-medicamentos',
   standalone: true,
-  imports: [FormsModule, CargandoComponent, ErrorComponent, VacioComponent],
+  imports: [ResumenModuloComponent, FormsModule, CargandoComponent, ErrorComponent, VacioComponent],
   templateUrl: './medicamentos.component.html',
   styleUrl: './medicamentos.component.scss',
 })

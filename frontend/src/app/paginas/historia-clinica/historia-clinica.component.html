@@ -7,6 +7,8 @@
   <img class="modulo-cabecera__imagen" src="/images/historia-segura.png" alt="" aria-hidden="true" loading="lazy" />
 </header>
 
+<app-resumen-modulo modulo="clinico" />
+
 @if (!hayPaciente()) {
   <section class="tarjeta buscador" aria-label="Buscar paciente">
     <form (ngSubmit)="cargarPacientes()">

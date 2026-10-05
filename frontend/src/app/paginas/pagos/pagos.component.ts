@@ -7,10 +7,13 @@ import { OperacionesService, Pago, Pagina } from '../../nucleo/servicios/operaci
 import { SesionService } from '../../nucleo/servicios/sesion.service';
 import type { Cita, Paciente } from '../../nucleo/modelos/dominio';
 
+import { ResumenModuloComponent } from '../../compartido/resumen-modulo.component';
 @Component({
-  selector: 'app-pagos', standalone: true, imports: [FormsModule, SelectorPacienteComponent],
+  selector: 'app-pagos', standalone: true, imports: [FormsModule, SelectorPacienteComponent, ResumenModuloComponent],
   template: `
     <header class="modulo-cabecera"><div class="modulo-cabecera__texto"><p class="ceja">ADMINISTRACIÓN</p><h1>Pagos</h1><p>Registro de efectivo y transferencias en USD. La confirmación la realiza el personal autorizado.</p></div><img class="modulo-cabecera__imagen" src="/images/pagos-administrativos.png" alt="" aria-hidden="true" loading="lazy" /></header>
+
+<app-resumen-modulo modulo="pagos" />
     @if (sesion.tienePermiso('pago.registrar')) {
       <section class="tarjeta editor-demo"><h2>Registrar un pago</h2>
         <app-selector-paciente (seleccion)="seleccionar($event)" />

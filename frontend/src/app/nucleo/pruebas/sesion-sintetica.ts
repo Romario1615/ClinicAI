@@ -13,6 +13,8 @@ import { provideRouter } from '@angular/router';
 import type { Identidad } from '../modelos/dominio';
 import { CONFIGURACION, CONFIGURACION_POR_DEFECTO } from '../servicios/configuracion';
 import { SesionService } from '../servicios/sesion.service';
+import { IndicadoresService } from '../servicios/indicadores.service';
+import { of } from 'rxjs';
 
 export const BASE = CONFIGURACION_POR_DEFECTO.urlApi;
 
@@ -45,11 +47,22 @@ export function identidadCon(permisos: readonly string[]): Identidad {
 }
 
 /** Proveedores comunes de un spec con HTTP simulado. */
+/**
+ * Indicadores vacíos: las cabeceras de resumen de cada módulo no deben añadir
+ * una petición que cada spec tendría que responder. Los indicadores tienen su
+ * propia prueba.
+ */
+export const INDICADORES_VACIOS = {
+  provide: IndicadoresService,
+  useValue: { obtener: () => of(null), refrescar: () => undefined },
+};
+
 export const PROVEEDORES_PRUEBA = [
   provideHttpClient(),
   provideHttpClientTesting(),
   provideRouter([]),
   { provide: CONFIGURACION, useValue: CONFIGURACION_POR_DEFECTO },
+  INDICADORES_VACIOS,
 ];
 
 /** Abre una sesión sintética con esos permisos. Llamar tras configurar TestBed. */

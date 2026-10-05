@@ -58,10 +58,11 @@ const DIAS_SEMANA = [
   { id: 6, nombre: 'Domingo' },
 ] as const;
 
+import { ResumenModuloComponent } from '../../compartido/resumen-modulo.component';
 @Component({
   selector: 'app-lista-espera',
   standalone: true,
-  imports: [
+  imports: [ResumenModuloComponent, 
     FormsModule,
     IconoComponent,
     SelectorPacienteComponent,
@@ -88,6 +89,8 @@ const DIAS_SEMANA = [
         </button>
       </div>
     </div>
+
+    <app-resumen-modulo modulo="lista_espera" />
 
     @if (error()) {
       <p class="aviso-error" role="alert">{{ error() }}</p>

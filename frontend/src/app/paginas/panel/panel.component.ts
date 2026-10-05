@@ -33,6 +33,9 @@ import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 
 import { ColaTrabajoComponent } from '../../compartido/cola-trabajo.component';
+import { TarjetasIndicadoresComponent } from '../../compartido/tarjetas-indicadores.component';
+import { IndicadoresService, type Indicadores } from '../../nucleo/servicios/indicadores.service';
+import { indicadoresDe } from '../../nucleo/utilidades/indicadores';
 import { FalloApi } from '../../nucleo/servicios/api.service';
 import { ApiService } from '../../nucleo/servicios/api.service';
 import { CatalogoService } from '../../nucleo/servicios/catalogo.service';
@@ -65,7 +68,7 @@ const DIAS_POR_PERIODO: Record<string, number> = { hoy: 1, '7': 7, '30': 30 };
 @Component({
   selector: 'app-panel',
   standalone: true,
-  imports: [FormsModule, RouterLink, ColaTrabajoComponent],
+  imports: [FormsModule, RouterLink, ColaTrabajoComponent, TarjetasIndicadoresComponent],
   template: `
     <div class="cabecera-pagina">
       <div>
@@ -78,6 +81,20 @@ const DIAS_POR_PERIODO: Record<string, number> = { hoy: 1, '7': 7, '30': 30 };
 
     @if (error()) {
       <p class="aviso-error" role="alert">{{ error() }}</p>
+    }
+
+    <!-- ============ 0. Tablero de su rol ============
+         Cada grupo aparece solo si el rol alcanza ese módulo: el backend no
+         envía el bloque y aquí no se pinta. Cada tarjeta lleva a donde se
+         resuelve lo que cuenta. -->
+    @for (grupo of tablero(); track grupo.titulo) {
+      <section class="bloque">
+        <div class="bloque__cabecera">
+          <h2>{{ grupo.titulo }}</h2>
+          <span class="bloque__linea" aria-hidden="true"></span>
+        </div>
+        <app-tarjetas-indicadores [indicadores]="grupo.tarjetas" [titulo]="grupo.titulo" />
+      </section>
     }
 
     <!-- ============ 1. Lo que tiene plazo ============ -->
@@ -732,7 +749,43 @@ export class PanelComponent {
     return senales;
   });
 
+  private readonly indicadoresServicio = inject(IndicadoresService);
+  private readonly indicadores = signal<Indicadores | null>(null);
+
+  /** Grupos del tablero en el orden en que se atienden: lo mío, la clínica hoy, lo pendiente y la gestión. */
+  protected readonly tablero = computed(() => {
+    const datos = this.indicadores();
+    const grupos = [
+      { titulo: 'Mi día', tarjetas: indicadoresDe(datos, 'mi_dia') },
+      { titulo: 'La clínica hoy', tarjetas: indicadoresDe(datos, 'agenda') },
+      {
+        titulo: 'Pendiente de atender',
+        tarjetas: [
+          ...indicadoresDe(datos, 'clinico'),
+          ...indicadoresDe(datos, 'mensajes'),
+          ...indicadoresDe(datos, 'lista_espera'),
+          ...indicadoresDe(datos, 'pagos'),
+        ],
+      },
+      {
+        titulo: 'Gestión de la clínica',
+        tarjetas: [
+          ...indicadoresDe(datos, 'pacientes'),
+          ...indicadoresDe(datos, 'conocimiento'),
+          ...indicadoresDe(datos, 'promociones'),
+          ...indicadoresDe(datos, 'usuarios'),
+        ],
+      },
+    ];
+    return grupos.filter((grupo) => grupo.tarjetas.length > 0);
+  });
+
   constructor() {
+    this.indicadoresServicio.refrescar();
+    this.indicadoresServicio.obtener().subscribe({
+      next: (datos) => this.indicadores.set(datos),
+      error: () => this.indicadores.set(null),
+    });
     this.catalogo.profesionales().subscribe({
       next: (lista) => this.profesionales.set(lista),
       error: () => this.profesionales.set([]),

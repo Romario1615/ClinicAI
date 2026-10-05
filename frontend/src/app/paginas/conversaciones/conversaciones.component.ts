@@ -7,10 +7,11 @@ import { IconoComponent } from '../../compartido/icono.component';
 
 registerLocaleData(localeEs);
 
+import { ResumenModuloComponent } from '../../compartido/resumen-modulo.component';
 @Component({
   selector: 'app-conversaciones',
   standalone: true,
-  imports: [DatePipe, IconoComponent],
+  imports: [ResumenModuloComponent, DatePipe, IconoComponent],
   template: `
     <main class="bandeja">
       <header class="bandeja__cabecera">
@@ -23,6 +24,8 @@ registerLocaleData(localeEs);
           <app-icono nombre="reloj" [tamano]="17" /> Actualizar
         </button>
       </header>
+
+      <app-resumen-modulo modulo="mensajes" />
 
       @if (error()) { <div class="aviso aviso--error" role="alert">{{ error() }}</div> }
 

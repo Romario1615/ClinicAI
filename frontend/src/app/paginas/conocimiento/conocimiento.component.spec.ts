@@ -99,6 +99,7 @@ function identidadAprobadora(): Identidad {
   };
 }
 
+import { INDICADORES_VACIOS } from '../../nucleo/pruebas/sesion-sintetica';
 describe('ConocimientoComponent', () => {
   let fixture: ComponentFixture<ConocimientoComponent>;
   let http: HttpTestingController;
@@ -110,6 +111,7 @@ describe('ConocimientoComponent', () => {
         provideHttpClient(),
         provideHttpClientTesting(),
         { provide: CONFIGURACION, useValue: CONFIGURACION_POR_DEFECTO },
+        INDICADORES_VACIOS,
       ],
     });
     fixture = TestBed.createComponent(ConocimientoComponent);

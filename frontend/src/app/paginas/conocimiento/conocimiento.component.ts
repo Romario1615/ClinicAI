@@ -157,10 +157,11 @@ const TIPOS_PRINCIPAL: Readonly<Record<TipoPrincipalDocumento, string>> = {
   ESPECIALIDAD: 'Especialidad',
 };
 
+import { ResumenModuloComponent } from '../../compartido/resumen-modulo.component';
 @Component({
   selector: 'app-conocimiento',
   standalone: true,
-  imports: [
+  imports: [ResumenModuloComponent, 
     FormsModule,
     CargandoComponent,
     ErrorComponent,

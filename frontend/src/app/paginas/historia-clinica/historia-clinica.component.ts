@@ -102,10 +102,11 @@ const VIAS: Record<string, string> = {
 type Pestana = 'evolucion' | 'odontograma' | 'periodoncia' | 'imagenes' | 'planes' | 'recetas';
 
 import { TipoDocumentoPipe } from '../../compartido/tipo-documento.pipe';
+import { ResumenModuloComponent } from '../../compartido/resumen-modulo.component';
 @Component({
   selector: 'app-historia-clinica',
   standalone: true,
-  imports: [
+  imports: [ResumenModuloComponent, 
     FormsModule,
     TipoDocumentoPipe,
     CargandoComponent,
