@@ -22,6 +22,35 @@ class RespuestaClinica(BaseModel):
     zona_horaria: str
     idioma: str
     moneda: str
+    identificacion_fiscal: str | None = None
+    telefono: str | None = None
+    correo: str | None = None
+
+
+class RespuestaClinicaCatalogo(BaseModel):
+    """Datos de clinica para catálogos, sin información fiscal."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    id: uuid.UUID
+    nombre: str
+    zona_horaria: str
+    idioma: str
+    moneda: str
+    telefono: str | None = None
+    correo: str | None = None
+
+
+class ActualizarClinica(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    nombre: str
+    identificacion_fiscal: str | None = None
+    zona_horaria: str
+    idioma: str
+    moneda: str
+    telefono: str | None = None
+    correo: str | None = None
 
 
 class RespuestaSede(BaseModel):
@@ -91,6 +120,7 @@ class RespuestaProfesional(BaseModel):
 
 __all__ = [
     "RespuestaClinica",
+    "RespuestaClinicaCatalogo",
     "RespuestaConsultorio",
     "RespuestaEspecialidad",
     "RespuestaProfesional",

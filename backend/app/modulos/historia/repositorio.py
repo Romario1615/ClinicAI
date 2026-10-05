@@ -28,7 +28,7 @@ import uuid
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import Select, literal, or_, select
+from sqlalchemy import Select, case, func, literal, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modulos.historia.modelos import (
@@ -44,6 +44,8 @@ from app.modulos.pacientes.modelos import RelacionAsistencial
 from app.nucleo.autorizacion import Principal
 
 _NINGUNO = uuid.UUID(int=0)
+_MINIMO_TOMAS_PARA_CANDIDATA = 4
+_UMBRAL_CANDIDATA = 0.25
 
 
 class RepositorioHistoria:
@@ -261,6 +263,65 @@ class RepositorioHistoria:
                 )
             )
         ).scalar_one_or_none()
+
+    async def listar_alertas_abiertas(
+        self, *, principal: Principal, ahora: datetime, limite: int = 100
+    ) -> list[AlertaAdherencia]:
+        consulta = (
+            select(AlertaAdherencia)
+            .join(Receta, Receta.id == AlertaAdherencia.receta_id)
+            .where(AlertaAdherencia.atendida_en.is_(None))
+        )
+        consulta = self._acotar_receta(consulta, principal, ahora)
+        consulta = consulta.order_by(
+            AlertaAdherencia.severidad.desc(), AlertaAdherencia.creado_en
+        ).limit(max(1, min(limite, 200)))
+        return list((await self._sesion.execute(consulta)).scalars())
+
+    async def obtener_alerta(
+        self, alerta_id: uuid.UUID, *, principal: Principal, ahora: datetime, bloquear: bool = False
+    ) -> AlertaAdherencia | None:
+        consulta = (
+            select(AlertaAdherencia)
+            .join(Receta, Receta.id == AlertaAdherencia.receta_id)
+            .where(AlertaAdherencia.id == alerta_id)
+        )
+        consulta = self._acotar_receta(consulta, principal, ahora)
+        if bloquear:
+            consulta = consulta.with_for_update(of=AlertaAdherencia)
+        return (await self._sesion.execute(consulta)).scalar_one_or_none()
+
+    async def recetas_candidatas_adherencia(
+        self, *, desde: datetime, hasta: datetime, limite: int = 200
+    ) -> list[tuple[uuid.UUID, uuid.UUID]]:
+        omitida = case(
+            (Toma.estado.in_((EstadoToma.OMITIDA.value, EstadoToma.PENDIENTE.value)), 1),
+            else_=0,
+        )
+        consulta = (
+            select(Receta.id, Receta.clinica_id)
+            .join(RecetaMedicamento, RecetaMedicamento.receta_id == Receta.id)
+            .join(Toma, Toma.receta_medicamento_id == RecetaMedicamento.id)
+            .where(
+                Receta.estado == EstadoReceta.CONFIRMADA.value,
+                Toma.estado != EstadoToma.CANCELADA.value,
+                Toma.programada_en >= desde,
+                Toma.programada_en <= hasta,
+                ~select(literal(1))
+                .select_from(AlertaAdherencia)
+                .where(
+                    AlertaAdherencia.receta_id == Receta.id,
+                    AlertaAdherencia.atendida_en.is_(None),
+                )
+                .exists(),
+            )
+            .group_by(Receta.id, Receta.clinica_id)
+            .having(func.count(Toma.id) >= _MINIMO_TOMAS_PARA_CANDIDATA)
+            .having(func.sum(omitida) >= func.count(Toma.id) * _UMBRAL_CANDIDATA)
+            .order_by(Receta.id)
+            .limit(max(1, min(limite, 500)))
+        )
+        return [(fila[0], fila[1]) for fila in (await self._sesion.execute(consulta)).all()]
 
     # ------------------------------------------------------------------
     #  Filtros

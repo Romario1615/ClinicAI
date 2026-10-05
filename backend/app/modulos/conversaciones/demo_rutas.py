@@ -53,9 +53,18 @@ async def responder(
     sesion: Sesion,
     reloj: RelojActual,
     clave: Clave,
+    configuracion: ConfiguracionActual,
 ) -> RespuestaDemo:
     respuesta = await demo_servicios.responder(
-        sesion, principal, reloj, identificador, datos.texto, clave, _fabrica(peticion)
+        sesion,
+        principal,
+        reloj,
+        identificador,
+        datos.texto,
+        clave,
+        _fabrica(peticion),
+        peticion.app.state.clasificador,
+        (configuracion.decisiones_umbral_clinico, configuracion.decisiones_umbral_intencion),
     )
     await sesion.commit()
     return respuesta

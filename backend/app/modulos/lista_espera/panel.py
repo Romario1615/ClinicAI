@@ -96,8 +96,14 @@ async def anotar(
             uuid.UUID(str(registro.respuesta["id"])), principal
         )
     else:
+        argumentos = datos.model_dump(exclude={"preferencias"})
+        preferencias = (
+            datos.preferencias.model_dump(mode="json", exclude_none=True)
+            if datos.preferencias
+            else None
+        )
         entrada = await ServicioListaEspera(sesion, reloj).anotar(
-            principal=principal, **datos.model_dump()
+            principal=principal, preferencias=preferencias, **argumentos
         )
         await RepositorioAuditoria(sesion).registrar(
             [

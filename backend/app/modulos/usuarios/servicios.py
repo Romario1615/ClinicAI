@@ -33,7 +33,7 @@ import uuid
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modulos.profesionales.modelos import Profesional
@@ -65,6 +65,8 @@ from app.nucleo.autorizacion import (
 from app.nucleo.errores import (
     CredencialesInvalidas,
     CuentaBloqueada,
+    DatosInvalidos,
+    RecursoNoEncontrado,
     SegundoFactorInvalido,
     SegundoFactorRequerido,
     TokenInvalido,
@@ -81,6 +83,7 @@ from app.nucleo.seguridad import (
     hashear_contrasena,
     hashear_jti,
     requiere_rehash,
+    validar_politica_contrasena,
     verificar_codigo_totp,
     verificar_contrasena,
 )
@@ -121,6 +124,7 @@ class ServicioAutenticacion:
         minutos_bloqueo_login: int,
         roles_con_2fa: frozenset[str],
         cifrador: CifradorDatos,
+        permite_acceso_local_demo: bool = False,
     ) -> None:
         self._sesion = sesion
         self._reloj = reloj
@@ -132,6 +136,113 @@ class ServicioAutenticacion:
         self._minutos_bloqueo = minutos_bloqueo_login
         self._roles_con_2fa = roles_con_2fa
         self._cifrador = cifrador
+        self._permite_acceso_local_demo = permite_acceso_local_demo
+
+    async def roles_acceso_local(self) -> list[str]:
+        """Lista roles con cuentas sinteticas disponibles para acceso local."""
+        if not self._permite_acceso_local_demo:
+            return []
+
+        roles_habilitados = (
+            "superadministrador",
+            "administrador_clinica",
+            "recepcion",
+            "asistente",
+            "auditor",
+            "profesional",
+        )
+        consulta = (
+            select(Rol.codigo)
+            .join(UsuarioRol, UsuarioRol.rol_id == Rol.id)
+            .join(Usuario, Usuario.id == UsuarioRol.usuario_id)
+            .where(
+                Rol.codigo.in_(roles_habilitados),
+                Rol.es_sistema.is_(True),
+                Rol.clinica_id.is_(None),
+                Usuario.activo.is_(True),
+                Usuario.apellido.contains("[SINTETICO]"),
+            )
+            .distinct()
+        )
+        disponibles = set((await self._sesion.execute(consulta)).scalars())
+        return [codigo for codigo in roles_habilitados if codigo in disponibles]
+
+    async def iniciar_sesion_rol_local(
+        self,
+        *,
+        codigo_rol: str,
+        ip: str | None = None,
+        agente_usuario: str | None = None,
+    ) -> ResultadoAutenticacion:
+        """Inicia una sesion de rol con una cuenta marcada como sintetica.
+
+        Esta ruta no acepta una cuenta elegida por el cliente. Solo admite los
+        roles locales conocidos, y resuelve una cuenta activa con el marcador
+        `[SINTETICO]`. El acceso solo se habilita en local/desarrollo desde la
+        configuracion de la aplicacion.
+        """
+        if codigo_rol not in await self.roles_acceso_local():
+            raise RecursoNoEncontrado("El acceso local solicitado no esta disponible.")
+
+        ahora = self._reloj.ahora()
+        usuario = (
+            await self._sesion.execute(
+                select(Usuario)
+                .join(UsuarioRol, UsuarioRol.usuario_id == Usuario.id)
+                .join(Rol, Rol.id == UsuarioRol.rol_id)
+                .where(
+                    Rol.codigo == codigo_rol,
+                    Rol.es_sistema.is_(True),
+                    Rol.clinica_id.is_(None),
+                    Usuario.activo.is_(True),
+                    Usuario.apellido.contains("[SINTETICO]"),
+                )
+                .order_by(Usuario.correo)
+                .limit(1)
+            )
+        ).scalar_one_or_none()
+        if usuario is None:
+            raise RecursoNoEncontrado("El acceso local solicitado no esta disponible.")
+
+        usuario.ultimo_acceso_en = ahora
+        usuario.intentos_fallidos = 0
+        usuario.bloqueado_hasta = None
+        # Los accesos de desarrollo pueden entrar a los roles que normalmente
+        # requieren 2FA, usando exclusivamente una cuenta de datos sinteticos.
+        exige_2fa = await self._exige_segundo_factor(usuario)
+        tokens = await self._emitir_tokens(
+            usuario,
+            ahora=ahora,
+            familia=generar_familia_sesion(),
+            segundo_factor_cumplido=exige_2fa,
+            requiere_segundo_factor=exige_2fa,
+            ip=ip,
+            agente_usuario=agente_usuario,
+            sesion_anterior_id=None,
+        )
+        self._registrar_acceso(
+            usuario.correo.lower(),
+            usuario.clinica_id,
+            ResultadoAcceso.EXITO,
+            ip,
+            agente_usuario,
+            ahora,
+            usuario_id=usuario.id,
+        )
+        principal = await self.resolver_principal_de_usuario(
+            usuario, segundo_factor_cumplido=exige_2fa
+        )
+        entrada = construir_entrada(
+            accion=AccionAuditada.LOGIN_ROL_LOCAL,
+            principal=principal,
+            ahora=ahora,
+            entidad_tipo="usuario",
+            entidad_id=usuario.id,
+            ip=ip,
+            codigo_rol=codigo_rol,
+            cuenta_sintetica=True,
+        )
+        return ResultadoAutenticacion(tokens, (entrada,))
 
     # ==================================================================
     #  Inicio de sesion
@@ -141,7 +252,6 @@ class ServicioAutenticacion:
         *,
         correo: str,
         contrasena: str,
-        clinica_id: uuid.UUID,
         ip: str | None = None,
         agente_usuario: str | None = None,
         codigo_2fa: str | None = None,
@@ -163,7 +273,8 @@ class ServicioAutenticacion:
         ahora = self._reloj.ahora()
         correo_normalizado = correo.strip().lower()
 
-        usuario = await self._buscar_usuario(correo_normalizado, clinica_id)
+        usuario = await self._buscar_usuario(correo_normalizado)
+        clinica_id = usuario.clinica_id if usuario is not None else None
 
         # Comparacion de tiempo equivalente aunque la cuenta no exista.
         # `verificar_contrasena` con un hash valido cuesta lo mismo que el
@@ -522,6 +633,25 @@ class ServicioAutenticacion:
         if usuario is None or not usuario.activo:
             raise TokenRevocado("La cuenta ya no esta activa.")
 
+        # Revocar solo el refresco deja vivo su token de acceso durante hasta
+        # quince minutos. La familia conserva exactamente un refresco actual
+        # no usado mientras la sesión siga activa; exigirlo hace que cierre de
+        # sesión, reasignación de clínica y desactivación corten el acceso al
+        # momento, también ante un JWT ya emitido.
+        sesion_activa = await self._sesion.scalar(
+            select(Sesion.id)
+            .where(
+                Sesion.usuario_id == usuario.id,
+                Sesion.familia == contenido.familia,
+                Sesion.usada_en.is_(None),
+                Sesion.revocada_en.is_(None),
+                Sesion.expira_en > self._reloj.ahora(),
+            )
+            .limit(1)
+        )
+        if sesion_activa is None:
+            raise TokenRevocado("La sesión ya fue revocada.")
+
         return await self.resolver_principal_de_usuario(
             usuario,
             segundo_factor_cumplido=contenido.segundo_factor_cumplido,
@@ -537,6 +667,35 @@ class ServicioAutenticacion:
         return (
             await self._sesion.execute(select(Usuario).where(Usuario.id == usuario_id))
         ).scalar_one_or_none()
+
+    async def cambiar_contrasena(
+        self, usuario_id: uuid.UUID, contrasena_actual: str, contrasena_nueva: str
+    ) -> EntradaAuditoria:
+        """Actualiza la contrasena y revoca todas las sesiones activas."""
+        usuario = await self.cargar_usuario(usuario_id)
+        if (
+            usuario is None
+            or not usuario.activo
+            or not verificar_contrasena(contrasena_actual, usuario.hash_contrasena)
+        ):
+            raise CredencialesInvalidas("La contraseña actual no es correcta.")
+        problemas = validar_politica_contrasena(contrasena_nueva)
+        if problemas:
+            raise DatosInvalidos(" ".join(problemas))
+        if verificar_contrasena(contrasena_nueva, usuario.hash_contrasena):
+            raise DatosInvalidos("La nueva contraseña debe ser distinta a la actual.")
+        usuario.hash_contrasena = hashear_contrasena(contrasena_nueva)
+        usuario.debe_cambiar_contrasena = False
+        await self.revocar_todas_las_sesiones(usuario_id, motivo=MotivoRevocacion.CAMBIO_CONTRASENA)
+        principal = await self.resolver_principal_de_usuario(usuario)
+        return construir_entrada(
+            accion=AccionAuditada.CONTRASENA_CAMBIADA,
+            principal=principal,
+            ahora=self._reloj.ahora(),
+            entidad_tipo="usuario",
+            entidad_id=usuario.id,
+            sesiones_revocadas=True,
+        )
 
     async def resolver_principal_por_id(self, usuario_id: uuid.UUID) -> Principal:
         usuario = (
@@ -597,6 +756,7 @@ class ServicioAutenticacion:
                 segundo_factor_cumplido=segundo_factor_cumplido,
                 requiere_segundo_factor=False,
                 profesional_id=profesional_id,
+                role_ids=frozenset(),
             )
 
         ids_rol = [rol.id for _, rol in vigentes]
@@ -628,6 +788,7 @@ class ServicioAutenticacion:
             segundo_factor_cumplido=segundo_factor_cumplido,
             requiere_segundo_factor=bool(codigos_rol & self._roles_con_2fa),
             roles=codigos_rol,
+            role_ids=frozenset(ids_rol),
             # Sin esto, la comprobacion de relacion asistencial de la historia
             # clinica no se ejecuta nunca por HTTP.
             profesional_id=profesional_id,
@@ -734,14 +895,9 @@ class ServicioAutenticacion:
             )
         ).scalar_one_or_none()
 
-    async def _buscar_usuario(self, correo: str, clinica_id: uuid.UUID) -> Usuario | None:
+    async def _buscar_usuario(self, correo: str) -> Usuario | None:
         return (
-            await self._sesion.execute(
-                select(Usuario).where(
-                    Usuario.clinica_id == clinica_id,
-                    Usuario.correo == correo,
-                )
-            )
+            await self._sesion.execute(select(Usuario).where(func.lower(Usuario.correo) == correo))
         ).scalar_one_or_none()
 
     async def _exige_segundo_factor(self, usuario: Usuario) -> bool:
@@ -821,7 +977,7 @@ class ServicioAutenticacion:
     def _registrar_acceso(
         self,
         correo: str,
-        clinica_id: uuid.UUID,
+        clinica_id: uuid.UUID | None,
         resultado: ResultadoAcceso,
         ip: str | None,
         agente_usuario: str | None,
@@ -851,7 +1007,7 @@ class ServicioAutenticacion:
     def _fallo_de_acceso(
         self,
         correo: str,
-        clinica_id: uuid.UUID,
+        clinica_id: uuid.UUID | None,
         resultado: ResultadoAcceso,
         ip: str | None,
         agente_usuario: str | None,

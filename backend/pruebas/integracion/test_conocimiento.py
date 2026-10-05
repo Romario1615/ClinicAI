@@ -555,6 +555,9 @@ async def test_al_archivar_el_documento_sus_fragmentos_dejan_de_recuperarse(
         especialidades=None,
         nivel_maximo=NivelSensibilidad.CLINICO,
         ahora=instante,
+        actor_id=None,
+        role_ids=frozenset(),
+        uso_agente=False,
     )
     vector = await embeddings.vectorizar_consulta("examen de sangre en ayunas")
 
@@ -714,6 +717,9 @@ async def test_un_documento_publicado_se_puede_retirar_para_corregirlo(
         especialidades=None,
         nivel_maximo=NivelSensibilidad.CLINICO,
         ahora=instante,
+        actor_id=None,
+        role_ids=frozenset(),
+        uso_agente=False,
     )
     vector = await embeddings.vectorizar_consulta("examen de sangre en ayunas")
 

@@ -8,6 +8,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from typing import Any
 
+from app.ia.decisiones import ClasificadorIntencion, DecisionTipada, Intencion
 from app.ia.herramientas.contrato import ContextoHerramienta, ResultadoHerramienta
 from app.ia.herramientas.limites import MotivoDerivacion, evaluar
 from app.ia.herramientas.registro import despachar
@@ -117,12 +118,54 @@ class ProveedorDemostracion(ProveedorConversacional):
         return Decision("handoff_to_human", {"motivo": motivo.value})
 
 
+_CLAVES_BUSQUEDA = ("profesional_id", "servicio_id", "sede_id", "desde", "hasta")
+
+
+def decision_determinista(  # noqa: PLR0911 - una salida por regla, en orden de prioridad
+    decision: DecisionTipada,
+    negocio: dict[str, Any],
+    *,
+    umbral_clinico: float,
+    umbral_intencion: float,
+) -> Decision | None:
+    """Lo que se resuelve sin LLM a partir de una decision tipada.
+
+    Primero la barrera clinica: una probabilidad clinica o de urgencia por
+    encima del umbral deriva siempre, aunque la intencion parezca
+    administrativa. Despues, solo las intenciones que no necesitan redactar
+    nada y solo con confianza alta. Todo lo demas sigue al proveedor.
+    """
+    if decision.urgencia >= umbral_clinico:
+        return Decision("handoff_to_human", {"motivo": MotivoDerivacion.URGENCIA_DECLARADA.value})
+    if decision.pregunta_clinica >= umbral_clinico:
+        return Decision(
+            "handoff_to_human", {"motivo": MotivoDerivacion.SINTOMA_O_DIAGNOSTICO.value}
+        )
+    if decision.confianza < umbral_intencion:
+        return None
+    if decision.intencion is Intencion.HABLAR_CON_PERSONA:
+        return Decision(
+            "handoff_to_human", {"motivo": MotivoDerivacion.PETICION_DEL_PACIENTE.value}
+        )
+    if decision.intencion is Intencion.CONSULTAR_CITAS and negocio.get("paciente_id"):
+        return Decision("get_patient_appointments", {"paciente_id": negocio["paciente_id"]})
+    if decision.intencion is Intencion.BUSCAR_HORARIOS and all(
+        negocio.get(clave) for clave in _CLAVES_BUSQUEDA
+    ):
+        return Decision("find_availability", {k: negocio[k] for k in _CLAVES_BUSQUEDA})
+    return None
+
+
 async def ejecutar_turno(
     proveedor: ProveedorConversacional,
     texto: str,
     memoria: dict[str, Any],
     negocio: dict[str, Any],
     contexto: ContextoHerramienta,
+    *,
+    clasificador: ClasificadorIntencion | None = None,
+    umbral_clinico: float = 0.35,
+    umbral_intencion: float = 0.85,
 ) -> tuple[ResultadoHerramienta, list[str]]:
     resultado: ResultadoHerramienta | None = None
     limite = evaluar(texto)
@@ -130,6 +173,24 @@ async def ejecutar_turno(
         resultado = await despachar("handoff_to_human", {"motivo": limite.motivo}, contexto)
         return resultado, ["handoff_to_human"]
     invocaciones: list[str] = []
+
+    if clasificador is not None and texto.strip():
+        # Segunda barrera y atajo: un modelo de decision (Jev o reglas)
+        # responde con valores tipados. Nunca ejecuta nada por si mismo.
+        tipada = await clasificador.clasificar(texto)
+        atajo = decision_determinista(
+            tipada,
+            negocio,
+            umbral_clinico=umbral_clinico,
+            umbral_intencion=umbral_intencion,
+        )
+        if atajo is not None and atajo.herramienta is not None:
+            argumentos = dict(atajo.argumentos)
+            if atajo.herramienta == "get_patient_appointments":
+                argumentos["paciente_id"] = negocio["paciente_id"]
+            resultado = await despachar(atajo.herramienta, argumentos, contexto)
+            return resultado, [atajo.herramienta]
+
     for _ in range(MAXIMO_PASOS):
         decision = await proveedor.decidir(
             sistema=PROMPT_SISTEMA,

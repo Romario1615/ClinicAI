@@ -31,6 +31,8 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Path, Query, status
 
 from app.modulos.historia.esquemas import (
+    AlertaAdherenciaSalida,
+    AtenderAlertaAdherencia,
     ConfirmacionReceta,
     CorreccionNota,
     MedicamentoSalida,
@@ -47,9 +49,11 @@ from app.modulos.historia.esquemas import (
 from app.modulos.historia.modelos import NotaEvolucion, Receta, RecetaMedicamento
 from app.modulos.historia.repositorio import RepositorioHistoria
 from app.modulos.historia.servicios import DatosMedicamento, DatosNota
+from app.nucleo.auditoria import AccionAuditada, construir_entrada
 from app.nucleo.autorizacion import Principal
 from app.nucleo.dependencias import (
     Auditor,
+    RelojActual,
     RepoHistoria,
     ServicioDeHistoria,
     Sesion,
@@ -465,15 +469,16 @@ async def registrar_toma(
     await sesion.commit()
 
 
-@enrutador.get(
+@enrutador.post(
     "/recetas/{receta_id}/adherencia",
-    summary="Evaluar la adherencia de una receta",
+    summary="Evaluar la adherencia y registrar una alerta si corresponde",
     responses={404: {"description": "No existe, o esta fuera de alcance"}},
 )
 async def evaluar_adherencia(
     principal: Annotated[Principal, Depends(exige_permiso("adherencia.leer"))],
     servicio: ServicioDeHistoria,
     sesion: Sesion,
+    auditor: Auditor,
     receta_id: Annotated[uuid.UUID, Path()],
     dias: Annotated[int, Query(ge=1, le=90)] = 7,
 ) -> dict[str, object]:
@@ -481,9 +486,24 @@ async def evaluar_adherencia(
 
     **No interpreta nada clinicamente.** Devuelve cuantas tomas se omitieron
     sobre las esperadas; no concluye que el tratamiento haya fallado ni
-    sugiere cambiarlo. Esa lectura es del profesional (CLAUDE.md, regla 5).
+    sugiere cambiarlo. Como puede crear una alerta y registrar auditoría, esta
+    operación usa POST y no una lectura GET. Esa lectura es del profesional
+    (CLAUDE.md, regla 5).
     """
     alerta = await servicio.evaluar_adherencia(receta_id, principal=principal, dias=dias)
+    if alerta is not None:
+        await auditor.registrar(
+            [
+                construir_entrada(
+                    accion=AccionAuditada.ALERTA_ADHERENCIA_CREADA,
+                    principal=principal,
+                    ahora=servicio.ahora(),
+                    entidad_tipo="alerta_adherencia",
+                    entidad_id=alerta.id,
+                    paciente_id=alerta.paciente_id,
+                )
+            ]
+        )
     await sesion.commit()
 
     if alerta is None:
@@ -504,6 +524,76 @@ async def evaluar_adherencia(
             "periodo_hasta": alerta.periodo_hasta.isoformat(),
         }
     }
+
+
+@enrutador.get(
+    "/adherencia/alertas",
+    response_model=list[AlertaAdherenciaSalida],
+    summary="Listar alertas abiertas de adherencia dentro del ámbito",
+)
+async def listar_alertas_adherencia(
+    principal: Annotated[Principal, Depends(exige_permiso("adherencia.leer"))],
+    sesion: Sesion,
+    auditor: Auditor,
+    reloj: RelojActual,
+    limite: Annotated[int, Query(ge=1, le=200)] = 100,
+) -> list[AlertaAdherenciaSalida]:
+    ahora = reloj.ahora()
+    repo = RepositorioHistoria(sesion)
+    alertas = await repo.listar_alertas_abiertas(principal=principal, ahora=ahora, limite=limite)
+    auditorias = [
+        construir_entrada(
+            accion=AccionAuditada.HISTORIA_CONSULTADA,
+            principal=principal,
+            ahora=ahora,
+            entidad_tipo="alerta_adherencia",
+            entidad_id=alerta.id,
+            paciente_id=alerta.paciente_id,
+        )
+        for alerta in alertas
+    ]
+    if auditorias:
+        await auditor.registrar(auditorias)
+        await sesion.commit()
+    return [
+        AlertaAdherenciaSalida(
+            id=alerta.id,
+            paciente_id=alerta.paciente_id,
+            receta_id=alerta.receta_id,
+            profesional_id=alerta.profesional_id,
+            severidad=alerta.severidad,
+            tomas_omitidas=alerta.tomas_omitidas,
+            tomas_esperadas=alerta.tomas_esperadas,
+            periodo_desde=alerta.periodo_desde,
+            periodo_hasta=alerta.periodo_hasta,
+            creado_en=alerta.creado_en,
+        )
+        for alerta in alertas
+    ]
+
+
+@enrutador.post(
+    "/adherencia/alertas/{alerta_id}/atencion",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Marcar una alerta de adherencia como atendida",
+    responses={
+        404: {"description": "No existe o esta fuera de alcance"},
+        409: {"description": "Ya atendida"},
+    },
+)
+async def atender_alerta_adherencia(
+    principal: Annotated[Principal, Depends(exige_permiso("alerta_adherencia.atender"))],
+    datos: AtenderAlertaAdherencia,
+    servicio: ServicioDeHistoria,
+    sesion: Sesion,
+    auditor: Auditor,
+    alerta_id: Annotated[uuid.UUID, Path()],
+) -> None:
+    resultado = await servicio.atender_alerta_adherencia(
+        alerta_id, principal=principal, nota=datos.nota_profesional
+    )
+    await auditor.registrar(resultado.auditoria)
+    await sesion.commit()
 
 
 __all__ = ["enrutador"]

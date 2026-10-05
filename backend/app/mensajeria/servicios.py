@@ -75,6 +75,8 @@ TIPOS_PROACTIVOS_A_PACIENTE: frozenset[TipoMensajeOutbox] = frozenset(
         TipoMensajeOutbox.OFERTA_PERDIDA,
         TipoMensajeOutbox.TOMA_RECORDATORIO,
         TipoMensajeOutbox.TOMA_SEGUIMIENTO,
+        TipoMensajeOutbox.PROMOCION,
+        TipoMensajeOutbox.SEGUIMIENTO_TRATAMIENTO,
     }
 )
 
@@ -84,6 +86,8 @@ TIPOS_PROACTIVOS_A_PACIENTE: frozenset[TipoMensajeOutbox] = frozenset(
 CONSENTIMIENTO_POR_TIPO: dict[TipoMensajeOutbox, TipoConsentimiento] = {
     TipoMensajeOutbox.TOMA_RECORDATORIO: TipoConsentimiento.RECORDATORIOS_MEDICACION,
     TipoMensajeOutbox.TOMA_SEGUIMIENTO: TipoConsentimiento.RECORDATORIOS_MEDICACION,
+    # Publicidad exige su consentimiento propio, no el de recordatorios.
+    TipoMensajeOutbox.PROMOCION: TipoConsentimiento.PROMOCIONES,
 }
 CONSENTIMIENTO_POR_DEFECTO = TipoConsentimiento.COMUNICACION_WHATSAPP
 
@@ -102,6 +106,10 @@ class SolicitudEnvio:
     entidad_origen_tipo: str | None = None
     entidad_origen_id: uuid.UUID | None = None
     programado_para: datetime | None = None
+    # Plantilla aprobada en Meta distinta de la del catalogo (campanas) y
+    # media id de la imagen de cabecera, si la plantilla la lleva.
+    plantilla_meta: str | None = None
+    imagen_cabecera: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -168,9 +176,16 @@ class ServicioOutbox:
                 destino_tipo=solicitud.destino_tipo,
                 destino_id=solicitud.destino_id,
                 carga_util={
-                    "plantilla": plantilla.nombre_meta or plantilla.tipo.value,
+                    "plantilla": solicitud.plantilla_meta
+                    or plantilla.nombre_meta
+                    or plantilla.tipo.value,
                     "variables": dict(solicitud.variables),
                     "texto": texto,
+                    **(
+                        {"imagen_cabecera": solicitud.imagen_cabecera}
+                        if solicitud.imagen_cabecera
+                        else {}
+                    ),
                 },
                 clave_deduplicacion=solicitud.clave_deduplicacion,
                 estado=EstadoOutbox.PENDIENTE.value,
@@ -355,6 +370,9 @@ class ServicioOutbox:
             nombre_plantilla=str(carga.get("plantilla", mensaje.tipo)),
             variables=_ordenar_variables(carga.get("variables")),
             texto=str(carga.get("texto", "")),
+            imagen_cabecera=(
+                str(carga["imagen_cabecera"]) if carga.get("imagen_cabecera") else None
+            ),
         )
         respuesta = await adaptador.enviar(saliente)
         ahora = self._reloj.ahora()

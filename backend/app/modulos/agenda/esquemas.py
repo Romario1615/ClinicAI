@@ -104,6 +104,9 @@ class PeticionReserva(_ConInstantes):
     sede_id: uuid.UUID
     inicio: InstanteConZona
     consultorio_id: uuid.UUID | None = None
+    # Vínculo opcional cuando la reserva agenda un procedimiento de un plan
+    # aceptado. El servicio lo valida y lo guarda en la misma transacción.
+    procedimiento_plan_id: uuid.UUID | None = None
     notas_recepcion: Annotated[str | None, Field(default=None, max_length=LONGITUD_MAXIMA_NOTAS)]
 
     @field_validator("notas_recepcion")
@@ -157,6 +160,9 @@ class RespuestaCita(BaseModel):
     origen: OrigenCita
     expira_en: datetime | None
     confirmada_en: datetime | None
+    llegada_en: datetime | None
+    atencion_iniciada_en: datetime | None
+    completada_en: datetime | None
     cancelada_en: datetime | None
     motivo_cancelacion: str | None
 

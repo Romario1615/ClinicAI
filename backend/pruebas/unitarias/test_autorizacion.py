@@ -140,6 +140,8 @@ class TestMatrizDePermisos:
             "diagnostico.registrar",
             "receta.crear",
             "receta.confirmar",
+            "odontograma.escribir",
+            "plan_tratamiento.escribir",
         ):
             con_permiso = [rol for rol, permisos in PERMISOS_POR_ROL.items() if codigo in permisos]
             assert con_permiso == ["profesional"], (

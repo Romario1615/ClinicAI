@@ -39,6 +39,7 @@ class AccionAuditada(StrEnum):
 
     # --- Autenticacion ---
     LOGIN_EXITOSO = "login.exitoso"
+    LOGIN_ROL_LOCAL = "login.rol_local"
     LOGIN_FALLIDO = "login.fallido"
     # Sigue la convencion recurso.accion igual que el resto del catalogo: un
     # codigo sin punto rompe las consultas de auditoria que agrupan por
@@ -59,8 +60,14 @@ class AccionAuditada(StrEnum):
     USUARIO_DESACTIVADO = "usuario.desactivado"
     ROL_ASIGNADO = "rol.asignado"
     ROL_REVOCADO = "rol.revocado"
+    ROL_CREADO = "rol.creado"
     AMBITO_MODIFICADO = "ambito.modificado"
     PERMISO_DENEGADO = "permiso.denegado"
+    INTEGRACION_CONFIGURADA = "integracion.configurada"
+    CLINICA_CREADA = "clinica.creada"
+    CLINICA_MODIFICADA = "clinica.modificada"
+    SEDE_CREADA = "sede.creada"
+    DASHBOARD_ANALISIS_IA = "dashboard.analisis_ia"
 
     # --- Pacientes ---
     PACIENTE_CREADO = "paciente.creado"
@@ -79,10 +86,38 @@ class AccionAuditada(StrEnum):
     ACCESO_EMERGENCIA = "acceso_emergencia.usado"
     ACCESO_SENSIBLE = "acceso_sensible.usado"
 
+    # --- Imagenes clinicas y odontologia ---
+    IMAGEN_CARGADA = "imagen_clinica.cargada"
+    IMAGEN_CONSULTADA = "imagen_clinica.consultada"
+    IMAGEN_ANULADA = "imagen_clinica.anulada"
+    FOTO_PERFIL_ACTUALIZADA = "paciente.foto_actualizada"
+    ODONTOGRAMA_CONSULTADO = "odontograma.consultado"
+    ODONTOGRAMA_VERSIONADO = "odontograma.versionado"
+    PLAN_CONSULTADO = "plan_tratamiento.consultado"
+    PLAN_CREADO = "plan_tratamiento.creado"
+    PLAN_MODIFICADO = "plan_tratamiento.modificado"
+    PLAN_ESTADO_CAMBIADO = "plan_tratamiento.estado_cambiado"
+    PROCEDIMIENTO_COMPLETADO = "procedimiento.completado"
+    PROCEDIMIENTO_AGENDADO = "procedimiento.agendado"
+    PLANTILLA_PLAN_CREADA = "plantilla_plan.creada"
+    PLANTILLA_PLAN_RETIRADA = "plantilla_plan.retirada"
+    DELEGACION_FIRMA_CREADA = "delegacion_firma.creada"
+    DELEGACION_FIRMA_REVOCADA = "delegacion_firma.revocada"
+
+    # --- Promociones ---
+    CAMPANA_CREADA = "campana.creada"
+    CAMPANA_MODIFICADA = "campana.modificada"
+    CAMPANA_IMAGEN = "campana.imagen_actualizada"
+    CAMPANA_APROBADA = "campana.aprobada"
+    CAMPANA_ENVIADA = "campana.enviada"
+    CAMPANA_CANCELADA = "campana.cancelada"
+
     # --- Agenda ---
     CITA_CREADA = "cita.creada"
     CITA_BLOQUEADA = "cita.bloqueada"
     CITA_CONFIRMADA = "cita.confirmada"
+    CITA_LLEGADA_REGISTRADA = "cita.llegada_registrada"
+    CITA_ATENCION_INICIADA = "cita.atencion_iniciada"
     CITA_CANCELADA = "cita.cancelada"
     CITA_REPROGRAMADA = "cita.reprogramada"
     CITA_COMPLETADA = "cita.completada"
@@ -96,6 +131,7 @@ class AccionAuditada(StrEnum):
     OFERTA_ENVIADA = "oferta.enviada"
     OFERTA_ACEPTADA = "oferta.aceptada"
     OFERTA_RECHAZADA = "oferta.rechazada"
+    OFERTA_PERDIDA = "oferta.perdida"
     OFERTA_EXPIRADA = "oferta.expirada"
     OFERTA_PERDIDA_CARRERA = "oferta.perdida_por_carrera"
 
@@ -109,6 +145,7 @@ class AccionAuditada(StrEnum):
     TOMA_REGISTRADA = "toma.registrada"
     ALERTA_ADHERENCIA_CREADA = "alerta_adherencia.creada"
     ALERTA_ADHERENCIA_ATENDIDA = "alerta_adherencia.atendida"
+    CONTROL_TRATAMIENTO_ATENDIDO = "control_tratamiento.atendido"
 
     # --- Conocimiento y RAG ---
     DOCUMENTO_CARGADO = "documento.cargado"
@@ -116,6 +153,7 @@ class AccionAuditada(StrEnum):
     DOCUMENTO_PUBLICADO = "documento.publicado"
     DOCUMENTO_ARCHIVADO = "documento.archivado"
     DOCUMENTO_MARCADO_REVISION = "documento.marcado_para_revision"
+    DOCUMENTO_ACL_ACTUALIZADA = "documento.acl_actualizada"
     CONSULTA_RAG = "rag.consulta"
     RAG_SIN_FUENTE = "rag.sin_fuente"
     INYECCION_DETECTADA = "seguridad.inyeccion_detectada"
@@ -129,6 +167,8 @@ class AccionAuditada(StrEnum):
     WEBHOOK_DUPLICADO = "webhook.duplicado"
     MENSAJE_ENVIADO = "mensaje.enviado"
     MENSAJE_FALLIDO = "mensaje.fallido"
+    CONVERSACION_LEIDA = "conversacion.leida"
+    CONVERSACION_CONSULTADA = "conversacion.consultada"
     CALENDARIO_CONECTADO = "calendario.conectado"
     CALENDARIO_DESCONECTADO = "calendario.desconectado"
     CALENDARIO_CONFLICTO = "calendario.conflicto"

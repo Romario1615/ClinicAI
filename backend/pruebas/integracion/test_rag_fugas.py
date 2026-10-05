@@ -40,6 +40,8 @@ from app.modulos.conocimiento.modelos import (
     KnowledgeChunk,
     KnowledgeDocument,
     KnowledgeEmbedding,
+    KnowledgePermission,
+    PrincipalConocimiento,
     TipoDocumentoConocimiento,
 )
 from app.modulos.conocimiento.repositorio import (
@@ -47,6 +49,7 @@ from app.modulos.conocimiento.repositorio import (
     RepositorioConocimiento,
 )
 from app.modulos.organizacion.modelos import Clinica, Especialidad, Sede
+from app.modulos.usuarios.modelos import Rol
 from app.nucleo.autorizacion import NivelSensibilidad
 
 pytestmark = [pytest.mark.integracion, pytest.mark.rag, pytest.mark.seguridad, pytest.mark.asyncio]
@@ -190,6 +193,9 @@ def _contexto(
     sedes: frozenset[uuid.UUID] | None = None,
     especialidades: frozenset[uuid.UUID] | None = None,
     nivel: NivelSensibilidad = NivelSensibilidad.CLINICO,
+    actor_id: uuid.UUID | None = None,
+    role_ids: frozenset[uuid.UUID] = frozenset(),
+    uso_agente: bool = False,
 ) -> ContextoAutorizacion:
     return ContextoAutorizacion(
         clinica_id=clinica.id,
@@ -197,6 +203,9 @@ def _contexto(
         especialidades=especialidades,
         nivel_maximo=nivel,
         ahora=instante,
+        actor_id=actor_id,
+        role_ids=role_ids,
+        uso_agente=uso_agente,
     )
 
 
@@ -218,6 +227,209 @@ async def test_un_fragmento_publicado_y_vigente_se_recupera(
     fragmento = await sembrar(clinic_id=clinica.id)  # type: ignore[operator]
     encontrados = await _buscar(repositorio, embeddings, _contexto(clinica, instante))
     assert fragmento.id in encontrados
+
+
+async def test_acl_explicita_restringe_el_documento_por_rol(
+    repositorio: RepositorioConocimiento,
+    embeddings: EmbeddingsSimulado,
+    sembrar: object,
+    sesion: AsyncSession,
+    clinica: Clinica,
+    instante: datetime,
+) -> None:
+    rol = Rol(
+        clinica_id=clinica.id,
+        codigo=f"rag_lectura_{uuid.uuid4().hex[:8]}",
+        nombre="Lectura RAG",
+        es_sistema=False,
+    )
+    sesion.add(rol)
+    await sesion.flush()
+    fragmento = await sembrar(clinic_id=clinica.id)  # type: ignore[operator]
+    sesion.add(
+        KnowledgePermission(
+            document_id=fragmento.document_id,
+            principal_tipo=PrincipalConocimiento.ROL.value,
+            principal_id=rol.id,
+            puede_leer=True,
+            puede_usar_en_agente=True,
+        )
+    )
+    await sesion.flush()
+
+    sin_rol = await _buscar(repositorio, embeddings, _contexto(clinica, instante))
+    con_rol = await _buscar(
+        repositorio,
+        embeddings,
+        _contexto(clinica, instante, role_ids=frozenset({rol.id})),
+    )
+    assert fragmento.id not in sin_rol
+    assert fragmento.id in con_rol
+
+
+async def test_acl_por_usuario_y_uso_agente_se_filtran_en_sql(
+    repositorio: RepositorioConocimiento,
+    embeddings: EmbeddingsSimulado,
+    sembrar: object,
+    sesion: AsyncSession,
+    clinica: Clinica,
+    instante: datetime,
+) -> None:
+    usuario_id = uuid.uuid4()
+    fragmento = await sembrar(clinic_id=clinica.id)  # type: ignore[operator]
+    sesion.add(
+        KnowledgePermission(
+            document_id=fragmento.document_id,
+            principal_tipo=PrincipalConocimiento.USUARIO.value,
+            principal_id=usuario_id,
+            puede_leer=True,
+            puede_usar_en_agente=False,
+        )
+    )
+    await sesion.flush()
+
+    usuario = await _buscar(
+        repositorio,
+        embeddings,
+        _contexto(clinica, instante, actor_id=usuario_id),
+    )
+    otro_usuario = await _buscar(
+        repositorio,
+        embeddings,
+        _contexto(clinica, instante, actor_id=uuid.uuid4()),
+    )
+    agente = await _buscar(
+        repositorio,
+        embeddings,
+        _contexto(clinica, instante, actor_id=usuario_id, uso_agente=True),
+    )
+    assert fragmento.id in usuario
+    assert fragmento.id not in otro_usuario
+    assert fragmento.id not in agente
+
+
+async def test_acl_por_usuario_puede_denegar_acceso_otorgado_por_rol(
+    repositorio: RepositorioConocimiento,
+    embeddings: EmbeddingsSimulado,
+    sembrar: object,
+    sesion: AsyncSession,
+    clinica: Clinica,
+    instante: datetime,
+) -> None:
+    rol = Rol(
+        clinica_id=clinica.id,
+        codigo=f"rag_precedencia_{uuid.uuid4().hex[:8]}",
+        nombre="Rol de acceso general",
+        es_sistema=False,
+    )
+    sesion.add(rol)
+    await sesion.flush()
+    usuario_id = uuid.uuid4()
+    acceso_rol = await sembrar(clinic_id=clinica.id)  # type: ignore[operator]
+    solo_personal = await sembrar(clinic_id=clinica.id)  # type: ignore[operator]
+    sesion.add_all(
+        [
+            KnowledgePermission(
+                document_id=acceso_rol.document_id,
+                principal_tipo=PrincipalConocimiento.ROL.value,
+                principal_id=rol.id,
+                puede_leer=True,
+                puede_usar_en_agente=True,
+            ),
+            KnowledgePermission(
+                document_id=acceso_rol.document_id,
+                principal_tipo=PrincipalConocimiento.USUARIO.value,
+                principal_id=usuario_id,
+                puede_leer=False,
+                puede_usar_en_agente=False,
+            ),
+            KnowledgePermission(
+                document_id=solo_personal.document_id,
+                principal_tipo=PrincipalConocimiento.ROL.value,
+                principal_id=rol.id,
+                puede_leer=True,
+                puede_usar_en_agente=True,
+            ),
+            KnowledgePermission(
+                document_id=solo_personal.document_id,
+                principal_tipo=PrincipalConocimiento.USUARIO.value,
+                principal_id=usuario_id,
+                puede_leer=True,
+                puede_usar_en_agente=False,
+            ),
+        ]
+    )
+    await sesion.flush()
+    rol_usuario = _contexto(clinica, instante, actor_id=usuario_id, role_ids=frozenset({rol.id}))
+    encontrados_personal = await _buscar(repositorio, embeddings, rol_usuario)
+    encontrados_agente = await _buscar(
+        repositorio,
+        embeddings,
+        _contexto(
+            clinica,
+            instante,
+            actor_id=usuario_id,
+            role_ids=frozenset({rol.id}),
+            uso_agente=True,
+        ),
+    )
+    assert acceso_rol.id not in encontrados_personal
+    assert solo_personal.id in encontrados_personal
+    assert solo_personal.id not in encontrados_agente
+
+
+@pytest.mark.parametrize(
+    ("tipo", "dimension"),
+    [
+        (PrincipalConocimiento.SEDE, "sede"),
+        (PrincipalConocimiento.ESPECIALIDAD, "especialidad"),
+    ],
+)
+async def test_acl_por_sede_y_especialidad_exige_el_ambito(
+    repositorio: RepositorioConocimiento,
+    embeddings: EmbeddingsSimulado,
+    sembrar: object,
+    sesion: AsyncSession,
+    clinica: Clinica,
+    instante: datetime,
+    tipo: PrincipalConocimiento,
+    dimension: str,
+) -> None:
+    destino = uuid.uuid4()
+    fragmento = await sembrar(clinic_id=clinica.id)  # type: ignore[operator]
+    sesion.add(
+        KnowledgePermission(
+            document_id=fragmento.document_id,
+            principal_tipo=tipo.value,
+            principal_id=destino,
+            puede_leer=True,
+            puede_usar_en_agente=True,
+        )
+    )
+    await sesion.flush()
+
+    autorizado = await _buscar(
+        repositorio,
+        embeddings,
+        _contexto(
+            clinica,
+            instante,
+            sedes=frozenset({destino}) if dimension == "sede" else None,
+            especialidades=(frozenset({destino}) if dimension == "especialidad" else None),
+        ),
+    )
+    sin_ambito = await _buscar(
+        repositorio,
+        embeddings,
+        _contexto(
+            clinica,
+            instante,
+            sedes=frozenset() if dimension == "sede" else None,
+            especialidades=frozenset() if dimension == "especialidad" else None,
+        ),
+    )
+    assert fragmento.id in autorizado
+    assert fragmento.id not in sin_ambito
 
 
 # ---------------------------------------------------------------------------

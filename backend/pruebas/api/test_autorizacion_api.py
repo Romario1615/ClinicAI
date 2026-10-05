@@ -247,7 +247,6 @@ class TestSegundoFactor:
             json={
                 "correo": usuario.correo,
                 "contrasena": "ContrasenaDePrueba123",
-                "clinica_id": str(clinica.id),
             },
         )
 

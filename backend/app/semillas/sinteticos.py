@@ -83,6 +83,7 @@ PREFIJO_TELEFONO_PRUEBAS = "+593990000"
 # el desarrollador acabaria poniendo "123456".  La salvaguarda de entorno es
 # lo que impide que estas cuentas existan en produccion.
 CONTRASENA_SINTETICA = "DesarrolloLocal2026"
+SEMILLA_PREDETERMINADA = 20260415
 
 # Convencion ISO: 1 = lunes, 5 = viernes, 6 = sabado.
 ULTIMO_DIA_LABORABLE = 5
@@ -198,7 +199,7 @@ def _hash_texto_sintetico(version: str) -> str:
     return hashlib.sha256(f"consentimiento-sintetico:{version}".encode()).hexdigest()
 
 
-def _correo_sintetico(nombre: str, indice: int) -> str:
+def _correo_sintetico(nombre: str, indice: int | str) -> str:
     """Construye una direccion de correo a partir de un nombre.
 
     Las tildes y la enye se transliteran, no se descartan: Faker en espanol
@@ -228,7 +229,7 @@ async def cargar_datos_sinteticos(  # noqa: PLR0912, PLR0915
     *,
     cantidad_pacientes: int = 60,
     cantidad_citas: int = 200,
-    semilla: int = 20260415,
+    semilla: int = SEMILLA_PREDETERMINADA,
 ) -> ResumenSinteticos:
     """Crea una clinica completa con datos ficticios.
 
@@ -440,7 +441,10 @@ async def cargar_datos_sinteticos(  # noqa: PLR0912, PLR0915
         """
         usuario = Usuario(
             clinica_id=clinica.id,
-            correo=_correo_sintetico(f"{nombre} {apellido}", indice),
+            correo=_correo_sintetico(
+                f"{nombre} {apellido}",
+                indice if semilla == SEMILLA_PREDETERMINADA else f"s{semilla}.{indice}",
+            ),
             hash_contrasena=hash_contrasena,
             nombre=nombre,
             apellido=f"{apellido} {MARCA_SINTETICO}",
@@ -491,6 +495,7 @@ async def cargar_datos_sinteticos(  # noqa: PLR0912, PLR0915
         return usuario
 
     # Un usuario por rol administrativo.
+    await crear_usuario("Sofia", "Plataforma", "superadministrador", indice=9)
     await crear_usuario("Ana", "Administradora", "administrador_clinica", indice=10)
     await crear_usuario("Rita", "Recepcion", "recepcion", indice=11, sedes_del_ambito=[sedes[0]])
     await crear_usuario("Alba", "Asistente", "asistente", indice=12)

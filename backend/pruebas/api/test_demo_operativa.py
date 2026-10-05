@@ -6,10 +6,16 @@ from datetime import timedelta
 import pytest
 from sqlalchemy import func, select
 
-from app.modulos.agenda.modelos import Cita
+from app.modulos.agenda.modelos import Cita, CitaHistorial
 from app.modulos.auditoria.modelos import Auditoria
 from app.modulos.conversaciones.demo_modelos import SesionDemo
 from app.modulos.conversaciones.modelos import Conversacion
+from app.modulos.lista_espera.modelos import (
+    EntradaListaEspera,
+    EstadoEspera,
+    EstadoOferta,
+    OfertaTurno,
+)
 from app.modulos.organizacion.modelos import Clinica
 from app.modulos.pacientes.modelos import Paciente
 from app.modulos.profesionales.modelos import ProfesionalSede
@@ -23,6 +29,7 @@ PERMISOS = (
     "agenda.leer",
     "cita.crear",
     "cita.cancelar",
+    "cita.reprogramar",
     "pago.leer",
     "pago.registrar",
     "pago.validar",
@@ -210,6 +217,42 @@ async def test_dashboard_cifras_reales(cliente, api, acceso, cita_demo, reloj):
     assert r.status_code == 200, r.text
     assert r.json()["citas"] == {"CONFIRMED": 1}
     assert r.json()["total_citas"] == r.json()["pacientes"] == 1
+    assert r.json()["espera"] == {
+        "promedio_minutos": None,
+        "personas_en_espera": 0,
+        "espera_mayor_15_minutos": 0,
+    }
+
+
+async def test_dashboard_mide_espera_y_alerta_a_quien_supera_15_minutos(
+    cliente, api, acceso, cita_demo, reloj, sesion
+):
+    ahora = reloj.ahora()
+    cita_demo.llegada_en = ahora - timedelta(minutes=20)
+    cita_demo.atencion_iniciada_en = ahora - timedelta(minutes=10)
+    await sesion.flush()
+
+    parametros = {
+        "desde": (ahora - timedelta(days=1)).isoformat(),
+        "hasta": (ahora + timedelta(days=7)).isoformat(),
+    }
+    r = await cliente.get(f"{api}/dashboard/", params=parametros, headers=acceso)
+    assert r.status_code == 200, r.text
+    assert r.json()["espera"] == {
+        "promedio_minutos": 10,
+        "personas_en_espera": 0,
+        "espera_mayor_15_minutos": 0,
+    }
+
+    cita_demo.atencion_iniciada_en = None
+    await sesion.flush()
+    r = await cliente.get(f"{api}/dashboard/", params=parametros, headers=acceso)
+    assert r.status_code == 200, r.text
+    assert r.json()["espera"] == {
+        "promedio_minutos": None,
+        "personas_en_espera": 1,
+        "espera_mayor_15_minutos": 1,
+    }
 
 
 async def test_dashboard_rechaza_rango_invertido(cliente, api, acceso, reloj):
@@ -263,6 +306,66 @@ async def test_espera_cancelacion_oferta_aceptacion(
         headers=cabeceras(acceso, "aceptacion-demo-001"),
     )
     assert repetida.json()["cita_resultante_id"] == aceptada.json()["cita_resultante_id"]
+
+
+async def test_aceptar_oferta_ya_ocupada_responde_409_y_devuelve_a_la_cola(
+    cliente, api, acceso, cita_demo, paciente, sede, servicio, especialidad, sesion
+):
+    alta = await cliente.post(
+        f"{api}/lista-espera/",
+        json={
+            "paciente_id": str(paciente.id),
+            "sede_id": str(sede.id),
+            "servicio_id": str(servicio.id),
+            "especialidad_id": str(especialidad.id),
+        },
+        headers=cabeceras(acceso, "alta-oferta-ocupada"),
+    )
+    assert alta.status_code == 201, alta.text
+    entrada_id = uuid.UUID(alta.json()["id"])
+
+    cancelada = await cliente.post(
+        f"{api}/agenda/citas/{cita_demo.id}/cancelacion",
+        json={"motivo": "Liberada para probar una oferta ocupada"},
+        headers=acceso,
+    )
+    assert cancelada.status_code == 200, cancelada.text
+    oferta = await sesion.scalar(
+        select(OfertaTurno).where(
+            OfertaTurno.lista_espera_id == entrada_id,
+            OfertaTurno.estado == EstadoOferta.OFRECIDA.value,
+        )
+    )
+    assert oferta is not None
+
+    # Otro canal ocupa el horario después de generarse la oferta.
+    sesion.add(
+        Cita(
+            clinica_id=cita_demo.clinica_id,
+            sede_id=cita_demo.sede_id,
+            paciente_id=paciente.id,
+            profesional_id=cita_demo.profesional_id,
+            servicio_id=servicio.id,
+            inicio=cita_demo.inicio,
+            duracion_minutos=cita_demo.duracion_minutos,
+            minutos_preparacion=cita_demo.minutos_preparacion,
+            estado="CONFIRMED",
+            origen="PANEL",
+        )
+    )
+    await sesion.flush()
+
+    respuesta = await cliente.post(
+        f"{api}/lista-espera/{entrada_id}/resolver",
+        json={"accion": "aceptar"},
+        headers=cabeceras(acceso, "aceptacion-oferta-ocupada"),
+    )
+
+    assert respuesta.status_code == 409, respuesta.text
+    entrada = await sesion.get(EntradaListaEspera, entrada_id)
+    await sesion.refresh(oferta)
+    assert entrada is not None and entrada.estado == EstadoEspera.ACTIVA.value
+    assert oferta.estado == EstadoOferta.PERDIDA.value
 
 
 @pytest.fixture
@@ -360,3 +463,46 @@ async def test_escrituras_nuevas_sin_permiso(cliente, api, usuario, clinica):
         assert r.status_code == 403
         r = await cliente.post(api + ruta, json={}, headers={"Idempotency-Key": "sin-sesion-001"})
         assert r.status_code == 401
+
+
+async def test_reprogramacion_reintento_no_repite_historial(
+    cliente, api, acceso, cita_demo, sesion
+):
+    ruta = f"{api}/agenda/citas/{cita_demo.id}/reprogramacion"
+    datos = {
+        "nuevo_inicio": (cita_demo.inicio + timedelta(hours=2)).isoformat(),
+        "motivo": "Cambio solicitado en demostracion",
+    }
+    for _ in range(2):
+        r = await cliente.post(ruta, json=datos, headers=cabeceras(acceso, "reprogramar-demo-001"))
+        assert r.status_code == 200, r.text
+        assert r.json()["estado"] == "RESCHEDULED"
+    historial = await sesion.scalar(
+        select(func.count())
+        .select_from(CitaHistorial)
+        .where(CitaHistorial.cita_id == cita_demo.id, CitaHistorial.estado_nuevo == "RESCHEDULED")
+    )
+    assert historial == 1
+    conflicto = await cliente.post(
+        ruta,
+        json={**datos, "motivo": "Otro motivo"},
+        headers=cabeceras(acceso, "reprogramar-demo-001"),
+    )
+    assert conflicto.status_code == 409
+
+
+async def test_simulador_no_llama_al_proveedor_configurado(
+    cliente, api, acceso, sesion_demo, aplicacion, monkeypatch
+):
+    def prohibido():
+        raise AssertionError("El simulador no puede abrir una conexion con el proveedor")
+
+    monkeypatch.setattr(aplicacion.state, "fabrica_conversacional", prohibido)
+    r = await cliente.post(
+        f"{api}/agente-demo/sesiones/{sesion_demo}/mensajes",
+        json={"texto": "buscar horarios"},
+        headers=cabeceras(acceso, "solo-simulador-001"),
+    )
+    assert r.status_code == 200, r.text
+    assert r.json()["modo"] == "simulado"
+    assert r.json()["herramientas"] == ["find_availability"]

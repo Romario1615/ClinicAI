@@ -123,12 +123,37 @@ class GestorDeUnaSesion(GestorBaseDatos):
         return None
 
 
+class AlmacenEnMemoria:
+    """Almacén aislado por prueba para recorrer las rutas de archivo sin disco."""
+
+    nombre = "memoria-pruebas"
+
+    def __init__(self) -> None:
+        self.objetos: dict[str, bytes] = {}
+
+    async def guardar(self, clave: str, datos: bytes) -> None:
+        self.objetos[clave] = datos
+
+    async def leer(self, clave: str) -> bytes:
+        return self.objetos[clave]
+
+    async def existe(self, clave: str) -> bool:
+        return clave in self.objetos
+
+
 # ---------------------------------------------------------------------------
 #  Infraestructura
 # ---------------------------------------------------------------------------
 @pytest.fixture(scope="session")
 def configuracion() -> Configuracion:
-    return Configuracion()
+    # Las credenciales personales de .env nunca convierten una regresion
+    # local en llamadas pagadas o envios a proveedores externos.
+    return Configuracion(
+        proveedor_llm="mock",
+        proveedor_embeddings="mock",
+        modo_whatsapp="sandbox",
+        modo_calendario="sandbox",
+    )
 
 
 @pytest_asyncio.fixture(scope="session")
@@ -215,6 +240,7 @@ def aplicacion(
         # registros de pytest y ralentizaria la suite sin aportar nada.
         configurar_logs=False,
     )
+    app.state.almacen_objetos = AlmacenEnMemoria()
 
     async def _sesion_de_prueba() -> AsyncIterator[AsyncSession]:
         yield sesion
@@ -491,7 +517,6 @@ async def iniciar_sesion(
         json={
             "correo": usuario.correo,
             "contrasena": CONTRASENA,
-            "clinica_id": str(usuario.clinica_id),
         },
     )
     assert respuesta.status_code == 200, respuesta.text

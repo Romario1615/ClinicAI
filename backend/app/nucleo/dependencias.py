@@ -35,13 +35,15 @@ from app.modulos.agenda.servicios import ServicioAgenda
 from app.modulos.auditoria.repositorio import RepositorioAuditoria
 from app.modulos.historia.repositorio import RepositorioHistoria
 from app.modulos.historia.servicios import ServicioHistoria
+from app.modulos.imagenes.servicios import ServicioImagenes
 from app.modulos.organizacion.repositorio import RepositorioCatalogo
 from app.modulos.pacientes.repositorio import RepositorioPacientes
 from app.modulos.usuarios.servicios import ServicioAutenticacion
+from app.nucleo.almacen import AlmacenObjetos
 from app.nucleo.auditoria import AccionAuditada, ResultadoAuditoria, construir_entrada
 from app.nucleo.autorizacion import Principal
 from app.nucleo.bd import GestorBaseDatos
-from app.nucleo.configuracion import Configuracion
+from app.nucleo.configuracion import Configuracion, Entorno
 from app.nucleo.errores import (
     NoAutenticado,
     PermisoDenegado,
@@ -83,6 +85,11 @@ def obtener_cifrador(peticion: Request) -> CifradorDatos:
     return cifrador
 
 
+def obtener_almacen_objetos(peticion: Request) -> AlmacenObjetos:
+    almacen: AlmacenObjetos = peticion.app.state.almacen_objetos
+    return almacen
+
+
 def obtener_limitador(peticion: Request) -> LimitadorTasa:
     limitador: LimitadorTasa = peticion.app.state.limitador
     return limitador
@@ -98,6 +105,8 @@ async def obtener_sesion(
 Sesion = Annotated[AsyncSession, Depends(obtener_sesion)]
 ConfiguracionActual = Annotated[Configuracion, Depends(obtener_configuracion)]
 RelojActual = Annotated[Reloj, Depends(obtener_reloj)]
+CifradorActual = Annotated[CifradorDatos, Depends(obtener_cifrador)]
+AlmacenActual = Annotated[AlmacenObjetos, Depends(obtener_almacen_objetos)]
 Limitador = Annotated[LimitadorTasa, Depends(obtener_limitador)]
 
 
@@ -121,6 +130,7 @@ def obtener_servicio_autenticacion(
         minutos_bloqueo_login=configuracion.minutos_bloqueo_login,
         roles_con_2fa=frozenset(configuracion.lista_roles_con_2fa),
         cifrador=cifrador,
+        permite_acceso_local_demo=configuracion.entorno in {Entorno.LOCAL, Entorno.DESARROLLO},
     )
 
 
@@ -143,6 +153,8 @@ def obtener_servicio_agenda(
         repositorio,
         reloj,
         minutos_expiracion_held=configuracion.minutos_expiracion_held,
+        recordatorio_horas_antes_1=configuracion.recordatorio_horas_antes_1,
+        recordatorio_horas_antes_2=configuracion.recordatorio_horas_antes_2,
     )
 
 
@@ -164,6 +176,16 @@ def obtener_servicio_historia(
     )
 
 
+def obtener_servicio_imagenes(
+    sesion: Sesion,
+    reloj: RelojActual,
+    almacen: AlmacenActual,
+    cifrador: CifradorActual,
+    configuracion: ConfiguracionActual,
+) -> ServicioImagenes:
+    return ServicioImagenes(sesion, reloj, almacen, cifrador, configuracion)
+
+
 def obtener_repositorio_catalogo(sesion: Sesion) -> RepositorioCatalogo:
     return RepositorioCatalogo(sesion)
 
@@ -177,6 +199,7 @@ RepoCatalogo = Annotated[RepositorioCatalogo, Depends(obtener_repositorio_catalo
 RepoPacientes = Annotated[RepositorioPacientes, Depends(obtener_repositorio_pacientes)]
 RepoHistoria = Annotated[RepositorioHistoria, Depends(obtener_repositorio_historia)]
 ServicioDeHistoria = Annotated[ServicioHistoria, Depends(obtener_servicio_historia)]
+ServicioDeImagenes = Annotated[ServicioImagenes, Depends(obtener_servicio_imagenes)]
 RepoAgenda = Annotated[RepositorioAgenda, Depends(obtener_repositorio_agenda)]
 ServicioDeAgenda = Annotated[ServicioAgenda, Depends(obtener_servicio_agenda)]
 Auditor = Annotated[RepositorioAuditoria, Depends(obtener_repositorio_auditoria)]
@@ -222,6 +245,20 @@ async def obtener_principal(
         # entre "token manipulado" y "cuenta desactivada", que es lo
         # deseable de cara a quien presenta el token.
         raise
+
+    usuario = await servicio.cargar_usuario(principal.actor_id) if principal.actor_id else None
+    if usuario and usuario.debe_cambiar_contrasena:
+        ruta_permitida = (
+            peticion.method == "GET" and peticion.url.path.endswith("/autenticacion/yo")
+        ) or (
+            peticion.method == "POST"
+            and peticion.url.path.endswith("/autenticacion/cambio-contrasena")
+        )
+        if not ruta_permitida:
+            raise PermisoDenegado(
+                "Debe cambiar la contraseña inicial antes de usar la aplicación.",
+                codigo="CAMBIO_CONTRASENA_REQUERIDO",
+            )
 
     # El identificador de correlacion se enlaza aqui para que toda linea de
     # registro y toda entrada de auditoria de esta peticion lo lleven.
@@ -332,7 +369,9 @@ async def _auditar_denegacion(
 
 
 __all__ = [
+    "AlmacenActual",
     "Auditor",
+    "CifradorActual",
     "ConfiguracionActual",
     "Limitador",
     "PrincipalActual",
@@ -344,9 +383,11 @@ __all__ = [
     "ServicioAuth",
     "ServicioDeAgenda",
     "ServicioDeHistoria",
+    "ServicioDeImagenes",
     "Sesion",
     "exige_permiso",
     "extraer_token",
+    "obtener_almacen_objetos",
     "obtener_cifrador",
     "obtener_configuracion",
     "obtener_gestor_bd",
@@ -361,5 +402,6 @@ __all__ = [
     "obtener_servicio_agenda",
     "obtener_servicio_autenticacion",
     "obtener_servicio_historia",
+    "obtener_servicio_imagenes",
     "obtener_sesion",
 ]

@@ -35,7 +35,7 @@ from app.modulos.conocimiento.modelos import (
     TipoDocumentoConocimiento,
 )
 from app.modulos.organizacion.modelos import Clinica, Sede
-from app.modulos.usuarios.modelos import Usuario
+from app.modulos.usuarios.modelos import Rol, Usuario
 from app.nucleo.auditoria import AccionAuditada
 from pruebas.api.conftest import cabecera_bearer, conceder_permisos
 
@@ -204,6 +204,207 @@ async def test_quien_carga_no_puede_archivar(
         cliente, api, cabeceras_cargador, document_id, EstadoDocumento.ARCHIVED
     )
     assert respuesta.status_code == 403
+
+
+async def test_solo_aprobador_consulta_y_reemplaza_acl_de_documento(
+    cliente: AsyncClient,
+    api: str,
+    sesion: AsyncSession,
+    usuario: Usuario,
+    clinica: Clinica,
+    cabeceras_aprobador: dict[str, str],
+) -> None:
+    document_id = await _crear_documento(cliente, api, cabeceras_aprobador)
+    opciones = await cliente.get(
+        f"{api}/conocimiento/permisos/opciones", headers=cabeceras_aprobador
+    )
+    assert opciones.status_code == 200, opciones.text
+    opciones_json = opciones.json()
+    rol_id = next(
+        rol["id"] for rol in opciones_json["roles"] if rol["codigo"].startswith("rol_api_")
+    )
+    sede_id = next(sede["id"] for sede in opciones_json["sedes"])
+    reglas = [
+        {
+            "principal_tipo": "ROL",
+            "principal_id": rol_id,
+            "puede_leer": True,
+            "puede_usar_en_agente": True,
+        },
+        {
+            "principal_tipo": "SEDE",
+            "principal_id": sede_id,
+            "puede_leer": True,
+            "puede_usar_en_agente": False,
+        },
+    ]
+    ruta = f"{api}/conocimiento/documentos/{document_id}/permisos"
+    guardados = await cliente.put(ruta, json={"permisos": reglas}, headers=cabeceras_aprobador)
+    assert guardados.status_code == 200, guardados.text
+    assert guardados.json()["permisos"] == reglas
+
+    consultados = await cliente.get(ruta, headers=cabeceras_aprobador)
+    assert consultados.status_code == 200
+    assert consultados.json()["permisos"] == reglas
+    auditoria = (
+        await sesion.execute(
+            sa.select(Auditoria).where(
+                Auditoria.accion == AccionAuditada.DOCUMENTO_ACL_ACTUALIZADA.value,
+                Auditoria.entidad_id == document_id,
+            )
+        )
+    ).scalar_one()
+    assert auditoria.actor_id == usuario.id
+    assert auditoria.clinica_id == clinica.id
+    assert auditoria.metadatos["cantidad_reglas"] == 2
+
+    limpiados = await cliente.put(ruta, json={"permisos": []}, headers=cabeceras_aprobador)
+    assert limpiados.status_code == 200, limpiados.text
+    assert limpiados.json()["permisos"] == []
+
+
+async def test_acl_rechaza_principal_de_otra_clinica_sin_borrar_reglas(
+    cliente: AsyncClient,
+    api: str,
+    sesion: AsyncSession,
+    cabeceras_aprobador: dict[str, str],
+) -> None:
+    document_id = await _crear_documento(cliente, api, cabeceras_aprobador)
+    ruta = f"{api}/conocimiento/documentos/{document_id}/permisos"
+    opciones = await cliente.get(
+        f"{api}/conocimiento/permisos/opciones", headers=cabeceras_aprobador
+    )
+    assert opciones.status_code == 200
+    propio = next(rol for rol in opciones.json()["roles"] if rol["codigo"].startswith("rol_api_"))
+    reglas_previas = [
+        {
+            "principal_tipo": "ROL",
+            "principal_id": propio["id"],
+            "puede_leer": True,
+            "puede_usar_en_agente": False,
+        }
+    ]
+    inicial = await cliente.put(
+        ruta, json={"permisos": reglas_previas}, headers=cabeceras_aprobador
+    )
+    assert inicial.status_code == 200, inicial.text
+
+    clinica_ajena = Clinica(
+        nombre="Clinica ajena de prueba",
+        identificacion_fiscal=f"ACL-{uuid.uuid4().hex[:12]}",
+        zona_horaria="America/Guayaquil",
+    )
+    sesion.add(clinica_ajena)
+    await sesion.flush()
+    rol_ajeno = Rol(
+        clinica_id=clinica_ajena.id,
+        codigo=f"rol_ajeno_{uuid.uuid4().hex[:8]}",
+        nombre="Rol ajeno",
+    )
+    sesion.add(rol_ajeno)
+    await sesion.flush()
+    respuesta = await cliente.put(
+        ruta,
+        json={
+            "permisos": [
+                {
+                    "principal_tipo": "ROL",
+                    "principal_id": str(rol_ajeno.id),
+                    "puede_leer": True,
+                    "puede_usar_en_agente": False,
+                }
+            ]
+        },
+        headers=cabeceras_aprobador,
+    )
+    assert respuesta.status_code == 422
+    despues = await cliente.get(ruta, headers=cabeceras_aprobador)
+    assert despues.status_code == 200
+    assert despues.json()["permisos"] == reglas_previas
+
+
+async def test_cargador_no_puede_administrar_acl(
+    cliente: AsyncClient,
+    api: str,
+    cabeceras_cargador: dict[str, str],
+) -> None:
+    document_id = await _crear_documento(cliente, api, cabeceras_cargador)
+    ruta = f"{api}/conocimiento/documentos/{document_id}/permisos"
+    assert (await cliente.get(ruta, headers=cabeceras_cargador)).status_code == 403
+    assert (
+        await cliente.put(ruta, json={"permisos": []}, headers=cabeceras_cargador)
+    ).status_code == 403
+
+
+async def test_acl_rechaza_duplicados_y_citas_sin_lectura(
+    cliente: AsyncClient,
+    api: str,
+    cabeceras_aprobador: dict[str, str],
+) -> None:
+    document_id = await _crear_documento(cliente, api, cabeceras_aprobador)
+    opciones = await cliente.get(
+        f"{api}/conocimiento/permisos/opciones", headers=cabeceras_aprobador
+    )
+    rol_id = next(
+        rol["id"] for rol in opciones.json()["roles"] if rol["codigo"].startswith("rol_api_")
+    )
+    regla = {
+        "principal_tipo": "ROL",
+        "principal_id": rol_id,
+        "puede_leer": True,
+        "puede_usar_en_agente": True,
+    }
+    ruta = f"{api}/conocimiento/documentos/{document_id}/permisos"
+    duplicado = await cliente.put(
+        ruta,
+        json={"permisos": [regla, regla]},
+        headers=cabeceras_aprobador,
+    )
+    sin_lectura = await cliente.put(
+        ruta,
+        json={"permisos": [{**regla, "puede_leer": False, "puede_usar_en_agente": True}]},
+        headers=cabeceras_aprobador,
+    )
+    assert duplicado.status_code == 422
+    assert sin_lectura.status_code == 422
+    estado = await cliente.get(ruta, headers=cabeceras_aprobador)
+    assert estado.status_code == 200
+    assert estado.json()["permisos"] == []
+
+
+async def test_el_listado_no_revela_metadatos_de_documentos_restringidos(
+    cliente: AsyncClient,
+    api: str,
+    sesion: AsyncSession,
+    clinica: Clinica,
+    cabeceras_aprobador: dict[str, str],
+) -> None:
+    document_id = await _crear_documento(cliente, api, cabeceras_aprobador)
+    rol_sin_asignar = Rol(
+        clinica_id=clinica.id,
+        codigo=f"rol_sin_asignar_{uuid.uuid4().hex[:8]}",
+        nombre="Rol sin asignar",
+    )
+    sesion.add(rol_sin_asignar)
+    await sesion.flush()
+    reglas = [
+        {
+            "principal_tipo": "ROL",
+            "principal_id": str(rol_sin_asignar.id),
+            "puede_leer": True,
+            "puede_usar_en_agente": False,
+        }
+    ]
+    guardado = await cliente.put(
+        f"{api}/conocimiento/documentos/{document_id}/permisos",
+        json={"permisos": reglas},
+        headers=cabeceras_aprobador,
+    )
+    assert guardado.status_code == 200, guardado.text
+
+    listado = await cliente.get(f"{api}/conocimiento/documentos", headers=cabeceras_aprobador)
+    assert listado.status_code == 200, listado.text
+    assert document_id not in {fila["id"] for fila in listado.json()["elementos"]}
 
 
 async def test_el_aprobador_recorre_el_ciclo_completo(

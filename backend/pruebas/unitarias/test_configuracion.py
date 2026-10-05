@@ -40,6 +40,7 @@ def _configuracion_produccion_valida(**sobreescrituras: Any) -> dict[str, Any]:
         "redactar_datos_sensibles": True,
         "proveedor_llm": "mock",
         "proveedor_embeddings": "mock",
+        "frontend_url": "https://clinica.example",
     }
     base.update(sobreescrituras)
     return base
@@ -54,6 +55,24 @@ class TestValoresPorDefecto:
     def test_zona_horaria_inicial_es_guayaquil(self) -> None:
         cfg = Configuracion(_env_file=None)
         assert cfg.zona_horaria_por_defecto == "America/Guayaquil"
+
+    def test_frontend_url_publica_tiene_default_local(self) -> None:
+        cfg = Configuracion(_env_file=None)
+        assert cfg.frontend_url == "http://localhost:4200"
+
+    @pytest.mark.parametrize(
+        "url",
+        [
+            "",
+            "/acceso",
+            "ftp://clinic.example",
+            "https://usuario:clave@clinic.example",
+            "https://clinic.example?next=patient",
+        ],
+    )
+    def test_frontend_url_invalida_se_rechaza(self, url: str) -> None:
+        with pytest.raises(ValidationError, match="FRONTEND_URL"):
+            Configuracion(_env_file=None, frontend_url=url)
 
     def test_solo_produccion_admite_datos_reales(self) -> None:
         """Ningun entorno salvo produccion debe contener datos de pacientes."""
@@ -130,6 +149,7 @@ class TestValidacionProduccion:
             ("modo_calendario", "sandbox", "MODO_CALENDARIO"),
             ("modo_correo", "consola", "MODO_CORREO"),
             ("antivirus_habilitado", False, "ANTIVIRUS_HABILITADO"),
+            ("frontend_url", "http://clinic.example", "FRONTEND_URL"),
             ("origenes_cors", "*", "comodin"),
             ("origenes_cors", "http://clinica.example", "sin TLS"),
             ("notificaciones_sin_datos_clinicos", False, "diagnosticos"),

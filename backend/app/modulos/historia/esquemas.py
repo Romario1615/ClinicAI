@@ -53,7 +53,9 @@ class NotaEntrada(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     paciente_id: uuid.UUID
-    profesional_id: uuid.UUID
+    # Opcional: el autor es siempre quien firma la sesion. Si se envia y no
+    # coincide, la peticion se rechaza (no se firma a nombre de otro).
+    profesional_id: uuid.UUID | None = None
     tipo: TipoNotaEntrada = "EVOLUCION"
     cita_id: uuid.UUID | None = None
 
@@ -246,7 +248,30 @@ class TomaSalida(BaseModel):
     registrada_en: datetime | None
 
 
+class AlertaAdherenciaSalida(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    id: uuid.UUID
+    paciente_id: uuid.UUID
+    receta_id: uuid.UUID
+    profesional_id: uuid.UUID
+    severidad: str
+    tomas_omitidas: int
+    tomas_esperadas: int
+    periodo_desde: datetime
+    periodo_hasta: datetime
+    creado_en: datetime
+
+
+class AtenderAlertaAdherencia(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    nota_profesional: str | None = Field(default=None, max_length=2000)
+
+
 __all__ = [
+    "AlertaAdherenciaSalida",
+    "AtenderAlertaAdherencia",
     "ConfirmacionReceta",
     "CorreccionNota",
     "DiagnosticoEntrada",

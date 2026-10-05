@@ -34,17 +34,18 @@ from __future__ import annotations
 
 import uuid
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from zoneinfo import ZoneInfo
 
-from sqlalchemy import func, or_, select
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.mensajeria.adaptadores import RegistroCanales
+from app.mensajeria.recordatorios import ServicioRecordatorios
 from app.mensajeria.servicios import ServicioOutbox, SolicitudEnvio
-from app.modulos.agenda.modelos import Cita, EstadoCita
+from app.modulos.agenda.modelos import Cita, CitaHistorial, EstadoCita
 from app.modulos.agenda.repositorio import RepositorioAgenda
 from app.modulos.lista_espera.modelos import (
     EntradaListaEspera,
@@ -84,12 +85,14 @@ ESPACIO_BLOQUEO_OFERTA = 7301
 logger = obtener_logger(__name__)
 
 MAXIMO_OFERTAS_VENCIDAS = 3
+MAXIMO_PROFUNDIDAD_CADENA = 5
 
 
 @dataclass(frozen=True, slots=True)
 class ResultadoOferta:
     oferta: OfertaTurno | None = None
     cita: Cita | None = None
+    turno_ocupado: bool = False
     auditoria: tuple[EntradaAuditoria, ...] = field(default_factory=tuple)
 
 
@@ -122,6 +125,9 @@ class ServicioListaEspera:
         prioridad: str = PrioridadEspera.NORMAL.value,
         horas_antelacion_minima: int = 4,
         preferencias: dict[str, object] | None = None,
+        disponible_desde: date | None = None,
+        disponible_hasta: date | None = None,
+        cita_previa_id: uuid.UUID | None = None,
         nota: str | None = None,
     ) -> EntradaListaEspera:
         """Anota a un paciente en la lista.
@@ -142,6 +148,25 @@ class ServicioListaEspera:
             principal, paciente_id, sede_id, especialidad_id, servicio_id, profesional_id
         )
 
+        if cita_previa_id is not None:
+            previa = await RepositorioAgenda(self._sesion).obtener_cita(
+                cita_previa_id, principal=principal
+            )
+            if (
+                previa is None
+                or previa.clinica_id != principal.clinica_id
+                or previa.paciente_id != paciente_id
+                or previa.sede_id != sede_id
+                or previa.servicio_id != servicio_id
+                or previa.estado not in {EstadoCita.CONFIRMED.value, EstadoCita.RESCHEDULED.value}
+                or previa.inicio <= self._reloj.ahora()
+            ):
+                # Un 404 genérico evita confirmar la existencia de citas fuera
+                # del ámbito del usuario o de otro paciente.
+                raise RecursoNoEncontrado(
+                    "La cita previa no existe, no corresponde al paciente o ya no está vigente."
+                )
+
         entrada = EntradaListaEspera(
             clinica_id=principal.clinica_id,
             paciente_id=paciente_id,
@@ -152,6 +177,9 @@ class ServicioListaEspera:
             prioridad=prioridad,
             horas_antelacion_minima=horas_antelacion_minima,
             preferencias=preferencias,
+            disponible_desde=disponible_desde,
+            disponible_hasta=disponible_hasta,
+            cita_previa_id=cita_previa_id,
             nota=nota,
             creado_por=principal.actor_id,
         )
@@ -204,6 +232,11 @@ class ServicioListaEspera:
             is None
         ):
             raise RecursoNoEncontrado("La cita solicitada no existe.")
+
+        # Una persona debe confirmar manualmente cada eslabón. El límite evita
+        # que una cadena excepcional se propague sin término operativo.
+        if cita_liberada.profundidad_lista_espera >= MAXIMO_PROFUNDIDAD_CADENA:
+            return ResultadoOferta()
 
         # Serializa a quien compita por ESTE turno, sin tocar el resto de la
         # agenda. Ver la nota del encabezado.
@@ -308,6 +341,40 @@ class ServicioListaEspera:
         if liberada is None:  # pragma: sin cobertura - clave externa en cascada
             raise RecursoNoEncontrado("El turno ofrecido ya no existe.")
 
+        if await self._turno_ocupado(liberada):
+            return await self._marcar_oferta_perdida(
+                oferta, entrada, principal=principal, ahora=ahora
+            )
+
+        cadena_id = liberada.cadena_lista_espera_id
+        nueva_profundidad_cadena = liberada.profundidad_lista_espera
+
+        previa: Cita | None = None
+        if entrada.cita_previa_id is not None:
+            if liberada.profundidad_lista_espera >= MAXIMO_PROFUNDIDAD_CADENA:
+                raise ConflictoEstado(
+                    "Esta oferta alcanzó el límite de reagendamientos encadenados."
+                )
+            previa = await RepositorioAgenda(self._sesion).obtener_cita_para_actualizar(
+                entrada.cita_previa_id, principal=principal
+            )
+            if (
+                previa is None
+                or previa.clinica_id != entrada.clinica_id
+                or previa.paciente_id != entrada.paciente_id
+                or previa.sede_id != entrada.sede_id
+                or previa.servicio_id != entrada.servicio_id
+                or previa.estado not in {EstadoCita.CONFIRMED.value, EstadoCita.RESCHEDULED.value}
+                or previa.inicio <= ahora
+            ):
+                raise ConflictoEstado(
+                    "La cita previa cambió y ya no se puede reagendar desde esta oferta."
+                )
+            cadena_id = cadena_id or previa.cadena_lista_espera_id or uuid.uuid4()
+            nueva_profundidad_cadena = (
+                max(liberada.profundidad_lista_espera, previa.profundidad_lista_espera) + 1
+            )
+
         cita = Cita(
             clinica_id=liberada.clinica_id,
             sede_id=liberada.sede_id,
@@ -322,6 +389,8 @@ class ServicioListaEspera:
             origen="LISTA_ESPERA",
             confirmada_en=ahora,
             cita_origen_id=liberada.id,
+            cadena_lista_espera_id=cadena_id,
+            profundidad_lista_espera=liberada.profundidad_lista_espera,
             creado_por=principal.actor_id,
         )
         self._sesion.add(cita)
@@ -339,30 +408,43 @@ class ServicioListaEspera:
         entrada.cita_resultante_id = cita.id
         await self._flush()
 
+        auditoria = [
+            construir_entrada(
+                accion=AccionAuditada.OFERTA_ACEPTADA,
+                principal=principal,
+                ahora=ahora,
+                entidad_tipo="oferta_turno",
+                entidad_id=oferta.id,
+                paciente_id=entrada.paciente_id,
+                sede_id=entrada.sede_id,
+            ),
+            construir_entrada(
+                accion=AccionAuditada.CITA_CREADA,
+                principal=principal,
+                ahora=ahora,
+                entidad_tipo="cita",
+                entidad_id=cita.id,
+                paciente_id=cita.paciente_id,
+                sede_id=cita.sede_id,
+                origen_cita="LISTA_ESPERA",
+            ),
+        ]
+
+        if previa is not None:
+            auditoria.extend(
+                await self._cancelar_cita_previa(
+                    previa,
+                    principal=principal,
+                    ahora=ahora,
+                    cadena_id=cadena_id,
+                    profundidad=nueva_profundidad_cadena,
+                )
+            )
+
         return ResultadoOferta(
             oferta=oferta,
             cita=cita,
-            auditoria=(
-                construir_entrada(
-                    accion=AccionAuditada.OFERTA_ACEPTADA,
-                    principal=principal,
-                    ahora=ahora,
-                    entidad_tipo="oferta_turno",
-                    entidad_id=oferta.id,
-                    paciente_id=entrada.paciente_id,
-                    sede_id=entrada.sede_id,
-                ),
-                construir_entrada(
-                    accion=AccionAuditada.CITA_CREADA,
-                    principal=principal,
-                    ahora=ahora,
-                    entidad_tipo="cita",
-                    entidad_id=cita.id,
-                    paciente_id=cita.paciente_id,
-                    sede_id=cita.sede_id,
-                    origen_cita="LISTA_ESPERA",
-                ),
-            ),
+            auditoria=tuple(auditoria),
         )
 
     async def rechazar_oferta(
@@ -468,6 +550,87 @@ class ServicioListaEspera:
     # ==================================================================
     #  Auxiliares
     # ==================================================================
+    async def _marcar_oferta_perdida(
+        self,
+        oferta: OfertaTurno,
+        entrada: EntradaListaEspera,
+        *,
+        principal: Principal,
+        ahora: datetime,
+    ) -> ResultadoOferta:
+        oferta.estado = EstadoOferta.PERDIDA.value
+        oferta.respondida_en = ahora
+        entrada.estado = EstadoEspera.ACTIVA.value
+        await self._flush()
+        return ResultadoOferta(
+            oferta=oferta,
+            turno_ocupado=True,
+            auditoria=(
+                construir_entrada(
+                    accion=AccionAuditada.OFERTA_PERDIDA,
+                    principal=principal,
+                    ahora=ahora,
+                    entidad_tipo="oferta_turno",
+                    entidad_id=oferta.id,
+                    paciente_id=entrada.paciente_id,
+                    sede_id=entrada.sede_id,
+                ),
+            ),
+        )
+
+    async def _cancelar_cita_previa(
+        self,
+        previa: Cita,
+        *,
+        principal: Principal,
+        ahora: datetime,
+        cadena_id: uuid.UUID | None,
+        profundidad: int,
+    ) -> tuple[EntradaAuditoria, ...]:
+        estado_anterior = previa.estado
+        motivo = "Reagendada al aceptar una oferta de la lista de espera."
+        previa.estado = EstadoCita.CANCELLED.value
+        previa.motivo_cancelacion = motivo
+        previa.cancelada_en = ahora
+        previa.cancelada_por = principal.actor_id
+        previa.expira_en = None
+        previa.actualizado_por = principal.actor_id
+        previa.cadena_lista_espera_id = cadena_id
+        previa.profundidad_lista_espera = profundidad
+        self._sesion.add(
+            CitaHistorial(
+                cita_id=previa.id,
+                estado_anterior=estado_anterior,
+                estado_nuevo=previa.estado,
+                actor_tipo=principal.actor_tipo.value,
+                actor_id=principal.actor_id,
+                motivo=motivo,
+            )
+        )
+        await self._flush()
+        await ServicioRecordatorios(self._sesion, self._reloj).cancelar_cita(
+            previa.id, motivo=motivo
+        )
+        auditoria = [
+            construir_entrada(
+                accion=AccionAuditada.CITA_CANCELADA,
+                principal=principal,
+                ahora=ahora,
+                entidad_tipo="cita",
+                entidad_id=previa.id,
+                paciente_id=previa.paciente_id,
+                sede_id=previa.sede_id,
+                motivo=motivo,
+                estado_anterior=estado_anterior,
+            )
+        ]
+        if profundidad < MAXIMO_PROFUNDIDAD_CADENA:
+            siguiente = await self.ofrecer_turno(
+                previa, principal=principal_sistema(previa.clinica_id)
+            )
+            auditoria.extend(siguiente.auditoria)
+        return tuple(auditoria)
+
     async def _siguiente_candidato(
         self, cita: Cita, *, ahora: datetime, principal: Principal
     ) -> EntradaListaEspera | None:
@@ -485,6 +648,20 @@ class ServicioListaEspera:
             .where(Sede.id == cita.sede_id)
         )
         fecha_local = cita.inicio.astimezone(ZoneInfo(zona or "America/Guayaquil")).date()
+        hora_local = cita.inicio.astimezone(ZoneInfo(zona or "America/Guayaquil")).strftime(
+            "%H:%M:%S"
+        )
+        preferencias = EntradaListaEspera.preferencias
+        dias_preferidos = preferencias["dias_semana"]
+        hora_desde = preferencias["hora_desde"].astext
+        hora_hasta = preferencias["hora_hasta"].astext
+        franja_aceptable = and_(
+            or_(
+                dias_preferidos.astext.is_(None), dias_preferidos.contains([fecha_local.weekday()])
+            ),
+            or_(hora_desde.is_(None), hora_desde <= hora_local),
+            or_(hora_hasta.is_(None), hora_hasta > hora_local),
+        )
 
         consulta = (
             RepositorioListaEspera(self._sesion)
@@ -508,9 +685,10 @@ class ServicioListaEspera:
                     EntradaListaEspera.disponible_hasta >= fecha_local,
                 ),
                 or_(
-                    EntradaListaEspera.preferencias.is_(None),
-                    EntradaListaEspera.preferencias == JSONB.NULL,
-                    EntradaListaEspera.preferencias == {},
+                    preferencias.is_(None),
+                    preferencias == JSONB.NULL,
+                    preferencias == {},
+                    franja_aceptable,
                 ),
                 EntradaListaEspera.especialidad_id
                 == select(Servicio.especialidad_id)
@@ -680,6 +858,7 @@ class ServicioListaEspera:
 __all__ = [
     "ESPACIO_BLOQUEO_OFERTA",
     "MAXIMO_OFERTAS_VENCIDAS",
+    "MAXIMO_PROFUNDIDAD_CADENA",
     "ResultadoOferta",
     "ServicioListaEspera",
 ]

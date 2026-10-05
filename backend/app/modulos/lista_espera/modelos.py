@@ -114,6 +114,11 @@ class EntradaListaEspera(Base, MezclaIdentificador, MezclaAuditoria):
     ofertas_vencidas: Mapped[int] = mapped_column(SmallInteger, default=0)
 
     nota: Mapped[str | None] = mapped_column(Text, default=None)
+    # Cita vigente que se sustituirá si el paciente acepta una oferta. Su
+    # cancelación y la nueva cita se confirman en la misma transacción.
+    cita_previa_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("cita.id", ondelete="SET NULL"), default=None
+    )
     cita_resultante_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("cita.id", ondelete="SET NULL"), default=None
     )
@@ -157,6 +162,16 @@ class EntradaListaEspera(Base, MezclaIdentificador, MezclaAuditoria):
             "prioridad",
             "creado_en",
             postgresql_where=text("estado = 'ACTIVA'"),
+        ),
+        # Una cita vigente solo puede estar asociada a una entrada activa. El
+        # índice deja reutilizar la cita cuando la entrada ya se resolvió.
+        Index(
+            "ix_espera_cita_previa_activa",
+            "cita_previa_id",
+            unique=True,
+            postgresql_where=text(
+                "cita_previa_id IS NOT NULL AND estado IN ('ACTIVA', 'OFERTADA')"
+            ),
         ),
     )
 

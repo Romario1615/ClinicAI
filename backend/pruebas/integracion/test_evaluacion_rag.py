@@ -221,6 +221,9 @@ async def _buscar(
             especialidades=especialidades,
             nivel_maximo=NivelSensibilidad.CLINICO,
             ahora=instante,
+            actor_id=None,
+            role_ids=frozenset(),
+            uso_agente=False,
         ),
         limite=limite,
     )

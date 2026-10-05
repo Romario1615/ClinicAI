@@ -52,7 +52,6 @@ class TestInicioSesion:
             json={
                 "correo": usuario.correo,
                 "contrasena": CONTRASENA,
-                "clinica_id": str(clinica.id),
             },
         )
 
@@ -77,7 +76,6 @@ class TestInicioSesion:
             json={
                 "correo": usuario.correo,
                 "contrasena": CONTRASENA,
-                "clinica_id": str(clinica.id),
             },
         )
 
@@ -95,7 +93,6 @@ class TestInicioSesion:
             json={
                 "correo": usuario.correo,
                 "contrasena": "incorrecta",
-                "clinica_id": str(clinica.id),
             },
         )
 
@@ -114,7 +111,6 @@ class TestInicioSesion:
             json={
                 "correo": usuario.correo,
                 "contrasena": "incorrecta",
-                "clinica_id": str(clinica.id),
             },
         )
         sin_cuenta = await cliente.post(
@@ -122,7 +118,6 @@ class TestInicioSesion:
             json={
                 "correo": "nadie@example.invalid",
                 "contrasena": "incorrecta",
-                "clinica_id": str(clinica.id),
             },
         )
 
@@ -150,7 +145,6 @@ class TestInicioSesion:
                 json={
                     "correo": usuario.correo,
                     "contrasena": "incorrecta",
-                    "clinica_id": str(clinica.id),
                 },
             )
 
@@ -172,7 +166,6 @@ class TestInicioSesion:
                 json={
                     "correo": usuario.correo,
                     "contrasena": "incorrecta",
-                    "clinica_id": str(clinica.id),
                 },
             )
 
@@ -181,7 +174,6 @@ class TestInicioSesion:
             json={
                 "correo": usuario.correo,
                 "contrasena": CONTRASENA,
-                "clinica_id": str(clinica.id),
             },
         )
 
@@ -208,7 +200,6 @@ class TestInicioSesion:
             json={
                 "correo": "esto-no-es-un-correo",
                 "contrasena": "ContrasenaSecretaDePrueba",
-                "clinica_id": str(clinica.id),
             },
         )
 
@@ -232,7 +223,6 @@ class TestInicioSesion:
             json={
                 "correo": usuario.correo,
                 "contrasena": CONTRASENA,
-                "clinica_id": str(clinica.id),
                 "es_administrador": True,
             },
         )
@@ -250,7 +240,6 @@ class TestInicioSesion:
         cuerpo = {
             "correo": usuario.correo,
             "contrasena": "incorrecta",
-            "clinica_id": str(clinica.id),
         }
         ultima = None
         for _ in range(configuracion_limite_login + 1):
@@ -281,7 +270,6 @@ class TestInicioSesion:
             json={
                 "correo": usuario.correo,
                 "contrasena": CONTRASENA,
-                "clinica_id": str(clinica.id),
             },
         )
 

@@ -229,10 +229,18 @@ class Cita(Base, MezclaIdentificador, MezclaAuditoria):
     cita_origen_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("cita.id", ondelete="SET NULL"), default=None
     )
+    # Trazabilidad y tope de turnos liberados por reagendamientos sucesivos
+    # aceptados desde la lista de espera.
+    cadena_lista_espera_id: Mapped[uuid.UUID | None] = mapped_column(default=None)
+    profundidad_lista_espera: Mapped[int] = mapped_column(
+        SmallInteger, default=0, server_default=text("0")
+    )
     serie_recurrente_id: Mapped[uuid.UUID | None] = mapped_column(default=None)
     clave_idempotencia: Mapped[str | None] = mapped_column(String(200), default=None)
 
     confirmada_en: Mapped[datetime | None] = mapped_column(default=None)
+    llegada_en: Mapped[datetime | None] = mapped_column(default=None)
+    atencion_iniciada_en: Mapped[datetime | None] = mapped_column(default=None)
     completada_en: Mapped[datetime | None] = mapped_column(default=None)
     cancelada_en: Mapped[datetime | None] = mapped_column(default=None)
     cancelada_por: Mapped[uuid.UUID | None] = mapped_column(default=None)
@@ -292,11 +300,19 @@ class Cita(Base, MezclaIdentificador, MezclaAuditoria):
             postgresql_where=text("clave_idempotencia IS NOT NULL"),
         ),
         CheckConstraint("duracion_minutos > 0", name="duracion_positiva"),
+        CheckConstraint(
+            "profundidad_lista_espera >= 0 AND profundidad_lista_espera <= 6",
+            name="profundidad_lista_espera_valida",
+        ),
         CheckConstraint("minutos_preparacion >= 0", name="preparacion_no_negativa"),
         # Red de seguridad sobre el disparador: si alguien lo deshabilitara
         # o insertara con `session_replication_role = replica`, esta
         # comprobacion sigue impidiendo un `fin` anterior al inicio.
         CheckConstraint("fin > inicio", name="fin_posterior_al_inicio"),
+        CheckConstraint(
+            "atencion_iniciada_en IS NULL OR llegada_en IS NOT NULL",
+            name="atencion_exige_llegada",
+        ),
         CheckConstraint(
             "estado IN ('PENDING', 'HELD', 'CONFIRMED', 'RESCHEDULED', "
             "'CANCELLED', 'COMPLETED', 'NO_SHOW')",

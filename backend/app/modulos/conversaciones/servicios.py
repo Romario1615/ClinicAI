@@ -59,6 +59,7 @@ from sqlalchemy import select, update
 from sqlalchemy.dialects.postgresql import insert as insert_pg
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.ia.decisiones import ClasificadorIntencion, Intencion
 from app.mensajeria.carga_whatsapp import CargaWebhook, MensajeEntranteCrudo
 from app.mensajeria.destinatarios import normalizar_telefono
 from app.modulos.conversaciones.identificacion import (
@@ -120,6 +121,22 @@ MOTIVOS_HANDOFF: dict[IntencionEntrante, str] = {
 }
 
 
+# Etiquetas para la cola del personal cuando el modelo de decision reconoce la
+# intencion de un mensaje libre. Orientan; no ejecutan nada.
+MOTIVOS_TIPADOS: dict[Intencion, str] = {
+    Intencion.BUSCAR_HORARIOS: "Quiere reservar una cita.",
+    Intencion.CONSULTAR_CITAS: "Pregunta por sus citas.",
+    Intencion.CANCELAR: "Parece querer cancelar (no se cancelo: confirme con el paciente).",
+    Intencion.REPROGRAMAR: "Quiere cambiar la fecha de una cita.",
+    Intencion.INFORMACION: "Pide informacion de la clinica.",
+    Intencion.SEGUIMIENTO_TRATAMIENTO: "Pregunta por la siguiente fase de su tratamiento.",
+    Intencion.BAJA_PROMOCIONES: (
+        "Parece pedir la baja de promociones (no se aplico: confirme con el paciente)."
+    ),
+    Intencion.HABLAR_CON_PERSONA: "Pide hablar con una persona.",
+}
+
+
 @dataclass(frozen=True, slots=True)
 class ResumenEntrada:
     recibidos: int = 0
@@ -136,9 +153,21 @@ class ResumenEntrada:
 class ServicioConversaciones:
     """Aplica un cuerpo de webhook ya verificado."""
 
-    def __init__(self, sesion: AsyncSession, reloj: Reloj) -> None:
+    def __init__(
+        self,
+        sesion: AsyncSession,
+        reloj: Reloj,
+        *,
+        clasificador: ClasificadorIntencion | None = None,
+        umbral_clinico: float = 0.35,
+    ) -> None:
         self._sesion = sesion
         self._reloj = reloj
+        # Solo se usa para **etiquetar** la derivacion de un mensaje que ya va
+        # a una persona: urgente y clinico primero. Nunca ejecuta una accion;
+        # cancelar o dar de baja siguen exigiendo la frase exacta.
+        self._clasificador = clasificador
+        self._umbral_clinico = umbral_clinico
 
     async def procesar(self, carga: CargaWebhook, *, clinica_id: uuid.UUID) -> ResumenEntrada:
         resumen = ResumenEntrada()
@@ -183,6 +212,21 @@ class ServicioConversaciones:
         )
         resumen = _con(resumen, recibidos=resumen.recibidos + 1)
 
+        if intencion is IntencionEntrante.BAJA_PROMOCIONES:
+            # Solo publicidad: los recordatorios de cita siguen llegando. Se
+            # aplica con la frase exacta, nunca por probabilidad.
+            revocados = await self._revocar_consentimiento(
+                clinica_id=clinica_id,
+                telefono=crudo.telefono,
+                tipos=(TipoConsentimiento.PROMOCIONES,),
+            )
+            logger.info(
+                "whatsapp.baja_promociones_aplicada",
+                conversacion_id=str(conversacion.id),
+                consentimientos_revocados=revocados,
+            )
+            return _con(resumen, bajas=resumen.bajas + 1)
+
         if intencion is IntencionEntrante.BAJA:
             revocados = await self._revocar_consentimiento(
                 clinica_id=clinica_id, telefono=crudo.telefono
@@ -218,7 +262,26 @@ class ServicioConversaciones:
         conversacion.motivo_handoff = MOTIVOS_HANDOFF.get(
             intencion, MOTIVOS_HANDOFF[IntencionEntrante.DESCONOCIDA]
         )
+        if intencion is IntencionEntrante.DESCONOCIDA and crudo.texto:
+            conversacion.motivo_handoff = await self._motivo_tipado(crudo.texto)
         return _con(resumen, derivados=resumen.derivados + 1)
+
+    async def _motivo_tipado(self, texto: str) -> str:
+        """Motivo de derivacion segun el modelo de decision, o el generico.
+
+        La etiqueta ordena la cola del personal: una urgencia no puede quedar
+        detras de diez preguntas por precios. El texto del paciente no se
+        copia al motivo.
+        """
+        generico = MOTIVOS_HANDOFF[IntencionEntrante.DESCONOCIDA]
+        if self._clasificador is None:
+            return generico
+        decision = await self._clasificador.clasificar(texto)
+        if decision.urgencia >= self._umbral_clinico:
+            return "PRIORIDAD: el mensaje parece describir una urgencia de salud."
+        if decision.pregunta_clinica >= self._umbral_clinico:
+            return "Consulta clinica: requiere respuesta de un profesional."
+        return MOTIVOS_TIPADOS.get(decision.intencion, generico)
 
     def _resolver_seleccion(self, conversacion: Conversacion, texto: str | None) -> bool:
         """Aplica la respuesta a una lista ya ofrecida.
@@ -407,7 +470,17 @@ class ServicioConversaciones:
         candidatos = list((await self._sesion.execute(consulta.limit(2))).scalars().all())
         return candidatos[0] if len(candidatos) == 1 else None
 
-    async def _revocar_consentimiento(self, *, clinica_id: uuid.UUID, telefono: str) -> int:
+    async def _revocar_consentimiento(
+        self,
+        *,
+        clinica_id: uuid.UUID,
+        telefono: str,
+        tipos: tuple[TipoConsentimiento, ...] = (
+            TipoConsentimiento.COMUNICACION_WHATSAPP,
+            TipoConsentimiento.RECORDATORIOS_MEDICACION,
+            TipoConsentimiento.PROMOCIONES,
+        ),
+    ) -> int:
         """Revoca los consentimientos de comunicacion de ese numero.
 
         No borra la fila: marca `revocado_en`.  Hay que poder demostrar que
@@ -421,12 +494,7 @@ class ServicioConversaciones:
             update(Consentimiento)
             .where(
                 Consentimiento.paciente_id.in_(pacientes),
-                Consentimiento.tipo.in_(
-                    [
-                        TipoConsentimiento.COMUNICACION_WHATSAPP.value,
-                        TipoConsentimiento.RECORDATORIOS_MEDICACION.value,
-                    ]
-                ),
+                Consentimiento.tipo.in_([tipo.value for tipo in tipos]),
                 Consentimiento.revocado_en.is_(None),
             )
             .values(revocado_en=self._reloj.ahora())

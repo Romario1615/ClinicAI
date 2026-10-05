@@ -33,6 +33,7 @@ from app.mensajeria.adaptadores import (
     CredencialesWhatsApp,
     RegistroCanales,
 )
+from app.mensajeria.recordatorios import ServicioRecordatorios
 from app.mensajeria.servicios import ServicioOutbox
 from app.modulos.outbox.modelos import CanalOutbox
 from app.nucleo.bd import GestorBaseDatos
@@ -149,9 +150,38 @@ async def recuperar_mensajes_huerfanos(
     return recuperados
 
 
+async def encolar_recordatorios(ctx: dict[Any, Any], *_argumentos: Any, **_opciones: Any) -> int:
+    """Materializa avisos vencidos en el outbox; no contacta proveedores."""
+    gestor: GestorBaseDatos = ctx["gestor_bd"]
+    reloj: Reloj = ctx["reloj"]
+    encolados = 0
+    async for sesion in gestor.sesion():
+        resumen = await ServicioRecordatorios(
+            sesion, reloj, url_aplicacion=ctx["configuracion"].frontend_url
+        ).encolar_vencidos(
+            tamano=TAMANO_LOTE,
+        )
+        encolados = resumen.encolados
+        if resumen.tomados:
+            _logger.info(
+                "recordatorios.lote_procesado",
+                tomados=resumen.tomados,
+                encolados=resumen.encolados,
+                omitidos=resumen.omitidos,
+            )
+        if resumen.tomados == TAMANO_LOTE:
+            _logger.warning(
+                "recordatorios.lote_lleno",
+                tomados=resumen.tomados,
+                nota="Quedan recordatorios hasta la proxima ejecucion.",
+            )
+    return encolados
+
+
 __all__ = [
     "TAMANO_LOTE",
     "construir_canales",
+    "encolar_recordatorios",
     "procesar_outbox",
     "recuperar_mensajes_huerfanos",
 ]

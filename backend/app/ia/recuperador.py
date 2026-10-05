@@ -95,7 +95,11 @@ class ResultadoRecuperacion:
 
 
 def contexto_desde_principal(
-    principal: Principal, *, ahora: datetime, nivel_maximo: NivelSensibilidad | None = None
+    principal: Principal,
+    *,
+    ahora: datetime,
+    nivel_maximo: NivelSensibilidad | None = None,
+    uso_agente: bool = False,
 ) -> ContextoAutorizacion:
     """Traduce el principal al contexto de autorizacion de la busqueda.
 
@@ -123,6 +127,9 @@ def contexto_desde_principal(
         ),
         nivel_maximo=nivel,
         ahora=ahora,
+        actor_id=principal.actor_id,
+        role_ids=principal.role_ids,
+        uso_agente=uso_agente,
     )
 
 

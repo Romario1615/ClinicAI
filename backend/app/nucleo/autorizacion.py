@@ -151,6 +151,8 @@ CATALOGO_PERMISOS: Final[tuple[DefinicionPermiso, ...]] = (
     _p("cita.reprogramar", "Reprogramar citas", "agenda"),
     _p("cita.cancelar", "Cancelar citas", "agenda"),
     _p("cita.marcar_inasistencia", "Marcar inasistencia", "agenda"),
+    _p("cita.registrar_llegada", "Registrar llegada del paciente", "agenda"),
+    _p("cita.iniciar_atencion", "Iniciar atención de una cita", "agenda"),
     _p("cita.completar", "Marcar una cita como completada", "agenda"),
     _p("bloqueo.gestionar", "Crear bloqueos, vacaciones y ausencias", "agenda"),
     # --- Pacientes ---
@@ -218,11 +220,61 @@ CATALOGO_PERMISOS: Final[tuple[DefinicionPermiso, ...]] = (
         nivel=NivelSensibilidad.CLINICO,
     ),
     _p("adherencia.leer", "Ver el seguimiento de adherencia", "recetas"),
+    # --- Imagenes clinicas y odontologia ---
+    # La foto de perfil NO entra aqui: es identificacion administrativa y se
+    # gestiona con `paciente.leer_administrativo` y `paciente.editar`.
+    _p(
+        "imagen_clinica.leer",
+        "Ver radiografias y fotos clinicas",
+        "clinico",
+        relacion=True,
+        nivel=NivelSensibilidad.CLINICO,
+    ),
+    _p(
+        "imagen_clinica.cargar",
+        "Subir radiografias y fotos clinicas",
+        "clinico",
+        relacion=True,
+        nivel=NivelSensibilidad.CLINICO,
+    ),
+    _p(
+        "odontograma.leer",
+        "Ver el odontograma",
+        "clinico",
+        relacion=True,
+        nivel=NivelSensibilidad.CLINICO,
+    ),
+    _p(
+        "odontograma.escribir",
+        "Registrar hallazgos en el odontograma",
+        "clinico",
+        relacion=True,
+        nivel=NivelSensibilidad.CLINICO,
+    ),
+    _p(
+        "plan_tratamiento.leer",
+        "Ver planes de tratamiento y su presupuesto",
+        "clinico",
+        relacion=True,
+        nivel=NivelSensibilidad.CLINICO,
+    ),
+    _p(
+        "plan_tratamiento.escribir",
+        "Crear y modificar planes de tratamiento",
+        "clinico",
+        relacion=True,
+        nivel=NivelSensibilidad.CLINICO,
+    ),
     _p("alerta_adherencia.atender", "Atender alertas de adherencia", "recetas"),
     # --- Lista de espera ---
     _p("lista_espera.gestionar", "Gestionar la lista de espera", "agenda"),
     # --- Conversaciones ---
-    _p("conversacion.leer", "Leer conversaciones de WhatsApp", "comunicacion"),
+    _p(
+        "conversacion.leer",
+        "Leer conversaciones de WhatsApp, cuyo texto puede ser clinico",
+        "comunicacion",
+        nivel=NivelSensibilidad.CLINICO,
+    ),
     _p("conversacion.responder", "Responder conversaciones", "comunicacion"),
     _p("conversacion.tomar", "Tomar una conversacion derivada a humano", "comunicacion"),
     # --- Conocimiento ---
@@ -230,6 +282,11 @@ CATALOGO_PERMISOS: Final[tuple[DefinicionPermiso, ...]] = (
     _p("conocimiento.cargar", "Cargar documentos", "conocimiento"),
     _p("conocimiento.aprobar", "Aprobar y publicar documentos", "conocimiento"),
     _p("conocimiento.archivar", "Archivar documentos", "conocimiento"),
+    # --- Promociones ---
+    # Separados como en conocimiento: quien redacta la campana no es
+    # necesariamente quien autoriza que salga a los pacientes.
+    _p("promocion.gestionar", "Crear campanas de promociones y sus imagenes", "comunicacion"),
+    _p("promocion.aprobar", "Aprobar y enviar campanas de promociones", "comunicacion"),
     # --- Pagos ---
     _p("pago.leer", "Ver pagos", "pagos"),
     _p("pago.registrar", "Registrar pagos y comprobantes", "pagos"),
@@ -257,6 +314,12 @@ PERMISOS_SOLO_ASISTENCIALES: Final[frozenset[str]] = frozenset(
         "receta.crear",
         "receta.confirmar",
         "receta.leer",
+        "imagen_clinica.leer",
+        "imagen_clinica.cargar",
+        "odontograma.leer",
+        "odontograma.escribir",
+        "plan_tratamiento.leer",
+        "plan_tratamiento.escribir",
     }
 )
 
@@ -347,6 +410,9 @@ class Principal:
     # Identificador del paciente, cuando el principal es el propio paciente.
     paciente_id: uuid.UUID | None = None
     roles: frozenset[str] = field(default_factory=frozenset)
+    # IDs concretos de roles vigentes. Los códigos son útiles para la
+    # interfaz; una ACL debe distinguir el rol local del rol del sistema.
+    role_ids: frozenset[uuid.UUID] = field(default_factory=frozenset)
     # Origen de la peticion. Se registra en auditoria.
     origen: str = "API"
 
@@ -450,6 +516,8 @@ PERMISOS_POR_ROL: Final[dict[str, frozenset[str]]] = {
             "cita.reprogramar",
             "cita.cancelar",
             "cita.marcar_inasistencia",
+            "cita.registrar_llegada",
+            "cita.iniciar_atencion",
             "cita.completar",
             "bloqueo.gestionar",
             "paciente.leer_administrativo",
@@ -465,6 +533,8 @@ PERMISOS_POR_ROL: Final[dict[str, frozenset[str]]] = {
             "conocimiento.cargar",
             "conocimiento.aprobar",
             "conocimiento.archivar",
+            "promocion.gestionar",
+            "promocion.aprobar",
             "pago.leer",
             "pago.registrar",
             "pago.validar",
@@ -495,6 +565,8 @@ PERMISOS_POR_ROL: Final[dict[str, frozenset[str]]] = {
             "cita.reprogramar",
             "cita.cancelar",
             "cita.marcar_inasistencia",
+            "cita.registrar_llegada",
+            "cita.iniciar_atencion",
             "cita.completar",
             "bloqueo.gestionar",
             "paciente.leer_administrativo",
@@ -513,6 +585,8 @@ PERMISOS_POR_ROL: Final[dict[str, frozenset[str]]] = {
             "conocimiento.cargar",
             "conocimiento.aprobar",
             "conocimiento.archivar",
+            "promocion.gestionar",
+            "promocion.aprobar",
             "pago.leer",
             "pago.registrar",
             "pago.validar",
@@ -532,6 +606,7 @@ PERMISOS_POR_ROL: Final[dict[str, frozenset[str]]] = {
             "cita.reprogramar",
             "cita.cancelar",
             "cita.marcar_inasistencia",
+            "cita.registrar_llegada",
             "bloqueo.gestionar",
             "paciente.leer_administrativo",
             "paciente.crear",
@@ -558,6 +633,8 @@ PERMISOS_POR_ROL: Final[dict[str, frozenset[str]]] = {
             "cita.reprogramar",
             "cita.cancelar",
             "cita.marcar_inasistencia",
+            "cita.registrar_llegada",
+            "cita.iniciar_atencion",
             "cita.completar",
             "bloqueo.gestionar",
             "paciente.leer_administrativo",
@@ -572,6 +649,12 @@ PERMISOS_POR_ROL: Final[dict[str, frozenset[str]]] = {
             "receta.crear",
             "receta.confirmar",
             "receta.leer",
+            "imagen_clinica.leer",
+            "imagen_clinica.cargar",
+            "odontograma.leer",
+            "odontograma.escribir",
+            "plan_tratamiento.leer",
+            "plan_tratamiento.escribir",
             "adherencia.leer",
             "alerta_adherencia.atender",
             "lista_espera.gestionar",
@@ -595,11 +678,20 @@ PERMISOS_POR_ROL: Final[dict[str, frozenset[str]]] = {
             "cita.reprogramar",
             "cita.cancelar",
             "cita.marcar_inasistencia",
+            "cita.registrar_llegada",
+            "cita.iniciar_atencion",
+            "cita.completar",
             "paciente.leer_administrativo",
             "paciente.crear",
             "paciente.editar",
             "historia_clinica.leer_metadatos",
             "receta.leer",
+            # El asistente dental toma radiografias y fotos, y consulta el
+            # odontograma y el plan para preparar el sillon. No los modifica.
+            "imagen_clinica.leer",
+            "imagen_clinica.cargar",
+            "odontograma.leer",
+            "plan_tratamiento.leer",
             "adherencia.leer",
             "alerta_adherencia.atender",
             "lista_espera.gestionar",

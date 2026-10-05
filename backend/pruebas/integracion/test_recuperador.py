@@ -61,6 +61,9 @@ def _contexto(clinica: Clinica, instante: datetime) -> ContextoAutorizacion:
         especialidades=None,
         nivel_maximo=NivelSensibilidad.CLINICO,
         ahora=instante,
+        actor_id=None,
+        role_ids=frozenset(),
+        uso_agente=False,
     )
 
 

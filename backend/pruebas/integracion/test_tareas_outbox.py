@@ -13,7 +13,7 @@ datos.
 from __future__ import annotations
 
 import uuid
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any
 
 import pytest
@@ -22,19 +22,30 @@ import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.mensajeria.adaptadores import RegistroCanales
+from app.mensajeria.recordatorios import ServicioRecordatorios
 from app.mensajeria.servicios import ServicioOutbox, SolicitudEnvio
 from app.modelos import Clinica, Consentimiento, Paciente
+from app.modulos.agenda.modelos import OrigenCita
+from app.modulos.agenda.repositorio import RepositorioAgenda
+from app.modulos.agenda.servicios import ServicioAgenda, SolicitudReserva
+from app.modulos.historia.modelos import EstadoReceta, Receta, RecetaMedicamento, Toma
 from app.modulos.outbox.modelos import (
     CanalOutbox,
     EstadoOutbox,
     OutboxMensaje,
+    Recordatorio,
     TipoMensajeOutbox,
 )
 from app.modulos.pacientes.modelos import TipoConsentimiento
+from app.nucleo.autorizacion import Ambito, Principal, TipoActor
 from app.nucleo.bd import GestorBaseDatos
 from app.nucleo.configuracion import Configuracion
 from app.nucleo.reloj import RelojFijo
-from app.tareas.outbox import procesar_outbox, recuperar_mensajes_huerfanos
+from app.tareas.outbox import (
+    encolar_recordatorios,
+    procesar_outbox,
+    recuperar_mensajes_huerfanos,
+)
 
 pytestmark = [pytest.mark.integracion, pytest.mark.asyncio]
 
@@ -154,6 +165,129 @@ async def test_procesar_outbox_sin_pendientes_no_hace_nada(
     degrada con el historico.
     """
     assert await procesar_outbox(contexto) == 0
+
+
+async def test_worker_materializa_recordatorio_vencido_en_el_outbox(
+    contexto: dict[Any, Any],
+    sesion: AsyncSession,
+    reloj_fijo: RelojFijo,
+    paciente_contactable: Paciente,
+    clinica: Clinica,
+    sede,
+    profesional,
+    servicio,
+) -> None:
+    """El cron encola citas y tomas sin revelar datos del medicamento."""
+    principal = Principal(
+        actor_tipo=TipoActor.USUARIO,
+        actor_id=uuid.uuid4(),
+        clinica_id=clinica.id,
+        permisos=frozenset({"cita.crear"}),
+        ambito=Ambito(
+            clinica_id=clinica.id,
+            sedes=frozenset({sede.id}),
+            todas_las_especialidades=True,
+            todos_los_profesionales=True,
+            todos_los_pacientes=True,
+        ),
+    )
+    cita = await ServicioAgenda(
+        sesion, RepositorioAgenda(sesion), reloj_fijo
+    ).crear_cita_confirmada(
+        SolicitudReserva(
+            paciente_id=paciente_contactable.id,
+            profesional_id=profesional.id,
+            servicio_id=servicio.id,
+            sede_id=sede.id,
+            inicio=reloj_fijo.ahora().replace(hour=9, minute=0) + timedelta(days=2),
+            origen=OrigenCita.PANEL,
+        ),
+        principal=principal,
+    )
+    recordatorio = (
+        (
+            await sesion.execute(
+                sa.select(Recordatorio)
+                .where(Recordatorio.entidad_id == cita.cita.id)
+                .order_by(Recordatorio.programado_para)
+            )
+        )
+        .scalars()
+        .first()
+    )
+    assert recordatorio is not None
+    recordatorio.programado_para = reloj_fijo.ahora() - timedelta(seconds=1)
+    await sesion.flush()
+
+    assert await encolar_recordatorios(contexto) == 1
+    await sesion.refresh(recordatorio)
+    assert recordatorio.estado == "ENCOLADO"
+    assert recordatorio.outbox_mensaje_id is not None
+    mensaje = await sesion.get(OutboxMensaje, recordatorio.outbox_mensaje_id)
+    assert mensaje is not None
+    assert mensaje.estado == EstadoOutbox.PENDIENTE.value
+    assert mensaje.entidad_origen_id == cita.cita.id
+
+    sesion.add(
+        Consentimiento(
+            paciente_id=paciente_contactable.id,
+            tipo=TipoConsentimiento.RECORDATORIOS_MEDICACION.value,
+            otorgado=True,
+            version_texto="v1",
+            texto_hash="1" * 64,
+            canal="PANEL",
+        )
+    )
+    receta = Receta(
+        clinica_id=clinica.id,
+        paciente_id=paciente_contactable.id,
+        profesional_id=profesional.id,
+        estado=EstadoReceta.CONFIRMADA.value,
+        confirmada_en=reloj_fijo.ahora(),
+        confirmada_por=profesional.id,
+    )
+    sesion.add(receta)
+    await sesion.flush()
+    medicamento = RecetaMedicamento(
+        receta_id=receta.id,
+        nombre="Medicamento Sintetico Secreto",
+        dosis="1 unidad",
+        via="ORAL",
+        cuando_sea_necesario=False,
+        frecuencia_horas=12,
+        duracion_dias=1,
+    )
+    sesion.add(medicamento)
+    await sesion.flush()
+    toma = Toma(
+        receta_medicamento_id=medicamento.id,
+        paciente_id=paciente_contactable.id,
+        programada_en=reloj_fijo.ahora() + timedelta(hours=1),
+    )
+    sesion.add(toma)
+    await sesion.flush()
+    avisos_toma = await ServicioRecordatorios(sesion, reloj_fijo).programar_tomas(receta.id)
+    assert avisos_toma == 1
+    aviso_toma = (
+        await sesion.execute(
+            sa.select(Recordatorio).where(
+                Recordatorio.entidad_tipo == "TOMA",
+                Recordatorio.entidad_id == toma.id,
+            )
+        )
+    ).scalar_one()
+    aviso_toma.programado_para = reloj_fijo.ahora() - timedelta(seconds=1)
+    await sesion.flush()
+
+    assert await encolar_recordatorios(contexto) == 1
+    await sesion.refresh(aviso_toma)
+    assert aviso_toma.estado == "ENCOLADO"
+    assert aviso_toma.outbox_mensaje_id is not None
+    mensaje_toma = await sesion.get(OutboxMensaje, aviso_toma.outbox_mensaje_id)
+    assert mensaje_toma is not None
+    assert mensaje_toma.tipo == TipoMensajeOutbox.TOMA_RECORDATORIO.value
+    assert "Medicamento Sintetico Secreto" not in str(mensaje_toma.carga_util)
+    assert mensaje_toma.carga_util["variables"]["enlace"].endswith("/acceso")
 
 
 async def test_recuperar_huerfanos_como_trabajo(

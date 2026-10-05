@@ -39,9 +39,10 @@ from app.modulos.historia.servicios import (
     DatosNota,
     ServicioHistoria,
 )
+from app.modulos.outbox.modelos import Recordatorio
 from app.modulos.pacientes.modelos import RelacionAsistencial
 from app.nucleo.auditoria import AccionAuditada
-from app.nucleo.autorizacion import Ambito, Principal, TipoActor
+from app.nucleo.autorizacion import Ambito, Principal, TipoActor, principal_sistema
 from app.nucleo.errores import (
     ConflictoEstado,
     MotivoModificacionRequerido,
@@ -52,6 +53,7 @@ from app.nucleo.errores import (
     RelacionAsistencialRequerida,
 )
 from app.nucleo.reloj import RelojFijo
+from app.tareas.adherencia import evaluar_alertas_adherencia
 
 pytestmark = [pytest.mark.integracion, pytest.mark.seguridad, pytest.mark.asyncio]
 
@@ -66,6 +68,7 @@ PERMISOS_CLINICOS = frozenset(
         "receta.confirmar",
         "receta.leer",
         "adherencia.leer",
+        "alerta_adherencia.atender",
     }
 )
 
@@ -517,6 +520,27 @@ class TestRecetas:
         # desarrollo tiene datos clinicos sembrados y el conteo global mediria
         # otra cosa.
         assert await _tomas_de(sesion, receta_con_pauta.id) == 6
+        recordatorios = (
+            (
+                await sesion.execute(
+                    sa.select(Recordatorio).where(
+                        Recordatorio.entidad_tipo == "TOMA",
+                        Recordatorio.entidad_id.in_(
+                            sa.select(Toma.id)
+                            .join(
+                                RecetaMedicamento,
+                                RecetaMedicamento.id == Toma.receta_medicamento_id,
+                            )
+                            .where(RecetaMedicamento.receta_id == receta_con_pauta.id)
+                        ),
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+        assert len(recordatorios) == resultado.tomas_generadas
+        assert all(recordatorio.estado == "PROGRAMADO" for recordatorio in recordatorios)
 
     async def test_no_se_confirma_dos_veces(
         self,
@@ -580,6 +604,25 @@ class TestRecetas:
                 assert estado == EstadoToma.PENDIENTE.value, "una toma pasada se altero"
             else:
                 assert estado == EstadoToma.CANCELADA.value
+        avisos_pendientes = (
+            await sesion.execute(
+                sa.select(sa.func.count())
+                .select_from(Recordatorio)
+                .where(
+                    Recordatorio.entidad_tipo == "TOMA",
+                    Recordatorio.estado == "PROGRAMADO",
+                    Recordatorio.entidad_id.in_(
+                        sa.select(Toma.id)
+                        .join(
+                            RecetaMedicamento,
+                            RecetaMedicamento.id == Toma.receta_medicamento_id,
+                        )
+                        .where(RecetaMedicamento.receta_id == receta_con_pauta.id)
+                    ),
+                )
+            )
+        ).scalar_one()
+        assert avisos_pendientes == 0
 
     async def test_suspender_sin_motivo_se_rechaza(
         self,
@@ -715,6 +758,15 @@ class TestRegistroDeTomas:
         await sesion.refresh(toma)
         assert toma.estado == EstadoToma.TOMADA.value
         assert toma.registrada_en is not None
+        aviso = (
+            await sesion.execute(
+                sa.select(Recordatorio).where(
+                    Recordatorio.entidad_tipo == "TOMA",
+                    Recordatorio.entidad_id == toma.id,
+                )
+            )
+        ).scalar_one()
+        assert aviso.estado == "CANCELADO"
 
     async def test_no_se_registra_dos_veces(
         self,
@@ -802,6 +854,7 @@ class TestAdherencia:
         servicio_historia: ServicioHistoria,
         principal_medico: Principal,
         receta_con_omisiones,  # type: ignore[no-untyped-def]
+        reloj_fijo: RelojFijo,
     ) -> None:
         """Una toma pendiente cuya hora ya paso es una toma que no se
         registro. Contar solo las resueltas daria adherencia perfecta a quien
@@ -813,6 +866,31 @@ class TestAdherencia:
         assert alerta is not None
         assert alerta.tomas_omitidas == alerta.tomas_esperadas
         assert alerta.severidad == "URGENTE"
+
+    async def test_worker_crea_alerta_auditable_y_es_idempotente(
+        self,
+        sesion: AsyncSession,
+        servicio_historia: ServicioHistoria,
+        receta_con_omisiones,  # type: ignore[no-untyped-def]
+        reloj_fijo: RelojFijo,
+    ) -> None:
+        class Gestor:
+            async def sesion(self):  # type: ignore[no-untyped-def]
+                yield sesion
+
+        contexto = {"gestor_bd": Gestor(), "reloj": reloj_fijo}
+
+        creadas = await evaluar_alertas_adherencia(contexto)
+        alertas = await RepositorioHistoria(sesion).listar_alertas_abiertas(
+            principal=principal_sistema(receta_con_omisiones.clinica_id),
+            ahora=reloj_fijo.ahora(),
+        )
+        repetidas = await evaluar_alertas_adherencia(contexto)
+
+        assert creadas == 1
+        assert len(alertas) == 1
+        assert alertas[0].receta_id == receta_con_omisiones.id
+        assert repetidas == 0
 
     async def test_no_se_crea_una_segunda_alerta_abierta(
         self,
@@ -830,6 +908,51 @@ class TestAdherencia:
 
         assert primera is not None
         assert segunda is None
+
+    async def test_profesional_puede_atender_alerta_y_queda_auditado(
+        self,
+        sesion: AsyncSession,
+        servicio_historia: ServicioHistoria,
+        principal_medico: Principal,
+        receta_con_omisiones,  # type: ignore[no-untyped-def]
+        reloj_fijo: RelojFijo,
+    ) -> None:
+        alerta = await servicio_historia.evaluar_adherencia(
+            receta_con_omisiones.id, principal=principal_medico, dias=10
+        )
+        assert alerta is not None
+
+        resultado = await servicio_historia.atender_alerta_adherencia(
+            alerta.id, principal=principal_medico, nota="Se reviso con el paciente."
+        )
+        await sesion.flush()
+
+        assert alerta.atendida_en == reloj_fijo.ahora()
+        assert alerta.atendida_por == principal_medico.actor_id
+        assert alerta.nota_profesional == "Se reviso con el paciente."
+        assert resultado.auditoria[0].accion is AccionAuditada.ALERTA_ADHERENCIA_ATENDIDA
+
+    async def test_no_permite_atender_alerta_fuera_de_alcance(
+        self,
+        servicio_historia: ServicioHistoria,
+        clinica,  # type: ignore[no-untyped-def]
+        receta_con_omisiones,  # type: ignore[no-untyped-def]
+    ) -> None:
+        alerta = await servicio_historia.evaluar_adherencia(
+            receta_con_omisiones.id,
+            principal=principal_sistema(clinica.id),
+            dias=10,
+        )
+        assert alerta is not None
+        otro = Principal(
+            actor_tipo=TipoActor.USUARIO,
+            actor_id=uuid.uuid4(),
+            clinica_id=uuid.uuid4(),
+            permisos=frozenset({"alerta_adherencia.atender"}),
+            ambito=Ambito(clinica_id=uuid.uuid4(), todos_los_pacientes=True),
+        )
+        with pytest.raises(RecursoNoEncontrado):
+            await servicio_historia.atender_alerta_adherencia(alerta.id, principal=otro)
 
     async def test_con_pocas_tomas_no_se_alerta(
         self,

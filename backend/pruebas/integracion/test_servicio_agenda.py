@@ -28,6 +28,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.modulos.agenda.modelos import CitaHistorial, EstadoCita, OrigenCita
 from app.modulos.agenda.repositorio import RepositorioAgenda
 from app.modulos.agenda.servicios import ServicioAgenda, SolicitudReserva
+from app.modulos.outbox.modelos import Recordatorio
 from app.nucleo.auditoria import AccionAuditada
 from app.nucleo.autorizacion import Ambito, Principal, TipoActor, principal_sistema
 from app.nucleo.errores import (
@@ -246,6 +247,21 @@ class TestCreacion:
         # El buffer efectivo es el mayor entre el del servicio y el del
         # profesional; aqui el profesional no tiene propio.
         assert cita.minutos_preparacion == servicio.minutos_preparacion
+
+        avisos = (
+            (
+                await sesion.execute(
+                    sa.select(Recordatorio).where(
+                        Recordatorio.entidad_tipo == "CITA",
+                        Recordatorio.entidad_id == cita.id,
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+        assert len(avisos) == 2
+        assert all(aviso.estado == "PROGRAMADO" for aviso in avisos)
 
     async def test_el_disparador_calcula_fin_y_rango(
         self, sesion, servicio_agenda, solicitud, principal_recepcion, servicio
@@ -584,7 +600,7 @@ class TestMaquinaDeEstados:
             await servicio_agenda.confirmar_cita(creada.cita.id, principal=principal_recepcion)
 
     async def test_no_se_puede_cancelar_dos_veces(
-        self, servicio_agenda, solicitud, principal_recepcion
+        self, sesion, servicio_agenda, solicitud, principal_recepcion
     ) -> None:
         creada = await servicio_agenda.crear_cita_confirmada(
             solicitud, principal=principal_recepcion
@@ -592,6 +608,16 @@ class TestMaquinaDeEstados:
         await servicio_agenda.cancelar_cita(
             creada.cita.id, principal=principal_recepcion, motivo="Primera"
         )
+        avisos = (
+            (
+                await sesion.execute(
+                    sa.select(Recordatorio).where(Recordatorio.entidad_id == creada.cita.id)
+                )
+            )
+            .scalars()
+            .all()
+        )
+        assert avisos and all(aviso.estado == "CANCELADO" for aviso in avisos)
         with pytest.raises(TransicionEstadoInvalida):
             await servicio_agenda.cancelar_cita(
                 creada.cita.id, principal=principal_recepcion, motivo="Segunda"
@@ -726,6 +752,33 @@ class TestCancelacion:
 #  Reprogramacion
 # ===========================================================================
 class TestReprogramacion:
+    async def test_reprogramar_reemplaza_los_avisos_vigentes(
+        self, sesion, servicio_agenda, solicitud, principal_recepcion
+    ) -> None:
+        creada = await servicio_agenda.crear_cita_confirmada(
+            solicitud, principal=principal_recepcion
+        )
+        await servicio_agenda.reprogramar_cita(
+            creada.cita.id,
+            principal=principal_recepcion,
+            nuevo_inicio=solicitud.inicio + timedelta(days=2),
+            motivo="Cambio solicitado",
+        )
+        avisos = (
+            (
+                await sesion.execute(
+                    sa.select(Recordatorio)
+                    .where(Recordatorio.entidad_id == creada.cita.id)
+                    .order_by(Recordatorio.programado_para)
+                )
+            )
+            .scalars()
+            .all()
+        )
+        assert len(avisos) == 4
+        assert [aviso.estado for aviso in avisos].count("CANCELADO") == 2
+        assert [aviso.estado for aviso in avisos].count("PROGRAMADO") == 2
+
     async def test_reprogramar_conserva_el_identificador(
         self, servicio_agenda, solicitud, principal_recepcion
     ) -> None:

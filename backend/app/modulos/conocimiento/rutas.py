@@ -31,31 +31,44 @@ import uuid
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Path, Query, Request, status
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, literal, or_, select
 
 from app.ia.embeddings import ProveedorEmbeddings
-from app.ia.recuperador import MENSAJE_SIN_FUENTE, Recuperador, contexto_desde_principal
+from app.ia.recuperador import (
+    MENSAJE_SIN_FUENTE,
+    Recuperador,
+    contexto_desde_principal,
+)
 from app.modulos.conocimiento.esquemas import (
     LONGITUD_EXTRACTO,
+    OpcionesPermisosDocumento,
+    OpcionPrincipal,
     PaginaDocumentos,
     RespuestaBusqueda,
     RespuestaDocumento,
     RespuestaIngesta,
+    RespuestaPermisoDocumento,
+    RespuestaPermisosDocumento,
     ResultadoBusqueda,
     SolicitudBusqueda,
     SolicitudCambioEstado,
     SolicitudDocumento,
     SolicitudIngesta,
+    SolicitudPermisosDocumento,
     SolicitudRevision,
 )
 from app.modulos.conocimiento.modelos import (
     EstadoDocumento,
     KnowledgeDocument,
+    KnowledgePermission,
     KnowledgeVersion,
 )
+from app.modulos.conocimiento.repositorio import condicion_acl_documento
 from app.modulos.conocimiento.servicios import ServicioConocimiento
+from app.modulos.organizacion.modelos import Especialidad, Sede
+from app.modulos.usuarios.modelos import Rol, Usuario
 from app.nucleo.auditoria import AccionAuditada, construir_entrada
-from app.nucleo.autorizacion import Principal
+from app.nucleo.autorizacion import NivelSensibilidad, Principal
 from app.nucleo.dependencias import (
     Auditor,
     ConfiguracionActual,
@@ -63,7 +76,7 @@ from app.nucleo.dependencias import (
     Sesion,
     exige_permiso,
 )
-from app.nucleo.errores import PermisoDenegado, RecursoNoEncontrado
+from app.nucleo.errores import DatosInvalidos, PermisoDenegado, RecursoNoEncontrado
 from app.nucleo.registro import obtener_logger
 
 logger = obtener_logger(__name__)
@@ -153,6 +166,7 @@ async def _a_respuesta(sesion: Sesion, documento: KnowledgeDocument) -> Respuest
 async def listar_documentos(
     principal: PuedeLeer,
     sesion: Sesion,
+    reloj: RelojActual,
     estado: Annotated[EstadoDocumento | None, Query()] = None,
     limite: Annotated[int, Query(ge=1, le=100)] = 25,
     desplazamiento: Annotated[int, Query(ge=0)] = 0,
@@ -162,7 +176,32 @@ async def listar_documentos(
     El filtro va en el `WHERE`, no despues: un documento de otra clinica es
     indistinguible de uno inexistente.
     """
-    condiciones = [KnowledgeDocument.clinic_id == principal.clinica_id]
+    contexto = contexto_desde_principal(principal, ahora=reloj.ahora())
+    condiciones = [
+        KnowledgeDocument.clinic_id == principal.clinica_id,
+        KnowledgeDocument.sensitivity_level.in_(
+            sorted(n.value for n in NivelSensibilidad if contexto.nivel_maximo.cubre(n))
+        ),
+        condicion_acl_documento(KnowledgeDocument.id, contexto),
+    ]
+    if contexto.sedes is not None:
+        condiciones.append(
+            or_(
+                KnowledgeDocument.branch_id.is_(None),
+                KnowledgeDocument.branch_id.in_(sorted(contexto.sedes)),
+            )
+            if contexto.sedes
+            else literal(False)
+        )
+    if contexto.especialidades is not None:
+        condiciones.append(
+            or_(
+                KnowledgeDocument.specialty_id.is_(None),
+                KnowledgeDocument.specialty_id.in_(sorted(contexto.especialidades)),
+            )
+            if contexto.especialidades
+            else literal(False)
+        )
     if estado is not None:
         condiciones.append(KnowledgeDocument.status == estado.value)
 
@@ -413,6 +452,256 @@ async def marcar_revisado(
     respuesta = await _a_respuesta(sesion, documento)
     await sesion.commit()
     return respuesta
+
+
+# ---------------------------------------------------------------------------
+#  Permisos de documentos
+# ---------------------------------------------------------------------------
+@enrutador.get(
+    "/permisos/opciones",
+    response_model=OpcionesPermisosDocumento,
+    summary="Listar los principales asignables a documentos",
+)
+async def opciones_permisos_documento(
+    principal: PuedeAprobar,
+    sesion: Sesion,
+) -> OpcionesPermisosDocumento:
+    if principal.clinica_id is None:
+        raise RecursoNoEncontrado("La clínica no existe.")
+    roles = (
+        (
+            await sesion.execute(
+                select(Rol)
+                .where(or_(Rol.clinica_id.is_(None), Rol.clinica_id == principal.clinica_id))
+                .order_by(Rol.nombre)
+            )
+        )
+        .scalars()
+        .all()
+    )
+    usuarios = (
+        (
+            await sesion.execute(
+                select(Usuario)
+                .where(Usuario.clinica_id == principal.clinica_id, Usuario.activo.is_(True))
+                .order_by(Usuario.nombre, Usuario.apellido)
+            )
+        )
+        .scalars()
+        .all()
+    )
+    sedes = (
+        (
+            await sesion.execute(
+                select(Sede)
+                .where(Sede.clinica_id == principal.clinica_id, Sede.activa.is_(True))
+                .order_by(Sede.nombre)
+            )
+        )
+        .scalars()
+        .all()
+    )
+    especialidades = (
+        (
+            await sesion.execute(
+                select(Especialidad)
+                .where(
+                    Especialidad.clinica_id == principal.clinica_id,
+                    Especialidad.activa.is_(True),
+                )
+                .order_by(Especialidad.nombre)
+            )
+        )
+        .scalars()
+        .all()
+    )
+    return OpcionesPermisosDocumento(
+        roles=[OpcionPrincipal(id=rol.id, nombre=rol.nombre, codigo=rol.codigo) for rol in roles],
+        usuarios=[
+            OpcionPrincipal(
+                id=usuario.id,
+                nombre=f"{usuario.nombre} {usuario.apellido}",
+                codigo=usuario.correo,
+            )
+            for usuario in usuarios
+        ],
+        sedes=[OpcionPrincipal(id=sede.id, nombre=sede.nombre) for sede in sedes],
+        especialidades=[
+            OpcionPrincipal(id=especialidad.id, nombre=especialidad.nombre)
+            for especialidad in especialidades
+        ],
+    )
+
+
+@enrutador.get(
+    "/documentos/{document_id}/permisos",
+    response_model=RespuestaPermisosDocumento,
+    summary="Consultar el acceso de un documento",
+)
+async def consultar_permisos_documento(
+    principal: PuedeAprobar,
+    sesion: Sesion,
+    document_id: IdDocumento,
+) -> RespuestaPermisosDocumento:
+    documento = await _documento_de_clinica(sesion, principal, document_id)
+    permisos = (
+        (
+            await sesion.execute(
+                select(KnowledgePermission)
+                .where(KnowledgePermission.document_id == documento.id)
+                .order_by(KnowledgePermission.principal_tipo, KnowledgePermission.principal_id)
+            )
+        )
+        .scalars()
+        .all()
+    )
+    return RespuestaPermisosDocumento(
+        document_id=documento.id,
+        permisos=[
+            RespuestaPermisoDocumento(
+                principal_tipo=permiso.principal_tipo,
+                principal_id=permiso.principal_id,
+                puede_leer=permiso.puede_leer,
+                puede_usar_en_agente=permiso.puede_usar_en_agente,
+            )
+            for permiso in permisos
+        ],
+    )
+
+
+@enrutador.put(
+    "/documentos/{document_id}/permisos",
+    response_model=RespuestaPermisosDocumento,
+    summary="Reemplazar los permisos de un documento",
+    responses={
+        403: {"description": "Sin permiso de aprobación de conocimiento"},
+        404: {"description": "El documento no existe en esta clínica"},
+        422: {"description": "Principales repetidos o agente sin permiso de lectura"},
+    },
+)
+async def reemplazar_permisos_documento(
+    principal: PuedeAprobar,
+    sesion: Sesion,
+    reloj: RelojActual,
+    auditor: Auditor,
+    document_id: IdDocumento,
+    cuerpo: SolicitudPermisosDocumento,
+) -> RespuestaPermisosDocumento:
+    documento = await _documento_de_clinica(sesion, principal, document_id, bloquear=True)
+    await _validar_principales_documento(sesion, principal, cuerpo)
+
+    await sesion.execute(
+        delete(KnowledgePermission).where(KnowledgePermission.document_id == documento.id)
+    )
+    permisos = [
+        KnowledgePermission(
+            document_id=documento.id,
+            principal_tipo=regla.principal_tipo.value,
+            principal_id=regla.principal_id,
+            puede_leer=regla.puede_leer,
+            puede_usar_en_agente=regla.puede_usar_en_agente,
+        )
+        for regla in cuerpo.permisos
+    ]
+    sesion.add_all(permisos)
+    await auditor.registrar(
+        [
+            construir_entrada(
+                accion=AccionAuditada.DOCUMENTO_ACL_ACTUALIZADA,
+                principal=principal,
+                ahora=reloj.ahora(),
+                entidad_tipo="knowledge_document",
+                entidad_id=documento.id,
+                cantidad_reglas=len(permisos),
+                permisos=[
+                    {
+                        "principal_tipo": regla.principal_tipo.value,
+                        "principal_id": str(regla.principal_id),
+                        "puede_leer": regla.puede_leer,
+                        "puede_usar_en_agente": regla.puede_usar_en_agente,
+                    }
+                    for regla in cuerpo.permisos
+                ],
+            )
+        ]
+    )
+    await sesion.commit()
+    return RespuestaPermisosDocumento(
+        document_id=documento.id,
+        permisos=[
+            RespuestaPermisoDocumento(
+                principal_tipo=regla.principal_tipo,
+                principal_id=regla.principal_id,
+                puede_leer=regla.puede_leer,
+                puede_usar_en_agente=regla.puede_usar_en_agente,
+            )
+            for regla in cuerpo.permisos
+        ],
+    )
+
+
+async def _documento_de_clinica(
+    sesion: Sesion,
+    principal: Principal,
+    document_id: uuid.UUID,
+    *,
+    bloquear: bool = False,
+) -> KnowledgeDocument:
+    consulta = select(KnowledgeDocument).where(
+        KnowledgeDocument.id == document_id,
+        KnowledgeDocument.clinic_id == principal.clinica_id,
+    )
+    if bloquear:
+        consulta = consulta.with_for_update()
+    documento = (await sesion.execute(consulta)).scalar_one_or_none()
+    if documento is None:
+        raise RecursoNoEncontrado("El documento no existe.")
+    return documento
+
+
+async def _validar_principales_documento(
+    sesion: Sesion,
+    principal: Principal,
+    solicitud: SolicitudPermisosDocumento,
+) -> None:
+    if principal.clinica_id is None:
+        raise RecursoNoEncontrado("El documento no existe.")
+    por_tipo: dict[str, set[uuid.UUID]] = {}
+    for regla in solicitud.permisos:
+        por_tipo.setdefault(regla.principal_tipo.value, set()).add(regla.principal_id)
+
+    validos: dict[str, set[uuid.UUID]] = {}
+    if ids := por_tipo.get("ROL"):
+        filas = await sesion.scalars(
+            select(Rol.id).where(
+                Rol.id.in_(sorted(ids)),
+                or_(Rol.clinica_id.is_(None), Rol.clinica_id == principal.clinica_id),
+            )
+        )
+        validos["ROL"] = set(filas)
+    if ids := por_tipo.get("USUARIO"):
+        filas = await sesion.scalars(
+            select(Usuario.id).where(
+                Usuario.id.in_(sorted(ids)), Usuario.clinica_id == principal.clinica_id
+            )
+        )
+        validos["USUARIO"] = set(filas)
+    if ids := por_tipo.get("SEDE"):
+        filas = await sesion.scalars(
+            select(Sede.id).where(Sede.id.in_(sorted(ids)), Sede.clinica_id == principal.clinica_id)
+        )
+        validos["SEDE"] = set(filas)
+    if ids := por_tipo.get("ESPECIALIDAD"):
+        filas = await sesion.scalars(
+            select(Especialidad.id).where(
+                Especialidad.id.in_(sorted(ids)),
+                Especialidad.clinica_id == principal.clinica_id,
+            )
+        )
+        validos["ESPECIALIDAD"] = set(filas)
+
+    if any(set(ids) != validos.get(tipo, set()) for tipo, ids in por_tipo.items()):
+        raise DatosInvalidos("Cada principal debe pertenecer a esta clínica.")
 
 
 # ---------------------------------------------------------------------------

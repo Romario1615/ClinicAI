@@ -26,9 +26,12 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from app.ia.embeddings import construir_proveedor_embeddings
-from app.modulos.usuarios.modelos import Usuario
-from app.nucleo.configuracion import Configuracion
+from app.modulos.organizacion.modelos import Clinica
+from app.modulos.usuarios.modelos import AmbitoAsignacion, Rol, Usuario, UsuarioRol
+from app.nucleo.autorizacion import TipoAmbito
+from app.nucleo.configuracion import Configuracion, Entorno
 from app.nucleo.reloj import RelojSistema
+from app.nucleo.seguridad import hashear_contrasena
 from app.semillas.catalogos import (
     cargar_catalogos,
     verificar_coherencia,
@@ -40,6 +43,69 @@ from app.semillas.sinteticos import cargar_datos_sinteticos
 
 def _escribir(mensaje: str = "") -> None:
     print(mensaje, flush=True)  # noqa: T201
+
+
+async def _habilitar_superadministrador_local(fabrica: async_sessionmaker[AsyncSession]) -> None:
+    async with fabrica() as sesion, sesion.begin():
+        clinicas = list(
+            (
+                await sesion.scalars(
+                    select(Clinica).where(
+                        Clinica.nombre.contains("Demostracion"),
+                        Clinica.nombre.contains("[SINTETICO]"),
+                        Clinica.anulado_en.is_(None),
+                    )
+                )
+            ).all()
+        )
+        if len(clinicas) != 1:
+            raise RuntimeError("Se esperaba exactamente una clínica de demostración sintética.")
+        rol = await sesion.scalar(
+            select(Rol).where(
+                Rol.codigo == "superadministrador",
+                Rol.clinica_id.is_(None),
+                Rol.es_sistema.is_(True),
+            )
+        )
+        if rol is None:
+            raise RuntimeError("Falta el rol superadministrador; cargue los catálogos.")
+        correo = "sofia.plataforma.9@example.invalid"
+        usuario = await sesion.scalar(select(Usuario).where(Usuario.correo == correo))
+        if usuario is None:
+            usuario = Usuario(
+                clinica_id=clinicas[0].id,
+                correo=correo,
+                hash_contrasena=hashear_contrasena("DesarrolloLocal2026"),
+                nombre="Sofia",
+                apellido="Plataforma [SINTETICO]",
+                activo=True,
+            )
+            sesion.add(usuario)
+            await sesion.flush()
+        asignacion = await sesion.scalar(
+            select(UsuarioRol).where(
+                UsuarioRol.usuario_id == usuario.id,
+                UsuarioRol.rol_id == rol.id,
+            )
+        )
+        if asignacion is None:
+            asignacion = UsuarioRol(usuario_id=usuario.id, rol_id=rol.id)
+            sesion.add(asignacion)
+            await sesion.flush()
+            for tipo in (
+                TipoAmbito.SEDE.value,
+                TipoAmbito.ESPECIALIDAD.value,
+                TipoAmbito.PROFESIONAL.value,
+                TipoAmbito.PACIENTE.value,
+            ):
+                sesion.add(
+                    AmbitoAsignacion(
+                        usuario_rol_id=asignacion.id,
+                        tipo=tipo,
+                        valor_id=None,
+                        incluir=True,
+                    )
+                )
 
 
 async def _ejecutar(opciones: argparse.Namespace) -> int:
@@ -74,6 +140,15 @@ async def _ejecutar(opciones: argparse.Namespace) -> int:
             _escribir(resumen.describir())
 
         if opciones.solo_catalogos:
+            return 0
+
+        if opciones.habilitar_superadministrador_local:
+            if configuracion.entorno not in {Entorno.LOCAL, Entorno.DESARROLLO}:
+                raise RuntimeError(
+                    "El acceso sintético de plataforma solo se habilita en local/desarrollo."
+                )
+            await _habilitar_superadministrador_local(fabrica)
+            _escribir("Acceso local sintético de superadministrador habilitado.")
             return 0
 
         # --- Datos sinteticos ---
@@ -202,6 +277,11 @@ def main(argumentos: list[str] | None = None) -> int:
         "--verificar",
         action="store_true",
         help="Comprueba que la base de datos coincida con el catalogo del codigo.",
+    )
+    analizador.add_argument(
+        "--habilitar-superadministrador-local",
+        action="store_true",
+        help="Crea o repara la cuenta sintética local del portal de clínicas.",
     )
     analizador.add_argument("--pacientes", type=int, default=60, help="Pacientes sinteticos (60).")
     analizador.add_argument("--citas", type=int, default=200, help="Citas sinteticas (200).")

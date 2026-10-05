@@ -23,6 +23,7 @@ from sqlalchemy import (
     String,
     Text,
     UniqueConstraint,
+    func,
     text,
 )
 from sqlalchemy.dialects.postgresql import INET, JSONB
@@ -90,9 +91,10 @@ class Usuario(Base, MezclaIdentificador, MezclaAuditoria):
     roles: Mapped[list[UsuarioRol]] = relationship(back_populates="usuario", lazy="raise")
 
     __table_args__ = (
-        # El correo es unico POR CLINICA, no globalmente: un profesional
-        # puede colaborar con dos clinicas distintas del mismo grupo.
-        UniqueConstraint("clinica_id", "correo", name="uq_usuario_clinica_id_correo"),
+        # La cuenta se resuelve antes de conocer la clinica. La asignacion de
+        # clinica la administra el responsable y el correo es globalmente
+        # unico, sin distinguir mayusculas.
+        Index("uq_usuario_correo_normalizado", func.lower(correo), unique=True),
         CheckConstraint("intentos_fallidos >= 0", name="intentos_no_negativos"),
         CheckConstraint(
             'NOT "2fa_habilitado" OR secreto_2fa_cifrado IS NOT NULL',

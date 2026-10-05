@@ -23,7 +23,8 @@ from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modulos.auditoria.modelos import Auditoria
-from app.modulos.organizacion.modelos import Clinica, Sede
+from app.modulos.historia.modelos import NotaEvolucion
+from app.modulos.organizacion.modelos import Clinica, Especialidad, Sede
 from app.modulos.pacientes.modelos import Paciente, RelacionAsistencial
 from app.modulos.profesionales.modelos import Profesional
 from app.modulos.usuarios.modelos import Usuario
@@ -40,6 +41,7 @@ PERMISOS_MEDICO = (
     "receta.confirmar",
     "receta.leer",
     "adherencia.leer",
+    "alerta_adherencia.atender",
 )
 
 
@@ -168,6 +170,58 @@ class TestAcceso:
         assert cuerpo["vigente"] is True
         assert cuerpo["raiz_id"] == cuerpo["id"]
 
+    async def test_no_se_firma_una_nota_a_nombre_de_otro_profesional(
+        self,
+        cliente: AsyncClient,
+        api: str,
+        cabeceras_medico: dict[str, str],
+        relacion: RelacionAsistencial,
+        paciente: Paciente,
+        sesion: AsyncSession,
+        clinica: Clinica,
+        especialidad: Especialidad,
+    ) -> None:
+        """El autor sale de la sesion. Antes se aceptaba cualquier profesional_id."""
+        otro = Profesional(
+            clinica_id=clinica.id,
+            especialidad_id=especialidad.id,
+            nombre="Otra",
+            apellido="Persona",
+            numero_registro_profesional=f"REG-{uuid.uuid4().hex[:8]}",
+        )
+        sesion.add(otro)
+        await sesion.flush()
+
+        respuesta = await cliente.post(
+            _ruta(api, "/notas"),
+            headers=cabeceras_medico,
+            json=_cuerpo_nota(paciente, otro),
+        )
+
+        assert respuesta.status_code == 403
+        total = await sesion.scalar(
+            sa.select(sa.func.count())
+            .select_from(NotaEvolucion)
+            .where(NotaEvolucion.profesional_id == otro.id)
+        )
+        assert total == 0
+
+    async def test_la_cita_de_otro_paciente_no_se_asocia(
+        self,
+        cliente: AsyncClient,
+        api: str,
+        cabeceras_medico: dict[str, str],
+        relacion: RelacionAsistencial,
+        paciente: Paciente,
+        profesional: Profesional,
+    ) -> None:
+        respuesta = await cliente.post(
+            _ruta(api, "/notas"),
+            headers=cabeceras_medico,
+            json=_cuerpo_nota(paciente, profesional, cita_id=str(uuid.uuid4())),
+        )
+        assert respuesta.status_code == 404
+
 
 # ===========================================================================
 #  Auditoria
@@ -229,7 +283,12 @@ class TestAuditoria:
         filas = list(
             (
                 await sesion.execute(
-                    sa.select(Auditoria).where(Auditoria.accion == AccionAuditada.NOTA_CREADA.value)
+                    # Acotada al paciente de la prueba (E-25): la base de desarrollo
+                    # puede tener otras notas sinteticas.
+                    sa.select(Auditoria).where(
+                        Auditoria.accion == AccionAuditada.NOTA_CREADA.value,
+                        Auditoria.paciente_id == paciente.id,
+                    )
                 )
             ).scalars()
         )
@@ -579,10 +638,96 @@ class TestRecetas:
         cliente: AsyncClient,
         api: str,
         cabeceras_medico: dict[str, str],
+        profesional: Profesional,
     ) -> None:
+        # Firmante propio: lo que se mide es la receta inexistente, no la firma.
         respuesta = await cliente.post(
             _ruta(api, f"/recetas/{uuid.uuid4()}/confirmacion"),
             headers=cabeceras_medico,
-            json={"profesional_id": str(uuid.uuid4())},
+            json={"profesional_id": str(profesional.id)},
         )
         assert respuesta.status_code == 404
+
+    async def test_alerta_se_lista_y_se_atiende_por_http_con_auditoria(
+        self,
+        cliente: AsyncClient,
+        api: str,
+        sesion: AsyncSession,
+        reloj,
+        cabeceras_medico: dict[str, str],
+        usuario: Usuario,
+        clinica: Clinica,
+        relacion: RelacionAsistencial,
+        paciente: Paciente,
+        profesional: Profesional,
+    ) -> None:
+        creada = await cliente.post(
+            _ruta(api, "/recetas"),
+            headers=cabeceras_medico,
+            json=self._cuerpo_receta(paciente, profesional),
+        )
+        receta_id = creada.json()["id"]
+        confirmada = await cliente.post(
+            _ruta(api, f"/recetas/{receta_id}/confirmacion"),
+            headers=cabeceras_medico,
+            json={"profesional_id": str(profesional.id)},
+        )
+        assert confirmada.status_code == 200, confirmada.text
+        reloj.avanzar(days=4)
+        # Avanzar el reloj tambien vence el token de acceso; renovar la sesion
+        # permite evaluar la receta con la identidad aun dentro de vigencia.
+        cabeceras_medico = await cabecera_bearer(cliente, usuario, clinica)
+
+        lectura = await cliente.get(
+            _ruta(api, f"/recetas/{receta_id}/adherencia"),
+            headers=cabeceras_medico,
+            params={"dias": 10},
+        )
+        assert lectura.status_code == 405, lectura.text
+        listado_sin_evaluar = await cliente.get(
+            _ruta(api, "/adherencia/alertas"), headers=cabeceras_medico
+        )
+        assert listado_sin_evaluar.status_code == 200
+        assert listado_sin_evaluar.json() == []
+
+        evaluacion = await cliente.post(
+            _ruta(api, f"/recetas/{receta_id}/adherencia"),
+            headers=cabeceras_medico,
+            params={"dias": 10},
+        )
+        assert evaluacion.status_code == 200, evaluacion.text
+        alerta_id = evaluacion.json()["alerta"]["id"]
+        listado = await cliente.get(_ruta(api, "/adherencia/alertas"), headers=cabeceras_medico)
+        assert listado.status_code == 200, listado.text
+        assert [alerta["id"] for alerta in listado.json()] == [alerta_id]
+
+        atendida = await cliente.post(
+            _ruta(api, f"/adherencia/alertas/{alerta_id}/atencion"),
+            headers=cabeceras_medico,
+            json={"nota_profesional": "Se reviso el registro con el paciente."},
+        )
+        assert atendida.status_code == 204, atendida.text
+        listado_vacio = await cliente.get(
+            _ruta(api, "/adherencia/alertas"), headers=cabeceras_medico
+        )
+        assert listado_vacio.status_code == 200
+        assert listado_vacio.json() == []
+
+        acciones = set(
+            (
+                await sesion.execute(
+                    sa.select(Auditoria.accion).where(
+                        Auditoria.accion.in_(
+                            (
+                                AccionAuditada.ALERTA_ADHERENCIA_CREADA.value,
+                                AccionAuditada.ALERTA_ADHERENCIA_ATENDIDA.value,
+                            )
+                        )
+                    )
+                )
+            ).scalars()
+        )
+        assert acciones == {
+            AccionAuditada.ALERTA_ADHERENCIA_CREADA.value,
+            AccionAuditada.ALERTA_ADHERENCIA_ATENDIDA.value,
+        }

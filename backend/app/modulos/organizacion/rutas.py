@@ -1,7 +1,8 @@
 """Rutas del catalogo de la organizacion.
 
-Solo lectura. Son los datos que la interfaz necesita para ofrecer opciones en
-lugar de pedir que alguien teclee identificadores UUID a mano.
+El catálogo ofrece opciones de agenda sin pedir identificadores UUID a mano.
+La ficha de clínica también admite lectura y edición dentro del ámbito de la
+sesión; sedes, profesionales y servicios siguen siendo de solo lectura.
 
 Por que exigen permiso si son "solo el catalogo"
 ------------------------------------------------
@@ -20,11 +21,15 @@ from __future__ import annotations
 
 import uuid
 from typing import Annotated
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from fastapi import APIRouter, Depends, Path, Query
+from sqlalchemy.exc import IntegrityError
 
 from app.modulos.organizacion.esquemas import (
+    ActualizarClinica,
     RespuestaClinica,
+    RespuestaClinicaCatalogo,
     RespuestaConsultorio,
     RespuestaEspecialidad,
     RespuestaProfesional,
@@ -33,13 +38,29 @@ from app.modulos.organizacion.esquemas import (
 )
 from app.modulos.organizacion.modelos import Clinica, Sede
 from app.modulos.profesionales.modelos import Profesional
+from app.nucleo.auditoria import AccionAuditada, construir_entrada
 from app.nucleo.autorizacion import Principal
-from app.nucleo.dependencias import RepoCatalogo, exige_permiso
-from app.nucleo.errores import RecursoNoEncontrado
+from app.nucleo.dependencias import Auditor, RelojActual, RepoCatalogo, Sesion, exige_permiso
+from app.nucleo.errores import ConflictoEstado, DatosInvalidos, RecursoNoEncontrado
 
 enrutador = APIRouter(prefix="/catalogo", tags=["catalogo"])
 
 PuedeLeerCatalogo = Annotated[Principal, Depends(exige_permiso("agenda.leer"))]
+PuedeLeerClinica = Annotated[
+    Principal,
+    Depends(exige_permiso("clinica.leer", "agenda.leer", "configuracion.escribir")),
+]
+PuedeLeerConfiguracionClinica = Annotated[
+    Principal, Depends(exige_permiso("clinica.leer", "clinica.escribir"))
+]
+PuedeEditarClinica = Annotated[Principal, Depends(exige_permiso("clinica.escribir"))]
+MAX_NOMBRE_CLINICA = 200
+MIN_LONGITUD_IDIOMA = 2
+MAX_LONGITUD_IDIOMA = 8
+LONGITUD_CODIGO_MONEDA = 3
+MAX_LONGITUD_CORREO = 200
+MAX_LONGITUD_IDENTIFICACION_FISCAL = 50
+MAX_LONGITUD_TELEFONO = 32
 
 
 def _zona_efectiva(sede: Sede, clinica: Clinica | None) -> str:
@@ -55,14 +76,14 @@ def _zona_efectiva(sede: Sede, clinica: Clinica | None) -> str:
 
 @enrutador.get(
     "/clinica",
-    response_model=RespuestaClinica,
+    response_model=RespuestaClinicaCatalogo,
     summary="Datos de la clinica del solicitante",
     responses={404: {"description": "El principal no tiene clinica asociada"}},
 )
 async def obtener_clinica(
-    principal: PuedeLeerCatalogo,
+    principal: PuedeLeerClinica,
     repo: RepoCatalogo,
-) -> RespuestaClinica:
+) -> RespuestaClinicaCatalogo:
     """Devuelve **la** clinica del principal, no una cualquiera por su id.
 
     No se acepta un identificador en la ruta a proposito: no existe ningun
@@ -72,12 +93,113 @@ async def obtener_clinica(
     clinica = await repo.obtener_clinica(principal)
     if clinica is None:
         raise RecursoNoEncontrado("No hay una clinica asociada a esta sesion.")
+    return RespuestaClinicaCatalogo(
+        id=clinica.id,
+        nombre=clinica.nombre,
+        zona_horaria=clinica.zona_horaria,
+        idioma=clinica.idioma,
+        moneda=clinica.moneda,
+        telefono=clinica.telefono,
+        correo=clinica.correo,
+    )
+
+
+@enrutador.get(
+    "/clinica/configuracion",
+    response_model=RespuestaClinica,
+    summary="Datos completos de la clinica para su configuracion",
+)
+async def obtener_configuracion_clinica(
+    principal: PuedeLeerConfiguracionClinica,
+    repo: RepoCatalogo,
+) -> RespuestaClinica:
+    """Lee los datos fiscales solo desde la pantalla de administracion."""
+    clinica = await repo.obtener_clinica(principal)
+    if clinica is None:
+        raise RecursoNoEncontrado("No hay una clinica asociada a esta sesion.")
     return RespuestaClinica(
         id=clinica.id,
         nombre=clinica.nombre,
         zona_horaria=clinica.zona_horaria,
         idioma=clinica.idioma,
         moneda=clinica.moneda,
+        identificacion_fiscal=clinica.identificacion_fiscal,
+        telefono=clinica.telefono,
+        correo=clinica.correo,
+    )
+
+
+@enrutador.put("/clinica", response_model=RespuestaClinica)
+async def actualizar_clinica(
+    datos: ActualizarClinica,
+    principal: PuedeEditarClinica,
+    repo: RepoCatalogo,
+    sesion: Sesion,
+    auditor: Auditor,
+    reloj: RelojActual,
+) -> RespuestaClinica:
+    """Actualiza solo la clínica asociada a la sesión, sin aceptar un ID."""
+    clinica = await repo.obtener_clinica(principal)
+    if clinica is None:
+        raise RecursoNoEncontrado("No hay una clinica asociada a esta sesion.")
+    nombre = datos.nombre.strip()
+    zona = datos.zona_horaria.strip()
+    idioma = datos.idioma.strip().lower()
+    moneda = datos.moneda.strip().upper()
+    correo = datos.correo.strip() if datos.correo else None
+    identificacion_fiscal = (
+        datos.identificacion_fiscal.strip() if datos.identificacion_fiscal else None
+    )
+    telefono = datos.telefono.strip() if datos.telefono else None
+    if not nombre or len(nombre) > MAX_NOMBRE_CLINICA:
+        raise DatosInvalidos("El nombre debe tener entre 1 y 200 caracteres.")
+    if not MIN_LONGITUD_IDIOMA <= len(idioma) <= MAX_LONGITUD_IDIOMA or not idioma.isalpha():
+        raise DatosInvalidos("El idioma debe ser un código de 2 a 8 letras.")
+    if len(moneda) != LONGITUD_CODIGO_MONEDA or not moneda.isalpha():
+        raise DatosInvalidos("La moneda debe ser un código de tres letras.")
+    if correo and (len(correo) > MAX_LONGITUD_CORREO or "@" not in correo):
+        raise DatosInvalidos("Ingrese un correo válido.")
+    if identificacion_fiscal and len(identificacion_fiscal) > MAX_LONGITUD_IDENTIFICACION_FISCAL:
+        raise DatosInvalidos("La identificación fiscal no puede superar 50 caracteres.")
+    if telefono and len(telefono) > MAX_LONGITUD_TELEFONO:
+        raise DatosInvalidos("El teléfono no puede superar 32 caracteres.")
+    try:
+        ZoneInfo(zona)
+    except (ZoneInfoNotFoundError, ValueError) as exc:
+        raise DatosInvalidos("Seleccione una zona horaria IANA válida.") from exc
+    clinica.nombre = nombre
+    clinica.identificacion_fiscal = identificacion_fiscal or None
+    clinica.zona_horaria = zona
+    clinica.idioma = idioma
+    clinica.moneda = moneda
+    clinica.telefono = telefono or None
+    clinica.correo = correo
+    try:
+        await sesion.flush()
+    except IntegrityError as exc:
+        await sesion.rollback()
+        raise ConflictoEstado("La identificación fiscal ya está registrada.") from exc
+    await auditor.registrar(
+        [
+            construir_entrada(
+                accion=AccionAuditada.CLINICA_MODIFICADA,
+                principal=principal,
+                ahora=reloj.ahora(),
+                entidad_tipo="clinica",
+                entidad_id=clinica.id,
+            )
+        ]
+    )
+    await sesion.commit()
+    return RespuestaClinica(
+        id=clinica.id,
+        nombre=clinica.nombre,
+        zona_horaria=clinica.zona_horaria,
+        idioma=clinica.idioma,
+        moneda=clinica.moneda,
+        identificacion_fiscal=clinica.identificacion_fiscal,
+        telefono=clinica.telefono,
+        correo=clinica.correo,
     )
 
 

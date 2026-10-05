@@ -190,7 +190,12 @@ async def recibir_webhook(
                 mensajes_descartados=len(carga.mensajes),
             )
         else:
-            servicio = ServicioConversaciones(sesion, reloj)
+            servicio = ServicioConversaciones(
+                sesion,
+                reloj,
+                clasificador=peticion.app.state.clasificador,
+                umbral_clinico=configuracion.decisiones_umbral_clinico,
+            )
             resumen = await servicio.procesar(carga, clinica_id=clinica_id)
 
     await sesion.commit()

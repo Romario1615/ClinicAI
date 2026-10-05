@@ -218,7 +218,6 @@ async def _sesiones(sesion: AsyncSession, usuario: Usuario) -> list[Sesion]:
 async def _agotar_intentos(
     servicio_auth: ServicioAutenticacion,
     cuenta: Usuario,
-    clinica: Clinica,
     reloj: RelojFijo,
 ) -> None:
     """Falla el login hasta activar el bloqueo.
@@ -231,9 +230,7 @@ async def _agotar_intentos(
     for _ in range(MAX_INTENTOS):
         reloj.avanzar(seconds=1)
         with pytest.raises(CredencialesInvalidas):
-            await servicio_auth.iniciar_sesion(
-                correo=cuenta.correo, contrasena="incorrecta", clinica_id=clinica.id
-            )
+            await servicio_auth.iniciar_sesion(correo=cuenta.correo, contrasena="incorrecta")
 
 
 def _refresco_sin_fila(usuario: Usuario, reloj: RelojFijo) -> str:
@@ -265,7 +262,6 @@ class TestInicioDeSesion:
         resultado = await servicio_auth.iniciar_sesion(
             correo=cuenta.correo,
             contrasena=CONTRASENA,
-            clinica_id=clinica.id,
             ip="203.0.113.10",
             agente_usuario="pytest",
         )
@@ -303,7 +299,6 @@ class TestInicioDeSesion:
         resultado = await servicio_auth.iniciar_sesion(
             correo=f"  {cuenta.correo.upper()}  ",
             contrasena=CONTRASENA,
-            clinica_id=clinica.id,
         )
         assert resultado.tokens is not None
 
@@ -315,9 +310,7 @@ class TestInicioDeSesion:
         clinica: Clinica,
     ) -> None:
         with pytest.raises(CredencialesInvalidas):
-            await servicio_auth.iniciar_sesion(
-                correo=cuenta.correo, contrasena="incorrecta", clinica_id=clinica.id
-            )
+            await servicio_auth.iniciar_sesion(correo=cuenta.correo, contrasena="incorrecta")
         await sesion.flush()
 
         assert cuenta.intentos_fallidos == 1
@@ -338,12 +331,10 @@ class TestInicioDeSesion:
         """Sin esto se podria enumerar al personal de la clinica."""
         with pytest.raises(CredencialesInvalidas) as inexistente:
             await servicio_auth.iniciar_sesion(
-                correo="nadie@example.invalid", contrasena=CONTRASENA, clinica_id=clinica.id
+                correo="nadie@example.invalid", contrasena=CONTRASENA
             )
         with pytest.raises(CredencialesInvalidas) as incorrecta:
-            await servicio_auth.iniciar_sesion(
-                correo=cuenta.correo, contrasena="incorrecta", clinica_id=clinica.id
-            )
+            await servicio_auth.iniciar_sesion(correo=cuenta.correo, contrasena="incorrecta")
 
         assert str(inexistente.value) == str(incorrecta.value)
         assert inexistente.value.codigo == incorrecta.value.codigo
@@ -355,26 +346,19 @@ class TestInicioDeSesion:
         assert len(historial) == 1
         assert historial[0].usuario_id is None
 
-    async def test_cuenta_de_otra_clinica_no_autentica(
+    async def test_la_clinica_se_toma_de_la_cuenta_y_no_del_cliente(
         self,
-        sesion: AsyncSession,
         servicio_auth: ServicioAutenticacion,
         cuenta: Usuario,
-        sufijo: str,
+        clinica: Clinica,
     ) -> None:
-        """El correo es unico por clinica, no globalmente."""
-        otra = Clinica(
-            nombre=f"Otra Clinica {sufijo}",
-            identificacion_fiscal=f"PRUEBA-OTRA-{sufijo}",
-            zona_horaria="America/Guayaquil",
+        """Un selector enviado por el navegador no cambia el ámbito del usuario."""
+        resultado = await servicio_auth.iniciar_sesion(correo=cuenta.correo, contrasena=CONTRASENA)
+        assert resultado.tokens is not None
+        principal = await servicio_auth.resolver_principal_desde_token(
+            resultado.tokens.token_acceso
         )
-        sesion.add(otra)
-        await sesion.flush()
-
-        with pytest.raises(CredencialesInvalidas):
-            await servicio_auth.iniciar_sesion(
-                correo=cuenta.correo, contrasena=CONTRASENA, clinica_id=otra.id
-            )
+        assert principal.clinica_id == clinica.id
 
     async def test_cuenta_desactivada_no_se_distingue_de_credencial_invalida(
         self,
@@ -387,9 +371,7 @@ class TestInicioDeSesion:
         await sesion.flush()
 
         with pytest.raises(CredencialesInvalidas):
-            await servicio_auth.iniciar_sesion(
-                correo=cuenta.correo, contrasena=CONTRASENA, clinica_id=clinica.id
-            )
+            await servicio_auth.iniciar_sesion(correo=cuenta.correo, contrasena=CONTRASENA)
         await sesion.flush()
 
         # El motivo real si queda en el historial interno, para el operador.
@@ -407,7 +389,7 @@ class TestBloqueoPorIntentos:
         clinica: Clinica,
         reloj: RelojFijo,
     ) -> None:
-        await _agotar_intentos(servicio_auth, cuenta, clinica, reloj)
+        await _agotar_intentos(servicio_auth, cuenta, reloj)
         await sesion.flush()
 
         assert cuenta.intentos_fallidos == MAX_INTENTOS
@@ -422,13 +404,11 @@ class TestBloqueoPorIntentos:
         reloj: RelojFijo,
     ) -> None:
         """Si la contrasena correcta saltara el bloqueo, el bloqueo no serviria."""
-        await _agotar_intentos(servicio_auth, cuenta, clinica, reloj)
+        await _agotar_intentos(servicio_auth, cuenta, reloj)
 
         reloj.avanzar(seconds=1)
         with pytest.raises(CuentaBloqueada) as excepcion:
-            await servicio_auth.iniciar_sesion(
-                correo=cuenta.correo, contrasena=CONTRASENA, clinica_id=clinica.id
-            )
+            await servicio_auth.iniciar_sesion(correo=cuenta.correo, contrasena=CONTRASENA)
         assert "minuto" in str(excepcion.value)
 
         await sesion.flush()
@@ -443,12 +423,10 @@ class TestBloqueoPorIntentos:
         clinica: Clinica,
         reloj: RelojFijo,
     ) -> None:
-        await _agotar_intentos(servicio_auth, cuenta, clinica, reloj)
+        await _agotar_intentos(servicio_auth, cuenta, reloj)
 
         reloj.avanzar(minutes=MINUTOS_BLOQUEO + 1)
-        resultado = await servicio_auth.iniciar_sesion(
-            correo=cuenta.correo, contrasena=CONTRASENA, clinica_id=clinica.id
-        )
+        resultado = await servicio_auth.iniciar_sesion(correo=cuenta.correo, contrasena=CONTRASENA)
 
         assert resultado.tokens is not None
         # Si el contador no se limpiara, el siguiente fallo volveria a
@@ -488,7 +466,6 @@ class TestSegundoFactor:
             await servicio_auth.iniciar_sesion(
                 correo=cuenta_sensible.correo,
                 contrasena=CONTRASENA,
-                clinica_id=clinica.id,
             )
         assert "configurado" in str(excepcion.value)
 
@@ -509,7 +486,6 @@ class TestSegundoFactor:
             await servicio_auth.iniciar_sesion(
                 correo=cuenta_sensible.correo,
                 contrasena=CONTRASENA,
-                clinica_id=clinica.id,
             )
         await sesion.flush()
         assert await _sesiones(sesion, cuenta_sensible) == []
@@ -529,7 +505,6 @@ class TestSegundoFactor:
             await servicio_auth.iniciar_sesion(
                 correo=cuenta_sensible.correo,
                 contrasena=CONTRASENA,
-                clinica_id=clinica.id,
                 codigo_2fa="000000",
             )
         await sesion.flush()
@@ -555,7 +530,6 @@ class TestSegundoFactor:
         resultado = await servicio_auth.iniciar_sesion(
             correo=cuenta_sensible.correo,
             contrasena=CONTRASENA,
-            clinica_id=clinica.id,
             codigo_2fa=pyotp.TOTP(secreto).now(),
         )
         await sesion.flush()
@@ -587,9 +561,7 @@ async def tokens(
     cuenta: Usuario,
     clinica: Clinica,
 ) -> ParTokens:
-    resultado = await servicio_auth.iniciar_sesion(
-        correo=cuenta.correo, contrasena=CONTRASENA, clinica_id=clinica.id
-    )
+    resultado = await servicio_auth.iniciar_sesion(correo=cuenta.correo, contrasena=CONTRASENA)
     await sesion.flush()
     assert resultado.tokens is not None
     return resultado.tokens
@@ -685,6 +657,8 @@ class TestRotacionDeTokens:
 
         with pytest.raises(TokenRevocado):
             await servicio_auth.refrescar_sesion(token_refresco=tokens.token_refresco)
+        with pytest.raises(TokenRevocado):
+            await servicio_auth.resolver_principal_desde_token(tokens.token_acceso)
         await sesion.flush()
 
         filas = await _sesiones(sesion, cuenta)
@@ -731,6 +705,8 @@ class TestCierreDeSesion:
 
         with pytest.raises(TokenRevocado):
             await servicio_auth.refrescar_sesion(token_refresco=tokens.token_refresco)
+        with pytest.raises(TokenRevocado):
+            await servicio_auth.resolver_principal_desde_token(tokens.token_acceso)
 
     async def test_cerrar_la_familia_revoca_toda_la_cadena(
         self,
@@ -770,9 +746,7 @@ class TestCierreDeSesion:
         tokens: ParTokens,
     ) -> None:
         # Segunda sesion, como desde otro dispositivo.
-        await servicio_auth.iniciar_sesion(
-            correo=cuenta.correo, contrasena=CONTRASENA, clinica_id=clinica.id
-        )
+        await servicio_auth.iniciar_sesion(correo=cuenta.correo, contrasena=CONTRASENA)
         await sesion.flush()
 
         afectadas = await servicio_auth.revocar_todas_las_sesiones(
@@ -811,9 +785,7 @@ class TestResolucionDelPrincipal:
         )
         await _asignar_rol(sesion, cuenta, rol)
 
-        resultado = await servicio_auth.iniciar_sesion(
-            correo=cuenta.correo, contrasena=CONTRASENA, clinica_id=clinica.id
-        )
+        resultado = await servicio_auth.iniciar_sesion(correo=cuenta.correo, contrasena=CONTRASENA)
         await sesion.flush()
         assert resultado.tokens is not None
         token = resultado.tokens.token_acceso
@@ -1159,5 +1131,6 @@ class TestAmbito:
 
         principal = await servicio_auth.resolver_principal_de_usuario(cuenta)
         assert {"paciente.leer_administrativo", "cita.crear"} <= principal.permisos
+        assert principal.role_ids == frozenset({asignacion.rol_id, segunda.rol_id})
         assert principal.ambito.cubre_sede(sede.id) is True
         assert principal.ambito.cubre_especialidad(especialidad.id) is True

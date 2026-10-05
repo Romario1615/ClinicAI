@@ -287,6 +287,31 @@ PLANTILLAS: dict[TipoMensajeOutbox, Plantilla] = {
         ),
         variables_permitidas=frozenset({"nombre", "fecha", "enlace"}),
     ),
+    # Promocion de campana. El texto de la oferta lo escribe y aprueba el
+    # personal; nunca lleva datos del paciente mas alla del nombre. En Meta la
+    # plantilla de marketing aprobada lleva cabecera de imagen y dos
+    # parametros de cuerpo, en orden alfabetico: nombre, texto_promocion.
+    TipoMensajeOutbox.PROMOCION: Plantilla(
+        tipo=TipoMensajeOutbox.PROMOCION,
+        nombre_meta="promocion_clinica",
+        texto=(
+            "Hola {nombre}. {texto_promocion} "
+            "Si no desea recibir más ofertas, responda BAJA PROMOCIONES."
+        ),
+        variables_permitidas=frozenset({"nombre", "texto_promocion"}),
+    ),
+    # Seguimiento de un plan: invita a agendar la siguiente cita. No nombra
+    # el tratamiento, la pieza ni el procedimiento (regla 10): la pantalla
+    # bloqueada del telefono es un canal publico.
+    TipoMensajeOutbox.SEGUIMIENTO_TRATAMIENTO: Plantilla(
+        tipo=TipoMensajeOutbox.SEGUIMIENTO_TRATAMIENTO,
+        nombre_meta="seguimiento_cita",
+        texto=(
+            "Hola {nombre}. En {clinica} queremos ayudarle a agendar su próxima cita. "
+            "Responda a este mensaje para ver horarios disponibles."
+        ),
+        variables_permitidas=frozenset({"nombre", "clinica"}),
+    ),
     TipoMensajeOutbox.ALERTA_PERSONAL: Plantilla(
         tipo=TipoMensajeOutbox.ALERTA_PERSONAL,
         nombre_meta="",

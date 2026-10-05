@@ -18,7 +18,7 @@ Lo que se comprueba aqui, y no en las pruebas del servicio:
 from __future__ import annotations
 
 import uuid
-from datetime import timedelta
+from datetime import UTC, datetime, timedelta
 
 import pytest
 import sqlalchemy as sa
@@ -26,7 +26,8 @@ from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modulos.agenda.modelos import Cita, EstadoCita
-from app.modulos.organizacion.modelos import Clinica, Sede, Servicio
+from app.modulos.odontologia.modelos import PlanTratamiento, ProcedimientoPlan
+from app.modulos.organizacion.modelos import Clinica, Consultorio, Sede, Servicio
 from app.modulos.pacientes.modelos import Paciente
 from app.modulos.profesionales.modelos import Profesional
 from app.modulos.usuarios.modelos import Usuario, UsuarioRol
@@ -42,6 +43,8 @@ PERMISOS_RECEPCION = (
     "cita.reprogramar",
     "cita.completar",
     "cita.marcar_inasistencia",
+    "cita.registrar_llegada",
+    "cita.iniciar_atencion",
 )
 
 
@@ -282,6 +285,134 @@ class TestDisponibilidad:
 #  Creacion
 # ===========================================================================
 class TestCreacion:
+    async def test_reservar_procedimiento_lo_vincula_al_plan_en_la_misma_operacion(
+        self,
+        cliente: AsyncClient,
+        api: str,
+        sesion: AsyncSession,
+        usuario: Usuario,
+        clinica: Clinica,
+        sede: Sede,
+        paciente: Paciente,
+        profesional: Profesional,
+        servicio: Servicio,
+        cuerpo_reserva: dict[str, str],
+    ) -> None:
+        cabeceras = await _recepcion(cliente, sesion, usuario, clinica, sede)
+        plan = PlanTratamiento(
+            clinica_id=clinica.id,
+            paciente_id=paciente.id,
+            profesional_id=profesional.id,
+            titulo="Plan dental aceptado",
+            estado="ACEPTADO",
+            moneda="USD",
+            aceptado_en=datetime(2026, 10, 1, tzinfo=UTC),
+            aceptacion_medio="DOCUMENTO_FIRMADO",
+            aceptacion_referencia="Constancia de prueba",
+            aceptacion_registrada_por=usuario.id,
+            creado_por=usuario.id,
+        )
+        sesion.add(plan)
+        await sesion.flush()
+        procedimiento = ProcedimientoPlan(
+            plan_id=plan.id,
+            fase=1,
+            orden=1,
+            servicio_id=servicio.id,
+            descripcion="Procedimiento de prueba",
+            precio="50.00",
+            estado="PENDIENTE",
+            creado_por=usuario.id,
+        )
+        sesion.add(procedimiento)
+        await sesion.flush()
+
+        respuesta = await cliente.post(
+            _ruta(api, "/citas"),
+            headers=cabeceras,
+            json={**cuerpo_reserva, "procedimiento_plan_id": str(procedimiento.id)},
+        )
+
+        assert respuesta.status_code == 201, respuesta.text
+        await sesion.refresh(procedimiento)
+        assert procedimiento.cita_id == uuid.UUID(respuesta.json()["id"])
+
+        duplicada = await cliente.post(
+            _ruta(api, "/citas"),
+            headers=cabeceras,
+            json={**cuerpo_reserva, "procedimiento_plan_id": str(procedimiento.id)},
+        )
+        assert duplicada.status_code == 409
+
+        cancelacion = await cliente.post(
+            _ruta(api, f"/citas/{procedimiento.cita_id}/cancelacion"),
+            headers=cabeceras,
+            json={"motivo": "Reagendar la fase de prueba"},
+        )
+        assert cancelacion.status_code == 200, cancelacion.text
+        await sesion.refresh(procedimiento)
+        assert procedimiento.cita_id is None
+
+    async def test_no_vincula_una_fase_a_una_cita_de_otro_paciente(
+        self,
+        cliente: AsyncClient,
+        api: str,
+        sesion: AsyncSession,
+        usuario: Usuario,
+        clinica: Clinica,
+        sede: Sede,
+        paciente: Paciente,
+        profesional: Profesional,
+        servicio: Servicio,
+        cuerpo_reserva: dict[str, str],
+    ) -> None:
+        cabeceras = await _recepcion(cliente, sesion, usuario, clinica, sede)
+        otro_paciente = Paciente(
+            clinica_id=clinica.id,
+            tipo_documento="CEDULA",
+            numero_documento=f"8{uuid.uuid4().hex[:9]}",
+            nombre="Otro",
+            apellido="Paciente de prueba",
+        )
+        sesion.add(otro_paciente)
+        await sesion.flush()
+        plan = PlanTratamiento(
+            clinica_id=clinica.id,
+            paciente_id=otro_paciente.id,
+            profesional_id=profesional.id,
+            titulo="Plan de otro paciente",
+            estado="ACEPTADO",
+            moneda="USD",
+            aceptado_en=datetime(2026, 10, 1, tzinfo=UTC),
+            aceptacion_medio="DOCUMENTO_FIRMADO",
+            aceptacion_referencia="Constancia de prueba",
+            aceptacion_registrada_por=usuario.id,
+            creado_por=usuario.id,
+        )
+        sesion.add(plan)
+        await sesion.flush()
+        procedimiento = ProcedimientoPlan(
+            plan_id=plan.id,
+            fase=1,
+            orden=1,
+            servicio_id=servicio.id,
+            descripcion="Procedimiento de otro paciente",
+            precio="50.00",
+            creado_por=usuario.id,
+        )
+        sesion.add(procedimiento)
+        await sesion.flush()
+
+        respuesta = await cliente.post(
+            _ruta(api, "/citas"),
+            headers=cabeceras,
+            json={**cuerpo_reserva, "procedimiento_plan_id": str(procedimiento.id)},
+        )
+
+        assert respuesta.status_code == 404
+        await sesion.refresh(procedimiento)
+        assert procedimiento.cita_id is None
+
     async def test_crea_una_cita_confirmada(
         self,
         cliente: AsyncClient,
@@ -529,6 +660,8 @@ class TestAislamientoPorAmbito:
             ("/cancelacion", {"motivo": "Prueba de acceso indebido"}),
             ("/completado", None),
             ("/inasistencia", None),
+            ("/llegada", None),
+            ("/inicio-atencion", None),
             (
                 "/reprogramacion",
                 {"nuevo_inicio": "2026-04-20T15:00:00+00:00", "motivo": "Prueba"},
@@ -620,6 +753,59 @@ class TestAislamientoPorAmbito:
 #  Ciclo de vida
 # ===========================================================================
 class TestCicloDeVida:
+    async def test_llegada_inicio_espera_y_cierre_quedan_registrados(
+        self,
+        cliente: AsyncClient,
+        api: str,
+        sesion: AsyncSession,
+        usuario: Usuario,
+        clinica: Clinica,
+        sede: Sede,
+        cuerpo_reserva: dict[str, str],
+    ) -> None:
+        cabeceras = await _recepcion(cliente, sesion, usuario, clinica, sede)
+        creada = await cliente.post(
+            _ruta(api, "/citas/bloqueos"), headers=cabeceras, json=cuerpo_reserva
+        )
+        assert creada.status_code == 201, creada.text
+        cita_id = creada.json()["id"]
+        confirmada = await cliente.post(
+            _ruta(api, f"/citas/{cita_id}/confirmacion"), headers=cabeceras
+        )
+        assert confirmada.status_code == 200
+
+        sin_llegada = await cliente.post(
+            _ruta(api, f"/citas/{cita_id}/inicio-atencion"), headers=cabeceras
+        )
+        assert sin_llegada.status_code == 409
+        assert sin_llegada.json()["codigo"] == "CONFLICTO_ESTADO"
+
+        llegada = await cliente.post(_ruta(api, f"/citas/{cita_id}/llegada"), headers=cabeceras)
+        assert llegada.status_code == 200, llegada.text
+        instante_llegada = datetime.fromisoformat(llegada.json()["llegada_en"])
+        assert llegada.json()["atencion_iniciada_en"] is None
+
+        duplicada = await cliente.post(_ruta(api, f"/citas/{cita_id}/llegada"), headers=cabeceras)
+        assert duplicada.status_code == 409
+
+        inasistencia = await cliente.post(
+            _ruta(api, f"/citas/{cita_id}/inasistencia"), headers=cabeceras
+        )
+        assert inasistencia.status_code == 409
+
+        inicio = await cliente.post(
+            _ruta(api, f"/citas/{cita_id}/inicio-atencion"), headers=cabeceras
+        )
+        assert inicio.status_code == 200, inicio.text
+        instante_inicio = datetime.fromisoformat(inicio.json()["atencion_iniciada_en"])
+        assert instante_inicio >= instante_llegada
+
+        completada = await cliente.post(
+            _ruta(api, f"/citas/{cita_id}/completado"), headers=cabeceras
+        )
+        assert completada.status_code == 200
+        assert completada.json()["completada_en"] is not None
+
     async def test_bloquear_confirmar_y_cancelar(
         self,
         cliente: AsyncClient,
@@ -740,6 +926,67 @@ class TestCicloDeVida:
         assert respuesta.status_code == 200
         assert respuesta.json()["id"] == cita_id
         assert respuesta.json()["inicio"] != creada.json()["inicio"]
+        actualizada = respuesta.json()
+        inicio = datetime.fromisoformat(actualizada["inicio"])
+        fin = datetime.fromisoformat(actualizada["fin"])
+        duracion = actualizada["duracion_minutos"] + actualizada["minutos_preparacion"]
+        assert (fin - inicio).total_seconds() == duracion * 60
+
+    async def test_reprogramar_puede_asignar_un_consultorio(
+        self,
+        cliente: AsyncClient,
+        api: str,
+        sesion: AsyncSession,
+        usuario: Usuario,
+        clinica: Clinica,
+        sede: Sede,
+        cuerpo_reserva: dict[str, str],
+        reloj: RelojFijo,
+    ) -> None:
+        """La nueva sala se valida dentro de la sede y queda en la cita."""
+        cabeceras = await _recepcion(cliente, sesion, usuario, clinica, sede)
+        consultorio = Consultorio(sede_id=sede.id, nombre=f"Consultorio {uuid.uuid4().hex[:8]}")
+        sesion.add(consultorio)
+        await sesion.flush()
+        creada = await cliente.post(_ruta(api, "/citas"), headers=cabeceras, json=cuerpo_reserva)
+        cita_id = creada.json()["id"]
+        nuevo_inicio = (reloj.ahora() + timedelta(days=2, hours=1)).isoformat()
+
+        respuesta = await cliente.post(
+            _ruta(api, f"/citas/{cita_id}/reprogramacion"),
+            headers=cabeceras,
+            json={
+                "nuevo_inicio": nuevo_inicio,
+                "nuevo_consultorio_id": str(consultorio.id),
+                "motivo": "Cambio de sala",
+            },
+        )
+
+        assert respuesta.status_code == 200
+        assert respuesta.json()["consultorio_id"] == str(consultorio.id)
+
+    async def test_reprogramar_al_mismo_horario_se_rechaza(
+        self,
+        cliente: AsyncClient,
+        api: str,
+        sesion: AsyncSession,
+        usuario: Usuario,
+        clinica: Clinica,
+        sede: Sede,
+        cuerpo_reserva: dict[str, str],
+    ) -> None:
+        cabeceras = await _recepcion(cliente, sesion, usuario, clinica, sede)
+        creada = await cliente.post(_ruta(api, "/citas"), headers=cabeceras, json=cuerpo_reserva)
+        cita = creada.json()
+
+        respuesta = await cliente.post(
+            _ruta(api, f"/citas/{cita['id']}/reprogramacion"),
+            headers=cabeceras,
+            json={"nuevo_inicio": cita["inicio"], "motivo": "Solicitud sintetica"},
+        )
+
+        assert respuesta.status_code == 422
+        assert "horario o recurso distinto" in respuesta.json()["mensaje"].lower()
 
     async def test_una_transicion_invalida_responde_409(
         self,
@@ -867,6 +1114,115 @@ class TestListado:
 
         respuesta = await cliente.get(
             _ruta(api, "/citas"), headers=cabeceras, params={"limite": 10_000}
+        )
+
+        assert respuesta.status_code == 422
+
+
+# ===========================================================================
+#  Consultorio
+# ===========================================================================
+class TestConsultorio:
+    """La sala de una cita tiene que ser de la sede de la cita.
+
+    Sin esa comprobacion, el identificador de una sala ajena quedaba grabado
+    en la cita y la restriccion de exclusion por consultorio bloqueaba turnos
+    de otra sede -- o de otra clinica -- sin que nadie lo viera.
+    """
+
+    async def _consultorio(
+        self, sesion: AsyncSession, sede: Sede, *, activo: bool = True
+    ) -> Consultorio:
+        sala = Consultorio(sede_id=sede.id, nombre=f"Sillon {uuid.uuid4().hex[:6]}", activo=activo)
+        sesion.add(sala)
+        await sesion.flush()
+        return sala
+
+    async def test_reserva_con_consultorio_de_la_sede(
+        self,
+        cliente: AsyncClient,
+        api: str,
+        sesion: AsyncSession,
+        usuario: Usuario,
+        clinica: Clinica,
+        sede: Sede,
+        cuerpo_reserva: dict[str, str],
+    ) -> None:
+        sala = await self._consultorio(sesion, sede)
+        cabeceras = await _recepcion(cliente, sesion, usuario, clinica, sede)
+
+        respuesta = await cliente.post(
+            _ruta(api, "/citas"),
+            headers=cabeceras,
+            json={**cuerpo_reserva, "consultorio_id": str(sala.id)},
+        )
+
+        assert respuesta.status_code == 201, respuesta.text
+        assert respuesta.json()["consultorio_id"] == str(sala.id)
+
+    async def test_consultorio_de_otra_sede_responde_404(
+        self,
+        cliente: AsyncClient,
+        api: str,
+        sesion: AsyncSession,
+        usuario: Usuario,
+        clinica: Clinica,
+        sede: Sede,
+        otra_sede: Sede,
+        cuerpo_reserva: dict[str, str],
+    ) -> None:
+        ajena = await self._consultorio(sesion, otra_sede)
+        cabeceras = await _recepcion(cliente, sesion, usuario, clinica, sede)
+
+        respuesta = await cliente.post(
+            _ruta(api, "/citas"),
+            headers=cabeceras,
+            json={**cuerpo_reserva, "consultorio_id": str(ajena.id)},
+        )
+
+        assert respuesta.status_code == 404
+        total = await sesion.scalar(
+            sa.select(sa.func.count()).select_from(Cita).where(Cita.consultorio_id == ajena.id)
+        )
+        assert total == 0
+
+    async def test_consultorio_inexistente_responde_404(
+        self,
+        cliente: AsyncClient,
+        api: str,
+        sesion: AsyncSession,
+        usuario: Usuario,
+        clinica: Clinica,
+        sede: Sede,
+        cuerpo_reserva: dict[str, str],
+    ) -> None:
+        cabeceras = await _recepcion(cliente, sesion, usuario, clinica, sede)
+
+        respuesta = await cliente.post(
+            _ruta(api, "/citas"),
+            headers=cabeceras,
+            json={**cuerpo_reserva, "consultorio_id": str(uuid.uuid4())},
+        )
+
+        assert respuesta.status_code == 404
+
+    async def test_consultorio_inactivo_se_rechaza(
+        self,
+        cliente: AsyncClient,
+        api: str,
+        sesion: AsyncSession,
+        usuario: Usuario,
+        clinica: Clinica,
+        sede: Sede,
+        cuerpo_reserva: dict[str, str],
+    ) -> None:
+        sala = await self._consultorio(sesion, sede, activo=False)
+        cabeceras = await _recepcion(cliente, sesion, usuario, clinica, sede)
+
+        respuesta = await cliente.post(
+            _ruta(api, "/citas"),
+            headers=cabeceras,
+            json={**cuerpo_reserva, "consultorio_id": str(sala.id)},
         )
 
         assert respuesta.status_code == 422

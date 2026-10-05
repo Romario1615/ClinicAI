@@ -451,6 +451,29 @@ class CifradorDatos:
                 "corresponde o la clave de cifrado cambio."
             ) from exc
 
+    def cifrar_bytes(self, datos: bytes, *, contexto: bytes | None = None) -> bytes:
+        """Cifra un binario y devuelve `nonce || texto cifrado || etiqueta`.
+
+        Variante para archivos (imagenes clinicas). Sin base64: el resultado
+        va a un almacen de objetos, no a una columna de texto, y codificarlo
+        inflaria un 33 % cada radiografia.
+        """
+        nonce = secrets.token_bytes(_LONGITUD_NONCE)
+        return nonce + self._aesgcm.encrypt(nonce, datos, contexto)
+
+    def descifrar_bytes(self, dato: bytes, *, contexto: bytes | None = None) -> bytes:
+        """Descifra un binario. Lanza `ValueError` si fue alterado o no corresponde."""
+        if len(dato) <= _LONGITUD_NONCE:
+            raise ValueError("El dato cifrado esta truncado.")
+        nonce, cifrado = dato[:_LONGITUD_NONCE], dato[_LONGITUD_NONCE:]
+        try:
+            return self._aesgcm.decrypt(nonce, cifrado, contexto)
+        except InvalidTag as exc:
+            raise ValueError(
+                "El descifrado fallo: el archivo fue alterado, el contexto no "
+                "corresponde o la clave de cifrado cambio."
+            ) from exc
+
 
 # ---------------------------------------------------------------------------
 #  Segundo factor (TOTP)

@@ -17,10 +17,23 @@ class FiltroDashboard(BaseModel):
         return self
 
 
+class ResumenEspera(BaseModel):
+    """Medidas operativas de espera dentro del periodo y ámbito consultados."""
+
+    promedio_minutos: int | None
+    personas_en_espera: int
+    espera_mayor_15_minutos: int
+
+
 class ResumenDashboard(BaseModel):
     desde: datetime
     hasta: datetime
     citas: dict[str, int]
     total_citas: int
     pacientes: int
+    espera: ResumenEspera
     pagos: dict[str, Decimal] | None
+
+
+class AnalisisInteligente(BaseModel):
+    analisis: str

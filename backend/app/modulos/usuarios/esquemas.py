@@ -16,6 +16,8 @@ from typing import Annotated
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from app.nucleo.seguridad import validar_politica_contrasena
+
 # La contrasena no se valida de forma estricta al iniciar sesion: la politica
 # se aplica al establecerla. Aqui solo se acota la longitud para no pasar
 # megabytes a Argon2id, que es un vector de agotamiento de CPU.
@@ -46,7 +48,6 @@ class PeticionInicioSesion(BaseModel):
 
     correo: CorreoElectronico
     contrasena: Annotated[str, Field(min_length=1, max_length=LONGITUD_MAXIMA_CONTRASENA)]
-    clinica_id: uuid.UUID
     # Opcional: solo lo envian los roles con segundo factor obligatorio.
     codigo_2fa: Annotated[str | None, Field(default=None, max_length=16)]
 
@@ -72,6 +73,131 @@ class PeticionCierreSesion(BaseModel):
     # «Cerrar sesion en todos los dispositivos»: revoca la cadena entera de
     # rotaciones, no solo la sesion presentada.
     todos_los_dispositivos: bool = False
+
+
+class CambioContrasena(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    contrasena_actual: Annotated[str, Field(min_length=1, max_length=LONGITUD_MAXIMA_CONTRASENA)]
+    contrasena_nueva: Annotated[str, Field(min_length=12, max_length=128)]
+
+    @field_validator("contrasena_nueva")
+    @classmethod
+    def _politica_contrasena(cls, valor: str) -> str:
+        problemas = validar_politica_contrasena(valor)
+        if problemas:
+            raise ValueError(" ".join(problemas))
+        return valor
+
+
+class CrearUsuarioClinica(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    correo: CorreoElectronico
+    contrasena_inicial: Annotated[str, Field(min_length=12, max_length=128)]
+    nombre: Annotated[str, Field(min_length=1, max_length=100)]
+    apellido: Annotated[str, Field(min_length=1, max_length=100)]
+    roles: Annotated[list[uuid.UUID], Field(min_length=1, max_length=8)]
+    profesional_id: uuid.UUID | None = None
+
+    @field_validator("contrasena_inicial")
+    @classmethod
+    def _politica_contrasena(cls, valor: str) -> str:
+        problemas = validar_politica_contrasena(valor)
+        if problemas:
+            raise ValueError(" ".join(problemas))
+        return valor
+
+    @field_validator("roles")
+    @classmethod
+    def _roles_sin_repetir(cls, valor: list[uuid.UUID]) -> list[uuid.UUID]:
+        if len(valor) != len(set(valor)):
+            raise ValueError("No repita roles en la asignacion.")
+        return valor
+
+
+class ActualizarRolesUsuario(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    roles: Annotated[list[uuid.UUID], Field(min_length=1, max_length=8)]
+    profesional_id: uuid.UUID | None = None
+
+    @field_validator("roles")
+    @classmethod
+    def _roles_sin_repetir(cls, valor: list[uuid.UUID]) -> list[uuid.UUID]:
+        if len(valor) != len(set(valor)):
+            raise ValueError("No repita roles en la asignacion.")
+        return valor
+
+
+class ActualizarEstadoUsuario(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    activo: bool
+
+
+class CrearRolClinica(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    codigo: Annotated[str, Field(min_length=2, max_length=50, pattern=r"^[a-z][a-z0-9_]+$")]
+    nombre: Annotated[str, Field(min_length=2, max_length=100)]
+    descripcion: Annotated[str | None, Field(default=None, max_length=1000)]
+    permisos: Annotated[list[str], Field(min_length=1, max_length=80)]
+
+    @field_validator("permisos")
+    @classmethod
+    def _permisos_sin_repetir(cls, valor: list[str]) -> list[str]:
+        if len(valor) != len(set(valor)):
+            raise ValueError("No repita permisos en el rol.")
+        return valor
+
+
+class PermisoDisponible(BaseModel):
+    codigo: str
+    descripcion: str
+    categoria: str
+
+
+class RolDisponible(BaseModel):
+    id: uuid.UUID
+    codigo: str
+    nombre: str
+    descripcion: str | None
+    es_sistema: bool
+    permisos: list[str]
+
+
+class UsuarioAdministrado(BaseModel):
+    id: uuid.UUID
+    correo: str
+    nombre: str
+    apellido: str
+    activo: bool
+    roles: list[str]
+    profesional_id: uuid.UUID | None = None
+    ultimo_acceso_en: datetime | None
+
+
+class ProfesionalDisponible(BaseModel):
+    id: uuid.UUID
+    nombre: str
+    apellido: str
+
+
+class PeticionAccesoLocal(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    codigo_rol: str = Field(min_length=1, max_length=50)
+
+
+class RolAccesoLocal(BaseModel):
+    codigo: str
+    nombre: str
+
+
+class RespuestaAccesosLocales(BaseModel):
+    habilitado: bool
+    roles: list[RolAccesoLocal]
 
 
 class RespuestaTokens(BaseModel):
@@ -137,12 +263,18 @@ class RespuestaIdentidad(BaseModel):
     dosfa_habilitado: bool
     debe_cambiar_contrasena: bool
     ultimo_acceso_en: datetime | None
+    # Profesional vinculado a la cuenta, si lo hay. La interfaz lo necesita
+    # para proponer «firmo yo» al crear una receta; el servidor no se fia de
+    # el: la firma se valida contra la sesion.
+    profesional_id: uuid.UUID | None = None
 
 
 __all__ = [
+    "PeticionAccesoLocal",
     "PeticionCierreSesion",
     "PeticionInicioSesion",
     "PeticionRefresco",
+    "RespuestaAccesosLocales",
     "RespuestaIdentidad",
     "RespuestaTokens",
     "ResumenAmbito",

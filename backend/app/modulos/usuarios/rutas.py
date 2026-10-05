@@ -19,29 +19,49 @@ confirman explicitamente antes de propagarse.
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Request, Response, status
+import uuid
+from typing import Annotated
 
+from fastapi import APIRouter, Depends, Request, Response, status
+
+from app.modulos.usuarios import administracion
 from app.modulos.usuarios.esquemas import (
+    ActualizarEstadoUsuario,
+    ActualizarRolesUsuario,
+    CambioContrasena,
+    CrearRolClinica,
+    CrearUsuarioClinica,
+    PermisoDisponible,
+    PeticionAccesoLocal,
     PeticionCierreSesion,
     PeticionInicioSesion,
     PeticionRefresco,
+    ProfesionalDisponible,
+    RespuestaAccesosLocales,
     RespuestaIdentidad,
     RespuestaTokens,
     ResumenAmbito,
+    RolDisponible,
+    UsuarioAdministrado,
 )
+from app.modulos.usuarios.modelos import MotivoRevocacion
 from app.modulos.usuarios.servicios import ParTokens
+from app.nucleo.auditoria import AccionAuditada, construir_entrada
 from app.nucleo.autorizacion import Principal
 from app.nucleo.dependencias import (
     Auditor,
     ConfiguracionActual,
     Limitador,
     PrincipalActual,
+    RelojActual,
     ServicioAuth,
     Sesion,
+    exige_permiso,
 )
 from app.nucleo.errores import (
     CredencialesInvalidas,
     CuentaBloqueada,
+    PermisoDenegado,
     RecursoNoEncontrado,
     SegundoFactorInvalido,
     SegundoFactorRequerido,
@@ -49,6 +69,15 @@ from app.nucleo.errores import (
 )
 
 enrutador = APIRouter(prefix="/autenticacion", tags=["autenticacion"])
+enrutador_usuarios = APIRouter(prefix="/usuarios", tags=["usuarios y accesos"])
+PuedeLeerUsuarios = Annotated[Principal, Depends(exige_permiso("usuario.leer"))]
+PuedeCrearUsuarios = Annotated[
+    Principal, Depends(exige_permiso("usuario.crear", "rol.asignar", exigir_todos=True))
+]
+PuedeAsignarRoles = Annotated[Principal, Depends(exige_permiso("rol.asignar"))]
+PuedeGestionarCuentas = Annotated[
+    Principal, Depends(exige_permiso("usuario.editar", "usuario.desactivar"))
+]
 
 
 def _ip(peticion: Request) -> str | None:
@@ -108,7 +137,7 @@ async def iniciar_sesion(
         fallar_cerrado=True,
     )
     await limitador.exigir(
-        f"login:cuenta:{datos.clinica_id}:{datos.correo.lower()}",
+        f"login:cuenta:{datos.correo.lower()}",
         limite=configuracion.limite_login_por_minuto,
         fallar_cerrado=True,
     )
@@ -117,7 +146,6 @@ async def iniciar_sesion(
         resultado = await servicio.iniciar_sesion(
             correo=datos.correo,
             contrasena=datos.contrasena,
-            clinica_id=datos.clinica_id,
             ip=_ip(peticion),
             agente_usuario=_agente(peticion),
             codigo_2fa=datos.codigo_2fa,
@@ -137,6 +165,66 @@ async def iniciar_sesion(
     if resultado.tokens is None:  # pragma: sin cobertura - iniciar_sesion siempre emite o lanza
         raise CredencialesInvalidas("Correo o contrasena incorrectos.")
 
+    await auditor.registrar(resultado.auditoria)
+    await sesion.commit()
+    return _a_respuesta(resultado.tokens)
+
+
+@enrutador.get(
+    "/accesos-locales",
+    response_model=RespuestaAccesosLocales,
+    summary="Roles disponibles para acceso local de desarrollo",
+)
+async def accesos_locales(servicio: ServicioAuth) -> RespuestaAccesosLocales:
+    """Expone accesos de datos sinteticos solo en local/desarrollo."""
+    nombres = {
+        "superadministrador": "Superadministrador",
+        "administrador_clinica": "Administración de clínica",
+        "recepcion": "Recepción",
+        "asistente": "Asistencia clínica",
+        "auditor": "Auditoría",
+        "profesional": "Profesional de salud",
+    }
+    roles = await servicio.roles_acceso_local()
+    return RespuestaAccesosLocales(
+        habilitado=bool(roles),
+        roles=[{"codigo": codigo, "nombre": nombres[codigo]} for codigo in roles],
+    )
+
+
+@enrutador.post(
+    "/sesion-local",
+    response_model=RespuestaTokens,
+    summary="Entrar con un rol de datos sinteticos (solo desarrollo)",
+    responses={404: {"description": "El acceso local no esta disponible"}},
+)
+async def iniciar_sesion_local(
+    peticion: Request,
+    datos: PeticionAccesoLocal,
+    sesion: Sesion,
+    servicio: ServicioAuth,
+    auditor: Auditor,
+    limitador: Limitador,
+    configuracion: ConfiguracionActual,
+) -> RespuestaTokens:
+    """Acceso rapido de desarrollo limitado a las cuentas sinteticas.
+
+    El servicio solo permite esta ruta si la configuracion de la app habilita
+    local/desarrollo; el rol se resuelve en servidor, nunca llega un user id.
+    """
+    origen = _ip(peticion) or "desconocido"
+    await limitador.exigir(
+        f"login-local:ip:{origen}",
+        limite=configuracion.limite_login_por_minuto,
+        fallar_cerrado=True,
+    )
+    resultado = await servicio.iniciar_sesion_rol_local(
+        codigo_rol=datos.codigo_rol,
+        ip=_ip(peticion),
+        agente_usuario=_agente(peticion),
+    )
+    if resultado.tokens is None:  # pragma: sin cobertura - el metodo emite o lanza
+        raise CredencialesInvalidas("El acceso local no esta disponible.")
     await auditor.registrar(resultado.auditoria)
     await sesion.commit()
     return _a_respuesta(resultado.tokens)
@@ -257,7 +345,30 @@ async def identidad(
         dosfa_habilitado=usuario.dosfa_habilitado,
         debe_cambiar_contrasena=usuario.debe_cambiar_contrasena,
         ultimo_acceso_en=usuario.ultimo_acceso_en,
+        profesional_id=principal.profesional_id,
     )
+
+
+@enrutador.post(
+    "/cambio-contrasena",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Cambiar la contraseña",
+)
+async def cambiar_contrasena(
+    datos: CambioContrasena,
+    principal: PrincipalActual,
+    servicio: ServicioAuth,
+    sesion: Sesion,
+    auditor: Auditor,
+) -> Response:
+    if principal.actor_id is None:
+        raise RecursoNoEncontrado("No se pudo resolver el usuario de la sesion.")
+    entrada = await servicio.cambiar_contrasena(
+        principal.actor_id, datos.contrasena_actual, datos.contrasena_nueva
+    )
+    await auditor.registrar([entrada])
+    await sesion.commit()
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 def _resumir_ambito(principal: Principal) -> ResumenAmbito:
@@ -277,4 +388,151 @@ def _resumir_ambito(principal: Principal) -> ResumenAmbito:
     )
 
 
-__all__ = ["enrutador"]
+@enrutador_usuarios.get("", response_model=list[UsuarioAdministrado])
+async def listar_usuarios(
+    principal: PuedeLeerUsuarios, sesion: Sesion
+) -> list[UsuarioAdministrado]:
+    return await administracion.listar_usuarios(sesion, principal)
+
+
+@enrutador_usuarios.get("/permisos", response_model=list[PermisoDisponible])
+async def listar_permisos(principal: PuedeAsignarRoles, sesion: Sesion) -> list[PermisoDisponible]:
+    return await administracion.listar_permisos(sesion, principal)
+
+
+@enrutador_usuarios.get("/roles", response_model=list[RolDisponible])
+async def listar_roles(principal: PuedeLeerUsuarios, sesion: Sesion) -> list[RolDisponible]:
+    return await administracion.listar_roles(sesion, principal)
+
+
+@enrutador_usuarios.get("/profesionales", response_model=list[ProfesionalDisponible])
+async def listar_profesionales_asignables(
+    principal: PuedeAsignarRoles,
+    sesion: Sesion,
+    usuario_id: uuid.UUID | None = None,
+) -> list[ProfesionalDisponible]:
+    return await administracion.listar_profesionales_asignables(sesion, principal, usuario_id)
+
+
+@enrutador_usuarios.post(
+    "/roles", response_model=RolDisponible, status_code=status.HTTP_201_CREATED
+)
+async def crear_rol(
+    datos: CrearRolClinica,
+    principal: PuedeAsignarRoles,
+    sesion: Sesion,
+    reloj: RelojActual,
+    auditor: Auditor,
+) -> RolDisponible:
+    rol = await administracion.crear_rol(sesion, principal, datos)
+    await auditor.registrar(
+        [
+            construir_entrada(
+                accion=AccionAuditada.ROL_CREADO,
+                principal=principal,
+                ahora=reloj.ahora(),
+                entidad_tipo="rol",
+                entidad_id=rol.id,
+                codigo_rol=rol.codigo,
+                cantidad_permisos=len(rol.permisos),
+            )
+        ]
+    )
+    await sesion.commit()
+    return rol
+
+
+@enrutador_usuarios.post(
+    "", response_model=UsuarioAdministrado, status_code=status.HTTP_201_CREATED
+)
+async def crear_usuario(
+    datos: CrearUsuarioClinica,
+    principal: PuedeCrearUsuarios,
+    sesion: Sesion,
+    reloj: RelojActual,
+    auditor: Auditor,
+) -> UsuarioAdministrado:
+    usuario = await administracion.crear_usuario(sesion, principal, datos)
+    await auditor.registrar(
+        [
+            construir_entrada(
+                accion=AccionAuditada.USUARIO_CREADO,
+                principal=principal,
+                ahora=reloj.ahora(),
+                entidad_tipo="usuario",
+                entidad_id=usuario.id,
+                roles=usuario.roles,
+            )
+        ]
+    )
+    await sesion.commit()
+    return usuario
+
+
+@enrutador_usuarios.put("/{usuario_id}/roles", response_model=UsuarioAdministrado)
+async def reemplazar_roles(
+    usuario_id: uuid.UUID,
+    datos: ActualizarRolesUsuario,
+    principal: PuedeAsignarRoles,
+    sesion: Sesion,
+    reloj: RelojActual,
+    auditor: Auditor,
+) -> UsuarioAdministrado:
+    usuario = await administracion.reemplazar_roles_usuario(
+        sesion, principal, usuario_id, datos.roles, datos.profesional_id
+    )
+    await auditor.registrar(
+        [
+            construir_entrada(
+                accion=AccionAuditada.USUARIO_MODIFICADO,
+                principal=principal,
+                ahora=reloj.ahora(),
+                entidad_tipo="usuario",
+                entidad_id=usuario.id,
+                roles=usuario.roles,
+            )
+        ]
+    )
+    await sesion.commit()
+    return usuario
+
+
+@enrutador_usuarios.put("/{usuario_id}/estado", response_model=UsuarioAdministrado)
+async def cambiar_estado_usuario(
+    usuario_id: uuid.UUID,
+    datos: ActualizarEstadoUsuario,
+    principal: PuedeGestionarCuentas,
+    sesion: Sesion,
+    servicio: ServicioAuth,
+    reloj: RelojActual,
+    auditor: Auditor,
+) -> UsuarioAdministrado:
+    permiso_necesario = "usuario.editar" if datos.activo else "usuario.desactivar"
+    if not principal.tiene_permiso(permiso_necesario):
+        raise PermisoDenegado("No tiene permiso para cambiar el estado de esta cuenta.")
+    usuario = await administracion.cambiar_estado_usuario(
+        sesion, principal, usuario_id, datos.activo
+    )
+    if not datos.activo:
+        await servicio.revocar_todas_las_sesiones(
+            usuario_id, motivo=MotivoRevocacion.USUARIO_DESACTIVADO
+        )
+    await auditor.registrar(
+        [
+            construir_entrada(
+                accion=AccionAuditada.USUARIO_MODIFICADO
+                if datos.activo
+                else AccionAuditada.USUARIO_DESACTIVADO,
+                principal=principal,
+                ahora=reloj.ahora(),
+                entidad_tipo="usuario",
+                entidad_id=usuario.id,
+                activo=datos.activo,
+            )
+        ]
+    )
+    await sesion.commit()
+    return usuario
+
+
+__all__ = ["enrutador", "enrutador_usuarios"]

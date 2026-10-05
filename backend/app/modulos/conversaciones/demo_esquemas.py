@@ -1,5 +1,5 @@
 import uuid
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -12,6 +12,7 @@ class AbrirDemo(FiltroDashboard):
     sede_id: uuid.UUID
     servicio_id: uuid.UUID
     profesional_id: uuid.UUID
+    modo: Literal["simulado", "configurado"] = "simulado"
 
 
 class MensajeDemo(BaseModel):
@@ -21,7 +22,7 @@ class MensajeDemo(BaseModel):
 
 class RespuestaDemo(BaseModel):
     sesion_id: uuid.UUID
-    modo: str = "simulado"
+    modo: Literal["simulado", "configurado"] = "simulado"
     mensaje: str
     requiere_humano: bool = False
     herramientas: list[str] = Field(default_factory=list)

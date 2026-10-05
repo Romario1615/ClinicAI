@@ -46,6 +46,9 @@ FRASES: dict[IntencionEntrante, frozenset[str]] = {
     IntencionEntrante.BAJA: frozenset(
         {"baja", "stop", "no molestar", "dar de baja", "cancelar suscripcion", "unsubscribe"}
     ),
+    IntencionEntrante.BAJA_PROMOCIONES: frozenset(
+        {"baja promociones", "no quiero promociones", "sin promociones", "stop promociones"}
+    ),
     IntencionEntrante.ALTA: frozenset({"alta", "start", "si acepto recibir mensajes"}),
     IntencionEntrante.AYUDA: frozenset({"ayuda", "help", "menu", "opciones"}),
 }

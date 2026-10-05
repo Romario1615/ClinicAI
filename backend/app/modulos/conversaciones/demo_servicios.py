@@ -5,7 +5,8 @@ from datetime import timedelta
 from sqlalchemy import inspect, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.ia.conversacion import ejecutar_turno
+from app.ia.conversacion import ProveedorDemostracion, ejecutar_turno
+from app.ia.decisiones import ClasificadorIntencion
 from app.ia.herramientas.contrato import ContextoHerramienta
 from app.ia.seleccion_llm import FabricaConversacional
 from app.modulos.conversaciones.demo_esquemas import AbrirDemo, RespuestaDemo
@@ -70,7 +71,9 @@ async def abrir(
     sesion.add(demo)
     await sesion.flush()
     respuesta = RespuestaDemo(
-        sesion_id=demo.id, mensaje="Simulacion iniciada. Escriba 'buscar horarios' o 'mis citas'."
+        sesion_id=demo.id,
+        modo=datos.modo,
+        mensaje="Conversacion iniciada. Escriba 'buscar horarios' o 'mis citas'.",
     )
     completar_operacion(operacion, respuesta.model_dump(mode="json"), reloj)
     return respuesta
@@ -106,6 +109,8 @@ async def responder(
     texto: str,
     clave: str,
     fabrica: FabricaConversacional,
+    clasificador: ClasificadorIntencion | None = None,
+    umbrales: tuple[float, float] = (0.35, 0.85),
 ) -> RespuestaDemo:
     demo = await obtener(sesion, principal, reloj, identificador)
     registro = await iniciar_operacion(
@@ -119,6 +124,7 @@ async def responder(
     if hilo.estado == "EN_HANDOFF":
         return RespuestaDemo(
             sesion_id=demo.id,
+            modo=demo.negocio.get("modo", "simulado"),
             mensaje="Esta conversacion requiere atencion del personal. Inicie otra simulacion para continuar las pruebas.",
             requiere_humano=True,
         )
@@ -147,7 +153,14 @@ async def responder(
     memoria = dict(demo.memoria)
     contexto = ContextoHerramienta(actor, sesion, reloj, demo.conversacion_id)
     resultado, herramientas = await ejecutar_turno(
-        fabrica(), texto, memoria, demo.negocio, contexto
+        fabrica() if demo.negocio.get("modo") == "configurado" else ProveedorDemostracion(),
+        texto,
+        memoria,
+        demo.negocio,
+        contexto,
+        clasificador=clasificador,
+        umbral_clinico=umbrales[0],
+        umbral_intencion=umbrales[1],
     )
     # Una colision de agenda puede deshacer la transaccion. Recuperamos el
     # registro del canal sin perder la respuesta segura que tradujo la herramienta.
@@ -167,6 +180,7 @@ async def responder(
     demo.memoria = memoria
     respuesta = RespuestaDemo(
         sesion_id=demo.id,
+        modo=str(demo.negocio.get("modo", "simulado")),
         mensaje=resultado.mensaje,
         requiere_humano=resultado.requiere_humano,
         herramientas=herramientas,

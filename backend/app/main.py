@@ -36,21 +36,34 @@ from fastapi.responses import JSONResponse
 
 from app.api.manejadores import registrar_manejadores
 from app.api.middleware import MiddlewareCorrelacion
+from app.ia.decisiones import construir_clasificador
 from app.ia.embeddings import construir_proveedor_embeddings
+from app.ia.imagenes_generativas import construir_generador
 from app.ia.seleccion_llm import construir_fabrica_conversacional
 from app.mensajeria import rutas as rutas_whatsapp
 from app.modulos.agenda import rutas as rutas_agenda
 from app.modulos.calendario import rutas as rutas_calendario
 from app.modulos.calendario.seleccion import construir_proveedores
+from app.modulos.configuracion import rutas as rutas_configuracion
 from app.modulos.conocimiento import rutas as rutas_conocimiento
 from app.modulos.conversaciones import demo_rutas
+from app.modulos.conversaciones import rutas as rutas_conversaciones
 from app.modulos.dashboard import rutas as rutas_dashboard
 from app.modulos.historia import rutas as rutas_historia
+from app.modulos.imagenes import rutas as rutas_imagenes
 from app.modulos.lista_espera import rutas as rutas_espera
+from app.modulos.odontologia import placa as rutas_placa
+from app.modulos.odontologia import planes_rutas
+from app.modulos.odontologia import rutas as rutas_odontologia
+from app.modulos.organizacion import plataforma as rutas_plataforma
 from app.modulos.organizacion import rutas as rutas_catalogo
+from app.modulos.pacientes import consentimientos as rutas_consentimientos
 from app.modulos.pacientes import rutas as rutas_pacientes
 from app.modulos.pagos import rutas as rutas_pagos
+from app.modulos.profesionales import delegaciones as rutas_delegaciones
+from app.modulos.promociones import rutas as rutas_promociones
 from app.modulos.usuarios import rutas as rutas_usuarios
+from app.nucleo.almacen import AlmacenS3, ErrorAlmacen, construir_almacen
 from app.nucleo.bd import GestorBaseDatos
 from app.nucleo.configuracion import Configuracion
 from app.nucleo.limite_tasa import ClienteRedis, LimitadorTasa
@@ -107,6 +120,16 @@ async def _ciclo_de_vida(aplicacion: FastAPI) -> AsyncIterator[None]:
             _logger.info("arranque.base_datos_lista", entorno=configuracion.entorno.value)
     except Exception as exc:  # el arranque no debe depender de la base
         _logger.error("arranque.base_datos_inaccesible", motivo=type(exc).__name__)
+
+    # Mismo criterio que la base: se avisa y se arranca. Una carga de imagen
+    # sin almacen falla con 503 y lo dice; un proceso que no arranca no.
+    almacen = getattr(aplicacion.state, "almacen_objetos", None)
+    if isinstance(almacen, AlmacenS3):
+        try:
+            await almacen.asegurar_bucket()
+            _logger.info("arranque.almacen_listo", almacen="s3")
+        except ErrorAlmacen as exc:
+            _logger.error("arranque.almacen_inaccesible", motivo=str(exc))
 
     yield
 
@@ -166,6 +189,7 @@ def crear_aplicacion(
         eco=False,
     )
     aplicacion.state.cifrador = CifradorDatos(configuracion.clave_cifrado_datos.get_secret_value())
+    aplicacion.state.almacen_objetos = construir_almacen(configuracion)
     aplicacion.state.redis = (
         cliente_redis if cliente_redis is not None else _crear_cliente_redis(configuracion)
     )
@@ -187,6 +211,9 @@ def crear_aplicacion(
     # porque el proveedor real guarda la transcripcion del turno; el cliente
     # HTTP, que es lo caro, si se comparte (ver `ia/seleccion_llm.py`).
     aplicacion.state.fabrica_conversacional = construir_fabrica_conversacional(configuracion)
+    # Modelo de decision tipada (Jev o reglas). Decide; nunca ejecuta.
+    aplicacion.state.clasificador = construir_clasificador(configuracion)
+    aplicacion.state.generador_imagenes = construir_generador(configuracion)
 
     # --- Middleware ---
     #
@@ -214,19 +241,31 @@ def crear_aplicacion(
 
 def _registrar_rutas(aplicacion: FastAPI) -> None:
     aplicacion.include_router(rutas_usuarios.enrutador, prefix=PREFIJO_API)
+    aplicacion.include_router(rutas_usuarios.enrutador_usuarios, prefix=PREFIJO_API)
+    aplicacion.include_router(rutas_configuracion.enrutador, prefix=PREFIJO_API)
     aplicacion.include_router(rutas_agenda.enrutador, prefix=PREFIJO_API)
     aplicacion.include_router(rutas_catalogo.enrutador, prefix=PREFIJO_API)
+    aplicacion.include_router(rutas_plataforma.enrutador, prefix=PREFIJO_API)
+    aplicacion.include_router(rutas_consentimientos.enrutador, prefix=PREFIJO_API)
     aplicacion.include_router(rutas_pacientes.enrutador, prefix=PREFIJO_API)
     aplicacion.include_router(rutas_pagos.enrutador, prefix=PREFIJO_API)
     aplicacion.include_router(rutas_dashboard.enrutador, prefix=PREFIJO_API)
     aplicacion.include_router(rutas_espera.enrutador, prefix=PREFIJO_API)
     aplicacion.include_router(demo_rutas.enrutador, prefix=PREFIJO_API)
+    aplicacion.include_router(rutas_conversaciones.enrutador, prefix=PREFIJO_API)
     aplicacion.include_router(rutas_historia.enrutador, prefix=PREFIJO_API)
+    aplicacion.include_router(rutas_imagenes.enrutador, prefix=PREFIJO_API)
+    aplicacion.include_router(rutas_imagenes.enrutador_imagenes, prefix=PREFIJO_API)
     # El webhook no lleva autenticacion: lo protege la firma HMAC, no un
     # token. Ver el encabezado de app/mensajeria/rutas.py.
     aplicacion.include_router(rutas_whatsapp.enrutador, prefix=PREFIJO_API)
     aplicacion.include_router(rutas_calendario.enrutador, prefix=PREFIJO_API)
     aplicacion.include_router(rutas_conocimiento.enrutador, prefix=PREFIJO_API)
+    aplicacion.include_router(rutas_promociones.enrutador, prefix=PREFIJO_API)
+    aplicacion.include_router(rutas_placa.enrutador_placa, prefix=PREFIJO_API)
+    aplicacion.include_router(rutas_delegaciones.enrutador, prefix=PREFIJO_API)
+    aplicacion.include_router(rutas_odontologia.enrutador, prefix=PREFIJO_API)
+    aplicacion.include_router(planes_rutas.enrutador_planes, prefix=PREFIJO_API)
 
     @aplicacion.get("/salud/vivo", tags=["salud"], summary="El proceso responde")
     async def vivo() -> dict[str, str]:

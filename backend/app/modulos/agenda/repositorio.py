@@ -44,6 +44,7 @@ from app.modulos.agenda.modelos import (
 )
 from app.modulos.organizacion.modelos import (
     Clinica,
+    Consultorio,
     Descanso,
     Feriado,
     HorarioAtencion,
@@ -481,6 +482,11 @@ class RepositorioAgenda:
     async def obtener_sede(self, sede_id: uuid.UUID) -> Sede | None:
         return (
             await self._sesion.execute(select(Sede).where(Sede.id == sede_id))
+        ).scalar_one_or_none()
+
+    async def obtener_consultorio(self, consultorio_id: uuid.UUID) -> Consultorio | None:
+        return (
+            await self._sesion.execute(select(Consultorio).where(Consultorio.id == consultorio_id))
         ).scalar_one_or_none()
 
     # ------------------------------------------------------------------

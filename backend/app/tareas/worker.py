@@ -28,11 +28,16 @@ from arq import cron
 from arq.connections import RedisSettings
 
 from app.nucleo.configuracion import Configuracion
+from app.tareas.adherencia import evaluar_alertas_adherencia
 from app.tareas.agenda import expirar_bloqueos
 from app.tareas.calendario import reconciliar_calendarios, sincronizar_calendarios
 from app.tareas.contexto import al_arrancar, al_parar
 from app.tareas.lista_espera import expirar_ofertas
-from app.tareas.outbox import procesar_outbox, recuperar_mensajes_huerfanos
+from app.tareas.outbox import (
+    encolar_recordatorios,
+    procesar_outbox,
+    recuperar_mensajes_huerfanos,
+)
 
 
 def _ajustes_redis() -> RedisSettings:
@@ -46,13 +51,25 @@ class ConfiguracionWorker:
         expirar_bloqueos,
         expirar_ofertas,
         procesar_outbox,
+        encolar_recordatorios,
         recuperar_mensajes_huerfanos,
         sincronizar_calendarios,
         reconciliar_calendarios,
+        evaluar_alertas_adherencia,
     ]
 
     cron_jobs: list[Any] = [  # noqa: RUF012
         cron(expirar_ofertas, minute=set(range(60)), unique=True, timeout=120, max_tries=1),
+        # Diario a las 09:20 de Ecuador (14:20 UTC): las omisiones se cuentan
+        # sobre siete dias y una alerta abierta bloquea repeticiones.
+        cron(
+            evaluar_alertas_adherencia,
+            hour={14},
+            minute={20},
+            unique=True,
+            timeout=600,
+            max_tries=1,
+        ),
         # Cada minuto. Es la resolucion util: el bloqueo dura minutos, y
         # barrer cada cinco significaria que un turno abandonado sigue
         # retenido hasta cinco minutos de mas. La consulta esta indexada por
@@ -71,6 +88,13 @@ class ConfiguracionWorker:
         # recordatorios: con cinco minutos, un aviso programado para las 07:00
         # podria salir a las 07:04, y el paciente que iba a las 07:30 ya salio
         # de casa.
+        cron(
+            encolar_recordatorios,
+            minute=set(range(60)),
+            unique=True,
+            timeout=120,
+            max_tries=1,
+        ),
         cron(
             procesar_outbox,
             minute=set(range(60)),

@@ -64,6 +64,8 @@ class IntencionEntrante(StrEnum):
     ACEPTAR_OFERTA = "ACEPTAR_OFERTA"
     REGISTRAR_TOMA = "REGISTRAR_TOMA"
     BAJA = "BAJA"
+    # Baja solo de las promociones: sigue recibiendo recordatorios de cita.
+    BAJA_PROMOCIONES = "BAJA_PROMOCIONES"
     ALTA = "ALTA"
     AYUDA = "AYUDA"
     DESCONOCIDA = "DESCONOCIDA"
@@ -178,7 +180,7 @@ class MensajeEntrante(Base, MezclaIdentificador):
         UniqueConstraint("external_id", name="uq_mensaje_entrante_external_id"),
         CheckConstraint(
             "intencion IN ('CONFIRMAR', 'CANCELAR', 'ACEPTAR_OFERTA', 'REGISTRAR_TOMA', "
-            "'BAJA', 'ALTA', 'AYUDA', 'DESCONOCIDA')",
+            "'BAJA', 'BAJA_PROMOCIONES', 'ALTA', 'AYUDA', 'DESCONOCIDA')",
             name="intencion_valida",
         ),
         Index("ix_mensaje_entrante_conversacion", "conversacion_id", "recibido_en"),

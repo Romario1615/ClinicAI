@@ -26,6 +26,7 @@ como E-1 y no debe presentarse como verificado.
 
 from __future__ import annotations
 
+import hashlib
 import uuid
 from dataclasses import dataclass, field
 from enum import StrEnum
@@ -80,6 +81,8 @@ class MensajeSaliente:
     variables: tuple[str, ...]
     texto: str
     idioma: str = "es"
+    # Media id de Meta para la cabecera de imagen (plantillas de marketing).
+    imagen_cabecera: str | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -152,6 +155,11 @@ class AdaptadorSandbox:
             referencia_externa=referencia,
             detalle="Entregado por el adaptador sandbox. No salio a la red.",
         )
+
+    async def subir_medio(self, datos: bytes, tipo_mime: str) -> str:
+        """Simula la subida de un medio: devuelve un id estable por contenido."""
+        del tipo_mime
+        return f"sandbox-media-{hashlib.sha256(datos).hexdigest()[:16]}"
 
     def programar_fallo(self, resultado: ResultadoEnvio, detalle: str = "fallo simulado") -> None:
         self.fallos_programados.append(RespuestaEnvio(resultado=resultado, detalle=detalle))
@@ -266,9 +274,56 @@ class AdaptadorWhatsAppCloud:
 
         return self._interpretar(respuesta)
 
+    async def subir_medio(self, datos: bytes, tipo_mime: str) -> str:
+        """Sube una imagen a la Cloud API y devuelve su media id.
+
+        Se sube una vez por campana, no por destinatario: el id se reutiliza
+        en cada envio de la plantilla. **Sin verificar contra el proveedor**
+        (limitacion E-1), igual que `enviar`.
+        """
+        url = (
+            f"{self._credenciales.url_base}/{self._credenciales.version_api}/"
+            f"{self._credenciales.id_numero_telefono}/media"
+        )
+        cliente = self._cliente or httpx.AsyncClient(timeout=self._timeout)
+        propio = self._cliente is None
+        try:
+            respuesta = await cliente.post(
+                url,
+                data={"messaging_product": "whatsapp", "type": tipo_mime},
+                files={"file": ("imagen", datos, tipo_mime)},
+                headers={"Authorization": f"Bearer {self._credenciales.token_acceso}"},
+            )
+        except httpx.HTTPError as exc:
+            raise ProveedorExternoNoDisponible(
+                f"No se pudo subir la imagen a WhatsApp: {type(exc).__name__}"
+            ) from exc
+        finally:
+            if propio:
+                await cliente.aclose()
+        if respuesta.status_code >= HTTP_REDIRECCION:
+            raise ProveedorExternoNoDisponible(
+                f"WhatsApp rechazo la imagen ({respuesta.status_code})."
+            )
+        return str(respuesta.json()["id"])
+
     def _construir_cuerpo(self, mensaje: MensajeSaliente) -> dict[str, object]:
         # Nombres impuestos por la API externa: no se traducen (CLAUDE.md,
         # seccion 2, excepcion de APIs externas).
+        componentes: list[dict[str, object]] = []
+        if mensaje.imagen_cabecera:
+            componentes.append(
+                {
+                    "type": "header",
+                    "parameters": [{"type": "image", "image": {"id": mensaje.imagen_cabecera}}],
+                }
+            )
+        componentes.append(
+            {
+                "type": "body",
+                "parameters": [{"type": "text", "text": valor} for valor in mensaje.variables],
+            }
+        )
         return {
             "messaging_product": "whatsapp",
             "recipient_type": "individual",
@@ -277,14 +332,7 @@ class AdaptadorWhatsAppCloud:
             "template": {
                 "name": mensaje.nombre_plantilla,
                 "language": {"code": mensaje.idioma},
-                "components": [
-                    {
-                        "type": "body",
-                        "parameters": [
-                            {"type": "text", "text": valor} for valor in mensaje.variables
-                        ],
-                    }
-                ],
+                "components": componentes,
             },
         }
 

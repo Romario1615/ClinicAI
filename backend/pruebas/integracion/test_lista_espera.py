@@ -21,20 +21,24 @@ from __future__ import annotations
 
 import uuid
 from datetime import UTC, datetime, timedelta
+from zoneinfo import ZoneInfo
 
 import pytest
 import pytest_asyncio
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.modulos.agenda.modelos import Cita, EstadoCita
+from app.modulos.agenda.modelos import Cita, CitaHistorial, EstadoCita
 from app.modulos.lista_espera.modelos import (
     EntradaListaEspera,
     EstadoEspera,
     EstadoOferta,
+    OfertaTurno,
     PrioridadEspera,
 )
 from app.modulos.lista_espera.servicios import (
     MAXIMO_OFERTAS_VENCIDAS,
+    MAXIMO_PROFUNDIDAD_CADENA,
     ServicioListaEspera,
 )
 from app.modulos.pacientes.modelos import Consentimiento, TipoConsentimiento
@@ -165,6 +169,84 @@ class TestAlta:
         )
         assert entrada.estado == EstadoEspera.ACTIVA.value
         assert entrada.ofertas_realizadas == 0
+
+    async def test_cita_previa_valida_se_vincula_a_la_entrada(
+        self,
+        servicio_espera: ServicioListaEspera,
+        principal_recepcion: Principal,
+        paciente,  # type: ignore[no-untyped-def]
+        clinica,  # type: ignore[no-untyped-def]
+        sede,  # type: ignore[no-untyped-def]
+        especialidad,  # type: ignore[no-untyped-def]
+        profesional,  # type: ignore[no-untyped-def]
+        servicio,  # type: ignore[no-untyped-def]
+        sesion: AsyncSession,
+    ) -> None:
+        cita = Cita(
+            clinica_id=clinica.id,
+            sede_id=sede.id,
+            paciente_id=paciente.id,
+            profesional_id=profesional.id,
+            servicio_id=servicio.id,
+            inicio=AHORA + timedelta(days=5),
+            duracion_minutos=30,
+            minutos_preparacion=15,
+            estado=EstadoCita.CONFIRMED.value,
+            confirmada_en=AHORA,
+        )
+        sesion.add(cita)
+        await sesion.flush()
+
+        entrada = await _anotar(
+            servicio_espera,
+            principal_recepcion,
+            paciente.id,
+            sede.id,
+            especialidad.id,
+            servicio_id=servicio.id,
+            cita_previa_id=cita.id,
+        )
+
+        assert entrada.cita_previa_id == cita.id
+
+    async def test_no_se_vincula_una_cita_de_otro_paciente(
+        self,
+        servicio_espera: ServicioListaEspera,
+        principal_recepcion: Principal,
+        paciente,  # type: ignore[no-untyped-def]
+        segundo_paciente,  # type: ignore[no-untyped-def]
+        clinica,  # type: ignore[no-untyped-def]
+        sede,  # type: ignore[no-untyped-def]
+        especialidad,  # type: ignore[no-untyped-def]
+        profesional,  # type: ignore[no-untyped-def]
+        servicio,  # type: ignore[no-untyped-def]
+        sesion: AsyncSession,
+    ) -> None:
+        cita = Cita(
+            clinica_id=clinica.id,
+            sede_id=sede.id,
+            paciente_id=segundo_paciente.id,
+            profesional_id=profesional.id,
+            servicio_id=servicio.id,
+            inicio=AHORA + timedelta(days=5),
+            duracion_minutos=30,
+            minutos_preparacion=15,
+            estado=EstadoCita.CONFIRMED.value,
+            confirmada_en=AHORA,
+        )
+        sesion.add(cita)
+        await sesion.flush()
+
+        with pytest.raises(RecursoNoEncontrado, match="cita previa"):
+            await _anotar(
+                servicio_espera,
+                principal_recepcion,
+                paciente.id,
+                sede.id,
+                especialidad.id,
+                servicio_id=servicio.id,
+                cita_previa_id=cita.id,
+            )
 
     async def test_no_se_anota_dos_veces_a_la_misma_especialidad(
         self,
@@ -407,6 +489,82 @@ class TestOferta:
         )
         assert resultado.oferta is None
 
+    async def test_respeta_las_fechas_disponibles_de_la_persona(
+        self,
+        sesion: AsyncSession,
+        servicio_espera: ServicioListaEspera,
+        principal_recepcion: Principal,
+        turno_liberado: Cita,
+        paciente,  # type: ignore[no-untyped-def]
+        sede,  # type: ignore[no-untyped-def]
+        especialidad,  # type: ignore[no-untyped-def]
+    ) -> None:
+        fecha_turno = turno_liberado.inicio.astimezone(ZoneInfo("America/Guayaquil")).date()
+        entrada = await _anotar(
+            servicio_espera,
+            principal_recepcion,
+            paciente.id,
+            sede.id,
+            especialidad.id,
+            disponible_desde=fecha_turno + timedelta(days=1),
+            disponible_hasta=fecha_turno + timedelta(days=5),
+        )
+
+        fuera_de_rango = await servicio_espera.ofrecer_turno(
+            turno_liberado, principal=principal_recepcion
+        )
+        assert fuera_de_rango.oferta is None
+
+        entrada.disponible_desde = fecha_turno
+        entrada.disponible_hasta = fecha_turno
+        await sesion.flush()
+        dentro_de_rango = await servicio_espera.ofrecer_turno(
+            turno_liberado, principal=principal_recepcion
+        )
+        assert dentro_de_rango.oferta is not None
+        assert dentro_de_rango.oferta.lista_espera_id == entrada.id
+
+    async def test_respeta_dias_y_franja_horaria_locales(
+        self,
+        sesion: AsyncSession,
+        servicio_espera: ServicioListaEspera,
+        principal_recepcion: Principal,
+        turno_liberado: Cita,
+        paciente,  # type: ignore[no-untyped-def]
+        sede,  # type: ignore[no-untyped-def]
+        especialidad,  # type: ignore[no-untyped-def]
+    ) -> None:
+        local = turno_liberado.inicio.astimezone(ZoneInfo("America/Guayaquil"))
+        entrada = await _anotar(
+            servicio_espera,
+            principal_recepcion,
+            paciente.id,
+            sede.id,
+            especialidad.id,
+            preferencias={
+                "dias_semana": [local.weekday()],
+                "hora_desde": "11:00:00",
+                "hora_hasta": "12:00:00",
+            },
+        )
+
+        fuera_de_franja = await servicio_espera.ofrecer_turno(
+            turno_liberado, principal=principal_recepcion
+        )
+        assert fuera_de_franja.oferta is None
+
+        entrada.preferencias = {
+            "dias_semana": [local.weekday()],
+            "hora_desde": "08:00:00",
+            "hora_hasta": "10:00:00",
+        }
+        await sesion.flush()
+        dentro_de_franja = await servicio_espera.ofrecer_turno(
+            turno_liberado, principal=principal_recepcion
+        )
+        assert dentro_de_franja.oferta is not None
+        assert dentro_de_franja.oferta.lista_espera_id == entrada.id
+
     async def test_no_se_ofrece_dos_veces_el_mismo_turno(
         self,
         servicio_espera: ServicioListaEspera,
@@ -496,6 +654,194 @@ class TestRespuesta:
         assert entrada is not None
         assert entrada.estado == EstadoEspera.CUMPLIDA.value
         assert entrada.cita_resultante_id is not None
+
+    async def test_aceptar_cita_temprana_cancela_la_previa_y_ofrece_su_hueco(
+        self,
+        sesion: AsyncSession,
+        servicio_espera: ServicioListaEspera,
+        principal_recepcion: Principal,
+        oferta_viva,  # type: ignore[no-untyped-def]
+        turno_liberado: Cita,
+        paciente,  # type: ignore[no-untyped-def]
+        segundo_paciente,  # type: ignore[no-untyped-def]
+        clinica,  # type: ignore[no-untyped-def]
+        sede,  # type: ignore[no-untyped-def]
+        profesional,  # type: ignore[no-untyped-def]
+        servicio,  # type: ignore[no-untyped-def]
+    ) -> None:
+        # Quien ya tiene una cita más lejana recibe la primera oferta. La otra
+        # persona de la cola debe recibir, dentro de la misma operación, el
+        # horario que esa aceptación acaba de liberar.
+        previa = Cita(
+            clinica_id=clinica.id,
+            sede_id=sede.id,
+            paciente_id=segundo_paciente.id,
+            profesional_id=profesional.id,
+            servicio_id=servicio.id,
+            inicio=AHORA + timedelta(days=5),
+            duracion_minutos=30,
+            minutos_preparacion=15,
+            estado=EstadoCita.CONFIRMED.value,
+            confirmada_en=AHORA,
+        )
+        sesion.add(previa)
+        await sesion.flush()
+        entrada_primera = await sesion.get(EntradaListaEspera, oferta_viva.lista_espera_id)
+        assert entrada_primera is not None
+        entrada_primera.servicio_id = servicio.id
+        entrada_primera.cita_previa_id = previa.id
+        await _anotar(
+            servicio_espera,
+            principal_recepcion,
+            paciente.id,
+            sede.id,
+            servicio.especialidad_id,
+            servicio_id=servicio.id,
+        )
+
+        resultado = await servicio_espera.aceptar_oferta(
+            oferta_viva.id, principal=principal_recepcion
+        )
+
+        await sesion.refresh(previa)
+        assert previa.estado == EstadoCita.CANCELLED.value
+        assert previa.motivo_cancelacion and "lista de espera" in previa.motivo_cancelacion
+        historial = await sesion.scalar(
+            select(CitaHistorial).where(CitaHistorial.cita_id == previa.id)
+        )
+        assert historial is not None
+        oferta_siguiente = await sesion.scalar(
+            select(OfertaTurno).where(
+                OfertaTurno.cita_liberada_id == previa.id,
+                OfertaTurno.estado == EstadoOferta.OFRECIDA.value,
+            )
+        )
+        assert oferta_siguiente is not None
+        assert oferta_siguiente.lista_espera_id != entrada_primera.id
+        assert any(a.accion == AccionAuditada.CITA_CANCELADA for a in resultado.auditoria)
+        assert any(a.accion == AccionAuditada.OFERTA_ENVIADA for a in resultado.auditoria)
+
+    async def test_si_el_turno_ofrecido_se_ocupa_la_cita_previa_se_conserva(
+        self,
+        sesion: AsyncSession,
+        servicio_espera: ServicioListaEspera,
+        principal_recepcion: Principal,
+        oferta_viva,  # type: ignore[no-untyped-def]
+        turno_liberado: Cita,
+        paciente,  # type: ignore[no-untyped-def]
+        segundo_paciente,  # type: ignore[no-untyped-def]
+        clinica,  # type: ignore[no-untyped-def]
+        sede,  # type: ignore[no-untyped-def]
+        profesional,  # type: ignore[no-untyped-def]
+        servicio,  # type: ignore[no-untyped-def]
+    ) -> None:
+        previa = Cita(
+            clinica_id=clinica.id,
+            sede_id=sede.id,
+            paciente_id=segundo_paciente.id,
+            profesional_id=profesional.id,
+            servicio_id=servicio.id,
+            inicio=AHORA + timedelta(days=5),
+            duracion_minutos=30,
+            minutos_preparacion=15,
+            estado=EstadoCita.CONFIRMED.value,
+            confirmada_en=AHORA,
+        )
+        ocupante = Cita(
+            clinica_id=clinica.id,
+            sede_id=sede.id,
+            paciente_id=paciente.id,
+            profesional_id=profesional.id,
+            servicio_id=servicio.id,
+            inicio=turno_liberado.inicio,
+            duracion_minutos=30,
+            minutos_preparacion=15,
+            estado=EstadoCita.CONFIRMED.value,
+            confirmada_en=AHORA,
+        )
+        sesion.add_all([previa, ocupante])
+        await sesion.flush()
+        entrada = await sesion.get(EntradaListaEspera, oferta_viva.lista_espera_id)
+        assert entrada is not None
+        oferta_id = oferta_viva.id
+        cita_liberada_id = turno_liberado.id
+        entrada.servicio_id = servicio.id
+        entrada.cita_previa_id = previa.id
+
+        resultado = await servicio_espera.aceptar_oferta(oferta_id, principal=principal_recepcion)
+        assert resultado.turno_ocupado
+        await sesion.refresh(previa)
+        await sesion.refresh(oferta_viva)
+        await sesion.refresh(entrada)
+        assert previa.estado == EstadoCita.CONFIRMED.value
+        assert oferta_viva.estado == EstadoOferta.PERDIDA.value
+        assert entrada.estado == EstadoEspera.ACTIVA.value
+        assert (
+            await sesion.scalar(
+                select(Cita.id).where(
+                    Cita.origen == "LISTA_ESPERA", Cita.cita_origen_id == cita_liberada_id
+                )
+            )
+            is None
+        )
+
+    async def test_al_llegar_al_limite_no_se_ofrece_otro_eslabon(
+        self,
+        sesion: AsyncSession,
+        servicio_espera: ServicioListaEspera,
+        principal_recepcion: Principal,
+        oferta_viva,  # type: ignore[no-untyped-def]
+        turno_liberado: Cita,
+        paciente,  # type: ignore[no-untyped-def]
+        segundo_paciente,  # type: ignore[no-untyped-def]
+        clinica,  # type: ignore[no-untyped-def]
+        sede,  # type: ignore[no-untyped-def]
+        profesional,  # type: ignore[no-untyped-def]
+        servicio,  # type: ignore[no-untyped-def]
+    ) -> None:
+        turno_liberado.profundidad_lista_espera = MAXIMO_PROFUNDIDAD_CADENA - 1
+        previa = Cita(
+            clinica_id=clinica.id,
+            sede_id=sede.id,
+            paciente_id=segundo_paciente.id,
+            profesional_id=profesional.id,
+            servicio_id=servicio.id,
+            inicio=AHORA + timedelta(days=5),
+            duracion_minutos=30,
+            minutos_preparacion=15,
+            estado=EstadoCita.CONFIRMED.value,
+            confirmada_en=AHORA,
+        )
+        sesion.add(previa)
+        await sesion.flush()
+        entrada = await sesion.get(EntradaListaEspera, oferta_viva.lista_espera_id)
+        assert entrada is not None
+        entrada.servicio_id = servicio.id
+        entrada.cita_previa_id = previa.id
+        await _anotar(
+            servicio_espera,
+            principal_recepcion,
+            paciente.id,
+            sede.id,
+            servicio.especialidad_id,
+            servicio_id=servicio.id,
+        )
+
+        resultado = await servicio_espera.aceptar_oferta(
+            oferta_viva.id, principal=principal_recepcion
+        )
+
+        assert resultado.cita is not None
+        assert resultado.cita.profundidad_lista_espera == MAXIMO_PROFUNDIDAD_CADENA - 1
+        assert previa.estado == EstadoCita.CANCELLED.value
+        assert previa.profundidad_lista_espera == MAXIMO_PROFUNDIDAD_CADENA
+        oferta_mas_profunda = await sesion.scalar(
+            select(OfertaTurno.id).where(
+                OfertaTurno.cita_liberada_id == previa.id,
+                OfertaTurno.estado == EstadoOferta.OFRECIDA.value,
+            )
+        )
+        assert oferta_mas_profunda is None
 
     async def test_no_se_acepta_dos_veces(
         self,

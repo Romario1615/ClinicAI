@@ -29,9 +29,11 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import Final
 
+from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.mensajeria.recordatorios import ServicioRecordatorios
 from app.modulos.agenda.disponibilidad import (
     ResultadoDisponibilidad,
     calcular_disponibilidad,
@@ -51,9 +53,15 @@ from app.nucleo.auditoria import (
     ResultadoAuditoria,
     construir_entrada,
 )
-from app.nucleo.autorizacion import Principal, TipoActor, principal_sistema
+from app.nucleo.autorizacion import (
+    NivelSensibilidad,
+    Principal,
+    TipoActor,
+    principal_sistema,
+)
 from app.nucleo.errores import (
     BloqueoExpirado,
+    ConflictoEstado,
     PermisoDenegado,
     PoliticaCancelacionViolada,
     RecursoNoEncontrado,
@@ -90,6 +98,7 @@ class SolicitudReserva:
     origen: OrigenCita = OrigenCita.PANEL
     clave_idempotencia: str | None = None
     notas_recepcion: str | None = None
+    procedimiento_plan_id: uuid.UUID | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -118,11 +127,18 @@ class ServicioAgenda:
         reloj: Reloj,
         *,
         minutos_expiracion_held: int = 10,
+        recordatorio_horas_antes_1: int = 24,
+        recordatorio_horas_antes_2: int = 3,
     ) -> None:
         self._sesion = sesion
         self._repo = repositorio
         self._reloj = reloj
         self._minutos_held = minutos_expiracion_held
+        self._horas_recordatorio_1 = recordatorio_horas_antes_1
+        self._horas_recordatorio_2 = recordatorio_horas_antes_2
+
+    def _recordatorios(self) -> ServicioRecordatorios:
+        return ServicioRecordatorios(self._sesion, self._reloj)
 
     # ==================================================================
     #  Consulta de disponibilidad
@@ -291,6 +307,13 @@ class ServicioAgenda:
             if existente is not None:
                 return ResultadoOperacion(existente, (), era_reintento=True)
 
+        if solicitud.procedimiento_plan_id is not None:
+            if estado is not EstadoCita.CONFIRMED:
+                raise ReglaNegocioViolada(
+                    "Un procedimiento del plan solo se puede vincular a una cita confirmada."
+                )
+            await self._validar_procedimiento_para_agenda(solicitud, principal)
+
         servicio = await self._repo.obtener_servicio(solicitud.servicio_id)
         if servicio is None:
             raise RecursoNoEncontrado("El servicio solicitado no existe.")
@@ -303,6 +326,9 @@ class ServicioAgenda:
             raise ReglaNegocioViolada(
                 "El profesional seleccionado no esta disponible para nuevas citas."
             )
+
+        if solicitud.consultorio_id is not None:
+            await self._validar_consultorio(solicitud.consultorio_id, solicitud.sede_id)
 
         buffer_minutos = max(servicio.minutos_preparacion, profesional.minutos_preparacion_propio)
 
@@ -339,6 +365,8 @@ class ServicioAgenda:
             # la averia que es.
             raise traducir_o_propagar(exc) from exc
 
+        auditoria_vinculo = await self._vincular_procedimiento_agendado(solicitud, principal, cita)
+
         historial = CitaHistorial(
             cita_id=cita.id,
             estado_anterior=None,
@@ -350,6 +378,13 @@ class ServicioAgenda:
             motivo="Creacion de la cita",
         )
         self._sesion.add(historial)
+
+        if estado is EstadoCita.CONFIRMED:
+            await self._recordatorios().programar_cita(
+                cita,
+                horas_antes_1=self._horas_recordatorio_1,
+                horas_antes_2=self._horas_recordatorio_2,
+            )
 
         entrada = construir_entrada(
             accion=accion,
@@ -365,7 +400,92 @@ class ServicioAgenda:
             origen=solicitud.origen.value,
         )
 
-        return ResultadoOperacion(cita, (entrada,))
+        return ResultadoOperacion(cita, (entrada, *auditoria_vinculo))
+
+    async def _vincular_procedimiento_agendado(
+        self,
+        solicitud: SolicitudReserva,
+        principal: Principal,
+        cita: Cita,
+    ) -> tuple[EntradaAuditoria, ...]:
+        procedimiento_id = solicitud.procedimiento_plan_id
+        if procedimiento_id is None:
+            return ()
+        # La fila del procedimiento permanece bloqueada desde la validación
+        # hasta el commit de la cita. Dos reservas no pueden adjudicarse a la
+        # misma fase en paralelo.
+        await self._sesion.execute(
+            text(
+                "UPDATE procedimiento_plan "
+                "SET cita_id = :cita_id, actualizado_en = :ahora, actualizado_por = :actor_id "
+                "WHERE id = :procedimiento_id"
+            ),
+            {
+                "cita_id": cita.id,
+                "ahora": self._reloj.ahora(),
+                "actor_id": principal.actor_id,
+                "procedimiento_id": procedimiento_id,
+            },
+        )
+        return (
+            construir_entrada(
+                accion=AccionAuditada.PROCEDIMIENTO_AGENDADO,
+                principal=principal,
+                ahora=self._reloj.ahora(),
+                entidad_tipo="procedimiento_plan",
+                entidad_id=procedimiento_id,
+                sede_id=solicitud.sede_id,
+                paciente_id=solicitud.paciente_id,
+                nivel_sensibilidad=NivelSensibilidad.CLINICO,
+                cita_id=str(cita.id),
+            ),
+        )
+
+    async def _validar_procedimiento_para_agenda(
+        self, solicitud: SolicitudReserva, principal: Principal
+    ) -> None:
+        """Valida y bloquea una fase clínica para reservarla de forma atómica."""
+        consulta = await self._sesion.execute(
+            text(
+                "SELECT pp.estado AS procedimiento_estado, pp.cita_id, pp.servicio_id, "
+                "pt.estado AS plan_estado, pt.paciente_id "
+                "FROM procedimiento_plan AS pp "
+                "JOIN plan_tratamiento AS pt ON pt.id = pp.plan_id "
+                "WHERE pp.id = :procedimiento_id AND pt.clinica_id = :clinica_id "
+                "FOR UPDATE OF pp, pt"
+            ),
+            {
+                "procedimiento_id": solicitud.procedimiento_plan_id,
+                "clinica_id": principal.clinica_id,
+            },
+        )
+        procedimiento = consulta.mappings().one_or_none()
+        if procedimiento is None or procedimiento["paciente_id"] != solicitud.paciente_id:
+            raise RecursoNoEncontrado("El procedimiento del plan no existe para este paciente.")
+        if (
+            procedimiento["plan_estado"] != "ACEPTADO"
+            or procedimiento["procedimiento_estado"] != "PENDIENTE"
+        ):
+            raise ConflictoEstado(
+                "Solo se puede agendar un procedimiento pendiente de un plan aceptado."
+            )
+        servicio_id = procedimiento["servicio_id"]
+        if servicio_id is not None and servicio_id != solicitud.servicio_id:
+            raise ReglaNegocioViolada(
+                "El servicio elegido no coincide con el servicio definido para esta fase."
+            )
+        cita_id = procedimiento["cita_id"]
+        if cita_id is not None:
+            cita = await self._sesion.execute(
+                text("SELECT estado FROM cita WHERE id = :cita_id"), {"cita_id": cita_id}
+            )
+            estado_cita = cita.scalar_one_or_none()
+            if estado_cita is not None and estado_cita not in {
+                EstadoCita.CANCELLED.value,
+                EstadoCita.COMPLETED.value,
+                EstadoCita.NO_SHOW.value,
+            }:
+                raise ConflictoEstado("Este procedimiento ya tiene una cita activa agendada.")
 
     # ==================================================================
     #  Confirmacion
@@ -424,6 +544,12 @@ class ServicioAgenda:
                 actor_id=principal.actor_id,
                 motivo="Confirmacion",
             )
+        )
+
+        await self._recordatorios().programar_cita(
+            cita,
+            horas_antes_1=self._horas_recordatorio_1,
+            horas_antes_2=self._horas_recordatorio_2,
         )
 
         entrada = construir_entrada(
@@ -499,9 +625,25 @@ class ServicioAgenda:
 
         try:
             await self._sesion.flush()
+            # `fin` lo calcula un disparador PostgreSQL. Tras un UPDATE,
+            # refrescamos el objeto antes de responder para no devolver el fin
+            # anterior junto al nuevo inicio.
+            await self._sesion.refresh(cita)
         except SQLAlchemyError as exc:
             await self._sesion.rollback()
             raise traducir_o_propagar(exc) from exc
+
+        # Si esta era la cita activa de una fase aún pendiente, al cancelarla
+        # se libera el vínculo para que recepción pueda agendar otro horario.
+        # La actualización pertenece a la misma transacción que la cancelación.
+        await self._sesion.execute(
+            text(
+                "UPDATE procedimiento_plan "
+                "SET cita_id = NULL, actualizado_en = :ahora, actualizado_por = :actor_id "
+                "WHERE cita_id = :cita_id AND estado = 'PENDIENTE'"
+            ),
+            {"ahora": ahora, "actor_id": principal.actor_id, "cita_id": cita.id},
+        )
 
         self._sesion.add(
             CitaHistorial(
@@ -513,6 +655,8 @@ class ServicioAgenda:
                 motivo=motivo_limpio,
             )
         )
+
+        await self._recordatorios().cancelar_cita(cita.id, motivo=motivo_limpio)
 
         entrada = construir_entrada(
             accion=AccionAuditada.CITA_CANCELADA,
@@ -588,6 +732,10 @@ class ServicioAgenda:
             if registro.respuesta:
                 return ResultadoOperacion(cita, (), era_reintento=True)
 
+        self._exigir_cambio_reprogramacion(
+            cita, nuevo_inicio, nuevo_profesional_id, nuevo_consultorio_id
+        )
+
         self._validar_transicion(cita, EstadoCita.RESCHEDULED)
 
         ahora = self._reloj.ahora()
@@ -612,9 +760,16 @@ class ServicioAgenda:
                 )
 
         if nuevo_consultorio_id is not None:
+            await self._validar_consultorio(nuevo_consultorio_id, cita.sede_id)
             cita.consultorio_id = nuevo_consultorio_id
 
         cita.inicio = nuevo_inicio
+        # El trigger recalcula `fin` en PostgreSQL para los caminos SQL
+        # directos. Asignarlo aquí también mantiene la respuesta correcta en
+        # instalaciones de prueba/esquemas que aún no aplicaron el trigger.
+        cita.fin = nuevo_inicio + timedelta(
+            minutes=cita.duracion_minutos + cita.minutos_preparacion
+        )
         cita.estado = EstadoCita.RESCHEDULED.value
         cita.expira_en = None
         cita.actualizado_por = principal.actor_id
@@ -638,6 +793,12 @@ class ServicioAgenda:
                 actor_id=principal.actor_id,
                 motivo=motivo_limpio,
             )
+        )
+        await self._recordatorios().cancelar_cita(cita.id, motivo=motivo_limpio)
+        await self._recordatorios().programar_cita(
+            cita,
+            horas_antes_1=self._horas_recordatorio_1,
+            horas_antes_2=self._horas_recordatorio_2,
         )
 
         entrada = construir_entrada(
@@ -671,6 +832,21 @@ class ServicioAgenda:
             motivo="Atencion completada",
         )
 
+    @staticmethod
+    def _exigir_cambio_reprogramacion(
+        cita: Cita,
+        nuevo_inicio: datetime,
+        nuevo_profesional_id: uuid.UUID | None,
+        nuevo_consultorio_id: uuid.UUID | None,
+    ) -> None:
+        sin_cambios = (
+            nuevo_inicio == cita.inicio
+            and nuevo_profesional_id in (None, cita.profesional_id)
+            and nuevo_consultorio_id in (None, cita.consultorio_id)
+        )
+        if sin_cambios:
+            raise ReglaNegocioViolada("Elija un horario o recurso distinto para reprogramar.")
+
     async def marcar_inasistencia(
         self, cita_id: uuid.UUID, *, principal: Principal
     ) -> ResultadoOperacion:
@@ -690,6 +866,92 @@ class ServicioAgenda:
             motivo="El paciente no se presento",
         )
 
+    async def registrar_llegada(
+        self, cita_id: uuid.UUID, *, principal: Principal
+    ) -> ResultadoOperacion:
+        """Registra la llegada sin cambiar el estado de reserva de la cita."""
+        if not principal.tiene_permiso("cita.registrar_llegada"):
+            raise PermisoDenegado("No tiene permiso para registrar llegadas.")
+
+        cita = await self._repo.obtener_cita_para_actualizar(cita_id, principal=principal)
+        if cita is None:
+            raise RecursoNoEncontrado("La cita solicitada no existe.")
+        if cita.estado not in (EstadoCita.CONFIRMED.value, EstadoCita.RESCHEDULED.value):
+            raise ConflictoEstado("Solo se registra la llegada de una cita confirmada.")
+        if cita.llegada_en is not None:
+            raise ConflictoEstado("La llegada de este paciente ya está registrada.")
+
+        ahora = self._reloj.ahora()
+        cita.llegada_en = ahora
+        cita.actualizado_por = principal.actor_id
+        await self._sesion.flush()
+        self._sesion.add(
+            CitaHistorial(
+                cita_id=cita.id,
+                estado_anterior=cita.estado,
+                estado_nuevo=cita.estado,
+                actor_tipo=principal.actor_tipo.value,
+                actor_id=principal.actor_id,
+                motivo="Llegada registrada",
+                metadatos={"evento": "LLEGADA"},
+            )
+        )
+        entrada = construir_entrada(
+            accion=AccionAuditada.CITA_LLEGADA_REGISTRADA,
+            principal=principal,
+            ahora=ahora,
+            entidad_tipo="cita",
+            entidad_id=cita.id,
+            sede_id=cita.sede_id,
+            paciente_id=cita.paciente_id,
+            estado_anterior=cita.estado,
+        )
+        return ResultadoOperacion(cita, (entrada,))
+
+    async def iniciar_atencion(
+        self, cita_id: uuid.UUID, *, principal: Principal
+    ) -> ResultadoOperacion:
+        """Marca el inicio para medir la espera real del paciente."""
+        if not principal.tiene_permiso("cita.iniciar_atencion"):
+            raise PermisoDenegado("No tiene permiso para iniciar la atención.")
+
+        cita = await self._repo.obtener_cita_para_actualizar(cita_id, principal=principal)
+        if cita is None:
+            raise RecursoNoEncontrado("La cita solicitada no existe.")
+        if cita.estado not in (EstadoCita.CONFIRMED.value, EstadoCita.RESCHEDULED.value):
+            raise ConflictoEstado("La atención requiere una cita confirmada.")
+        if cita.llegada_en is None:
+            raise ConflictoEstado("Registre primero la llegada del paciente.")
+        if cita.atencion_iniciada_en is not None:
+            raise ConflictoEstado("La atención de esta cita ya está en curso.")
+
+        ahora = self._reloj.ahora()
+        cita.atencion_iniciada_en = ahora
+        cita.actualizado_por = principal.actor_id
+        await self._sesion.flush()
+        self._sesion.add(
+            CitaHistorial(
+                cita_id=cita.id,
+                estado_anterior=cita.estado,
+                estado_nuevo=cita.estado,
+                actor_tipo=principal.actor_tipo.value,
+                actor_id=principal.actor_id,
+                motivo="Atención iniciada",
+                metadatos={"evento": "ATENCION_INICIADA"},
+            )
+        )
+        entrada = construir_entrada(
+            accion=AccionAuditada.CITA_ATENCION_INICIADA,
+            principal=principal,
+            ahora=ahora,
+            entidad_tipo="cita",
+            entidad_id=cita.id,
+            sede_id=cita.sede_id,
+            paciente_id=cita.paciente_id,
+            estado_anterior=cita.estado,
+        )
+        return ResultadoOperacion(cita, (entrada,))
+
     async def _cerrar(
         self,
         cita_id: uuid.UUID,
@@ -706,6 +968,11 @@ class ServicioAgenda:
         cita = await self._repo.obtener_cita_para_actualizar(cita_id, principal=principal)
         if cita is None:
             raise RecursoNoEncontrado("La cita solicitada no existe.")
+
+        if nuevo_estado is EstadoCita.NO_SHOW and cita.llegada_en is not None:
+            raise ConflictoEstado(
+                "No se puede marcar inasistencia después de registrar la llegada."
+            )
 
         self._validar_transicion(cita, nuevo_estado)
 
@@ -732,6 +999,7 @@ class ServicioAgenda:
                 motivo=motivo,
             )
         )
+        await self._recordatorios().cancelar_cita(cita.id, motivo=motivo)
 
         entrada = construir_entrada(
             accion=accion,
@@ -817,6 +1085,21 @@ class ServicioAgenda:
     # ==================================================================
     #  Maquina de estados
     # ==================================================================
+    async def _validar_consultorio(self, consultorio_id: uuid.UUID, sede_id: uuid.UUID) -> None:
+        """El consultorio tiene que existir, estar activo y ser de la sede de la cita.
+
+        Sin esta comprobacion, un identificador de una sala de otra sede -- o de
+        otra clinica -- quedaria grabado en la cita, y la restriccion de
+        exclusion por consultorio bloquearia turnos ajenos. Se responde 404
+        igual que con una sede ajena: confirmar que el consultorio existe en
+        otro sitio permitiria enumerarlos.
+        """
+        consultorio = await self._repo.obtener_consultorio(consultorio_id)
+        if consultorio is None or consultorio.sede_id != sede_id or consultorio.esta_anulado:
+            raise RecursoNoEncontrado("El consultorio solicitado no existe en esta sede.")
+        if not consultorio.activo:
+            raise ReglaNegocioViolada("El consultorio seleccionado no esta disponible.")
+
     def _validar_transicion(self, cita: Cita, nuevo: EstadoCita) -> None:
         """Comprueba que la transicion sea valida.
 

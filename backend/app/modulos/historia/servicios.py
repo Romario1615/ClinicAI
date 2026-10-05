@@ -30,9 +30,12 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from zoneinfo import ZoneInfo
 
+from sqlalchemy import select
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.mensajeria.recordatorios import ServicioRecordatorios
+from app.modulos.agenda.modelos import Cita
 from app.modulos.historia.modelos import (
     AlertaAdherencia,
     Diagnostico,
@@ -45,6 +48,7 @@ from app.modulos.historia.modelos import (
     Toma,
 )
 from app.modulos.historia.repositorio import RepositorioHistoria
+from app.modulos.profesionales.modelos import DelegacionFirma
 from app.nucleo.auditoria import AccionAuditada, EntradaAuditoria, construir_entrada
 from app.nucleo.autorizacion import NivelSensibilidad, Principal
 from app.nucleo.errores import (
@@ -91,7 +95,7 @@ class DatosMedicamento:
 @dataclass(frozen=True, slots=True)
 class DatosNota:
     paciente_id: uuid.UUID
-    profesional_id: uuid.UUID
+    profesional_id: uuid.UUID | None
     tipo: str
     motivo_consulta: str | None = None
     subjetivo: str | None = None
@@ -149,16 +153,19 @@ class ServicioHistoria:
         aplicacion no lo conoce antes de insertar.
         """
         self._exigir(principal, "historia_clinica.escribir")
+        autor = self._autor(principal, datos.profesional_id)
         await self._exigir_relacion(principal, datos.paciente_id)
 
         if principal.clinica_id is None:
             raise PermisoDenegado("La sesion no tiene clinica asociada.")
+        if datos.cita_id is not None:
+            await self._exigir_cita_del_paciente(datos.cita_id, datos.paciente_id, principal)
 
         ahora = self._reloj.ahora()
         nota = NotaEvolucion(
             clinica_id=principal.clinica_id,
             paciente_id=datos.paciente_id,
-            profesional_id=datos.profesional_id,
+            profesional_id=autor,
             cita_id=datos.cita_id,
             version=1,
             vigente=True,
@@ -207,6 +214,7 @@ class ServicioHistoria:
         intacto y sigue siendo consultable.
         """
         self._exigir(principal, "historia_clinica.escribir")
+        autor = self._autor(principal, datos.profesional_id)
 
         motivo_limpio = motivo.strip()
         if not motivo_limpio:
@@ -231,7 +239,7 @@ class ServicioHistoria:
         nueva = NotaEvolucion(
             clinica_id=actual.clinica_id,
             paciente_id=actual.paciente_id,
-            profesional_id=datos.profesional_id,
+            profesional_id=autor,
             cita_id=actual.cita_id,
             raiz_id=actual.raiz_id,
             version=actual.version + 1,
@@ -330,6 +338,7 @@ class ServicioHistoria:
         con recordatorios.
         """
         self._exigir(principal, "receta.crear")
+        profesional_id, delegada = await self._firma(principal, profesional_id)
         await self._exigir_relacion(principal, paciente_id)
 
         if not medicamentos:
@@ -381,6 +390,7 @@ class ServicioHistoria:
                     paciente_id=paciente_id,
                     nivel_sensibilidad=NivelSensibilidad.CLINICO,
                     lineas=len(medicamentos),
+                    firma_delegada=delegada,
                 ),
             ),
         )
@@ -394,6 +404,7 @@ class ServicioHistoria:
         respalda: insertar una toma de una receta sin confirmar se rechaza.
         """
         self._exigir(principal, "receta.confirmar")
+        profesional_id, delegada = await self._firma(principal, profesional_id)
 
         ahora = self._reloj.ahora()
         receta = await self._repo.obtener_receta(
@@ -414,6 +425,7 @@ class ServicioHistoria:
         await self._flush()
 
         generadas = await self._generar_tomas(receta, desde=ahora)
+        await ServicioRecordatorios(self._sesion, self._reloj).programar_tomas(receta.id)
 
         return ResultadoClinico(
             receta=receta,
@@ -427,6 +439,8 @@ class ServicioHistoria:
                     entidad_id=receta.id,
                     paciente_id=receta.paciente_id,
                     nivel_sensibilidad=NivelSensibilidad.CLINICO,
+                    firma_delegada=delegada,
+                    profesional_firmante=str(profesional_id),
                 ),
                 construir_entrada(
                     accion=AccionAuditada.TOMAS_GENERADAS,
@@ -470,6 +484,9 @@ class ServicioHistoria:
         receta.actualizado_por = principal.actor_id
 
         canceladas = await self._cancelar_tomas_futuras(receta_id, desde=ahora)
+        await ServicioRecordatorios(self._sesion, self._reloj).cancelar_tomas_receta(
+            receta_id, motivo=motivo_limpio
+        )
         await self._flush()
 
         return ResultadoClinico(
@@ -535,6 +552,10 @@ class ServicioHistoria:
         toma.registrada_por_tipo = principal.actor_tipo.value
         toma.registrada_por_id = principal.actor_id
         toma.nota_paciente = (nota_paciente or "").strip() or None
+        await ServicioRecordatorios(self._sesion, self._reloj).cancelar_toma(
+            toma.id,
+            motivo="Toma registrada" if tomada else "Toma marcada como omitida",
+        )
         await self._flush()
 
         return ResultadoClinico(
@@ -610,6 +631,36 @@ class ServicioHistoria:
         self._sesion.add(alerta)
         await self._flush()
         return alerta
+
+    async def atender_alerta_adherencia(
+        self, alerta_id: uuid.UUID, *, principal: Principal, nota: str | None = None
+    ) -> ResultadoClinico:
+        if "alerta_adherencia.atender" not in principal.permisos:
+            raise PermisoDenegado("No tiene permiso para atender alertas de adherencia.")
+        ahora = self._reloj.ahora()
+        alerta = await self._repo.obtener_alerta(
+            alerta_id, principal=principal, ahora=ahora, bloquear=True
+        )
+        if alerta is None:
+            raise RecursoNoEncontrado("La alerta solicitada no existe.")
+        if alerta.atendida_en is not None:
+            raise ConflictoEstado("Esta alerta ya fue atendida.")
+        alerta.atendida_en = ahora
+        alerta.atendida_por = principal.actor_id
+        alerta.nota_profesional = (nota or "").strip() or None
+        await self._flush()
+        return ResultadoClinico(
+            auditoria=(
+                construir_entrada(
+                    accion=AccionAuditada.ALERTA_ADHERENCIA_ATENDIDA,
+                    principal=principal,
+                    ahora=ahora,
+                    entidad_tipo="alerta_adherencia",
+                    entidad_id=alerta.id,
+                    paciente_id=alerta.paciente_id,
+                ),
+            ),
+        )
 
     # ==================================================================
     #  Auxiliares
@@ -714,6 +765,65 @@ class ServicioHistoria:
             )
         if not principal.tiene_permiso(permiso):
             raise PermisoDenegado("No tiene permiso para esta operacion clinica.")
+
+    @staticmethod
+    def _autor(principal: Principal, declarado: uuid.UUID | None) -> uuid.UUID:
+        """El autor de una nota es quien la escribe, nunca un dato del cliente.
+
+        Antes se tomaba `profesional_id` del cuerpo: un profesional podia firmar
+        una nota a nombre de otro. Solo un profesional escribe notas, y su
+        identificador sale de la sesion.
+        """
+        if principal.profesional_id is None:
+            raise PermisoDenegado("Solo un profesional puede escribir notas clinicas.")
+        if declarado is not None and declarado != principal.profesional_id:
+            raise PermisoDenegado("No puede registrar una nota a nombre de otro profesional.")
+        return principal.profesional_id
+
+    async def _firma(self, principal: Principal, firmante: uuid.UUID) -> tuple[uuid.UUID, bool]:
+        """Quien firma una receta: el propio profesional, o otro por delegacion.
+
+        Firmar por otro solo vale con una delegacion registrada por la
+        administracion, vigente ahora y de esa persona hacia quien actua. Sin
+        ella, 403. Devuelve el firmante y si la firma es delegada (se audita).
+        """
+        if principal.profesional_id is None:
+            raise PermisoDenegado("Solo un profesional firma recetas.")
+        if firmante == principal.profesional_id:
+            return firmante, False
+        ahora = self._reloj.ahora()
+        vigente = (
+            await self._sesion.execute(
+                select(DelegacionFirma.id).where(
+                    DelegacionFirma.clinica_id == principal.clinica_id,
+                    DelegacionFirma.delegante_id == firmante,
+                    DelegacionFirma.delegado_id == principal.profesional_id,
+                    DelegacionFirma.revocada_en.is_(None),
+                    DelegacionFirma.vigente_desde <= ahora,
+                    DelegacionFirma.vigente_hasta > ahora,
+                )
+            )
+        ).first()
+        if vigente is None:
+            raise PermisoDenegado(
+                "No tiene una delegacion vigente para firmar a nombre de ese profesional."
+            )
+        return firmante, True
+
+    async def _exigir_cita_del_paciente(
+        self, cita_id: uuid.UUID, paciente_id: uuid.UUID, principal: Principal
+    ) -> None:
+        cita = (
+            await self._sesion.execute(
+                select(Cita.id).where(
+                    Cita.id == cita_id,
+                    Cita.paciente_id == paciente_id,
+                    Cita.clinica_id == principal.clinica_id,
+                )
+            )
+        ).scalar_one_or_none()
+        if cita is None:
+            raise RecursoNoEncontrado("La cita indicada no existe para este paciente.")
 
     async def _exigir_relacion(self, principal: Principal, paciente_id: uuid.UUID) -> None:
         """Comprueba el vinculo asistencial cuando el principal es profesional.

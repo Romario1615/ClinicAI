@@ -17,6 +17,7 @@ from enum import StrEnum
 from functools import lru_cache
 from pathlib import Path
 from typing import Annotated, Literal
+from urllib.parse import urlsplit
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from pydantic import Field, SecretStr, field_validator, model_validator
@@ -125,6 +126,28 @@ class Configuracion(BaseSettings):
     llm_timeout_segundos: Annotated[int, Field(ge=1, le=300)] = 30
     ollama_url: str = "http://localhost:11434"
 
+    # --- Decisiones tipadas (Jev, TypeSafe AI) ----------------------------
+    # `reglas` es el sandbox sin red. Con `jev`, el texto del mensaje (sin
+    # identificadores) sale a TypeSafe AI: requiere acuerdo de encargo.
+    proveedor_decisiones: Literal["jev", "reglas"] = "reglas"
+    typesafe_api_key: SecretStr = SecretStr("")
+    typesafe_modelo: str = "jev-latest"
+    typesafe_timeout_segundos: Annotated[float, Field(ge=0.2, le=30)] = 3.0
+    # Probabilidad clinica a partir de la cual se deriva a una persona. Baja
+    # a proposito: un falso positivo cuesta una derivacion; un falso negativo,
+    # que el agente conteste algo clinico.
+    decisiones_umbral_clinico: Annotated[float, Field(ge=0.05, le=0.9)] = 0.35
+    # Confianza minima para resolver una intencion simple sin llamar al LLM.
+    decisiones_umbral_intencion: Annotated[float, Field(ge=0.5, le=1.0)] = 0.85
+
+    # --- Generacion de imagenes para promociones ---------------------------
+    # `sandbox` dibuja localmente. `openai` usa una API compatible con
+    # /images/generations; la URL permite apuntar a otro proveedor compatible.
+    proveedor_imagenes: Literal["openai", "sandbox"] = "sandbox"
+    imagenes_api_url: str = "https://api.openai.com/v1"
+    imagenes_api_key: SecretStr = SecretStr("")
+    imagenes_modelo: str = "gpt-image-1"
+
     # --- Embeddings -------------------------------------------------------
     proveedor_embeddings: Literal["fastembed", "ollama", "mock"] = "fastembed"
     modelo_embeddings: str = "intfloat/multilingual-e5-small"
@@ -189,6 +212,13 @@ class Configuracion(BaseSettings):
     antivirus_habilitado: bool = False
     clamav_host: str = "localhost"
     clamav_puerto: int = 3310
+    # Almacen S3 compatible (MinIO en desarrollo). Solo con
+    # `almacenamiento_archivos = "s3"`. Las credenciales entran por entorno.
+    s3_endpoint: str = ""
+    s3_bucket: str = "clinica-archivos"
+    s3_region: str = "us-east-1"
+    s3_clave_acceso: str = ""
+    s3_clave_secreta: SecretStr = SecretStr("")
 
     # --- Observabilidad ---------------------------------------------------
     metricas_habilitadas: bool = True
@@ -197,7 +227,26 @@ class Configuracion(BaseSettings):
 
     # --- Frontend ---------------------------------------------------------
     api_url: str = "http://localhost:8000"
+    frontend_url: str = "http://localhost:4200"
     frontend_modo_simulado: bool = True
+
+    @field_validator("frontend_url")
+    @classmethod
+    def validar_frontend_url(cls, valor: str) -> str:
+        partes = urlsplit(valor.strip())
+        if (
+            partes.scheme not in {"http", "https"}
+            or not partes.netloc
+            or partes.username is not None
+            or partes.password is not None
+            or partes.query
+            or partes.fragment
+        ):
+            raise ValueError(
+                "FRONTEND_URL debe ser una URL HTTP(S) absoluta sin credenciales, "
+                "consulta ni fragmento."
+            )
+        return valor.strip().rstrip("/")
 
     # ------------------------------------------------------------------
     #  Propiedades derivadas
@@ -311,6 +360,8 @@ class Configuracion(BaseSettings):
             fallos.append("DEPURACION=true expone trazas internas en las respuestas de error")
         if self.frontend_modo_simulado:
             fallos.append("FRONTEND_MODO_SIMULADO=true haria que la interfaz use datos falsos")
+        if not self.frontend_url.startswith("https://"):
+            fallos.append("FRONTEND_URL debe usar HTTPS en produccion")
         if not self.whatsapp_validar_firma:
             fallos.append("WHATSAPP_VALIDAR_FIRMA=false aceptaria webhooks de cualquier origen")
         if self.modo_whatsapp == "sandbox":

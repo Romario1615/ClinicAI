@@ -10,11 +10,13 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime
+from typing import Self
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from app.modulos.conocimiento.modelos import (
     EstadoDocumento,
+    PrincipalConocimiento,
     TipoDocumentoConocimiento,
 )
 
@@ -65,6 +67,53 @@ class SolicitudRevision(BaseModel):
 
     version: int = Field(ge=1)
     nota: str = Field(min_length=10, max_length=1000)
+
+
+class ReglaPermisoDocumento(BaseModel):
+    principal_tipo: PrincipalConocimiento
+    principal_id: uuid.UUID
+    puede_leer: bool
+    puede_usar_en_agente: bool = False
+
+
+class SolicitudPermisosDocumento(BaseModel):
+    """Reemplazo completo y atomico de la lista de grants de un documento."""
+
+    permisos: list[ReglaPermisoDocumento] = Field(max_length=100)
+
+    @model_validator(mode="after")
+    def validar_permisos(self) -> Self:
+        claves = [(regla.principal_tipo, regla.principal_id) for regla in self.permisos]
+        if len(claves) != len(set(claves)):
+            raise ValueError("No repita el mismo principal en los permisos del documento.")
+        if any(regla.puede_usar_en_agente and not regla.puede_leer for regla in self.permisos):
+            raise ValueError("El agente no puede citar un documento sin permiso de lectura.")
+        return self
+
+
+class RespuestaPermisoDocumento(BaseModel):
+    principal_tipo: PrincipalConocimiento
+    principal_id: uuid.UUID
+    puede_leer: bool
+    puede_usar_en_agente: bool
+
+
+class RespuestaPermisosDocumento(BaseModel):
+    document_id: uuid.UUID
+    permisos: list[RespuestaPermisoDocumento]
+
+
+class OpcionPrincipal(BaseModel):
+    id: uuid.UUID
+    nombre: str
+    codigo: str | None = None
+
+
+class OpcionesPermisosDocumento(BaseModel):
+    roles: list[OpcionPrincipal]
+    usuarios: list[OpcionPrincipal]
+    sedes: list[OpcionPrincipal]
+    especialidades: list[OpcionPrincipal]
 
 
 class RespuestaDocumento(BaseModel):
@@ -142,14 +191,20 @@ class RespuestaBusqueda(BaseModel):
 
 __all__ = [
     "LONGITUD_EXTRACTO",
+    "OpcionPrincipal",
+    "OpcionesPermisosDocumento",
     "PaginaDocumentos",
+    "ReglaPermisoDocumento",
     "RespuestaBusqueda",
     "RespuestaDocumento",
     "RespuestaIngesta",
+    "RespuestaPermisoDocumento",
+    "RespuestaPermisosDocumento",
     "ResultadoBusqueda",
     "SolicitudBusqueda",
     "SolicitudCambioEstado",
     "SolicitudDocumento",
     "SolicitudIngesta",
+    "SolicitudPermisosDocumento",
     "SolicitudRevision",
 ]

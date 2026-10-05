@@ -12,6 +12,7 @@ from app.modulos.lista_espera.esquemas import (
 )
 from app.nucleo.autorizacion import Principal
 from app.nucleo.dependencias import RelojActual, Sesion, exige_permiso
+from app.nucleo.errores import TurnoNoDisponible
 
 enrutador = APIRouter(prefix="/lista-espera", tags=["lista de espera"])
 PuedeGestionar = Annotated[Principal, Depends(exige_permiso("lista_espera.gestionar"))]
@@ -70,4 +71,8 @@ async def resolver(
 ) -> RespuestaEspera:
     resultado = await panel.resolver(sesion, principal, reloj, entrada_id, datos, clave)
     await sesion.commit()
+    if datos.accion == "aceptar" and resultado.estado == "ACTIVA":
+        raise TurnoNoDisponible(
+            "Ese horario se ocupó antes de confirmar. El paciente continúa en la lista de espera."
+        )
     return resultado

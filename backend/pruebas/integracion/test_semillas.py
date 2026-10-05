@@ -228,6 +228,7 @@ class TestSalvaguardaDeProduccion:
             clave_cifrado_datos=base64.urlsafe_b64encode(secrets.token_bytes(32)).decode(),
             postgres_contrasena=secrets.token_urlsafe(24),
             origenes_cors="https://clinica.example",
+            frontend_url="https://clinica.example",
         )
 
         with pytest.raises(RuntimeError, match="bloqueada"):

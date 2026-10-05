@@ -39,15 +39,18 @@ import uuid
 from dataclasses import dataclass
 from datetime import datetime
 
-from sqlalchemy import Select, Text, and_, func, literal, or_, select
+from sqlalchemy import Select, Text, and_, exists, func, literal, not_, or_, select
 from sqlalchemy.dialects.postgresql import TSQUERY
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm.attributes import InstrumentedAttribute
 from sqlalchemy.sql.elements import ColumnElement
 
 from app.modulos.conocimiento.modelos import (
     ESTADOS_RECUPERABLES,
     KnowledgeChunk,
     KnowledgeEmbedding,
+    KnowledgePermission,
+    PrincipalConocimiento,
 )
 from app.nucleo.autorizacion import NivelSensibilidad
 from app.nucleo.registro import obtener_logger
@@ -104,6 +107,12 @@ class ContextoAutorizacion:
     # reloj aqui para que una prueba pueda situarse antes o despues de que un
     # documento venza (ADR-0010).
     ahora: datetime
+    # Identidad y roles del personal para evaluar ACL explícitas por documento.
+    # Los códigos vienen del principal validado, nunca de la petición.
+    actor_id: uuid.UUID | None
+    role_ids: frozenset[uuid.UUID]
+    # El agente solo puede citar documentos cuyo ACL habilite ambos usos.
+    uso_agente: bool
 
 
 @dataclass(frozen=True, slots=True)
@@ -124,6 +133,78 @@ class FragmentoRecuperado:
     def referencia(self) -> str:
         """Cita legible, para acompanar al texto en el prompt (RF-O04)."""
         return f"doc:{self.document_id}#v{self.version}:{self.indice_fragmento}"
+
+
+def condicion_acl_documento(
+    document_id: InstrumentedAttribute[uuid.UUID] | ColumnElement[uuid.UUID],
+    contexto: ContextoAutorizacion,
+) -> ColumnElement[bool]:
+    """Filtra una fila por su ACL opcional y el principal autenticado."""
+    acl_documento = select(KnowledgePermission.id).where(
+        KnowledgePermission.document_id == document_id
+    )
+    grants: list[ColumnElement[bool]] = []
+    if contexto.role_ids:
+        grants.append(
+            and_(
+                KnowledgePermission.principal_tipo == PrincipalConocimiento.ROL.value,
+                KnowledgePermission.principal_id.in_(sorted(contexto.role_ids)),
+            )
+        )
+    if contexto.actor_id is not None:
+        grants.append(
+            and_(
+                KnowledgePermission.principal_tipo == PrincipalConocimiento.USUARIO.value,
+                KnowledgePermission.principal_id == contexto.actor_id,
+            )
+        )
+    if contexto.sedes:
+        grants.append(
+            and_(
+                KnowledgePermission.principal_tipo == PrincipalConocimiento.SEDE.value,
+                KnowledgePermission.principal_id.in_(sorted(contexto.sedes)),
+            )
+        )
+    if contexto.especialidades:
+        grants.append(
+            and_(
+                KnowledgePermission.principal_tipo == PrincipalConocimiento.ESPECIALIDAD.value,
+                KnowledgePermission.principal_id.in_(sorted(contexto.especialidades)),
+            )
+        )
+
+    principal_coincide = or_(*grants) if grants else literal(False)
+
+    def existe_regla(*filtros: ColumnElement[bool]) -> ColumnElement[bool]:
+        return exists(
+            select(KnowledgePermission.id).where(
+                KnowledgePermission.document_id == document_id,
+                principal_coincide,
+                *filtros,
+            )
+        )
+
+    if contexto.uso_agente:
+        permiso_efectivo = and_(
+            existe_regla(
+                KnowledgePermission.puede_leer.is_(True),
+                KnowledgePermission.puede_usar_en_agente.is_(True),
+            ),
+            not_(
+                existe_regla(
+                    or_(
+                        KnowledgePermission.puede_leer.is_(False),
+                        KnowledgePermission.puede_usar_en_agente.is_(False),
+                    )
+                )
+            ),
+        )
+    else:
+        permiso_efectivo = and_(
+            existe_regla(KnowledgePermission.puede_leer.is_(True)),
+            not_(existe_regla(KnowledgePermission.puede_leer.is_(False))),
+        )
+    return or_(not_(exists(acl_documento)), permiso_efectivo)
 
 
 def _condiciones(contexto: ContextoAutorizacion) -> list[ColumnElement[bool]]:
@@ -155,6 +236,8 @@ def _condiciones(contexto: ContextoAutorizacion) -> list[ColumnElement[bool]]:
             sorted(n.value for n in NivelSensibilidad if contexto.nivel_maximo.cubre(n))
         ),
     ]
+
+    condiciones.append(condicion_acl_documento(KnowledgeChunk.document_id, contexto))
 
     # Sede. Un fragmento sin sede es de alcance general y lo ve quien tenga
     # acceso a la clinica; uno con sede exige que esa sede este autorizada.
@@ -383,4 +466,5 @@ __all__ = [
     "ContextoAutorizacion",
     "FragmentoRecuperado",
     "RepositorioConocimiento",
+    "condicion_acl_documento",
 ]

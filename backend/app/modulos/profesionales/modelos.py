@@ -334,3 +334,35 @@ class CalendarioEvento(Base, MezclaIdentificador, MezclaAuditoria):
             postgresql_where=text("estado IN ('PENDIENTE', 'ERROR')"),
         ),
     )
+
+
+class DelegacionFirma(Base, MezclaIdentificador, MezclaAuditoria):
+    """Autoriza a un profesional (delegado) a firmar recetas por otro (delegante).
+
+    Caso real: un residente prescribe bajo la responsabilidad de su adjunto.
+    Sin delegacion vigente, nadie firma a nombre de otro. La crea la
+    administracion, con vigencia obligatoria y motivo; se revoca, no se borra.
+    La auditoria registra siempre quien actuo, ademas de quien firma.
+    """
+
+    __tablename__ = "delegacion_firma"
+
+    clinica_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("clinica.id", ondelete="RESTRICT"))
+    delegante_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("profesional.id", ondelete="RESTRICT")
+    )
+    delegado_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("profesional.id", ondelete="RESTRICT")
+    )
+    vigente_desde: Mapped[datetime] = mapped_column()
+    vigente_hasta: Mapped[datetime] = mapped_column()
+    motivo: Mapped[str] = mapped_column(Text)
+    revocada_en: Mapped[datetime | None] = mapped_column(default=None)
+    revocada_por: Mapped[uuid.UUID | None] = mapped_column(default=None)
+
+    __table_args__ = (
+        CheckConstraint("delegante_id <> delegado_id", name="no_autodelegacion"),
+        CheckConstraint("vigente_hasta > vigente_desde", name="vigencia_valida"),
+        CheckConstraint("char_length(motivo) >= 5", name="motivo_obligatorio"),
+        Index("ix_delegacion_firma_delegado", "delegado_id", "delegante_id"),
+    )

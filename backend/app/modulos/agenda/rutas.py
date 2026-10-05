@@ -68,6 +68,8 @@ PuedeCancelar = Annotated[Principal, Depends(exige_permiso("cita.cancelar"))]
 PuedeReprogramar = Annotated[Principal, Depends(exige_permiso("cita.reprogramar"))]
 PuedeCompletar = Annotated[Principal, Depends(exige_permiso("cita.completar"))]
 PuedeMarcarInasistencia = Annotated[Principal, Depends(exige_permiso("cita.marcar_inasistencia"))]
+PuedeRegistrarLlegada = Annotated[Principal, Depends(exige_permiso("cita.registrar_llegada"))]
+PuedeIniciarAtencion = Annotated[Principal, Depends(exige_permiso("cita.iniciar_atencion"))]
 
 ClaveIdempotencia = Annotated[
     str | None,
@@ -99,6 +101,9 @@ def _a_respuesta(cita: Cita) -> RespuestaCita:
         origen=OrigenCita(cita.origen),
         expira_en=cita.expira_en,
         confirmada_en=cita.confirmada_en,
+        llegada_en=cita.llegada_en,
+        atencion_iniciada_en=cita.atencion_iniciada_en,
+        completada_en=cita.completada_en,
         cancelada_en=cita.cancelada_en,
         motivo_cancelacion=cita.motivo_cancelacion,
     )
@@ -398,6 +403,7 @@ def _solicitud(datos: PeticionReserva, clave: str | None, peticion: Request) -> 
         sede_id=datos.sede_id,
         inicio=datos.inicio,
         consultorio_id=datos.consultorio_id,
+        procedimiento_plan_id=datos.procedimiento_plan_id,
         origen=OrigenCita.PANEL,
         clave_idempotencia=_clave_validada(clave),
         notas_recepcion=datos.notas_recepcion,
@@ -502,6 +508,46 @@ async def reprogramar_cita(
         nuevo_consultorio_id=datos.nuevo_consultorio_id,
         clave_idempotencia=clave_idempotencia,
     )
+    return await _persistir(resultado, sesion, auditor)
+
+
+@enrutador.post(
+    "/citas/{cita_id}/llegada",
+    response_model=RespuestaCita,
+    summary="Registrar que el paciente llegó a la clínica",
+    responses={
+        404: {"description": "No existe, o está fuera del ámbito"},
+        409: {"description": "La cita no admite llegada"},
+    },
+)
+async def registrar_llegada(
+    principal: PuedeRegistrarLlegada,
+    servicio_agenda: ServicioDeAgenda,
+    sesion: Sesion,
+    auditor: Auditor,
+    cita_id: Annotated[uuid.UUID, Path()],
+) -> RespuestaCita:
+    resultado = await servicio_agenda.registrar_llegada(cita_id, principal=principal)
+    return await _persistir(resultado, sesion, auditor)
+
+
+@enrutador.post(
+    "/citas/{cita_id}/inicio-atencion",
+    response_model=RespuestaCita,
+    summary="Registrar el inicio de atención después de la llegada",
+    responses={
+        404: {"description": "No existe, o está fuera del ámbito"},
+        409: {"description": "La cita aún no tiene llegada o ya empezó"},
+    },
+)
+async def iniciar_atencion(
+    principal: PuedeIniciarAtencion,
+    servicio_agenda: ServicioDeAgenda,
+    sesion: Sesion,
+    auditor: Auditor,
+    cita_id: Annotated[uuid.UUID, Path()],
+) -> RespuestaCita:
+    resultado = await servicio_agenda.iniciar_atencion(cita_id, principal=principal)
     return await _persistir(resultado, sesion, auditor)
 
 
