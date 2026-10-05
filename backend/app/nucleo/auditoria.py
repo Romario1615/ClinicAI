@@ -80,6 +80,10 @@ class AccionAuditada(StrEnum):
     # --- Historia clinica ---
     HISTORIA_CONSULTADA = "historia_clinica.consultada"
     RESUMEN_CLINICO_REDACTADO = "historia_clinica.resumen_redactado"
+    INDICACION_PUBLICADA = "indicacion_postconsulta.publicada"
+    INDICACION_LEIDA = "indicacion_postconsulta.leida"
+    INDICACION_ACCESO_FALLIDO = "indicacion_postconsulta.acceso_fallido"
+    INDICACION_ANULADA = "indicacion_postconsulta.anulada"
     NOTA_CREADA = "nota_evolucion.creada"
     NOTA_VERSIONADA = "nota_evolucion.versionada"
     NOTA_ANULADA = "nota_evolucion.anulada"

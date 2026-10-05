@@ -99,17 +99,26 @@ const VIAS: Record<string, string> = {
   INTRAVENOSA: 'via intravenosa',
 };
 
-type Pestana = 'evolucion' | 'odontograma' | 'periodoncia' | 'imagenes' | 'planes' | 'recetas';
+type Pestana =
+  | 'evolucion'
+  | 'odontograma'
+  | 'periodoncia'
+  | 'imagenes'
+  | 'planes'
+  | 'recetas'
+  | 'indicaciones';
 
 import { TipoDocumentoPipe } from '../../compartido/tipo-documento.pipe';
 import { ResumenModuloComponent } from '../../compartido/resumen-modulo.component';
 import { ResumenClinicoComponent } from './resumen-clinico.component';
+import { IndicacionesPacienteComponent } from './indicaciones-paciente.component';
 @Component({
   selector: 'app-historia-clinica',
   standalone: true,
   imports: [
     ResumenModuloComponent,
     ResumenClinicoComponent,
+    IndicacionesPacienteComponent,
     FormsModule,
     TipoDocumentoPipe,
     CargandoComponent,
@@ -192,8 +201,23 @@ export class HistoriaClinicaComponent {
     }
     if (this.puedeLeerPlanes()) lista.push({ clave: 'planes', texto: 'Planes de tratamiento' });
     lista.push({ clave: 'recetas', texto: 'Recetas' });
+    if (this.puedeLeerNotas()) lista.push({ clave: 'indicaciones', texto: 'Indicaciones al paciente' });
     return lista;
   });
+
+  protected readonly puedeEscribirHistoria = computed(() =>
+    this.sesion.tienePermiso(PERMISOS.historiaEscribir),
+  );
+
+  /** Recetas confirmadas, para adjuntarlas a las indicaciones. */
+  protected readonly recetasConfirmadas = computed(() =>
+    this.recetas()
+      .filter((r) => r.estado === 'CONFIRMADA')
+      .map((r) => ({
+        id: r.id,
+        etiqueta: `${new Date(r.confirmada_en ?? r.creado_en).toLocaleDateString('es')} · ${r.medicamentos.map((m) => m.nombre).join(', ') || 'Receta'}`,
+      })),
+  );
 
   protected readonly puedeCrearRecetas = computed(() =>
     this.sesion.tienePermiso(PERMISOS.recetaCrear),

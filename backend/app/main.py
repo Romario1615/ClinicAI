@@ -63,6 +63,7 @@ from app.modulos.organizacion import rutas as rutas_catalogo
 from app.modulos.pacientes import consentimientos as rutas_consentimientos
 from app.modulos.pacientes import rutas as rutas_pacientes
 from app.modulos.pagos import rutas as rutas_pagos
+from app.modulos.postconsulta import rutas as rutas_postconsulta
 from app.modulos.profesionales import delegaciones as rutas_delegaciones
 from app.modulos.promociones import rutas as rutas_promociones
 from app.modulos.usuarios import rutas as rutas_usuarios
@@ -256,6 +257,7 @@ def _registrar_rutas(aplicacion: FastAPI) -> None:
     aplicacion.include_router(indicadores_dashboard.enrutador, prefix=PREFIJO_API)
     aplicacion.include_router(rutas_automatizaciones.enrutador, prefix=PREFIJO_API)
     aplicacion.include_router(rutas_resumen_clinico.enrutador, prefix=PREFIJO_API)
+    aplicacion.include_router(rutas_postconsulta.enrutador, prefix=PREFIJO_API)
     aplicacion.include_router(rutas_espera.enrutador, prefix=PREFIJO_API)
     aplicacion.include_router(demo_rutas.enrutador, prefix=PREFIJO_API)
     aplicacion.include_router(rutas_conversaciones.enrutador, prefix=PREFIJO_API)

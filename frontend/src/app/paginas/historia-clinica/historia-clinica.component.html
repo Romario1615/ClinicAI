@@ -274,6 +274,13 @@
     </section>
 
       }
+      @case ('indicaciones') {
+        <app-indicaciones-paciente
+          [pacienteId]="paciente()!.id"
+          [puedeEscribir]="puedeEscribirHistoria()"
+          [recetas]="recetasConfirmadas()"
+        />
+      }
       @case ('recetas') {
     <!-- ===================== Recetas ===================== -->
     <section aria-label="Recetas">

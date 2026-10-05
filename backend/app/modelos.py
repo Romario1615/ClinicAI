@@ -113,6 +113,7 @@ from app.modulos.pacientes.modelos import (
     TipoDocumento,
 )
 from app.modulos.pagos.modelos import Pago
+from app.modulos.postconsulta.modelos import IndicacionPostconsulta
 from app.modulos.profesionales.modelos import (
     AgendaPlantilla,
     CalendarioConexion,
@@ -190,6 +191,7 @@ __all__ = [
     "HistorialAcceso",
     "HorarioAtencion",
     "ImagenPaciente",
+    "IndicacionPostconsulta",
     "IntencionEntrante",
     "KnowledgeChunk",
     "KnowledgeDocument",

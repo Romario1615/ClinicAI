@@ -205,6 +205,16 @@ export const routes: Routes = [
     loadComponent: () => import('./paginas/plataforma/plataforma.component').then((m) => m.PlataformaComponent),
   },
   {
+    // Pública a propósito: el paciente llega desde el WhatsApp sin cuenta. La
+    // página pide verificar identidad antes de mostrar nada.
+    path: 'indicaciones/:token',
+    title: 'Sus indicaciones · ClinicAI',
+    loadComponent: () =>
+      import('./paginas/publico/indicaciones-publicas.component').then(
+        (m) => m.IndicacionesPublicasComponent,
+      ),
+  },
+  {
     path: 'sin-permiso',
     canActivate: [guardiaAutenticacion],
     title: 'Sin acceso · ClinicAI',

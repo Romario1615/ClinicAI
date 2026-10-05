@@ -56,6 +56,11 @@ export class OperacionesService {
       .pipe(catchError(traducirFallo));
   }
 
+  /** Cambio parcial (PATCH): anulaciones y transiciones con motivo. */
+  cambiar<T>(ruta: string, datos: unknown): Observable<T> {
+    return this.http.patch<T>(this.configuracion.urlApi + ruta, datos).pipe(catchError(traducirFallo));
+  }
+
   guardar<T>(ruta: string, datos: unknown, clave: string, editar = false): Observable<T> {
     const opciones = { headers: { 'Idempotency-Key': clave } };
     const url = this.configuracion.urlApi + ruta;
