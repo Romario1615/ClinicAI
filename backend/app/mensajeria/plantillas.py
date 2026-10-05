@@ -231,6 +231,18 @@ PLANTILLAS: dict[TipoMensajeOutbox, Plantilla] = {
         ),
         variables_permitidas=frozenset({"nombre", "enlace"}),
     ),
+    TipoMensajeOutbox.INDICACIONES_DISPONIBLES: Plantilla(
+        tipo=TipoMensajeOutbox.INDICACIONES_DISPONIBLES,
+        nombre_meta="indicaciones_disponibles",
+        # Ni medicamento ni indicacion: el detalle esta detras del enlace,
+        # que caduca y exige verificar identidad (CLAUDE.md, regla 10).
+        texto=(
+            "Hola {nombre}. Su profesional de {clinica} dejo indicaciones de su consulta.\n\n"
+            "Puede leerlas aqui: {enlace}\nEl enlace caduca en {dias} dias y le pedira "
+            "confirmar su identidad."
+        ),
+        variables_permitidas=frozenset({"nombre", "clinica", "enlace", "dias"}),
+    ),
     TipoMensajeOutbox.TOMA_SEGUIMIENTO: Plantilla(
         tipo=TipoMensajeOutbox.TOMA_SEGUIMIENTO,
         nombre_meta="toma_seguimiento",

@@ -42,6 +42,7 @@ from app.ia.imagenes_generativas import construir_generador
 from app.ia.seleccion_llm import construir_fabrica_conversacional
 from app.mensajeria import rutas as rutas_whatsapp
 from app.modulos.agenda import rutas as rutas_agenda
+from app.modulos.automatizaciones import rutas as rutas_automatizaciones
 from app.modulos.calendario import rutas as rutas_calendario
 from app.modulos.calendario.seleccion import construir_proveedores
 from app.modulos.configuracion import rutas as rutas_configuracion
@@ -50,6 +51,7 @@ from app.modulos.conversaciones import demo_rutas
 from app.modulos.conversaciones import rutas as rutas_conversaciones
 from app.modulos.dashboard import indicadores as indicadores_dashboard
 from app.modulos.dashboard import rutas as rutas_dashboard
+from app.modulos.historia import resumen_clinico as rutas_resumen_clinico
 from app.modulos.historia import rutas as rutas_historia
 from app.modulos.imagenes import rutas as rutas_imagenes
 from app.modulos.lista_espera import rutas as rutas_espera
@@ -252,6 +254,8 @@ def _registrar_rutas(aplicacion: FastAPI) -> None:
     aplicacion.include_router(rutas_pagos.enrutador, prefix=PREFIJO_API)
     aplicacion.include_router(rutas_dashboard.enrutador, prefix=PREFIJO_API)
     aplicacion.include_router(indicadores_dashboard.enrutador, prefix=PREFIJO_API)
+    aplicacion.include_router(rutas_automatizaciones.enrutador, prefix=PREFIJO_API)
+    aplicacion.include_router(rutas_resumen_clinico.enrutador, prefix=PREFIJO_API)
     aplicacion.include_router(rutas_espera.enrutador, prefix=PREFIJO_API)
     aplicacion.include_router(demo_rutas.enrutador, prefix=PREFIJO_API)
     aplicacion.include_router(rutas_conversaciones.enrutador, prefix=PREFIJO_API)

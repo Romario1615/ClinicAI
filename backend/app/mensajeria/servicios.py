@@ -37,6 +37,7 @@ from app.mensajeria.adaptadores import (
     ResultadoEnvio,
 )
 from app.mensajeria.destinatarios import DestinatarioNoResoluble, ResolutorContacto
+from app.modulos.automatizaciones import servicios as automatizaciones
 from app.modulos.outbox.modelos import (
     CanalOutbox,
     EstadoOutbox,
@@ -77,6 +78,7 @@ TIPOS_PROACTIVOS_A_PACIENTE: frozenset[TipoMensajeOutbox] = frozenset(
         TipoMensajeOutbox.TOMA_SEGUIMIENTO,
         TipoMensajeOutbox.PROMOCION,
         TipoMensajeOutbox.SEGUIMIENTO_TRATAMIENTO,
+        TipoMensajeOutbox.INDICACIONES_DISPONIBLES,
     }
 )
 
@@ -156,6 +158,18 @@ class ServicioOutbox:
         significa descubrirlo cuando el paciente ya no recibio el mensaje;
         aqui rompe la operacion que lo encola, que es donde se puede corregir.
         """
+        # Un flujo apagado por la clinica no encola. Se registra y se devuelve
+        # `None`, como un duplicado: quien encola no tiene que tratarlo aparte.
+        if not await automatizaciones.tipo_permitido(
+            self._sesion, solicitud.clinica_id, solicitud.tipo
+        ):
+            logger.info(
+                "outbox.flujo_apagado",
+                tipo=solicitud.tipo.value,
+                clinica_id=str(solicitud.clinica_id),
+            )
+            return None
+
         plantilla = catalogo_plantillas.obtener(solicitud.tipo)
         # Redactar valida los huecos y, sobre todo, que no se este colando una
         # variable clinica en la carga util.

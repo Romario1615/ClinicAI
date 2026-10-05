@@ -79,6 +79,7 @@ class AccionAuditada(StrEnum):
 
     # --- Historia clinica ---
     HISTORIA_CONSULTADA = "historia_clinica.consultada"
+    RESUMEN_CLINICO_REDACTADO = "historia_clinica.resumen_redactado"
     NOTA_CREADA = "nota_evolucion.creada"
     NOTA_VERSIONADA = "nota_evolucion.versionada"
     NOTA_ANULADA = "nota_evolucion.anulada"
@@ -105,6 +106,7 @@ class AccionAuditada(StrEnum):
     DELEGACION_FIRMA_REVOCADA = "delegacion_firma.revocada"
 
     # --- Promociones ---
+    AUTOMATIZACION_CAMBIADA = "automatizacion.cambiada"
     CAMPANA_CREADA = "campana.creada"
     CAMPANA_MODIFICADA = "campana.modificada"
     CAMPANA_IMAGEN = "campana.imagen_actualizada"

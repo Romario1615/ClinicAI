@@ -46,6 +46,7 @@ import { PERMISOS } from '../nucleo/servicios/configuracion';
 import { SesionService } from '../nucleo/servicios/sesion.service';
 import { OdontogramaComponent } from '../paginas/historia-clinica/odontograma.component';
 import { PlanesTratamientoComponent } from '../paginas/historia-clinica/planes-tratamiento.component';
+import { ResumenClinicoComponent } from '../paginas/historia-clinica/resumen-clinico.component';
 import { ConsentimientosPacienteComponent } from './consentimientos-paciente.component';
 import { FotoPerfilComponent } from './foto-perfil.component';
 import { GaleriaImagenesComponent } from './galeria-imagenes.component';
@@ -117,6 +118,7 @@ const DETALLE_CLINICO: Partial<Record<Pestana, string>> = {
     OdontogramaComponent,
     PlanesTratamientoComponent,
     TipoDocumentoPipe,
+    ResumenClinicoComponent,
   ],
   template: `
     <div class="ficha" [class.ficha--embebida]="sinCabecera()" [attr.aria-label]="'Ficha de ' + nombre()">
@@ -333,6 +335,9 @@ const DETALLE_CLINICO: Partial<Record<Pestana, string>> = {
                       Abrir historia completa
                     </button>
                   </div>
+                  @if (puedeLeerHistoria()) {
+                    <app-resumen-clinico [pacienteId]="pacienteId()" />
+                  }
                   @if (cargandoClinico()) {
                     <p class="ficha__nada" role="status">Cargando…</p>
                   } @else if (avisoClinico()) {

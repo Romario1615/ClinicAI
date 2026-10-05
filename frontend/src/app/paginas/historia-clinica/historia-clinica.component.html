@@ -104,6 +104,9 @@
       (reintentar)="cargarHistoria()"
     />
   } @else {
+    @if (puedeLeerNotas() && !sinRelacion()) {
+      <app-resumen-clinico class="historia__resumen" [pacienteId]="paciente()!.id" />
+    }
     <nav class="pestanas" role="tablist" aria-label="Secciones de la historia clínica">
       @for (opcion of pestanas(); track opcion.clave) {
         <button

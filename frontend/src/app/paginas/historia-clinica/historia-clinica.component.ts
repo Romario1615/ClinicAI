@@ -103,10 +103,13 @@ type Pestana = 'evolucion' | 'odontograma' | 'periodoncia' | 'imagenes' | 'plane
 
 import { TipoDocumentoPipe } from '../../compartido/tipo-documento.pipe';
 import { ResumenModuloComponent } from '../../compartido/resumen-modulo.component';
+import { ResumenClinicoComponent } from './resumen-clinico.component';
 @Component({
   selector: 'app-historia-clinica',
   standalone: true,
-  imports: [ResumenModuloComponent, 
+  imports: [
+    ResumenModuloComponent,
+    ResumenClinicoComponent,
     FormsModule,
     TipoDocumentoPipe,
     CargandoComponent,

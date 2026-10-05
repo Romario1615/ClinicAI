@@ -126,6 +126,13 @@ class Configuracion(BaseSettings):
     llm_timeout_segundos: Annotated[int, Field(ge=1, le=300)] = 30
     ollama_url: str = "http://localhost:11434"
 
+    # --- Resumen clinico para el profesional --------------------------------
+    # Solo IA LOCAL: la historia clinica no sale del servidor. `desactivado`
+    # deja el resumen estructurado (sin IA) y rechaza la redaccion.
+    proveedor_resumen_clinico: Literal["ollama", "desactivado"] = "desactivado"
+    modelo_resumen_clinico: str = "llama3.1:8b"
+    resumen_clinico_timeout_segundos: Annotated[int, Field(ge=5, le=300)] = 90
+
     # --- Decisiones tipadas (Jev, TypeSafe AI) ----------------------------
     # `reglas` es el sandbox sin red. Con `jev`, el texto del mensaje (sin
     # identificadores) sale a TypeSafe AI: requiere acuerdo de encargo.

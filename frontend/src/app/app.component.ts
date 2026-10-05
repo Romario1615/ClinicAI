@@ -132,6 +132,13 @@ const NAVEGACION: readonly EnlaceNavegacion[] = [
     demostracion: true,
   },
   {
+    ruta: '/automatizaciones',
+    etiqueta: 'Automatizaciones',
+    icono: 'chispa',
+    permisos: [PERMISOS.configuracionEscribir, 'auditoria.leer'],
+    demostracion: false,
+  },
+  {
     ruta: '/configuracion',
     etiqueta: 'Configuración',
     icono: 'configuracion',

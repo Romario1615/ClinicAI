@@ -128,6 +128,8 @@ describe('HistoriaClinicaComponent', () => {
   });
 
   afterEach(() => {
+    // El resumen clínico tiene su propia prueba; aquí solo se responde.
+    http.match((p) => p.url.endsWith('/resumen-clinico')).forEach((p) => p.flush({ codigo: 'X', mensaje: 'x' }, { status: 403, statusText: 'F' }));
     // La cabecera pide la foto de perfil; aquí no se prueba la foto.
     http.match((p) => p.url.endsWith('/foto-perfil')).forEach((p) => p.flush(null));
     http.verify();

@@ -284,7 +284,10 @@ describe('FichaPacienteComponent con permisos clínicos', () => {
     fixture.detectChanges();
   });
 
-  afterEach(() => http.verify());
+  afterEach(() => {
+    http.match((p) => p.url.endsWith('/resumen-clinico')).forEach((p) => p.flush({ codigo: 'X', mensaje: 'x' }, { status: 403, statusText: 'F' }));
+    http.verify();
+  });
 
   it('muestra pestañas y atajos clínicos según permisos y pide lo clínico al abrirlo', () => {
     const claves = c.pestanas().map((p: { clave: string }) => p.clave);
