@@ -1,0 +1,5 @@
+# Falsos positivos revisados a mano (2026-10-05):
+# - test_registro.py: encabezado PKCS#8 truncado, sin clave real; prueba que el log lo redacta.
+# - test_autenticacion.py: referencia a la variable rotado.tokens.token_refresco, no un valor.
+290853658fbe39e8c756d283d59685498d9aa6b6:backend/pruebas/integracion/test_autenticacion.py:generic-api-key:747
+e725bab987988c333b99c16dbc61d5f5b00bb572:backend/pruebas/unitarias/test_registro.py:private-key:136
