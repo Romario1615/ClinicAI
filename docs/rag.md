@@ -1,11 +1,12 @@
 # Base de conocimiento y recuperación (RAG)
 
-> **Última actualización:** 2026‑09‑12 · Fase 6.
+> **Última actualización:** 2026‑10‑05 · fase funcional cerrada en modo simulado; E‑20 ACL documental resuelto.
 >
-> El agente conversacional **no existe todavía**. Lo implementado es la base de
-> conocimiento, la recuperación y la preparación del contexto citado. La calidad de
-> recuperación está medida con el proveedor de embeddings **simulado**; con el modelo real
-> no se ha medido (limitación E‑9).
+> El proyecto ya tiene un circuito de agente con herramientas administrativas y un
+> simulador local. El webhook de WhatsApp todavía deriva los mensajes al personal y no
+> invoca ese circuito. Este documento describe la base de conocimiento, la recuperación
+> y el contexto citado. La evaluación reproducible usa embeddings simulados; la calidad
+> semántica con embeddings reales sigue pendiente (E‑9).
 
 ---
 

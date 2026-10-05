@@ -137,7 +137,75 @@ services:
         max-size: "10m"
         max-file: "3"
 
+  minio:
+    # Almacen S3 compatible para imagenes clinicas. Recibe bytes ya cifrados
+    # por la aplicacion: aunque se copie el volumen, no hay imagen en claro.
+    # Perfil propio: no arranca con `infra-arriba` salvo que se pida
+    # (`--profile archivos`). Con ALMACENAMIENTO_ARCHIVOS=local no hace falta.
+    profiles: ["archivos"]
+    image: minio/minio:latest
+    container_name: clinica-minio
+    restart: unless-stopped
+    environment:
+      MINIO_ROOT_USER: ${S3_CLAVE_ACCESO:-}
+      MINIO_ROOT_PASSWORD: ${S3_CLAVE_SECRETA:-}
+    command: ["server", "/data", "--console-address", ":9001"]
+    ports:
+      - "9000:9000"
+      # Consola web solo para desarrollo.
+      - "9001:9001"
+    volumes:
+      - miniodata:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  clamav:
+    # Antivirus para las imagenes subidas (protocolo INSTREAM, puerto 3310).
+    # Mismo perfil que MinIO: la firma de virus ocupa ~1 GB de RAM, demasiado
+    # para arrancarlo siempre en este equipo (riesgo R-02). Con
+    # ANTIVIRUS_HABILITADO=true el backend lo exige; sin el, en desarrollo
+    # registra NO_DISPONIBLE y en produccion rechaza la carga.
+    profiles: ["archivos"]
+    image: clamav/clamav:stable
+    container_name: clinica-clamav
+    restart: unless-stopped
+    ports:
+      - "3310:3310"
+    volumes:
+      - clamavdata:/var/lib/clamav
+    healthcheck:
+      test: ["CMD", "clamdcheck.sh"]
+      interval: 60s
+      timeout: 10s
+      retries: 5
+      start_period: 180s
+    deploy:
+      resources:
+        limits:
+          memory: 1400M
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
 volumes:
+  clamavdata:
+    name: clinica-dev-clamavdata
+  miniodata:
+    name: clinica-dev-miniodata
   pgdata:
     name: clinica-dev-pgdata
   redisdata:

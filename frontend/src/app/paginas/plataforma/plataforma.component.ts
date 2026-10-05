@@ -7,9 +7,11 @@ import {
   type AltaClinicaPlataforma,
   type AltaUsuarioPlataforma,
   type AsignacionUsuarioPlataforma,
+  type AltaSedePlataforma,
   type ClinicaPlataforma,
   type ProfesionalPlataforma,
   type RolPlataforma,
+  type SedePlataforma,
   type UsuarioPlataforma,
 } from '../../nucleo/servicios/api.service';
 
@@ -38,10 +40,44 @@ import {
             <span>{{ clinica.correo || 'Sin correo institucional' }}</span>
             <span>{{ clinica.cantidad_sedes }} sedes · {{ clinica.cantidad_usuarios }} cuentas</span>
           </div>
-          <span class="etiqueta">{{ clinica.activa ? 'Activa' : 'Inactiva' }}</span>
+          <div class="acciones-clinica"><span class="etiqueta">{{ clinica.activa ? 'Activa' : 'Inactiva' }}</span>
+            @if (clinica.activa) { <button class="boton boton--pequeno" type="button" (click)="alternarSedes(clinica)">{{ clinicaSedesId() === clinica.id ? 'Cerrar sedes' : 'Gestionar sedes' }}</button> }
+          </div>
         </article>
       }
     </section>
+
+    @if (clinicaSedesId()) {
+      <section class="tarjeta">
+        <div class="seccion-titulo"><div><h2>Sedes de {{ nombreClinicaSedes() }}</h2>
+          <p>Agrega sucursales. Si no indicas otra zona horaria, heredarán la de la clínica.</p></div>
+          <button class="boton" type="button" (click)="cargarSedes()" [disabled]="cargandoSedes()">Actualizar sedes</button></div>
+        @if (errorSedes()) { <p class="mensaje mensaje--error" role="alert">{{ errorSedes() }}</p> }
+        @if (avisoSede()) { <p class="mensaje mensaje--bien" role="status">{{ avisoSede() }}</p> }
+        @if (cargandoSedes()) { <p role="status">Cargando sedes…</p> }
+        @for (sede of sedes(); track sede.id) {
+          <article class="fila"><div class="datos"><strong>{{ sede.nombre }}</strong>
+            <span>{{ sede.direccion || 'Dirección no registrada' }} · {{ sede.zona_horaria || 'Zona horaria heredada' }}</span>
+            @if (sede.telefono) { <span>{{ sede.telefono }}</span> }
+          </div><span class="etiqueta">{{ sede.activa ? 'Activa' : 'Inactiva' }}</span></article>
+        }
+        <form (ngSubmit)="crearSede()">
+          <h3>Agregar sucursal</h3>
+          <div class="campos">
+            <label>Nombre de la sede<input name="nombreSede" [(ngModel)]="formSede.nombre" required maxlength="200" /></label>
+            <label>Dirección<input name="direccionSede" [(ngModel)]="formSede.direccion" maxlength="500" /></label>
+            <label>Teléfono<input name="telefonoSede" [(ngModel)]="formSede.telefono" maxlength="32" /></label>
+            <label>Zona horaria<select name="zonaSede" [(ngModel)]="formSede.zona_horaria">
+              <option [ngValue]="null">Heredar zona de la clínica</option><option value="America/Guayaquil">Ecuador · Guayaquil</option>
+              <option value="America/Bogota">Colombia · Bogotá</option><option value="America/Lima">Perú · Lima</option>
+              <option value="America/Mexico_City">México · Ciudad de México</option><option value="America/Santiago">Chile · Santiago</option>
+              <option value="Europe/Madrid">España · Madrid</option>
+            </select></label>
+          </div>
+          <button class="boton boton--principal" [disabled]="ocupadoSede() || !formSede.nombre.trim()">{{ ocupadoSede() ? 'Guardando…' : 'Crear sede' }}</button>
+        </form>
+      </section>
+    }
 
     <section class="tarjeta">
       <div class="seccion-titulo"><div><h2>Accesos del personal</h2>
@@ -162,6 +198,7 @@ import {
     .seccion-titulo h2, h3 { margin:0 0 .4rem; }
     .seccion-titulo p, form>p { color:var(--texto-secundario, #5d6b79); margin:.25rem 0 1rem; }
     .fila { display:flex; align-items:center; justify-content:space-between; gap:1rem; padding:.9rem 0; border-top:1px solid var(--borde, #dce5ed); }
+    .acciones-clinica { display:flex; align-items:center; gap:.6rem; }
     .datos { display:grid; gap:.25rem; }.datos span { color:var(--texto-secundario, #5d6b79); font-size:.9rem; }
   .campos { display:grid; grid-template-columns:repeat(auto-fit, minmax(min(100%, 14rem), 1fr)); gap:1rem; margin:1rem 0 1.4rem; }
     .opciones { display:grid; grid-template-columns:repeat(auto-fit, minmax(min(100%, 17rem), 1fr)); gap:.7rem; margin:1rem 0; }
@@ -183,6 +220,13 @@ export class PlataformaComponent implements OnInit {
   protected readonly ocupado = signal(false);
   protected readonly error = signal('');
   protected readonly aviso = signal('');
+  protected readonly clinicaSedesId = signal('');
+  protected readonly sedes = signal<readonly SedePlataforma[]>([]);
+  protected readonly cargandoSedes = signal(false);
+  protected readonly ocupadoSede = signal(false);
+  protected readonly errorSedes = signal('');
+  protected readonly avisoSede = signal('');
+  protected formSede: AltaSedePlataforma = this.formularioSedeVacio();
   protected form: AltaClinicaPlataforma = this.formularioVacio();
   protected readonly usuarios = signal<readonly UsuarioPlataforma[]>([]);
   protected readonly cargandoUsuarios = signal(false);
@@ -217,6 +261,53 @@ export class PlataformaComponent implements OnInit {
     this.api.usuariosPlataforma().subscribe({
       next: (respuesta) => { this.usuarios.set(respuesta); this.cargandoUsuarios.set(false); },
       error: (fallo: FalloApi) => { this.errorUsuarios.set(fallo.message); this.cargandoUsuarios.set(false); },
+    });
+  }
+
+  protected alternarSedes(clinica: ClinicaPlataforma): void {
+    this.errorSedes.set(''); this.avisoSede.set('');
+    if (this.clinicaSedesId() === clinica.id) {
+      this.clinicaSedesId.set(''); this.sedes.set([]); return;
+    }
+    this.clinicaSedesId.set(clinica.id);
+    this.formSede = this.formularioSedeVacio();
+    this.cargarSedes();
+  }
+
+  protected nombreClinicaSedes(): string {
+    return this.clinicas().find((clinica) => clinica.id === this.clinicaSedesId())?.nombre ?? 'clínica';
+  }
+
+  protected cargarSedes(): void {
+    const clinicaId = this.clinicaSedesId();
+    if (!clinicaId) return;
+    this.cargandoSedes.set(true); this.errorSedes.set('');
+    this.api.sedesPlataforma(clinicaId).subscribe({
+      next: (sedes) => { this.sedes.set(sedes); this.cargandoSedes.set(false); },
+      error: (fallo: FalloApi) => { this.errorSedes.set(fallo.message); this.cargandoSedes.set(false); },
+    });
+  }
+
+  protected crearSede(): void {
+    const clinicaId = this.clinicaSedesId();
+    if (!clinicaId || this.ocupadoSede() || !this.formSede.nombre.trim()) return;
+    this.ocupadoSede.set(true); this.errorSedes.set(''); this.avisoSede.set('');
+    const datos: AltaSedePlataforma = {
+      nombre: this.formSede.nombre.trim(),
+      direccion: this.formSede.direccion?.trim() || null,
+      telefono: this.formSede.telefono?.trim() || null,
+      zona_horaria: this.formSede.zona_horaria,
+    };
+    this.api.crearSedePlataforma(clinicaId, datos).subscribe({
+      next: (sede) => {
+        this.sedes.update((actuales) => [...actuales, sede].sort((a, b) => a.nombre.localeCompare(b.nombre)));
+        this.clinicas.update((actuales) => actuales.map((clinica) => clinica.id === clinicaId
+          ? { ...clinica, cantidad_sedes: clinica.cantidad_sedes + 1 }
+          : clinica));
+        this.formSede = this.formularioSedeVacio();
+        this.avisoSede.set(`Sede ${sede.nombre} creada.`); this.ocupadoSede.set(false);
+      },
+      error: (fallo: FalloApi) => { this.errorSedes.set(fallo.message); this.ocupadoSede.set(false); },
     });
   }
 
@@ -365,5 +456,9 @@ export class PlataformaComponent implements OnInit {
       telefono: null, correo: null, sede_nombre: 'Sede principal', sede_direccion: null,
       administrador_nombre: '', administrador_apellido: '', administrador_correo: '', contrasena_inicial: '',
     };
+  }
+
+  private formularioSedeVacio(): AltaSedePlataforma {
+    return { nombre: '', direccion: null, telefono: null, zona_horaria: null };
   }
 }

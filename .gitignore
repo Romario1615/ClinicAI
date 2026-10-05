@@ -92,3 +92,10 @@ frontend/cobertura/
 # unos 2 MB de editor minificado: lo que se versiona son los artboards.
 diseno/*.html
 !diseno/*.dc.html
+
+# Capturas y volcados de la verificacion con Playwright MCP (pueden mostrar
+# pantallas con datos, aunque sean sinteticos) y repos de herramientas externas.
+.playwright-mcp/
+impeccable/
+ui-ux-pro-max-skill/
+frontend/.impeccable/hook.cache.json

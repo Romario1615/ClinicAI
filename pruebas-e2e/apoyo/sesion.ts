@@ -1,61 +1,36 @@
-/**
- * Apoyo para los escenarios: acceso y datos de la clinica sintetica.
- *
- * Las credenciales son **sinteticas** y estan en las semillas del proyecto
- * (`backend/app/semillas/sinteticos.py`). No son un secreto: son cuentas de
- * desarrollo de una base local, y el propio codigo explica por que la
- * contrasena es fija. Nada de esto sirve fuera del entorno local.
- */
+/** Accesos por rol para los usuarios sintéticos del entorno local. */
 import type { Page } from '@playwright/test';
 
-export const CONTRASENA = 'DesarrolloLocal2026';
-
-/**
- * Cuentas sinteticas por rol.
- *
- * `administradora` y `auditor` **no** pueden iniciar sesion: su rol exige
- * segundo factor y estas cuentas no lo tienen configurado. Eso es el control
- * funcionando, y hay un escenario que lo comprueba.
- */
-export const CUENTAS = {
-  recepcion: 'rita.recepcion.11@example.invalid',
-  asistente: 'alba.asistente.12@example.invalid',
-  profesional: 'agustina.salgado.21@example.invalid',
-  administradora: 'ana.administradora.10@example.invalid',
+export const CODIGOS_ROL = {
+  recepcion: 'recepcion',
+  asistente: 'asistente',
+  profesional: 'profesional',
+  administradora: 'administrador_clinica',
+  auditor: 'auditor',
+  superadministrador: 'superadministrador',
 } as const;
 
-export type Rol = keyof typeof CUENTAS;
+export type Rol = keyof typeof CODIGOS_ROL;
 
-/** Resuelve el identificador de la clinica sintetica desde la propia API. */
-export async function obtenerClinicaId(page: Page): Promise<string> {
-  const guardado = process.env.CLINICA_ID;
-  if (guardado) {
-    return guardado;
-  }
-  throw new Error(
-    'Falta CLINICA_ID. Se obtiene con:\n' +
-      "  docker exec clinica-pg psql -U clinica -d clinica -tAc \"select id from clinica where nombre like '%SINTETICO%' order by creado_en desc limit 1\"",
-  );
-}
+const ETIQUETAS_ROL: Record<Rol, RegExp> = {
+  recepcion: /recepción/i,
+  asistente: /asistencia clínica/i,
+  profesional: /profesional de salud/i,
+  administradora: /administración de clínica/i,
+  auditor: /auditoría/i,
+  superadministrador: /superadministrador/i,
+};
 
-/**
- * Inicia sesion por la interfaz, no por la API.
- *
- * Entrar por la API y sembrar el token seria mas rapido, y se saltaria
- * exactamente lo que estas pruebas existen para comprobar: que el formulario,
- * el interceptor y el guardia encajan.
- */
+/** Inicia sesión seleccionando el rol desde la interfaz local. */
 export async function acceder(page: Page, rol: Rol): Promise<void> {
-  const clinicaId = await obtenerClinicaId(page);
   await page.goto('/acceso');
-  await page.locator('input[name="clinica"]').fill(clinicaId);
-  await page.locator('input[name="correo"]').fill(CUENTAS[rol]);
-  await page.locator('input[name="contrasena"]').fill(CONTRASENA);
-  await page.getByRole('button', { name: /entrar/i }).click();
+  const boton = page.getByRole('button', { name: ETIQUETAS_ROL[rol] });
+  await boton.waitFor({ state: 'visible', timeout: 15_000 });
+  await boton.click();
   await page.waitForURL(/\/(panel|agenda)/, { timeout: 15_000 });
 }
 
-/** Navega a una seccion desde la barra de navegacion. */
+/** Navega a una sección desde la barra de navegación. */
 export async function irA(page: Page, etiqueta: string | RegExp): Promise<void> {
-  await page.getByRole('link', { name: etiqueta }).click();
+  await page.getByRole('navigation', { name: 'Secciones' }).getByRole('link', { name: etiqueta }).click();
 }

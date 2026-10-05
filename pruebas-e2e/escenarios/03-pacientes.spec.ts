@@ -6,7 +6,7 @@
  * concluya que un paciente no esta registrado y le cree una ficha duplicada.
  * Una ficha duplicada parte la historia clinica entre dos registros.
  */
-import { expect, test } from '@playwright/test';
+import { expect, test } from '../apoyo/prueba';
 
 import { acceder, irA } from '../apoyo/sesion';
 
@@ -36,8 +36,9 @@ test.describe('Pacientes', () => {
   });
 
   test('un termino demasiado corto dice que NO se busco', async ({ page }) => {
-    await page.locator('input[name="termino"]').fill('a');
-    await page.getByRole('button', { name: /^buscar$/i }).click();
+    const busqueda = page.getByRole('region', { name: 'Buscar pacientes' });
+    await busqueda.getByRole('textbox', { name: /buscar por nombre/i }).fill('a');
+    await busqueda.getByRole('button', { name: /^buscar$/i }).click();
 
     // Lo que NO debe decir: que no hay coincidencias, ni que el ambito esta
     // vacio. Las tres cosas significan algo distinto.
@@ -47,8 +48,9 @@ test.describe('Pacientes', () => {
   });
 
   test('un termino sin resultados dice que no hay coincidencias', async ({ page }) => {
-    await page.locator('input[name="termino"]').fill('zzzzzzzz');
-    await page.getByRole('button', { name: /^buscar$/i }).click();
+    const busqueda = page.getByRole('region', { name: 'Buscar pacientes' });
+    await busqueda.getByRole('textbox', { name: /buscar por nombre/i }).fill('zzzzzzzz');
+    await busqueda.getByRole('button', { name: /^buscar$/i }).click();
 
     await expect(page.locator('body')).toContainText(/sin coincidencias/i);
     await expect(page.locator('body')).not.toContainText(/no lleg[oó] a hacerse/i);
@@ -60,7 +62,7 @@ test.describe('Pacientes', () => {
     await expect(page.locator('.ficha')).toBeVisible();
     // Quien la usa tiene que saber que esta ficha es administrativa: si creyera
     // que es la historia, concluiria que el paciente no tiene antecedentes.
-    await expect(page.locator('.ficha')).toContainText(/administrativa/i);
-    await expect(page.locator('.ficha')).toContainText(/relaci[oó]n asistencial/i);
+    await expect(page.locator('.ficha')).toContainText(/esta ficha muestra lo administrativo/i);
+    await expect(page.locator('.ficha')).toContainText(/historial.*no est[aá]n aqu[ií]|datos cl[ií]nicos/i);
   });
 });

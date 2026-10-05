@@ -6,7 +6,7 @@
  * Aqui se prueba el **recorrido completo**: navegador real, frontend real,
  * API real y PostgreSQL real. No hay dobles de ningun tipo.
  *
- * Lo que NO se prueba aqui son las reglas de dominio. Esas ya tienen 1267
+ * Lo que NO se prueba aqui son las reglas de dominio. Esas ya tienen 1471
  * pruebas del backend que las cubren mucho mejor y mucho mas rapido. Repetirlas
  * a traves del navegador daria una suite lenta y fragil que tarda diez veces
  * mas en decir lo mismo.

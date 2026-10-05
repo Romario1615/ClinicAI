@@ -338,6 +338,44 @@ Ver [ADR‑0011](decisiones/0011-historia-clinica-append-only.md).
 **`seguimiento`** — `id`, `paciente_id`, `origen_tipo`, `origen_id`,
 `fecha_programada`, `responsable_id`, `estado`, `resultado`.
 
+### Odontología: odontograma y planes
+
+**`odontograma`** — `id`, `clinica_id`, `paciente_id`, `profesional_id`, `version`,
+`vigente`, `denticion` (`PERMANENTE` | `TEMPORAL` | `MIXTA`), `piezas` (`jsonb` con
+hallazgos FDI validados), `motivo_modificacion`, `procedimiento_id`. Cada fila contiene
+el estado completo de la boca. La versión vigente es única por paciente; las versiones
+anteriores se conservan y no se editan ni eliminan. Desde la segunda versión se exige un
+motivo. Completar un procedimiento con resultado clínico crea una versión ligada al
+procedimiento dentro de la misma transacción.
+
+**`plan_tratamiento`** — `id`, `clinica_id`, `paciente_id`, `profesional_id`, `titulo`,
+`estado` (`BORRADOR` | `PROPUESTO` | `ACEPTADO` | `COMPLETADO` | `CANCELADO`), `moneda`,
+`observaciones`, `propuesto_en`, `aceptado_en`, `aceptacion_medio`,
+`aceptacion_referencia`, `aceptacion_imagen_id`, `aceptacion_registrada_por`,
+`completado_en`, `cancelado_en`, `motivo_cancelacion`. `ACEPTADO` y `COMPLETADO`
+requieren fecha y constancia referenciada del documento firmado en la clínica. Esta
+constancia no equivale a firma electrónica.
+
+**`procedimiento_plan`** — `id`, `plan_id`, `fase`, `orden`, `pieza`, `caras`, `servicio_id`,
+`descripcion`, `precio`, `estado` (`PENDIENTE` | `COMPLETADO` | `CANCELADO`),
+`hallazgo_resultante`, `cita_id`, `completado_en`, `completado_por`,
+`control_recomendado_en`, `control_atendido_en`, `control_atendido_por`, `control_nota`,
+`cancelado_en`, `motivo_cancelacion`. El control es opcional y solo se puede programar al
+completar el procedimiento; la fecha la define el profesional. La atención queda asociada
+al actor y al instante, y la nota solo se conserva cuando el control fue atendido. `cita_id`
+apunta a la reserva vigente de esa fase; al cancelar una cita mientras el procedimiento
+sigue pendiente, el vínculo se libera dentro de la misma transacción para permitir reagendar.
+
+**`plantilla_plan`** — `id`, `clinica_id`, `nombre`, `descripcion`, `procedimientos`
+(`jsonb` no vacío), más columnas de auditoría y anulación lógica. El nombre vigente es único
+por clínica. Aplicar una plantilla genera un borrador editable; no acepta ni propone un plan
+automáticamente.
+
+**`registro_placa`** — `id`, `clinica_id`, `paciente_id`, `profesional_id`, `piezas_evaluadas`,
+`superficies_con_placa` (`jsonb`), `total_superficies`, `total_con_placa`, `porcentaje`,
+`observacion`. Registra el índice de O'Leary por superficies FDI y permite conservar la
+serie histórica; los conteos y el porcentaje tienen restricciones de rango en PostgreSQL.
+
 ---
 
 ## 9. Recetas y adherencia
@@ -439,6 +477,12 @@ CREATE INDEX ON knowledge_chunks (clinic_id, status, effective_from, effective_u
 **`knowledge_permissions`** — `id`, `document_id`, `principal_tipo`
 (`ROL` | `USUARIO` | `ESPECIALIDAD` | `SEDE`), `principal_id`, `puede_leer`,
 `puede_usar_en_agente`.
+
+Sin filas ACL, el documento conserva el acceso determinado por sus metadatos y
+el ámbito del principal. Con filas ACL, la recuperación exige un grant
+coincidente; una denegación directa prevalece sobre los grants heredados. El
+personal requiere `puede_leer` y el agente además `puede_usar_en_agente`. Los
+roles se comparan por su ID vigente, no por código.
 
 **`knowledge_ingestion_jobs`** — `id`, `document_id`, `version`, `estado`, `paso_actual`,
 `fragmentos_generados`, `embeddings_generados`, `error`, `intentos`, `creado_en`,

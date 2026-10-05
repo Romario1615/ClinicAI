@@ -118,15 +118,15 @@ Estado: `pendiente` · `en curso` · `hecho` · `bloqueado`
 
 | # | Tarea | Requisitos | Criterio de aceptación | Estado |
 |---|---|---|---|---|
-| 5.1 | Registro y preferencias | RF‑J01 | Preferencias respetadas en la selección de candidatos | pendiente |
-| 5.2 | Turno liberado transaccional | RF‑J02 | La cancelación y el turno liberado se confirman juntos o no se confirman | pendiente |
-| 5.3 | Selección de candidatos | RF‑J03 | Prueba con casos que deben y no deben coincidir | pendiente |
-| 5.4 | **Oferta única por turno** | RF‑J04 | El índice único parcial impide dos ofertas activas; prueba de concurrencia | pendiente |
-| 5.5 | Contenido y plazo de la oferta | RF‑J05 | La oferta incluye todos los campos exigidos y su tiempo límite | pendiente |
-| 5.6 | Expiración y siguiente candidato | RF‑J06 | Tras expirar, se ofrece al siguiente; prueba con reloj fijo | pendiente |
-| 5.7 | Aceptación y reagendamiento | RF‑J07 | Se crea la cita nueva y se libera la anterior en una transacción | pendiente |
-| 5.8 | Cadena de liberaciones | RF‑J08 | El turno liberado por un reagendamiento genera una nueva oferta; con límite de profundidad | pendiente |
-| 5.9 | **Aceptación simultánea** | RF‑J09 | 2 y 10 aceptaciones concurrentes producen 1 ganador; el resto recibe mensaje adecuado | pendiente |
+| 5.1 | Registro y preferencias | RF‑J01 | Preferencias respetadas en la selección de candidatos | hecho: interfaz y API guardan profesional, intervalo de fechas, días, franja horaria local y antelación; integración y E2E verifican persistencia y filtrado de turnos |
+| 5.2 | Turno liberado transaccional | RF‑J02 | La cancelación y el turno liberado se confirman juntos o no se confirman | hecho: transacción y rollback inducido verificados contra la restricción EXCLUDE real de PostgreSQL; ante la carrera, la cita nueva no se crea y la oferta continúa activa |
+| 5.3 | Selección de candidatos | RF‑J03 | Prueba con casos que deben y no deben coincidir | hecho: pruebas de sede, servicio, profesional, prioridad, antelación y disponibilidad en `test_lista_espera.py` |
+| 5.4 | **Oferta única por turno** | RF‑J04 | El índice único parcial impide dos ofertas activas; prueba de concurrencia | hecho: índice parcial más prueba concurrente de duplicado en `test_oferta_concurrente.py` |
+| 5.5 | Contenido y plazo de la oferta | RF‑J05 | La oferta incluye todos los campos exigidos y su tiempo límite | hecho en outbox: plantilla sin datos clínicos, consentimiento y plazo probados; entrega real a WhatsApp sigue fuera del entorno local |
+| 5.6 | Expiración y siguiente candidato | RF‑J06 | Tras expirar, se ofrece al siguiente; prueba con reloj fijo | hecho: expiración, nuevo candidato y reintento sin duplicar están probados en `test_tareas_lista_espera.py` |
+| 5.7 | Aceptación y reagendamiento | RF‑J07 | Se crea la cita nueva y se libera la anterior en una transacción | hecho: cita anterior opcional validada para paciente, clínica, sede y servicio; la aceptación crea la nueva y cancela la previa atómicamente; integración, API y E2E cubren aceptación y turno ocupado |
+| 5.8 | Cadena de liberaciones | RF‑J08 | El turno liberado por un reagendamiento genera una nueva oferta; con límite de profundidad | hecho: el horario anterior se ofrece al siguiente paciente, con profundidad máxima de cinco liberaciones; integración y E2E verifican la cadena |
+| 5.9 | **Aceptación simultánea** | RF‑J09 | 2 y 10 aceptaciones concurrentes producen 1 ganador; el resto recibe mensaje adecuado | hecho: diez sesiones y solicitudes HTTP concurrentes producen una cita (200) y nueve respuestas 409; las ofertas perdedoras vuelven a la cola. Probado contra PostgreSQL real |
 
 ## Fase 6 — Conocimiento y RAG
 
@@ -157,8 +157,8 @@ Estado: `pendiente` · `en curso` · `hecho` · `bloqueado`
 | 7.7 | Cálculo del calendario de tomas | RF‑L03 | Pruebas de cada tipo de frecuencia, con inicio, fin y zona horaria | pendiente |
 | 7.8 | **PRN sin horarios automáticos** | RF‑L08 | `CHECK` en base de datos y prueba que intenta violarlo | pendiente |
 | 7.9 | Recordatorios de toma y respuestas | RF‑L04, RF‑L05 | Las cinco respuestas registradas; «recordarme después» reprograma | pendiente |
-| 7.10 | Alertas de adherencia | RF‑L06 | Toma omitida y problema reportado generan alerta al personal autorizado | pendiente |
-| 7.11 | **Cambio de receta cancela recordatorios futuros** | RF‑L09 | Las tomas futuras pendientes se cancelan y el historial se conserva | pendiente |
+| 7.10 | Alertas de adherencia y seguimiento | RF‑L06 | Alertas por omisiones autorizadas y atendibles; control posterior de procedimientos con fecha elegida por el profesional, cierre auditado y recorrido E2E | parcial: ambos flujos anteriores están implementados; siguen pendientes alertas clínicas estructuradas ante problemas reportados por el paciente |
+| 7.11 | **Cambio de receta cancela recordatorios futuros** | RF‑L09 | Suspender una receta cancela tomas y avisos futuros pendientes y conserva los registros pasados; una modificación versionada deberá aplicar la misma regla | parcial: suspensión, cancelación de tomas/avisos y conservación del historial tienen cobertura de integración y API; modificar/versionar una receta aún no está disponible |
 | 7.12 | **Lista negra clínica de la IA** | RF‑L07 | Prueba que verifica la ausencia de herramientas de escritura clínica y la derivación obligatoria | pendiente |
 
 ## Fase 8 — Dashboard y predicciones

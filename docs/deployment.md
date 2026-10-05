@@ -147,6 +147,23 @@ un PostgreSQL sano sin esas extensiones no sirve para este sistema.
 wsl --shutdown                                     # liberar la memoria de WSL
 ```
 
+### Imágenes clínicas: MinIO y antivirus (opcional)
+
+MinIO y ClamAV están en el perfil `archivos` de `docker-compose.dev.yml` y no arrancan con
+`infra-arriba.ps1`: ClamAV ocupa ~1 GB de RAM. Para probar el almacén S3 y el antivirus:
+
+```bash
+# dentro de WSL, en infra/compose
+docker compose -f docker-compose.dev.yml --profile archivos up -d minio clamav
+```
+
+Y en `.env`: `ALMACENAMIENTO_ARCHIVOS=s3`, `S3_ENDPOINT=http://127.0.0.1:9000`,
+`S3_CLAVE_ACCESO` / `S3_CLAVE_SECRETA` (mínimo 3 y 8 caracteres, inventados para desarrollo,
+nunca los de producción) y `ANTIVIRUS_HABILITADO=true`. El bucket se crea al primer uso. Las
+imágenes llegan cifradas por la aplicación: el bucket nunca ve una imagen en claro.
+
+En producción el antivirus es obligatorio: la configuración no arranca sin él.
+
 ### Infraestructura de pruebas
 
 Puertos distintos (5433 y 6380) y sin persistencia, para que la suite de integración no

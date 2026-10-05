@@ -1,6 +1,11 @@
 # Estado de preparación para producción
 
-> **Última actualización:** 2026‑09‑14 · Fases 0, 0b, 3, 4 y 6 cerradas; capa de herramientas del agente, pagos, dashboard, lista de espera y restauración verificada.
+> **Última auditoría formal:** 2026‑09‑14. **Actualización de pruebas:** 2026‑10‑05 ·
+> 1510 pruebas en la suite backend completa (3 opcionales de LLM omitidas),
+> 256 casos frontend aprobados y 34 E2E. También pasaron 55 pruebas focalizadas de lista de espera.
+> La cobertura frontend cumple sus umbrales actuales: 87,99 % de líneas y 74,24 % de ramas.
+> La revisión añadió alertas automáticas de adherencia con auditoría y cobertura de worker/roles;
+> los bloqueos de producción de este documento siguen vigentes.
 >
 > **Veredicto actual: el sistema NO está preparado para producción y no puede usarse con
 > datos de pacientes reales.** No es una fórmula de cautela. Hay tres motivos concretos, y
@@ -25,13 +30,13 @@ funcionalidad no existe todavía; **no** significa que esté bien.
 
 | # | Criterio | Estado | Evidencia |
 |---|---|---|---|
-| 1 | No hay errores críticos | **parcial** | 1267 pruebas de backend, 114 de frontend y 20 E2E en verde; `ruff`/`mypy --strict` sin hallazgos. Pero **sin pruebas de carga y sin DAST**, «no hay errores críticos» sigue siendo una afirmación que no se puede sostener |
+| 1 | No hay errores críticos | **parcial** | 1510 pruebas backend en la suite completa; 256 pruebas frontend y 34 E2E en la validación actual. Tres pruebas de integración con LLM se omitieron al no configurar una API externa. Lint, build, `ruff` y `mypy` pasan; faltan DAST y pruebas de carga representativas recientes |
 | 2 | Sin vulnerabilidades críticas o altas pendientes | **parcial** | `pip-audit --strict` → sin vulnerabilidades conocidas; `bandit -r app -ll` sin hallazgos. 44 vulnerabilidades corregidas (ver informe). **Falta DAST y Trivy sobre imágenes construidas** |
 | 3 | No existen secretos en el repositorio | **parcial** | `.env` excluido, `.env.example` sin un valor real, secretos de prueba sintéticos. `gitleaks` **no está instalado localmente**; corre en el pipeline, que nunca se ha ejecutado |
 | 4 | Las reservas concurrentes no generan duplicados | **verificado** | Restricción de exclusión `gist`; prueba de concurrencia real con 50 participantes y `asyncio.Barrier` sobre conexiones separadas |
-| 5 | La lista de espera funciona automáticamente | **verificado** | Ciclo completo **ejecutado contra el sistema arrancado**: cancelar una cita ofrece el turno al primero de la cola, encola el aviso con plantilla aprobada y consentimiento, y la oferta aparece en el panel. Rutas HTTP, disparo automático al liberarse el turno, tarea del worker que vence ofertas cada minuto y **encadena al siguiente**, una sola oferta activa por turno bajo dos aceptaciones simultáneas, y la oferta que no se pudo comunicar **no penaliza** al paciente. 40 pruebas. La **entrega real** del aviso depende de Meta (E‑1), como todo mensaje saliente |
+| 5 | La lista de espera funciona automáticamente | **parcial** | 55 pruebas focalizadas cubren selección, franjas locales, outbox, expiración, reagendamiento con cita previa, cadena limitada, rollback ante la restricción EXCLUDE y diez aceptaciones concurrentes por servicio y HTTP. Una solicitud obtiene 200 y nueve 409; solo se crea una cita. La **entrega real** del aviso depende de Meta (E‑1) |
 | 6 | Los calendarios se sincronizan | **parcial** | El flujo completo esta verificado con adaptador sandbox: OAuth con `state` firmado y de un solo uso, tokens cifrados y ligados al profesional, publicacion, retirada y **reconciliacion de cambios externos** -- borrado y movimiento manual del profesional (85 pruebas). Lo que falta: el **adaptador real de Google** y la renovacion automatica del token de acceso (E‑19). `MODO_CALENDARIO=google` no arranca, a proposito |
-| 7 | Los recordatorios son persistentes y reintentables | **parcial** | El outbox está verificado: deduplicación por restricción única, retroceso exponencial con tope, recuperación de huérfanos, `FOR UPDATE SKIP LOCKED` (25 pruebas de integración). **Falta el planificador que crea los recordatorios** al confirmar una cita o una receta, y la entrega real contra Meta (E‑1) |
+| 7 | Los recordatorios son persistentes y reintentables | **parcial** | Los avisos de citas confirmadas se guardan de forma durable (24 h y 3 h); los de tomas se generan al confirmar recetas y cubren solo pautas fijas. Se sustituyen/cancelan al modificar o cerrar su entidad. Un cron cada minuto materializa los vencidos en el outbox; el worker respeta el consentimiento específico y el outbox gestiona deduplicación, reintentos y huérfanos. Los recorridos se probaron contra PostgreSQL aislado. **Falta verificar la entrega real contra Meta** (E‑1)
 | 8 | Los permisos impiden accesos indebidos | **verificado** | Permiso + ámbito de 4 dimensiones + relación asistencial, aplicados en el `WHERE`. 404 y no 403 fuera de ámbito. 504 pruebas con marcador `seguridad`. Tres fallos propios del filtro de ámbito encontrados y corregidos |
 | 9 | La historia clínica está protegida | **verificado** | Append‑only por disparador, versionado con autor y motivo, atacado con SQL directo en las pruebas |
 | 10 | Los medicamentos solo usan recetas aprobadas | **verificado** | Disparador `toma_exige_receta_confirmada`; los PRN no generan horarios fijos |
@@ -45,18 +50,18 @@ funcionalidad no existe todavía; **no** significa que esté bien.
 | 18 | Existe procedimiento de rollback | **parcial** | El rollback de esquema **sí está verificado** (`upgrade → downgrade -1 → upgrade` en cada migración). El rollback de despliegue está documentado y sin probar |
 | 19 | Existe procedimiento de restauración | **verificado** | Documentado **y ejecutado** ([`backup-and-restore.md`](backup-and-restore.md), sección 3). Restaura sobre una base nueva, nunca sobre la dañada |
 | 20 | Existe monitoreo | **parcial** | [`monitoring.md`](monitoring.md) define qué vigilar y por qué, sobre los eventos que el sistema **ya emite** con `correlacion_id`. **Nada los vigila todavía**: falta recolección, agregación, reglas de alerta y destinatario. Las cuatro señales que deben despertar a alguien están enumeradas |
-| 21 | Pruebas de aceptación con escenarios de clínica | **parcial** | **20 escenarios en verde** contra navegador, frontend, API y PostgreSQL reales ([`pruebas-e2e/`](../pruebas-e2e/README.md)): acceso y segundo factor, coincidencia entre el menú y los permisos reales, el token que **no** queda en el navegador, los tres vacíos de la búsqueda, notas versionadas y que **un PRN nunca aparece en el calendario de tomas**. **Faltan**: reserva completa desde la agenda, reserva por WhatsApp simulado (depende de E‑23), alerta por toma omitida y consulta RAG desde la interfaz |
+| 21 | Pruebas de aceptación con escenarios de clínica | **parcial** | **34 escenarios en verde** contra navegador, frontend, API y PostgreSQL reales ([`pruebas-e2e/`](../pruebas-e2e/README.md)): acceso, permisos, pacientes, historia clínica, medicación, alertas por tomas omitidas, control posterior del procedimiento, bandeja de mensajes derivados, agenda, pagos, RAG, imágenes y lista de espera. Siguen pendientes la reserva por WhatsApp simulado (depende de E‑23), alertas por problemas reportados y aceptación clínica integral |
 | 22 | Todas las limitaciones documentadas | **hecho** | 24 limitaciones estructurales y 9 restricciones deliberadas en [`known-limitations.md`](known-limitations.md) |
 | 23 | Notificaciones sin datos clínicos | **verificado** | 40 pruebas recorren el catálogo completo de plantillas: ninguna admite ni menciona diagnóstico, medicamento ni motivo de consulta (regla 10, RF‑K07) |
 | 24 | Los eventos del calendario externo no contienen datos clínicos | **verificado** | RF‑I09. `construir_evento` **no acepta** paciente ni servicio, y una prueba inspecciona su firma para que siga siendo así. Comprobado también sobre lo que de verdad sale hacia el proveedor (ADR‑0018) |
 
-**Resumen: 11 de 24 verificados, 12 parciales, 0 sin evaluar, 1 hecho** (el 22, que no es
+**Resumen: 10 de 24 verificados, 13 parciales, 0 sin evaluar, 1 hecho** (el 22, que no es
 un criterio de funcionamiento sino de documentación).
 
-Se mueven en esta revisión: el criterio 14 y el 19 pasan a **verificado** con la
+Se mueven en la auditoría original: el criterio 14 y el 19 pasan a **verificado** con la
 restauración ejecutada; el 20 y el 21 pasan de «no evaluado» a **parcial** — ya existe la
-definición de qué vigilar, aunque nada vigile todavía, y ya hay 20 escenarios E2E, aunque
-falten los que dependen del agente y del worker.
+definición de qué vigilar, aunque nada vigile todavía, y ya hay 34 escenarios E2E, aunque
+falten los que dependen del agente y la aceptación clínica integral.
 
 El 15 también deja de estar sin evaluar: la prueba de carga se ejecutó. **Ya no queda
 ningún criterio sin evaluar**; los 13 parciales lo son por razones concretas que cada
@@ -85,7 +90,7 @@ Dependen del usuario y de terceros.
 
 No se declarará el sistema listo hasta que **todas** se cumplan con evidencia:
 
-1. Los 22 criterios de la sección 1 en estado `hecho`, cada uno con la salida real de la
+1. Los 24 criterios de la sección 1 en estado `hecho`, cada uno con la salida real de la
    prueba que lo verifica.
 2. Ejecución completa de la suite: unitarias, integración, API, extremo a extremo,
    concurrencia, seguridad, RAG, carga y recuperación.
@@ -95,7 +100,7 @@ No se declarará el sistema listo hasta que **todas** se cumplan con evidencia:
 5. Restauración de respaldo ejecutada sobre una instancia limpia, con comparación de
    recuentos de filas.
 6. Rollback de versión y de migración ejecutados en preproducción.
-7. Los 21 escenarios de aceptación clínica en verde.
+7. Los 34 escenarios de aceptación clínica actuales y los escenarios faltantes en verde.
 8. **Verificación contra los proveedores reales** de WhatsApp y Google en
    preproducción, no solo contra el sandbox.
 9. **Revisión jurídica completada** y decisiones de la clínica registradas sobre
@@ -113,3 +118,4 @@ No se declarará el sistema listo hasta que **todas** se cumplan con evidencia:
 | 2026‑09‑12 | 4 (WhatsApp) | **No preparado.** Outbox de entrega, catálogo de plantillas sin datos clínicos y webhook con firma validada, verificados con 236 pruebas contra PostgreSQL real y 33 comprobaciones sobre la API arrancada. Ese ejercicio manual encontró, con 891 pruebas en verde, que **una `BAJA` por WhatsApp no daba de baja al paciente** por el formato del número; corregido con un índice funcional y 6 pruebas de regresión. **El camino real hacia Meta no está verificado** y así se declara (E‑1). Se corrigió además la medición de cobertura del proyecto, que llevaba varias fases mal medida por el greenlet de SQLAlchemy async |
 | 2026‑09‑12 | 4 (calendarios) | **No preparado.** OAuth con `state` firmado y de un solo uso, tokens cifrados con AES‑GCM ligados al profesional, publicación de eventos **sin datos clínicos** (ADR‑0018) y reconciliación de borrados y cambios externos, verificado con 85 pruebas y adaptador sandbox. **Falta el adaptador real de Google** y la renovación automática del token (E‑19); `MODO_CALENDARIO=google` no arranca, a propósito |
 | 2026‑09‑12 | 6 (conocimiento y RAG) | **No preparado.** Base de conocimiento con pgvector, búsqueda híbrida con los filtros de autorización dentro del SQL, ciclo de vida del documento y defensa anti inyección, con 80 pruebas `rag`. El arnés de evaluación destapó **dos fallos propios que se tapaban mutuamente**: el umbral de similitud no se aplicaba —la búsqueda nunca habría podido decir «no tengo información aprobada»— y la consulta textual unía los términos con `AND`, así que casi nunca coincidía. Corregidos y medidos: Hit@3 100 %, y una pregunta sin documentación devuelve **0** resultados (antes: el corpus entero). **La calidad se midió con el proveedor simulado, no con un modelo real** (E‑9) |
+| 2026‑10‑05 | Recordatorios | **Parcial.** Los avisos de citas y de tomas de pautas fijas ya se programan de forma durable y el cron los materializa en el outbox. Suspensión y registro de toma invalidan avisos pendientes; los de medicación exigen consentimiento propio y no contienen el nombre del medicamento. Verificados contra PostgreSQL aislado. La entrega real a Meta sigue pendiente

@@ -5,7 +5,7 @@ tipo.
 
 ## Qué se prueba aquí, y qué no
 
-**No** se prueban las reglas de dominio. Esas ya tienen 1267 pruebas en el
+**No** se prueban las reglas de dominio. Esas ya tienen más de mil pruebas en el
 backend que las cubren mejor y en una fracción del tiempo. Repetirlas a través
 del navegador daría una suite lenta y frágil que tarda diez veces más en decir
 lo mismo.
@@ -27,22 +27,19 @@ levantan desde aquí a propósito: `webServer` de Playwright los mataría al
 terminar, y en este proyecto el servidor de desarrollo es algo que la persona
 deja corriendo mientras trabaja.
 
-```bash
-# 1. El identificador de la clínica sintética
-docker exec clinica-pg psql -U clinica -d clinica -tAc \
-  "select id from clinica where nombre like '%SINTETICO%' order by creado_en desc limit 1"
-
-# 2. La API, con el límite de acceso propio de una corrida E2E (ver abajo)
+```powershell
+# 1. API, con el límite temporal de la suite E2E
 cd backend
-LIMITE_LOGIN_POR_MINUTO=200 uv run uvicorn app.main:crear_aplicacion --factory
+$env:LIMITE_LOGIN_POR_MINUTO='200'
+uv run uvicorn app.main:crear_aplicacion --factory
 
-# 3. El frontend
-cd frontend && npm start
+# 2. Frontend, en otra terminal
+cd frontend
+npm start
 
-# 4. Los escenarios
+# 3. Escenarios, en otra terminal
 cd pruebas-e2e
-PLAYWRIGHT_BROWSERS_PATH=D:/playwright-browsers \
-CLINICA_ID=<el del paso 1> \
+$env:PLAYWRIGHT_BROWSERS_PATH='D:/playwright-browsers'
 npx playwright test
 ```
 
@@ -52,7 +49,7 @@ npx playwright test
 ataque por fuerza bruta contra el formulario.
 
 Cada escenario inicia sesión de nuevo porque **los tokens viven solo en
-memoria** (ADR‑0016) y no se pueden sembrar con `storageState`. Veinte
+memoria** (ADR‑0016) y no se pueden sembrar con `storageState`. Treinta
 escenarios son más de diez accesos por minuto, así que el limitador los frena
 —el control funcionando— y la suite falla de forma aparentemente aleatoria.
 
@@ -94,25 +91,34 @@ Los escenarios comparten la base de datos de desarrollo y varios escriben en
 ella. En paralelo, uno que crea una cita y otro que consulta la agenda del mismo
 profesional se estorban, y el fallo aparece de forma intermitente.
 
+Los escenarios que necesitan un turno buscan dentro del horizonte de 60 días
+permitido por la API. Así siguen siendo repetibles aunque queden citas sintéticas
+de corridas anteriores ocupando una semana cercana.
+
 ## Estado
 
-**20 escenarios, todos en verde** (última ejecución: 2026‑09‑14).
+La suite contiene **34 escenarios**. Última ejecución completa: **2026-10-05, 34/34 aprobados**. Incluye el recorrido de superadministración y el reagendamiento en lista de espera desde la interfaz: acepta el turno anticipado, cancela la cita anterior y ofrece su horario a la siguiente persona. También cubre la llamada manual cuando falta consentimiento. Para repetirla, inicia una sola instancia actual de la API con `LIMITE_LOGIN_POR_MINUTO=200`; el valor normal de desarrollo continúa en 10.
 
 | Archivo | Qué cubre |
 |---|---|
-| `01-acceso.spec.ts` | Redirección al acceso, credenciales incorrectas, entrada por rol, y el **segundo factor bloqueando a un rol sensible** |
+| `01-acceso.spec.ts` | Redirección al acceso, seis roles locales, apertura del portal, alta de clínica y asignación de módulos por superadministración |
 | `02-autorizacion.spec.ts` | Que el menú coincide con los permisos reales, que recargar cierra la sesión y que **el token no queda en el navegador** |
 | `03-pacientes.spec.ts` | Búsqueda, paginación, la ficha, y **los tres vacíos que no se pueden confundir** |
-| `04-clinico.spec.ts` | Notas versionadas, el límite del asistente, y que **un PRN nunca aparece en el calendario de tomas** |
+| `04-clinico.spec.ts` | Notas versionadas, ciclo del plan dental con control posterior, el límite del asistente, que **un PRN nunca aparece en el calendario de tomas**, y revisión/atención de alertas por omisiones |
+| `05-demo-operativa.spec.ts` | Reserva, reprogramación y cancelación desde la agenda, check-in, seguimiento de espera en dashboard, cierre de atención y registro de un pago |
+| `06-conocimiento.spec.ts` | Consulta RAG desde la interfaz; muestra fuentes aprobadas y deriva las consultas sin respaldo |
+| `07-imagenes.spec.ts` | El profesional carga una imagen clínica y la vuelve a ver desde la galería autenticada |
+| `08-conversaciones.spec.ts` | El profesional abre la bandeja protegida de mensajes derivados |
+| `09-lista-espera.spec.ts` | Recepción registra preferencias y una cita previa, libera un turno, confirma el reagendamiento y la siguiente oferta; verifica la llamada manual cuando falta consentimiento; no conecta WhatsApp |
 
 ## Lo que falta
 
-De los 21 escenarios que la especificación exige, estos 20 cubren acceso,
-autorización, pacientes, historia clínica y medicación. Falta:
+La suite actual contiene 34 escenarios y cubre acceso, autorización, pacientes,
+historia clínica, medicación, búsqueda en conocimiento y operaciones de agenda,
+pagos y lista de espera. Aún faltan:
 
-* **Reserva completa desde la agenda** y cancelación con reasignación de lista
-  de espera.
+* **Reserva completa desde la agenda**. La cancelación visual, la oferta
+  resultante y su aceptación ya están cubiertas en el recorrido de lista de espera.
 * **Reserva por WhatsApp simulado**, que depende del agente conversacional
   (E‑23) y del webhook, hoy sin conectar a herramientas.
-* **Alerta por toma omitida**, que depende del cálculo periódico en el worker.
-* **Consulta RAG desde la interfaz**: la pantalla existe; el escenario no.
+* **Alerta clínica posterior al tratamiento** y aceptación clínica integral.

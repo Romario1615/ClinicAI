@@ -1,6 +1,10 @@
 # Plan de pruebas
 
-> **Última actualización:** 2026‑09‑12 · Fases 0–4 y 6 cerradas · 1139 pruebas.
+> **Validación de este avance (2026‑10‑05):** 55 pruebas focalizadas de lista de espera
+> (integración, tareas, aviso, API, rollback y concurrencia HTTP); Ruff y mypy aprobados para los módulos
+> tocados; 256 pruebas frontend aprobadas; 34/34 escenarios E2E aprobados. La cobertura
+> frontend medida fue 87,99 % de líneas y 74,24 % de ramas. La suite backend completa aprobó
+> 1510 pruebas y omitió 3 integraciones opcionales de LLM que requieren Anthropic real.
 
 Este documento dice **qué se prueba, con qué, y por qué de esa forma**. No es un
 inventario de pruebas: el inventario está en el código. Lo que aquí importa son las

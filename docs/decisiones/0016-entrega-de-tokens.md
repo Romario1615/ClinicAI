@@ -35,6 +35,9 @@ La defensa principal contra un refresco robado **no es ocultarlo, sino detectar 
 duplicó**:
 
 * Cada refresco es de un solo uso y se almacena con hash (`jti_refresco_hash`).
+* El JWT de acceso solo se acepta mientras exista un refresco actual no usado y no
+  revocado para su familia. Cerrar sesión, reasignar la clínica o desactivar la cuenta
+  invalida inmediatamente también los JWT de acceso ya emitidos.
 * Si un refresco ya usado vuelve a presentarse, existen dos copias en circulación. No se
   puede saber cuál es la legítima, así que se revoca **la familia completa** de sesiones
   y se registra `token.reutilizado`, que está en la lista de acciones que generan alerta.

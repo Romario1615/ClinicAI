@@ -18,10 +18,26 @@
  * pantalla a base de clics hasta dar con uno que tenga datos hace la prueba
  * lenta y dependiente de como siembre el generador.
  */
-import { type Page, expect, test } from '@playwright/test';
+import type { Page } from '@playwright/test';
+import { expect, test } from '../apoyo/prueba';
 
-import { pacienteConTomas, pacienteConVersionAnterior } from '../apoyo/datos';
+import {
+  pacienteConAlertaAdherencia,
+  pacienteConTomas,
+  pacienteConVersionAnterior,
+} from '../apoyo/datos';
 import { acceder, irA } from '../apoyo/sesion';
+
+const API = process.env.URL_API ?? 'http://127.0.0.1:8000/api/v1';
+
+function fechaAgenda(diasDesdeHoy: number): string {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Guayaquil',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(new Date(Date.now() + diasDesdeHoy * 24 * 60 * 60 * 1000));
+}
 
 /**
  * Busca al paciente **por su documento** y abre su detalle.
@@ -31,9 +47,13 @@ import { acceder, irA } from '../apoyo/sesion';
  * motivo que no tiene nada que ver con lo que comprueba.
  */
 async function abrir(page: Page, documento: string, boton: RegExp): Promise<void> {
-  await page.locator('input[name="termino"]').fill(documento);
-  await page.getByRole('button', { name: /^buscar$/i }).click();
-  await page.getByRole('button', { name: boton }).first().click();
+  const busqueda = page.getByRole('region', { name: /buscar paciente/i });
+  await busqueda.waitFor({ state: 'visible' });
+  await busqueda.getByRole('textbox', { name: /buscar paciente/i }).fill(documento);
+  await busqueda.getByRole('button', { name: /^buscar$/i }).click();
+  // Hay varias acciones «Abrir historia»: se limita a la fila del documento
+  // exacto para no abrir al primer paciente de la tabla.
+  await page.getByRole('row').filter({ hasText: documento }).getByRole('button', { name: boton }).click();
   await page
     .locator('app-cargando')
     .waitFor({ state: 'detached' })
@@ -120,4 +140,159 @@ test.describe('Medicacion', () => {
       await expect(futuras.first().getByRole('button')).toHaveCount(0);
     }
   });
+
+  test('el profesional revisa y atiende una alerta por tomas omitidas', async ({
+    page,
+    request,
+  }) => {
+    const { paciente, alertaId } = await pacienteConAlertaAdherencia(request);
+    await acceder(page, 'profesional');
+    await irA(page, /medicamentos/i);
+    await abrir(page, paciente.numero_documento ?? '', /ver medicaci/i);
+
+    const alerta = page.getByRole('region', { name: 'Alertas de adherencia abiertas' });
+    await expect(alerta).toBeVisible();
+    await expect(alerta).toContainText(/tomas sin registrar en el periodo/i);
+
+    const atencion = page.waitForResponse(
+      (respuesta) =>
+        respuesta.url().includes(`/historia/adherencia/alertas/${alertaId}/atencion`) &&
+        respuesta.request().method() === 'POST',
+    );
+    await alerta.getByRole('button', { name: 'Marcar atendida' }).click();
+    expect((await atencion).status()).toBe(204);
+    await expect(alerta).toHaveCount(0);
+  });
+});
+
+test('el profesional completa un plan y atiende su control posterior', async ({ page, request }) => {
+  test.setTimeout(90_000);
+  const paciente = await pacienteConVersionAnterior(request);
+  const titulo = `Plan sintetico ${Date.now()}`;
+  let citaId = '';
+  let tokenAgenda = '';
+  await acceder(page, 'profesional');
+  await irA(page, /historia/i);
+  await abrir(page, paciente.numero_documento ?? '', /abrir historia/i);
+
+  await page.getByRole('tab', { name: 'Planes de tratamiento' }).click();
+  const planes = page.getByRole('region', { name: 'Planes de tratamiento' });
+  await planes.getByRole('button', { name: 'Crear borrador' }).click();
+  await planes.getByLabel('Título del plan').fill(titulo);
+  await planes.getByLabel('Descripción').fill('Restauración sintetica de prueba');
+  await planes.getByLabel('Pieza FDI (opcional)').fill('36');
+  await planes.getByLabel('Caras FDI').fill('OM');
+  await planes.getByLabel('Precio (USD)').fill('85.00');
+  await planes.getByRole('button', { name: 'Añadir al plan' }).click();
+  const guardado = page.waitForResponse(
+    (respuesta) =>
+      respuesta.url().includes(`/odontologia/pacientes/${paciente.id}/planes-tratamiento`) &&
+      respuesta.request().method() === 'POST',
+  );
+  await planes.getByRole('button', { name: 'Guardar borrador' }).click();
+  const respuestaPlan = await guardado;
+  expect(respuestaPlan.status()).toBe(201);
+  const procedimientoId = (await respuestaPlan.json()).procedimientos[0].id as string;
+  await expect(planes.getByRole('status').filter({ hasText: 'Borrador guardado' })).toBeVisible();
+
+  const plan = planes.locator('article.plan').filter({ hasText: titulo });
+  await expect(plan).toContainText('PENDIENTE DE REVISIÓN');
+  await expect(plan).toContainText('Pieza 36');
+  await plan.getByRole('button', { name: 'Proponer al paciente' }).click();
+  await expect(planes.getByRole('status').filter({ hasText: 'Plan propuesto' })).toBeVisible();
+  await expect(plan).toContainText('PROPUESTO');
+  await expect(plan).toContainText('Falta registrar la aceptación firmada del paciente.');
+
+  await plan.getByRole('button', { name: 'Registrar aceptación firmada' }).click();
+  await plan.getByLabel('Referencia del documento firmado').fill(`Constancia ${titulo}`);
+  await plan.getByRole('button', { name: 'Confirmar' }).click();
+  await expect(plan).toContainText('ACEPTADO · EN CURSO');
+
+  await plan.getByRole('button', { name: 'Agendar esta fase' }).click();
+  await expect(page).toHaveURL(/procedimiento_plan=/);
+  await expect(page.getByText('Esta cita quedará vinculada al procedimiento seleccionado en el plan.'))
+    .toBeVisible();
+  const fecha = page.getByLabel('Fecha', { exact: true });
+  for (let dias = 2; dias <= 30; dias += 1) {
+    const cargando = page.waitForResponse(
+      (respuesta) => respuesta.url().includes('/agenda/disponibilidad') && respuesta.status() === 200,
+    );
+    await fecha.fill(fechaAgenda(dias));
+    await cargando;
+    if (await page.locator('.fila-dia--hueco').count()) break;
+  }
+  const hueco = page.locator('.fila-dia--hueco').first();
+  await expect(hueco, 'debe haber al menos un turno disponible para agendar la fase').toBeVisible();
+  await hueco.click();
+  const reserva = page.waitForResponse(
+    (respuesta) =>
+      respuesta.url().endsWith('/agenda/citas') && respuesta.request().method() === 'POST',
+  );
+  await page.locator('.panel').getByRole('button', { name: 'Confirmar cita' }).click();
+  const respuestaCita = await reserva;
+  expect(respuestaCita.status()).toBe(201);
+  expect(respuestaCita.request().postDataJSON().procedimiento_plan_id).toBe(procedimientoId);
+  citaId = (await respuestaCita.json()).id as string;
+  tokenAgenda = (await respuestaCita.request().headerValue('authorization')) ?? '';
+
+  try {
+    await irA(page, /historia/i);
+    await abrir(page, paciente.numero_documento ?? '', /abrir historia/i);
+    await page.getByRole('tab', { name: 'Planes de tratamiento' }).click();
+    const planAgendado = page.locator('article.plan').filter({ hasText: titulo });
+    await expect(planAgendado).toContainText('Cita agendada para esta fase');
+
+    // Al cancelar la cita, el vínculo se libera en la misma transacción para
+    // permitir elegir otro horario para el mismo procedimiento.
+    const cancelada = await request.post(`${API}/agenda/citas/${citaId}/cancelacion`, {
+      headers: { Authorization: tokenAgenda },
+      data: { motivo: 'Reagendar la fase de prueba E2E' },
+    });
+    expect(cancelada.status()).toBe(200);
+  } finally {
+    if (citaId && tokenAgenda) {
+      try {
+        const existente = await request.get(`${API}/agenda/citas/${citaId}`, {
+          headers: { Authorization: tokenAgenda },
+        });
+        if (existente.ok() && (await existente.json()).estado !== 'CANCELLED') {
+          await request.post(`${API}/agenda/citas/${citaId}/cancelacion`, {
+            headers: { Authorization: tokenAgenda },
+            data: { motivo: 'Limpieza de prueba sintetica E2E' },
+          });
+        }
+      } catch {
+        // En una interrupción de Playwright el contexto HTTP también puede
+        // cerrarse. La cita ya es sintética y el flujo normal la cancela arriba.
+      }
+    }
+  }
+  // Salir y volver al módulo vuelve a consultar el plan tras la cancelación.
+  await irA(page, /agenda/i);
+  await irA(page, /historia/i);
+  await abrir(page, paciente.numero_documento ?? '', /abrir historia/i);
+  await page.getByRole('tab', { name: 'Planes de tratamiento' }).click();
+  const planLiberado = page.locator('article.plan').filter({ hasText: titulo });
+  await expect(planLiberado).not.toContainText('Cita agendada para esta fase');
+  await expect(planLiberado.getByRole('button', { name: 'Agendar esta fase' })).toBeVisible();
+
+  await planLiberado.getByRole('button', { name: 'Completar' }).click();
+  const control = new Date();
+  control.setDate(control.getDate() + 7);
+  const fechaControl = [
+    control.getFullYear(),
+    String(control.getMonth() + 1).padStart(2, '0'),
+    String(control.getDate()).padStart(2, '0'),
+  ].join('-');
+  const fechaControlVisible = new Intl.DateTimeFormat('en-US', { dateStyle: 'medium' }).format(control);
+  await planLiberado.getByLabel('Fecha de control posterior (opcional)').fill(fechaControl);
+  await planLiberado.getByRole('button', { name: 'Confirmar' }).click();
+  await expect(planLiberado).toContainText('Control posterior pendiente');
+  await expect(planLiberado).toContainText(fechaControlVisible);
+
+  await planLiberado.getByRole('button', { name: 'Registrar control realizado' }).click();
+  await planLiberado.getByLabel('Nota del control (opcional)').fill('Control de seguimiento realizado.');
+  await planLiberado.getByRole('button', { name: 'Confirmar' }).click();
+  await expect(planLiberado).toContainText('Control posterior atendido');
+  await expect(planLiberado).toContainText('Control de seguimiento realizado.');
 });

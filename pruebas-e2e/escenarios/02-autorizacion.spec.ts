@@ -11,7 +11,7 @@
  * visible cuyas peticiones devuelven 403 en bucle, o una seccion oculta a quien
  * si tiene derecho a usarla.
  */
-import { expect, test } from '@playwright/test';
+import { expect, test } from '../apoyo/prueba';
 
 import { acceder } from '../apoyo/sesion';
 

@@ -68,13 +68,13 @@ else
 fi
 
 # --- 4. Docker Engine ------------------------------------------------------
-if ! command -v docker >/dev/null 2>&1; then
+if [[ ! -x /usr/bin/docker || ! -x /usr/bin/dockerd ]]; then
     log "Instalando Docker Engine, CLI, containerd y el plugin Compose..."
     apt-get install -y -qq \
         docker-ce docker-ce-cli containerd.io \
         docker-buildx-plugin docker-compose-plugin
 else
-    log "Docker ya instalado: $(docker --version)"
+    log "Docker Engine ya instalado: $(/usr/bin/docker --version)"
 fi
 
 # --- 5. Usuario sin privilegios en el grupo docker -------------------------
@@ -131,10 +131,10 @@ fi
 
 # --- 8. Verificacion -------------------------------------------------------
 log "Verificando la instalacion..."
-docker --version
-docker compose version
+/usr/bin/docker --version
+/usr/bin/docker compose version
 
-if docker info >/dev/null 2>&1; then
+if /usr/bin/docker info >/dev/null 2>&1; then
     log "El demonio de Docker responde correctamente."
 else
     aviso "El demonio aun no responde."
