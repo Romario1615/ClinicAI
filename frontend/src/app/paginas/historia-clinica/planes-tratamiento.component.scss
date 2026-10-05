@@ -1,0 +1,202 @@
+:host {
+  display: block;
+  margin: var(--espacio-6) 0;
+}
+
+.planes {
+  display: grid;
+  gap: var(--espacio-4);
+}
+
+.cabecera-planes,
+.plan__cabecera,
+.acciones-plan,
+.procedimientos-pendientes li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--espacio-3);
+}
+
+.cabecera-planes p:not(.ceja),
+.editor-plan > p,
+.nota-flujo,
+.plan__observaciones {
+  color: var(--texto-suave);
+}
+
+h2,
+h3,
+h4,
+p {
+  margin-top: 0;
+}
+
+.editor-plan,
+.procedimiento-editor,
+.procedimientos-pendientes {
+  display: grid;
+  gap: var(--espacio-3);
+}
+
+.procedimiento-editor,
+.procedimientos-pendientes {
+  padding: var(--espacio-4);
+  border: 1px solid var(--borde);
+  border-radius: var(--radio);
+  background: var(--superficie-hundida);
+}
+
+.campos-procedimiento {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--espacio-3);
+}
+
+.procedimientos-pendientes ol,
+.plan__procedimientos {
+  display: grid;
+  gap: var(--espacio-2);
+  margin: 0;
+  padding-left: 1.4rem;
+}
+
+.procedimientos-pendientes li,
+.plan__procedimientos li {
+  padding: var(--espacio-2) 0;
+  border-bottom: 1px solid var(--borde);
+}
+
+.procedimiento__fotos {
+  margin-top: var(--espacio-2);
+  padding: var(--espacio-2);
+  border-radius: var(--radio-md);
+  background: var(--fondo);
+}
+
+.total-plan {
+  margin: 0;
+  text-align: right;
+}
+
+.lista-planes {
+  display: grid;
+  gap: var(--espacio-3);
+}
+
+.plan {
+  display: grid;
+  gap: var(--espacio-3);
+}
+
+.plan__cabecera h3 {
+  margin: 0;
+}
+
+.plan__cabecera .ceja {
+  margin-bottom: var(--espacio-1);
+  color: var(--texto-tenue);
+  font-size: 0.75rem;
+  font-weight: 750;
+  letter-spacing: 0.06em;
+}
+
+.aviso-pendiente {
+  margin: 0;
+  padding: var(--espacio-3);
+  border-radius: var(--radio-pequeno);
+  background: var(--aviso-fondo);
+  color: var(--aviso);
+}
+
+.nota-flujo {
+  margin: 0;
+  font-size: 0.84rem;
+}
+
+@media (max-width: 720px) {
+  .campos-procedimiento {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 480px) {
+  .cabecera-planes,
+  .procedimientos-pendientes li {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .campos-procedimiento {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.procedimiento--cerrado {
+  color: var(--texto-suave);
+}
+
+.procedimiento__estado {
+  font-size: 0.78rem;
+  font-weight: 650;
+  color: var(--texto-suave);
+}
+
+.procedimiento__estado[data-estado='COMPLETADO'] {
+  color: var(--exito);
+}
+
+.procedimiento__estado[data-estado='CANCELADO'] {
+  color: var(--peligro);
+}
+
+.procedimiento__acciones {
+  gap: var(--espacio-2);
+}
+
+.plan__constancia {
+  margin: var(--espacio-2) 0;
+  font-size: 0.88rem;
+  color: var(--texto-suave);
+}
+
+.plan__control {
+  display: grid;
+  gap: var(--espacio-1);
+  margin: 0;
+  padding: var(--espacio-3);
+  border-radius: var(--radio);
+  background: var(--superficie-suave);
+  color: var(--texto-suave);
+  font-size: 0.86rem;
+}
+
+.plan__control--pendiente {
+  border-inline-start: 3px solid var(--aviso);
+  color: var(--texto);
+}
+
+.accion-plan {
+  margin-top: var(--espacio-3);
+  padding: var(--espacio-4);
+  border: 1px solid var(--borde);
+  border-radius: var(--radio);
+  background: var(--superficie);
+}
+
+.accion-plan__aviso {
+  padding: var(--espacio-3);
+  border-left: 3px solid var(--aviso);
+  background: var(--aviso-fondo);
+  color: var(--aviso);
+  font-size: 0.88rem;
+}
+
+.plan__siguiente {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--espacio-2);
+  margin: var(--espacio-2) 0;
+  font-weight: 600;
+}

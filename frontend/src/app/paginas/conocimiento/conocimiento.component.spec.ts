@@ -27,7 +27,13 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 
 import { ConocimientoComponent } from './conocimiento.component';
 import { CONFIGURACION, CONFIGURACION_POR_DEFECTO } from '../../nucleo/servicios/configuracion';
-import type { Documento, RespuestaBusqueda } from '../../nucleo/servicios/api.service';
+import { SesionService } from '../../nucleo/servicios/sesion.service';
+import type {
+  Documento,
+  PermisoDocumento,
+  RespuestaBusqueda,
+} from '../../nucleo/servicios/api.service';
+import type { Identidad } from '../../nucleo/modelos/dominio';
 
 const BASE = CONFIGURACION_POR_DEFECTO.urlApi;
 
@@ -62,6 +68,34 @@ function resultado(sufijo: string, extracto: string) {
     puntuacion: 0.9,
     posicion_vectorial: 1,
     posicion_textual: 2,
+  };
+}
+
+function identidadAprobadora(): Identidad {
+  return {
+    usuario_id: 'u-aprobador',
+    correo: 'aprobador@example.invalid',
+    nombre: 'Revisor',
+    apellido: 'Conocimiento',
+    clinica_id: 'c-1',
+    roles: ['administrador_clinica'],
+    permisos: ['conocimiento.leer', 'conocimiento.aprobar'],
+    ambito: {
+      clinica_id: 'c-1',
+      sedes: [],
+      todas_las_sedes: true,
+      especialidades: [],
+      todas_las_especialidades: true,
+      profesionales: [],
+      todos_los_profesionales: true,
+      todos_los_pacientes: true,
+      nivel_maximo: 'N1',
+    },
+    requiere_segundo_factor: false,
+    segundo_factor_cumplido: false,
+    dosfa_habilitado: false,
+    debe_cambiar_contrasena: false,
+    ultimo_acceso_en: null,
   };
 }
 
@@ -200,6 +234,49 @@ describe('ConocimientoComponent', () => {
     expect(texto()).toContain('no responde');
     expect(texto()).toContain('Borrador');
     expect(texto()).toContain('Archivado');
+  });
+
+  it('permite asignar y guardar una regla de acceso para un rol', () => {
+    TestBed.inject(SesionService).establecerIdentidad(identidadAprobadora());
+    const doc = documento('acl');
+    cargar([doc]);
+
+    fixture.componentInstance['gestionarPermisos'](doc);
+    http
+      .expectOne(`${BASE}/conocimiento/permisos/opciones`)
+      .flush({
+        roles: [{ id: 'rol-1', nombre: 'Recepción', codigo: 'recepcion' }],
+        usuarios: [],
+        sedes: [],
+        especialidades: [],
+      });
+    http
+      .expectOne(`${BASE}/conocimiento/documentos/${doc.id}/permisos`)
+      .flush({ document_id: doc.id, permisos: [] });
+    fixture.detectChanges();
+
+    fixture.componentInstance['principalNuevo'] = 'rol-1';
+    fixture.componentInstance['puedeUsarEnAgenteNuevo'] = true;
+    fixture.componentInstance['agregarPermiso']();
+    fixture.detectChanges();
+    expect(texto()).toContain('Recepción');
+    expect(texto()).toContain('Agente puede citar');
+
+    fixture.componentInstance['guardarPermisos']();
+    const solicitud = http.expectOne(`${BASE}/conocimiento/documentos/${doc.id}/permisos`);
+    expect(solicitud.request.method).toBe('PUT');
+    const permisos = solicitud.request.body['permisos'] as readonly PermisoDocumento[];
+    expect(permisos).toEqual([
+      {
+        principal_tipo: 'ROL',
+        principal_id: 'rol-1',
+        puede_leer: true,
+        puede_usar_en_agente: true,
+      },
+    ]);
+    solicitud.flush({ document_id: doc.id, permisos });
+    fixture.detectChanges();
+    expect(texto()).toContain('Accesos del documento actualizados y auditados.');
   });
 
   it('filtrar por estado vuelve a pedir el listado con ese filtro', () => {

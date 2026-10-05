@@ -1,4 +1,29 @@
-<h1>Base de conocimiento</h1>
+<header class="portada">
+  <div class="portada__texto">
+    <p class="ceja">CONOCIMIENTO CLÍNICO</p>
+    <h1>Base de conocimiento</h1>
+    <p class="portada__sub">
+      Protocolos, instructivos y políticas de la clínica. Es la única fuente de la que el agente
+      puede responder, y solo cuando el documento está aprobado.
+    </p>
+  </div>
+  <img class="portada__ilustracion" src="/images/conocimiento-aprobado.png" alt="" aria-hidden="true" loading="lazy" />
+  @if (puedeCargar()) {
+    <button type="button" class="boton boton--principal portada__accion" (click)="abrirCarga()">
+      <app-icono nombre="subir" [tamano]="18" />
+      Cargar documento
+    </button>
+  }
+</header>
+
+<ol class="flujo" aria-label="Cómo llega un documento al agente">
+  <li class="flujo__paso"><span class="flujo__num">1</span> Cargar <small>borrador</small></li>
+  <li class="flujo__paso"><span class="flujo__num">2</span> Revisar <small>en revisión</small></li>
+  <li class="flujo__paso"><span class="flujo__num">3</span> Aprobar <small>quien no lo cargó</small></li>
+  <li class="flujo__paso flujo__paso--fin">
+    <span class="flujo__num">4</span> Responde consultas <small>aprobado o publicado</small>
+  </li>
+</ol>
 
 <!-- ===================== Buscador ===================== -->
 <section class="tarjeta buscador" aria-label="Buscar en la base de conocimiento">
@@ -100,6 +125,18 @@
 
 <!-- ===================== Documentos ===================== -->
 <section class="listado" aria-label="Documentos de la base de conocimiento">
+  @if (mensajeAccion()) {
+    <p class="exito" role="status">{{ mensajeAccion() }}</p>
+  }
+  @if (errorAccion(); as fallo) {
+    <div class="aviso-error" role="alert">
+      {{ fallo.message }}
+      @if (fallo.correlacionId) {
+        <span class="ayuda-demo">· Referencia: {{ fallo.correlacionId }}</span>
+      }
+    </div>
+  }
+
   <div class="listado__cabecera">
     <h2>Documentos</h2>
     <label class="campo campo--en-linea">
@@ -129,11 +166,17 @@
       (reintentar)="cargar()"
     />
   } @else if (documentos().length === 0) {
-    <div class="tarjeta">
+    <div class="tarjeta vacio-carga">
       <app-vacio
         titulo="No hay documentos"
         detalle="No hay ningún documento en su ámbito con ese estado."
       />
+      @if (puedeCargar() && !filtroEstado()) {
+        <button type="button" class="boton boton--principal" (click)="abrirCarga()">
+          <app-icono nombre="subir" [tamano]="18" />
+          Cargar el primer documento
+        </button>
+      }
     </div>
   } @else {
     <!-- Documentos marcados por la detección de inyección. Van arriba y
@@ -177,6 +220,9 @@
             <th scope="col">Estado</th>
             <th scope="col">Versión</th>
             <th scope="col">Vigencia</th>
+            @if (puedeCargar() || puedeAprobar()) {
+              <th scope="col"><span class="solo-lectores">Acciones</span></th>
+            }
           </tr>
         </thead>
         <tbody>
@@ -201,15 +247,177 @@
               </td>
               <td class="numerico">{{ documento.version_vigente ?? '—' }}</td>
               <td class="vigencia">{{ vigencia(documento) }}</td>
+              @if (puedeCargar() || puedeAprobar()) {
+                <td class="celda-acciones">
+                  <div class="acciones">
+                    @if (puedeCargar()) {
+                      @for (accion of acciones(documento); track accion.destino) {
+                        <button
+                          type="button"
+                          class="boton boton--pequeno"
+                          [class.boton--principal]="accion.principal"
+                          [disabled]="cambiando() === documento.id"
+                          (click)="cambiarEstado(documento, accion)"
+                        >
+                          {{ accion.texto }}
+                        </button>
+                      }
+                      @if (documento.status !== 'ARCHIVED') {
+                        <button
+                          type="button"
+                          class="boton boton--pequeno boton--plano"
+                          [disabled]="cambiando() === documento.id"
+                          (click)="abrirCarga(documento)"
+                        >
+                          <app-icono nombre="subir" [tamano]="16" />
+                          Versión nueva
+                        </button>
+                      }
+                    }
+                    @if (puedeAprobar()) {
+                      <button
+                        type="button"
+                        class="boton boton--pequeno boton--plano"
+                        [attr.aria-expanded]="documentoPermisos() === documento.id"
+                        [disabled]="guardandoPermisos()"
+                        (click)="gestionarPermisos(documento)"
+                      >
+                        {{ documentoPermisos() === documento.id ? 'Cerrar accesos' : 'Accesos' }}
+                      </button>
+                    }
+                  </div>
+                </td>
+              }
             </tr>
           }
         </tbody>
       </table>
     </div>
 
+    @if (documentoPermisos()) {
+      <section class="tarjeta permisos-documento" aria-label="Accesos del documento">
+        <header class="permisos-documento__cabecera">
+          <div>
+            <p class="ceja">ACCESO POR DOCUMENTO</p>
+            <h3>¿Quién puede consultar este contenido?</h3>
+          </div>
+          <span class="permisos-documento__estado">
+            {{ permisosDocumento().length ? permisosDocumento().length + ' reglas' : 'Alcance general' }}
+          </span>
+        </header>
+
+        <p class="permisos-documento__ayuda">
+          Sin reglas, se aplica el alcance de clínica, sede, especialidad y sensibilidad. Al
+          agregar reglas, solo los principales seleccionados pueden leer; el agente necesita
+          además permiso expreso para citar. Una denegación directa prevalece sobre los permisos
+          heredados de sus roles.
+        </p>
+
+        @if (errorPermisos()) {
+          <p class="aviso-error" role="alert">{{ errorPermisos() }}</p>
+        }
+
+        @if (cargandoPermisos()) {
+          <app-cargando mensaje="Cargando roles y permisos del documento..." />
+        } @else {
+          @if (permisosDocumento().length) {
+            <ul class="permisos-documento__lista">
+              @for (regla of permisosDocumento(); track regla.principal_tipo + regla.principal_id) {
+                <li>
+                  <div>
+                    <strong>{{ nombrePrincipal(regla) }}</strong>
+                    <span>{{ tipoPrincipal(regla.principal_tipo) }}</span>
+                  </div>
+                  <div class="permisos-documento__insignias">
+                    @if (regla.puede_leer) { <span>Puede leer</span> }
+                    @else { <span>Lectura denegada</span> }
+                    @if (regla.puede_usar_en_agente) { <span>Agente puede citar</span> }
+                    @else if (regla.puede_leer) { <span>Agente no puede citar</span> }
+                  </div>
+                  <button
+                    type="button"
+                    class="boton boton--pequeno boton--plano"
+                    (click)="quitarPermiso(regla)"
+                    [disabled]="guardandoPermisos()"
+                  >
+                    Quitar
+                  </button>
+                </li>
+              }
+            </ul>
+          } @else {
+            <p class="permisos-documento__vacio">
+              No hay reglas individuales. El acceso depende del alcance general del documento.
+            </p>
+          }
+
+          <div class="permisos-documento__formulario">
+            <label class="campo">
+              <span class="campo__etiqueta">Tipo de principal</span>
+              <select
+                class="campo__control"
+                name="tipo-principal"
+                [ngModel]="tipoPrincipalNuevo"
+                (ngModelChange)="cambiarTipoPrincipal($event)"
+              >
+                <option value="ROL">Rol</option>
+                <option value="USUARIO">Usuario</option>
+                <option value="SEDE">Sede</option>
+                <option value="ESPECIALIDAD">Especialidad</option>
+              </select>
+            </label>
+            <label class="campo">
+              <span class="campo__etiqueta">Rol o persona</span>
+              <select class="campo__control" name="principal" [(ngModel)]="principalNuevo">
+                <option value="">Seleccionar...</option>
+                @for (opcion of opcionesTipo(); track opcion.id) {
+                  <option [value]="opcion.id">{{ opcion.nombre }}</option>
+                }
+              </select>
+            </label>
+            <label class="permisos-documento__opcion">
+              <input type="checkbox" name="puede-leer" [(ngModel)]="puedeLeerNuevo" />
+              Puede leer
+            </label>
+            <label class="permisos-documento__opcion">
+              <input
+                type="checkbox"
+                name="agente-puede-citar"
+                [(ngModel)]="puedeUsarEnAgenteNuevo"
+                [disabled]="!puedeLeerNuevo"
+              />
+              El agente puede citar
+            </label>
+            <button
+              type="button"
+              class="boton"
+              (click)="agregarPermiso()"
+              [disabled]="!principalNuevo || guardandoPermisos()"
+            >
+              Agregar regla
+            </button>
+          </div>
+
+          <footer class="permisos-documento__pie">
+            <button
+              type="button"
+              class="boton boton--principal"
+              (click)="guardarPermisos()"
+              [disabled]="guardandoPermisos()"
+            >
+              {{ guardandoPermisos() ? 'Guardando...' : 'Guardar accesos' }}
+            </button>
+          </footer>
+        }
+      </section>
+    }
+
     <p class="pie-listado">
-      Mostrando {{ documentos().length }} de {{ total() }} documentos de su ámbito. La
-      creación y edición de documentos todavía no está en esta pantalla.
+      Mostrando {{ documentos().length }} de {{ total() }} documentos de su ámbito.
     </p>
   }
 </section>
+
+@if (dialogo() !== undefined) {
+  <app-cargar-documento [documento]="dialogo() ?? null" (cerrado)="cerrarCarga()" />
+}

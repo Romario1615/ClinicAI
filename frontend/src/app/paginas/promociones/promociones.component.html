@@ -1,0 +1,234 @@
+<header class="portada">
+  <div>
+    <p class="ceja">COMUNICACIÓN</p>
+    <h1>Promociones por WhatsApp</h1>
+    <p class="portada__sub">
+      Campañas con imagen propia o propuesta por IA. Solo llegan a pacientes que aceptaron
+      recibir publicidad, y siempre las aprueba una persona antes de salir.
+    </p>
+  </div>
+  <button type="button" class="boton boton--principal" (click)="creando.set(!creando())">
+    <app-icono nombre="mas" [tamano]="18" />
+    Nueva campaña
+  </button>
+</header>
+
+@if (exito()) {
+  <p class="exito" role="status">{{ exito() }}</p>
+}
+@if (error()) {
+  <p class="aviso-error" role="alert">{{ error() }}</p>
+}
+
+@if (creando()) {
+  <form class="tarjeta nueva" (ngSubmit)="crear()" #formulario="ngForm">
+    <h2>Nueva campaña</h2>
+    <div class="nueva__rejilla">
+      <label class="campo">
+        <span class="campo__etiqueta">Nombre interno</span>
+        <input class="campo__control" name="nombre" required minlength="3" maxlength="150" [(ngModel)]="nombre" placeholder="Limpieza dental de octubre" />
+      </label>
+      <label class="campo">
+        <span class="campo__etiqueta">Plantilla aprobada en Meta</span>
+        <input class="campo__control" name="plantilla" pattern="[a-z0-9_]+" [(ngModel)]="plantillaMeta" />
+        <span class="campo__ayuda">Plantilla de marketing con cabecera de imagen.</span>
+      </label>
+    </div>
+    <label class="campo">
+      <span class="campo__etiqueta">Texto de la oferta</span>
+      <textarea class="campo__control" name="texto" required minlength="10" maxlength="500" rows="3" [(ngModel)]="texto" placeholder="Este mes la limpieza dental tiene 20 % de descuento. Agende por este chat."></textarea>
+      <span class="campo__ayuda">El saludo con el nombre y la opción de baja se añaden solos. Sin datos de pacientes.</span>
+    </label>
+
+    <fieldset class="segmento">
+      <legend class="campo__etiqueta">A quién va dirigida</legend>
+      <div class="nueva__rejilla">
+        <label class="campo">
+          <span class="campo__etiqueta">Sede</span>
+          <select class="campo__control" name="sede" [(ngModel)]="sedeId">
+            <option value="">Todas las sedes</option>
+            @for (sede of sedes(); track sede.id) {
+              <option [value]="sede.id">{{ sede.nombre }}</option>
+            }
+          </select>
+        </label>
+        <label class="campo">
+          <span class="campo__etiqueta">Pacientes</span>
+          <select class="campo__control" name="audiencia" [(ngModel)]="tipoAudiencia">
+            <option value="todos">Todos los que aceptaron promociones</option>
+            <option value="reactivar">Sin visita desde hace…</option>
+            <option value="recientes">Visitaron en los últimos…</option>
+          </select>
+        </label>
+        @if (tipoAudiencia !== 'todos') {
+          <label class="campo">
+            <span class="campo__etiqueta">Días</span>
+            <input class="campo__control numerico" type="number" name="dias" min="1" max="3650" [(ngModel)]="dias" />
+          </label>
+        }
+      </div>
+      <p class="campo__ayuda">
+        El segmento usa solo datos administrativos. No existe filtro por tratamiento ni por
+        diagnóstico.
+      </p>
+    </fieldset>
+
+    <div class="acciones acciones--final">
+      <button class="boton" type="button" (click)="creando.set(false)">Cancelar</button>
+      <button class="boton boton--principal" type="submit" [disabled]="trabajando() || !formulario.form.valid">
+        Crear borrador
+      </button>
+    </div>
+  </form>
+}
+
+<div class="columnas">
+  <section class="lista" aria-label="Campañas">
+    @if (cargando()) {
+      <p role="status">Cargando campañas…</p>
+    } @else if (!campanas().length) {
+      <div class="tarjeta vacio">
+        <app-icono nombre="megafono" [tamano]="28" />
+        <p>Aún no hay campañas. Cree la primera con «Nueva campaña».</p>
+      </div>
+    } @else {
+      @for (campana of campanas(); track campana.id) {
+        <button
+          type="button"
+          class="campana"
+          [class.campana--activa]="seleccionada()?.id === campana.id"
+          (click)="seleccionar(campana)"
+        >
+          <span class="campana__cabecera">
+            <strong>{{ campana.nombre }}</strong>
+            <span class="estado" [attr.data-tono]="estados[campana.estado].tono">
+              {{ estados[campana.estado].texto }}
+            </span>
+          </span>
+          <span class="campana__texto">{{ campana.texto }}</span>
+          <span class="campana__pie">
+            {{ campana.creado_en | date: 'mediumDate' }}
+            @if (campana.estado === 'ENVIADA') { · {{ campana.encolados }} en cola }
+          </span>
+        </button>
+      }
+    }
+  </section>
+
+  @if (seleccionada(); as campana) {
+    <section class="tarjeta detalle" aria-label="Detalle de la campaña">
+      <header class="detalle__cabecera">
+        <div>
+          <h2>{{ campana.nombre }}</h2>
+          <p class="detalle__sub">{{ describirSegmento(campana) }}</p>
+        </div>
+        <span class="estado" [attr.data-tono]="estados[campana.estado].tono">
+          {{ estados[campana.estado].texto }}
+        </span>
+      </header>
+
+      <div class="detalle__cuerpo">
+        <!-- Vista previa con la forma de un chat: así lo verá el paciente. -->
+        <div class="vista-previa" aria-label="Vista previa del mensaje">
+          <div class="burbuja">
+            @if (imagenUrl(); as fuente) {
+              <img class="burbuja__imagen" [src]="fuente" alt="Imagen de la campaña" />
+            } @else {
+              <div class="burbuja__sin-imagen">
+                <app-icono nombre="archivo" [tamano]="28" />
+                Sin imagen todavía
+              </div>
+            }
+            <p class="burbuja__texto">{{ campana.vista_previa }}</p>
+          </div>
+          @if (campana.imagen_origen === 'GENERADA') {
+            <p class="vista-previa__nota">
+              <app-icono nombre="chispa" [tamano]="14" />
+              Imagen propuesta por IA ({{ campana.imagen_proveedor }}). Revísela antes de aprobar.
+            </p>
+          }
+        </div>
+
+        <div class="panel-acciones">
+          @if (campana.estado === 'BORRADOR') {
+            <h3>Imagen</h3>
+            <label class="campo">
+              <span class="campo__etiqueta">Describa la imagen para la IA</span>
+              <textarea class="campo__control" name="descripcion" rows="3" maxlength="600" [(ngModel)]="descripcionImagen" placeholder="Sonrisa luminosa, tonos verde azulado, ambiente de consultorio limpio"></textarea>
+              <span class="campo__ayuda">Sin nombres ni teléfonos. La IA propone; usted decide.</span>
+            </label>
+            <div class="acciones">
+              <button class="boton boton--principal" type="button" [disabled]="generando() || descripcionImagen.trim().length < 10" (click)="generar()">
+                <app-icono nombre="chispa" [tamano]="16" />
+                {{ generando() ? 'Generando…' : campana.tiene_imagen ? 'Regenerar con IA' : 'Generar con IA' }}
+              </button>
+              <label class="boton">
+                <input type="file" class="solo-lectores" accept="image/jpeg,image/png" (change)="subir($event)" />
+                <app-icono nombre="subir" [tamano]="16" />
+                Subir imagen
+              </label>
+            </div>
+          }
+
+          <h3>Audiencia</h3>
+          <p class="audiencia">
+            @if (audiencia() !== null) {
+              <strong class="numerico">{{ audiencia() }}</strong> paciente(s) con consentimiento
+              de promociones vigente.
+            } @else {
+              Calculando…
+            }
+          </p>
+
+          @if (puedeAprobar()) {
+            @switch (campana.estado) {
+              @case ('BORRADOR') {
+                <button class="boton boton--principal" type="button" [disabled]="trabajando() || !campana.tiene_imagen" (click)="aprobar()">
+                  Aprobar campaña
+                </button>
+                @if (!campana.tiene_imagen) {
+                  <p class="campo__ayuda">Agregue una imagen para poder aprobar.</p>
+                }
+              }
+              @case ('APROBADA') {
+                <label class="campo">
+                  <span class="campo__etiqueta">Programar envío (opcional)</span>
+                  <input class="campo__control" type="datetime-local" name="programada" [(ngModel)]="programadaPara" />
+                </label>
+                <button class="boton boton--principal" type="button" [disabled]="trabajando()" (click)="enviar()">
+                  <app-icono nombre="megafono" [tamano]="16" />
+                  {{ programadaPara ? 'Programar envío' : 'Enviar ahora' }}
+                </button>
+              }
+              @case ('ENVIADA') {
+                <p>
+                  Enviada el {{ campana.enviada_en | date: 'medium' }}:
+                  <strong>{{ campana.encolados }}</strong> en cola, {{ campana.omitidos }} omitido(s).
+                </p>
+              }
+              @case ('CANCELADA') {
+                <p>Cancelada: {{ campana.motivo_cancelacion }}</p>
+              }
+            }
+            @if (campana.estado === 'BORRADOR' || campana.estado === 'APROBADA') {
+              @if (pidiendoCancelacion()) {
+                <label class="campo">
+                  <span class="campo__etiqueta">Motivo de la cancelación</span>
+                  <input class="campo__control" name="motivo" maxlength="500" [(ngModel)]="motivoCancelacion" />
+                </label>
+                <div class="acciones">
+                  <button class="boton" type="button" (click)="pidiendoCancelacion.set(false)">Volver</button>
+                  <button class="boton boton--peligro" type="button" (click)="cancelar()">Confirmar cancelación</button>
+                </div>
+              } @else {
+                <button class="boton boton--plano" type="button" (click)="pidiendoCancelacion.set(true)">Cancelar campaña</button>
+              }
+            }
+          } @else if (campana.estado === 'BORRADOR') {
+            <p class="campo__ayuda">La aprobación y el envío los hace alguien con permiso de aprobación.</p>
+          }
+        </div>
+      </div>
+    </section>
+  }
+</div>

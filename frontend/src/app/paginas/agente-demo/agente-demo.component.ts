@@ -20,7 +20,7 @@ interface RespuestaDemo {
     cita_id?: string; inicio?: string; expira_en?: string; zona_horaria?: string;
   };
 }
-interface Mensaje { autor: 'Usted' | 'Asistente simulado'; texto: string; respuesta?: RespuestaDemo }
+interface Mensaje { autor: 'Usted' | 'Asistente'; texto: string; respuesta?: RespuestaDemo }
 
 @Component({
   selector: 'app-agente-demo', standalone: true,
@@ -38,6 +38,7 @@ export class AgenteDemoComponent {
   protected readonly servicioId = signal('');
   protected profesionalId = '';
   protected fecha = '';
+  protected modo: 'simulado' | 'configurado' = 'simulado';
   protected texto = '';
   protected readonly cargando = signal(true);
   protected readonly cargandoProfesionales = signal(false);
@@ -91,7 +92,7 @@ export class AgenteDemoComponent {
   protected iniciar(): void {
     if (!this.paciente() || !this.fecha || !this.profesionalId || this.ocupado()) return;
     const rango = rangoDelDia(this.fecha, this.zona());
-    const datos = { paciente_id: this.paciente()!.id, sede_id: this.sedeId(), servicio_id: this.servicioId(),
+    const datos = { modo: this.modo, paciente_id: this.paciente()!.id, sede_id: this.sedeId(), servicio_id: this.servicioId(),
       profesional_id: this.profesionalId, desde: rango.desde,
       hasta: rangoDelDia(sumarDias(this.fecha, 6), this.zona()).hasta };
     const cuerpo = JSON.stringify(datos);
@@ -138,7 +139,7 @@ export class AgenteDemoComponent {
 
   private recibir(respuesta: RespuestaDemo): void {
     this.respuestaActual.set(respuesta); this.requiereHumano.set(respuesta.requiere_humano);
-    this.mensajes.update(lista => [...lista, { autor: 'Asistente simulado', texto: respuesta.mensaje, respuesta }]);
+    this.mensajes.update(lista => [...lista, { autor: 'Asistente', texto: respuesta.mensaje, respuesta }]);
   }
 
   private mensajeError(e: unknown): string {

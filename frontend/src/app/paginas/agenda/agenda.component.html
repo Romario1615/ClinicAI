@@ -22,6 +22,7 @@
     <p class="cabecera-agenda__zona">
       Horario de <strong>{{ zona() }}</strong>
     </p>
+    <img class="modulo-cabecera__imagen" src="/images/agenda-turnos.png" alt="" aria-hidden="true" loading="lazy" />
   </div>
 
   <!-- Los cuatro filtros en una línea. Antes eran cuatro campos apilados que
@@ -121,6 +122,22 @@
     </div>
   </section>
 
+  @if (pacienteSugerido()) {
+    <p class="aviso-sugerido" role="status">
+      Agendando para <strong>{{ nombreSugerido() }}</strong>. Pulse un hueco libre: el paciente ya
+      queda elegido en la reserva.
+      <button type="button" class="boton boton--plano boton--pequeno" (click)="pacienteSugerido.set(null)">
+        Quitar
+      </button>
+    </p>
+  }
+  @if (procedimientoPlanSugerido()) {
+    <p class="aviso-sugerido" role="status">
+      Esta cita quedará vinculada al procedimiento seleccionado en el plan. El detalle clínico
+      permanece en la historia del paciente.
+    </p>
+  }
+
   @if (mensajeExito()) {
     <p class="exito" role="status">{{ mensajeExito() }}</p>
   }
@@ -165,6 +182,56 @@
       </label>
     </div>
 
+    @if (tableroConsultorios().length > 0) {
+      <!-- ================= Consultorios ================= -->
+      <!-- Todas las salas de la sede a la vez: quién está en cuál y cuándo se
+           libera. Incluye las citas de todos los profesionales, no solo las
+           del filtro, porque una sala la puede ocupar cualquiera. -->
+      <section class="salas" aria-labelledby="titulo-salas">
+        <div class="salas__cabecera">
+          <h2 id="titulo-salas">Consultorios</h2>
+          <span class="dia__pista">Ocupación de toda la sede este día</span>
+        </div>
+        <div class="salas__rejilla">
+          @for (sala of tableroConsultorios(); track sala.consultorio.id) {
+            <article class="sala" [class.sala--ocupada]="sala.ocupadoAhora">
+              <header class="sala__cabecera">
+                <div>
+                  <h3 class="sala__nombre">{{ sala.consultorio.nombre }}</h3>
+                  <span class="sala__tipo">{{ sala.tipo }}</span>
+                </div>
+                @if (sala.ocupadoAhora; as cita) {
+                  <span class="sala__estado sala__estado--ocupada">
+                    Ocupado hasta {{ hora(cita.fin) }}
+                  </span>
+                } @else {
+                  <span class="sala__estado sala__estado--libre">Libre ahora</span>
+                }
+              </header>
+              <!-- Franja de 07:00 a 21:00 con los bloques ocupados. -->
+              <div class="sala__linea" aria-hidden="true">
+                @for (bloque of sala.bloques; track bloque.cita.id) {
+                  <span
+                    class="sala__bloque"
+                    [class.sala__bloque--hecho]="bloque.cita.estado === 'COMPLETED'"
+                    [style.left.%]="bloque.izquierda"
+                    [style.width.%]="bloque.ancho"
+                    [title]="hora(bloque.cita.inicio) + '–' + hora(bloque.cita.fin)"
+                  ></span>
+                }
+              </div>
+              <p class="sala__pie numerico">
+                {{ sala.citas.length }} cita(s)
+                @if (sala.proxima; as proxima) {
+                  · próxima {{ hora(proxima.inicio) }}
+                }
+              </p>
+            </article>
+          }
+        </div>
+      </section>
+    }
+
     <div class="columnas">
       <!-- ================= El día, en orden ================= -->
       <section class="dia" aria-labelledby="titulo-dia">
@@ -177,6 +244,7 @@
 
         @if (secuencia().length === 0) {
           <div class="dia__vacio">
+            <img class="dia__ilustracion" src="/images/agenda-turnos.png" alt="" aria-hidden="true" loading="lazy" />
             @if (seleccionIncompleta()) {
               <app-vacio
                 titulo="Elija servicio y profesional"
@@ -345,9 +413,49 @@
                   </p>
                 }
 
+                @if (consultorios().length > 0 && turnoElegido()) {
+                  <!-- Las salas ocupadas a esa hora se ven, pero no se pueden
+                       elegir: ocultarlas haría pensar que no existen. -->
+                  <fieldset class="selector-sala">
+                    <legend class="campo__etiqueta">Consultorio</legend>
+                    <div class="selector-sala__lista">
+                      <button
+                        type="button"
+                        class="selector-sala__opcion"
+                        [attr.aria-pressed]="consultorioId() === ''"
+                        (click)="elegirConsultorio('')"
+                      >
+                        <strong>Sin asignar</strong>
+                        <span>Se decide al llegar</span>
+                      </button>
+                      @for (sala of consultorios(); track sala.id) {
+                        @let choque = choqueConsultorio(sala.id);
+                        <button
+                          type="button"
+                          class="selector-sala__opcion"
+                          [class.selector-sala__opcion--ocupada]="choque"
+                          [attr.aria-pressed]="consultorioId() === sala.id"
+                          [disabled]="choque !== null"
+                          (click)="elegirConsultorio(sala.id)"
+                        >
+                          <strong>{{ sala.nombre }}</strong>
+                          @if (choque) {
+                            <span class="numerico">
+                              Ocupado {{ hora(choque.inicio) }}–{{ hora(choque.fin) }}
+                            </span>
+                          } @else {
+                            <span>Libre</span>
+                          }
+                        </button>
+                      }
+                    </div>
+                  </fieldset>
+                }
+
                 <label class="campo">
                   <span class="campo__etiqueta">Paciente</span>
-                  <select class="campo__control" name="paciente" [(ngModel)]="pacienteId">
+                  <select class="campo__control" name="paciente" [(ngModel)]="pacienteId"
+                          [disabled]="!!procedimientoPlanSugerido()">
                     <option value="">Seleccione…</option>
                     @for (paciente of pacientes(); track paciente.id) {
                       <option [value]="paciente.id">
@@ -410,6 +518,7 @@
                   {{ nombreServicio(cita.servicio_id) }} ·
                   {{ nombreProfesional(cita.profesional_id) }}
                 </p>
+                <p class="panel__subtitulo">{{ nombreConsultorio(cita.consultorio_id) }}</p>
 
                 @if (cita.estado === 'HELD' && cita.expira_en) {
                   <p class="aviso-llamar">
@@ -437,6 +546,28 @@
                       <dd class="numerico">{{ hora(cita.confirmada_en) }}</dd>
                     </div>
                   }
+                  @if (cita.llegada_en) {
+                    <div>
+                      <dt>Llegada</dt>
+                      <dd class="numerico">{{ hora(cita.llegada_en) }}</dd>
+                    </div>
+                    <div>
+                      <dt>Espera registrada</dt>
+                      <dd>{{ minutosEspera(cita) }} min</dd>
+                    </div>
+                  }
+                  @if (cita.atencion_iniciada_en) {
+                    <div>
+                      <dt>Atención iniciada</dt>
+                      <dd class="numerico">{{ hora(cita.atencion_iniciada_en) }}</dd>
+                    </div>
+                  }
+                  @if (cita.completada_en) {
+                    <div>
+                      <dt>Atención finalizada</dt>
+                      <dd class="numerico">{{ hora(cita.completada_en) }}</dd>
+                    </div>
+                  }
                 </dl>
 
                 <div class="panel__acciones">
@@ -447,6 +578,16 @@
                       (click)="confirmarCita(cita)"
                     >
                       Confirmar
+                    </button>
+                  }
+                  @if (accionesDe(cita).registrarLlegada) {
+                    <button type="button" class="boton boton--principal" (click)="registrarLlegada(cita)">
+                      Registrar llegada
+                    </button>
+                  }
+                  @if (accionesDe(cita).iniciarAtencion) {
+                    <button type="button" class="boton boton--principal" (click)="iniciarAtencion(cita)">
+                      Iniciar atención
                     </button>
                   }
                   @if (accionesDe(cita).completar) {
@@ -552,6 +693,8 @@
     <app-reprogramar-cita
       [cita]="cita"
       [zona]="zona()"
+      [consultorios]="consultorios()"
+      [citasSede]="citasSede()"
       (cerrar)="citaAReprogramar.set(null)"
       (guardada)="alReprogramar($event)"
     />

@@ -22,37 +22,55 @@
  * formulario más allá del envío.** El correo sí se recuerda, porque no es una
  * credencial y teclearlo cada mañana es fricción sin beneficio.
  */
-import { Component, computed, inject, signal } from '@angular/core';
+import { Component, OnInit, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
 
-import { FalloApi } from '../../nucleo/servicios/api.service';
+import { ApiService, FalloApi } from '../../nucleo/servicios/api.service';
 import { AutenticacionService } from '../../nucleo/servicios/autenticacion.service';
-import { CONFIGURACION } from '../../nucleo/servicios/configuracion';
 import { SesionService } from '../../nucleo/servicios/sesion.service';
+import { MarcaComponent } from '../../compartido/marca.component';
 
 @Component({
   selector: 'app-acceso',
   standalone: true,
-  imports: [FormsModule],
+  imports: [FormsModule, MarcaComponent],
   templateUrl: './acceso.component.html',
   styleUrl: './acceso.component.scss',
 })
-export class AccesoComponent {
+export class AccesoComponent implements OnInit {
+  private readonly api = inject(ApiService);
   private readonly autenticacion = inject(AutenticacionService);
   private readonly router = inject(Router);
   private readonly ruta = inject(ActivatedRoute);
-  private readonly configuracion = inject(CONFIGURACION);
   protected readonly sesion = inject(SesionService);
 
   protected correo = this.sesion.correoRecordado();
   protected contrasena = '';
   protected codigo2fa = '';
-  protected clinicaId = this.configuracion.clinicaPorDefecto;
   protected recordar = this.sesion.correoRecordado() !== '';
 
   protected readonly enviando = signal(false);
   protected readonly error = signal<FalloApi | null>(null);
+  protected readonly cargandoAccesosLocales = signal(true);
+  protected readonly modoAccesoLocal = signal(false);
+  protected readonly rolesLocales = signal<readonly { codigo: string; nombre: string }[]>([]);
+
+  ngOnInit(): void {
+    this.api.accesosLocales().subscribe({
+      next: (respuesta) => {
+        this.rolesLocales.set(respuesta.roles);
+        this.modoAccesoLocal.set(respuesta.habilitado && respuesta.roles.length > 0);
+        this.cargandoAccesosLocales.set(false);
+      },
+      error: () => {
+        // Si el backend es antiguo o el servidor no está disponible, conserva
+        // el acceso normal por contraseña en lugar de bloquear la pantalla.
+        this.modoAccesoLocal.set(false);
+        this.cargandoAccesosLocales.set(false);
+      },
+    });
+  }
 
   /**
    * Cierto cuando hay que pedir el código del segundo factor.
@@ -66,9 +84,6 @@ export class AccesoComponent {
     const codigo = this.error()?.codigo;
     return codigo === 'SEGUNDO_FACTOR_REQUERIDO' || codigo === 'SEGUNDO_FACTOR_INVALIDO';
   });
-
-  /** El identificador de clínica solo se pide si el despliegue no lo fija. */
-  protected readonly pideClinica = this.configuracion.clinicaPorDefecto === '';
 
   protected readonly mensajeError = computed(() => this.error()?.message ?? '');
 
@@ -94,7 +109,6 @@ export class AccesoComponent {
       .iniciarSesion({
         correo: this.correo,
         contrasena: this.contrasena,
-        clinicaId: this.clinicaId,
         codigo2fa: this.codigo2fa || null,
         recordarCorreo: this.recordar,
       })
@@ -117,5 +131,28 @@ export class AccesoComponent {
           );
         },
       });
+  }
+
+  protected entrarComo(codigoRol: string): void {
+    if (this.enviando()) {
+      return;
+    }
+    this.error.set(null);
+    this.enviando.set(true);
+    this.autenticacion.iniciarSesionLocal(codigoRol).subscribe({
+      next: () => {
+        this.enviando.set(false);
+        const destino = this.ruta.snapshot.queryParamMap.get('destino') ?? '/panel';
+        void this.router.navigateByUrl(destino);
+      },
+      error: (fallo: unknown) => {
+        this.enviando.set(false);
+        this.error.set(
+          fallo instanceof FalloApi
+            ? fallo
+            : new FalloApi('ERROR_DESCONOCIDO', 'Ocurrió un error inesperado.', 0),
+        );
+      },
+    });
   }
 }

@@ -20,6 +20,12 @@ export const guardiaAutenticacion: CanActivateFn = (_ruta, estado) => {
   const router = inject(Router);
 
   if (sesion.autenticado()) {
+    if (
+      sesion.identidad()?.debe_cambiar_contrasena &&
+      !estado.url.startsWith('/cambiar-contrasena')
+    ) {
+      return router.createUrlTree(['/cambiar-contrasena']);
+    }
     return true;
   }
 
@@ -62,6 +68,16 @@ export function guardiaPermiso(...codigos: readonly string[]): CanActivateFn {
     return router.createUrlTree(['/sin-permiso']);
   };
 }
+
+/** Oculta la consola de organizaciones a cuentas de administración de clínica. */
+export const guardiaSuperadministrador: CanActivateFn = () => {
+  const sesion = inject(SesionService);
+  const router = inject(Router);
+  if (!sesion.autenticado()) return router.createUrlTree(['/acceso']);
+  return sesion.identidad()?.roles.includes('superadministrador')
+    ? true
+    : router.createUrlTree(['/sin-permiso']);
+};
 
 /**
  * Bloquea la navegacion mientras el segundo factor este pendiente.

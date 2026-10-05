@@ -10,7 +10,7 @@ import type { Cita, Paciente } from '../../nucleo/modelos/dominio';
 @Component({
   selector: 'app-pagos', standalone: true, imports: [FormsModule, SelectorPacienteComponent],
   template: `
-    <h1>Pagos</h1><p>Registro de efectivo y transferencias en USD. La confirmación la realiza el personal autorizado.</p>
+    <header class="modulo-cabecera"><div class="modulo-cabecera__texto"><p class="ceja">ADMINISTRACIÓN</p><h1>Pagos</h1><p>Registro de efectivo y transferencias en USD. La confirmación la realiza el personal autorizado.</p></div><img class="modulo-cabecera__imagen" src="/images/pagos-administrativos.png" alt="" aria-hidden="true" loading="lazy" /></header>
     @if (sesion.tienePermiso('pago.registrar')) {
       <section class="tarjeta editor-demo"><h2>Registrar un pago</h2>
         <app-selector-paciente (seleccion)="seleccionar($event)" />

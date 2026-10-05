@@ -28,9 +28,15 @@
 import { Component, computed, inject, input, type OnInit, output, signal } from '@angular/core';
 
 import { ApiService, FalloApi, type PacienteDetalle } from '../nucleo/servicios/api.service';
+import { PERMISOS } from '../nucleo/servicios/configuracion';
+import { SesionService } from '../nucleo/servicios/sesion.service';
+import { ConsentimientosPacienteComponent } from './consentimientos-paciente.component';
+import { FotoPerfilComponent } from './foto-perfil.component';
+import { GaleriaImagenesComponent } from './galeria-imagenes.component';
 import { InsigniaEstadoComponent } from './insignia-estado.component';
 import type { Cita } from '../nucleo/modelos/dominio';
 import { formatearFecha, formatearFechaHora } from '../nucleo/utilidades/fechas';
+import { IconoComponent } from './icono.component';
 
 /** Traducción del nivel de verificación, con lo que implica para quien atiende. */
 const VERIFICACION: Record<string, { etiqueta: string; consecuencia: string; alerta: boolean }> = {
@@ -58,18 +64,31 @@ const VERIFICACION: Record<string, { etiqueta: string; consecuencia: string; ale
   },
 };
 
-type Pestana = 'resumen' | 'citas' | 'contacto';
+type Pestana = 'resumen' | 'citas' | 'contacto' | 'imagenes';
 
 @Component({
   selector: 'app-ficha-paciente',
   standalone: true,
-  imports: [InsigniaEstadoComponent],
+  imports: [
+    InsigniaEstadoComponent,
+    IconoComponent,
+    GaleriaImagenesComponent,
+    FotoPerfilComponent,
+    ConsentimientosPacienteComponent,
+  ],
   template: `
     <aside class="ficha" [class.ficha--embebida]="sinCabecera()" [attr.aria-label]="sinCabecera() ? null : 'Ficha de ' + nombre()">
       @if (!sinCabecera()) {
       <header class="ficha__cabecera">
         <div class="ficha__identidad">
-          <span class="ficha__inicial" aria-hidden="true">{{ iniciales() }}</span>
+          <app-foto-perfil
+            [pacienteId]="pacienteId()"
+            [nombre]="nombre()"
+            [iniciales]="iniciales()"
+            [tamano]="72"
+            [puedeEditar]="puedeEditarFoto()"
+            [conBotones]="true"
+          />
           <div class="ficha__nombre">
             <h2>{{ nombre() }}</h2>
             @if (paciente(); as p) {
@@ -87,9 +106,7 @@ type Pestana = 'resumen' | 'citas' | 'contacto';
             (click)="cerrar.emit()"
             aria-label="Cerrar la ficha del paciente"
           >
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true">
-              <path d="M18 6 6 18M6 6l12 12" />
-            </svg>
+            <app-icono nombre="cerrar" [tamano]="18" />
           </button>
         </div>
 
@@ -117,7 +134,7 @@ type Pestana = 'resumen' | 'citas' | 'contacto';
         <p class="ficha__error" role="alert">{{ error()!.message }}</p>
       } @else {
         <div class="ficha__pestanas" role="tablist">
-          @for (tab of pestanas; track tab.clave) {
+          @for (tab of pestanas(); track tab.clave) {
             <button
               type="button"
               role="tab"
@@ -224,7 +241,12 @@ type Pestana = 'resumen' | 'citas' | 'contacto';
                   Ningún recordatorio automático incluye diagnóstico, medicamento ni motivo de
                   consulta.
                 </p>
+                <app-consentimientos-paciente [pacienteId]="pacienteId()" />
               </section>
+            }
+
+            @case ('imagenes') {
+              <app-galeria-imagenes [pacienteId]="pacienteId()" />
             }
           }
         </div>
@@ -505,6 +527,7 @@ type Pestana = 'resumen' | 'citas' | 'contacto';
 })
 export class FichaPacienteComponent implements OnInit {
   private readonly api = inject(ApiService);
+  private readonly sesion = inject(SesionService);
 
   readonly pacienteId = input.required<string>();
   /**
@@ -518,11 +541,17 @@ export class FichaPacienteComponent implements OnInit {
   readonly zona = input('America/Guayaquil');
   readonly cerrar = output<void>();
 
-  protected readonly pestanas: readonly { clave: Pestana; etiqueta: string }[] = [
-    { clave: 'resumen', etiqueta: 'Resumen' },
-    { clave: 'citas', etiqueta: 'Citas' },
-    { clave: 'contacto', etiqueta: 'Contacto' },
-  ];
+  protected readonly pestanas = computed(() => {
+    const pestañas: { clave: Pestana; etiqueta: string }[] = [
+      { clave: 'resumen', etiqueta: 'Resumen' },
+      { clave: 'citas', etiqueta: 'Citas' },
+      { clave: 'contacto', etiqueta: 'Contacto' },
+    ];
+    if (this.sesion.tienePermiso(PERMISOS.imagenClinicaLeer)) {
+      pestañas.push({ clave: 'imagenes', etiqueta: 'Imágenes clínicas' });
+    }
+    return pestañas;
+  });
 
   protected readonly pestana = signal<Pestana>('resumen');
   protected readonly paciente = signal<PacienteDetalle | null>(null);
@@ -534,6 +563,11 @@ export class FichaPacienteComponent implements OnInit {
     const p = this.paciente();
     return p ? `${p.nombre} ${p.apellido}` : 'Paciente';
   });
+
+  /** Cambiar la foto es editar la ficha: mismo permiso que el backend exige. */
+  protected readonly puedeEditarFoto = computed(() =>
+    this.sesion.tienePermiso(PERMISOS.pacienteEditar),
+  );
 
   protected readonly iniciales = computed(() => {
     const p = this.paciente();

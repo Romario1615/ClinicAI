@@ -77,7 +77,11 @@ describe('BuscadorGlobalComponent', () => {
     fixture.detectChanges();
   });
 
-  afterEach(() => http.verify());
+  afterEach(() => {
+    // Cada resultado pide su foto de perfil; aqui no se prueba la foto.
+    http.match((peticion) => peticion.url.endsWith('/foto-perfil')).forEach((p) => p.flush(null));
+    http.verify();
+  });
 
   it('no se pinta sin permiso de ficha', () => {
     sesion.permitido = false;

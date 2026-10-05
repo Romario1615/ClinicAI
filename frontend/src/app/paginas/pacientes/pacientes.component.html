@@ -8,6 +8,7 @@
     <p class="ceja">PACIENTES</p>
     <h1>Pacientes de su ámbito</h1>
   </div>
+  <img class="modulo-cabecera__imagen" src="/images/busqueda-pacientes.png" alt="" aria-hidden="true" loading="lazy" />
   @if (sesion.tienePermiso('paciente.crear')) {
     <button type="button" class="boton boton--principal" (click)="nuevoPaciente()">
       Registrar paciente
@@ -106,6 +107,7 @@
         <button class="boton" type="button" (click)="limpiar()">Ver todos</button>
       </app-vacio>
     } @else {
+      <img class="pacientes__ilustracion" src="/images/busqueda-pacientes.png" alt="" aria-hidden="true" loading="lazy" />
       <app-vacio
         titulo="No hay pacientes en su ámbito"
         detalle="Su usuario no tiene pacientes asignados. Pida al administrador de la clínica que revise su ámbito."

@@ -28,17 +28,17 @@
 import { Component, computed, input, output } from '@angular/core';
 
 import type { TareaPendiente } from '../nucleo/utilidades/pendientes';
+import { IconoComponent } from './icono.component';
 
 @Component({
   selector: 'app-cola-trabajo',
   standalone: true,
+  imports: [IconoComponent],
   template: `
     @if (tareas().length === 0) {
       <p class="cola__vacio" role="status">
         <span class="cola__tic" aria-hidden="true">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round">
-            <path d="M20 6 9 17l-5-5" />
-          </svg>
+          <app-icono nombre="tic" [tamano]="18" />
         </span>
         Nada pendiente con plazo. La jornada está al día.
       </p>
@@ -50,19 +50,13 @@ import type { TareaPendiente } from '../nucleo/utilidades/pendientes';
               <span class="cola__icono" aria-hidden="true">
                 @switch (tarea.clase) {
                   @case ('caduca') {
-                    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round">
-                      <circle cx="12" cy="12" r="9" /><path d="M12 7.5V12l3 2" />
-                    </svg>
+                    <app-icono nombre="reloj" [tamano]="17" />
                   }
                   @case ('llamar') {
-                    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round">
-                      <path d="M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a1.5 1.5 0 0 1-1.7 1.5C10.8 19.6 4.4 13.2 3.5 5.7A1.5 1.5 0 0 1 5 4z" />
-                    </svg>
+                    <app-icono nombre="telefono" [tamano]="17" />
                   }
                   @default {
-                    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round">
-                      <path d="M20 6 9 17l-5-5" />
-                    </svg>
+                    <app-icono nombre="tic" [tamano]="17" />
                   }
                 }
               </span>

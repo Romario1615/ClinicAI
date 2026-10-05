@@ -38,6 +38,7 @@
               }
             ],
             "styles": [
+              "node_modules/@fontsource-variable/plus-jakarta-sans/index.css",
               "src/styles.scss"
             ],
             "scripts": []
@@ -52,8 +53,8 @@
                 },
                 {
                   "type": "anyComponentStyle",
-                  "maximumWarning": "8kB",
-                  "maximumError": "16kB"
+                  "maximumWarning": "14kB",
+                  "maximumError": "24kB"
                 }
               ],
               "outputHashing": "all",
@@ -98,6 +99,7 @@
               }
             ],
             "styles": [
+              "node_modules/@fontsource-variable/plus-jakarta-sans/index.css",
               "src/styles.scss"
             ],
             "scripts": [],

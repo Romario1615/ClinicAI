@@ -95,6 +95,91 @@ export interface FiltroPacientes {
   readonly desplazamiento?: number;
 }
 
+export interface ClinicaPlataforma {
+  readonly id: string;
+  readonly nombre: string;
+  readonly identificacion_fiscal: string | null;
+  readonly correo: string | null;
+  readonly activa: boolean;
+  readonly cantidad_sedes: number;
+  readonly cantidad_usuarios: number;
+}
+
+export interface UsuarioPlataforma {
+  readonly id: string;
+  readonly clinica_id: string;
+  readonly clinica_nombre: string;
+  readonly correo: string;
+  readonly nombre: string;
+  readonly apellido: string;
+  readonly activo: boolean;
+  readonly roles: readonly string[];
+  readonly profesional_id: string | null;
+}
+
+export interface RolPlataforma {
+  readonly id: string;
+  readonly codigo: string;
+  readonly nombre: string;
+  readonly descripcion: string | null;
+  readonly es_sistema: boolean;
+}
+
+export interface ProfesionalPlataforma {
+  readonly id: string;
+  readonly nombre: string;
+  readonly apellido: string;
+}
+
+export interface AltaUsuarioPlataforma {
+  readonly clinica_id: string;
+  readonly correo: string;
+  readonly nombre: string;
+  readonly apellido: string;
+  readonly contrasena_inicial: string;
+  readonly roles: readonly string[];
+  readonly profesional_id: string | null;
+}
+
+export interface AsignacionUsuarioPlataforma {
+  readonly clinica_id: string;
+  readonly roles: readonly string[];
+  readonly profesional_id: string | null;
+}
+
+export interface AltaClinicaPlataforma {
+  nombre: string;
+  identificacion_fiscal: string | null;
+  zona_horaria: string;
+  idioma: string;
+  moneda: string;
+  telefono: string | null;
+  correo: string | null;
+  sede_nombre: string;
+  sede_direccion: string | null;
+  administrador_nombre: string;
+  administrador_apellido: string;
+  administrador_correo: string;
+  contrasena_inicial: string;
+}
+
+export interface SedePlataforma {
+  readonly id: string;
+  readonly clinica_id: string;
+  readonly nombre: string;
+  readonly direccion: string | null;
+  readonly telefono: string | null;
+  readonly zona_horaria: string | null;
+  readonly activa: boolean;
+}
+
+export interface AltaSedePlataforma {
+  readonly nombre: string;
+  readonly direccion: string | null;
+  readonly telefono: string | null;
+  readonly zona_horaria: string | null;
+}
+
 export interface PaginaPacientes {
   readonly elementos: readonly Paciente[];
   readonly total: number;
@@ -122,6 +207,7 @@ export interface DatosReserva {
   readonly sede_id: string;
   readonly inicio: string;
   readonly consultorio_id?: string | null;
+  readonly procedimiento_plan_id?: string | null;
   readonly notas_recepcion?: string | null;
 }
 
@@ -174,10 +260,126 @@ export interface PaginaDocumentos {
   readonly total: number;
 }
 
+export type TipoPrincipalDocumento = 'ROL' | 'USUARIO' | 'SEDE' | 'ESPECIALIDAD';
+
+export interface PermisoDocumento {
+  readonly principal_tipo: TipoPrincipalDocumento;
+  readonly principal_id: string;
+  readonly puede_leer: boolean;
+  readonly puede_usar_en_agente: boolean;
+}
+
+export interface OpcionPrincipalDocumento {
+  readonly id: string;
+  readonly nombre: string;
+  readonly codigo: string | null;
+}
+
+export interface OpcionesPermisosDocumento {
+  readonly roles: readonly OpcionPrincipalDocumento[];
+  readonly usuarios: readonly OpcionPrincipalDocumento[];
+  readonly sedes: readonly OpcionPrincipalDocumento[];
+  readonly especialidades: readonly OpcionPrincipalDocumento[];
+}
+
+export interface RespuestaPermisosDocumento {
+  readonly document_id: string;
+  readonly permisos: readonly PermisoDocumento[];
+}
+
 export interface FiltroDocumentos {
   readonly estado?: EstadoDocumento;
   readonly limite?: number;
   readonly desplazamiento?: number;
+}
+
+/** Alta de un documento. Nace siempre en `DRAFT`. */
+export interface DatosDocumento {
+  readonly titulo: string;
+  readonly tipo: TipoDocumento;
+  /** `N0`..`N3`. */
+  readonly sensibilidad: string;
+  readonly etiquetas?: readonly string[] | null;
+  readonly effective_from?: string | null;
+  readonly effective_until?: string | null;
+}
+
+/** Texto de una version nueva. El backend lo fragmenta y vectoriza. */
+export interface DatosIngesta {
+  readonly contenido: string;
+  readonly nombre_archivo?: string | null;
+  readonly notas_cambio?: string | null;
+}
+
+export interface RespuestaIngesta {
+  readonly document_id: string;
+  readonly version: number;
+  readonly fragmentos: number;
+  readonly embeddings: number;
+  readonly riesgo_inyeccion: string;
+  /** Cierto si la ingesta detecto texto que parece una instruccion. */
+  readonly requiere_revision: boolean;
+}
+
+// ---------------------------------------------------------------------------
+//  Consentimientos de comunicacion
+// ---------------------------------------------------------------------------
+export interface TextoConsentimiento {
+  readonly tipo: string;
+  readonly version: string;
+  readonly titulo: string;
+  readonly texto: string;
+}
+
+export interface EstadoConsentimiento {
+  readonly tipo: string;
+  readonly titulo: string;
+  readonly vigente: boolean;
+  readonly version_texto: string | null;
+  readonly otorgado_en: string | null;
+  readonly revocado_en: string | null;
+  readonly canal: string | null;
+}
+
+// ---------------------------------------------------------------------------
+//  Promociones
+// ---------------------------------------------------------------------------
+export type EstadoCampana = 'BORRADOR' | 'APROBADA' | 'ENVIADA' | 'CANCELADA';
+
+export interface SegmentoCampana {
+  readonly sede_id?: string | null;
+  readonly sin_visita_hace_dias?: number | null;
+  readonly visita_en_ultimos_dias?: number | null;
+}
+
+export interface Campana {
+  readonly id: string;
+  readonly nombre: string;
+  readonly texto: string;
+  readonly plantilla_meta: string;
+  readonly estado: EstadoCampana;
+  readonly segmento: SegmentoCampana;
+  readonly tiene_imagen: boolean;
+  readonly imagen_origen: 'SUBIDA' | 'GENERADA' | null;
+  readonly imagen_proveedor: string | null;
+  readonly imagen_prompt: string | null;
+  readonly aprobada_en: string | null;
+  readonly programada_para: string | null;
+  readonly enviada_en: string | null;
+  readonly encolados: number;
+  readonly omitidos: number;
+  readonly cancelada_en: string | null;
+  readonly motivo_cancelacion: string | null;
+  readonly creado_en: string;
+  /** El mensaje tal como lo verá un paciente de ejemplo. */
+  readonly vista_previa: string;
+}
+
+export interface CampanaNueva {
+  readonly nombre: string;
+  readonly texto: string;
+  readonly plantilla_meta?: string;
+  readonly segmento?: SegmentoCampana;
 }
 
 export interface ResultadoBusqueda {
@@ -232,6 +434,179 @@ export interface Nota {
   readonly creado_en: string;
 }
 
+/** Nota nueva. El autor no se envía: lo fija el servidor desde la sesión. */
+export interface NotaNueva {
+  readonly paciente_id: string;
+  readonly tipo: 'EVOLUCION' | 'ENFERMERIA' | 'INTERCONSULTA' | 'PROCEDIMIENTO';
+  readonly motivo_consulta: string | null;
+  readonly subjetivo: string | null;
+  readonly objetivo: string | null;
+  readonly analisis: string | null;
+  readonly plan: string | null;
+  readonly signos_vitales: Readonly<Record<string, number>> | null;
+}
+
+/** Control del índice de placa de O'Leary. */
+export interface RegistroPlaca {
+  readonly id: string;
+  readonly paciente_id: string;
+  readonly profesional_id: string;
+  readonly piezas_evaluadas: readonly number[];
+  readonly superficies_con_placa: Readonly<Record<string, readonly string[]>>;
+  readonly total_superficies: number;
+  readonly total_con_placa: number;
+  readonly porcentaje: string;
+  readonly observacion: string | null;
+  readonly creado_en: string;
+}
+
+export interface ImagenPacienteApi {
+  readonly id: string;
+  readonly paciente_id: string;
+  readonly tipo: string;
+  readonly piezas: readonly number[];
+  readonly tomada_en: string | null;
+  readonly descripcion: string | null;
+  readonly procedimiento_id?: string | null;
+  readonly tipo_mime: string;
+  readonly tamano_bytes: number;
+  readonly antivirus: 'LIMPIO' | 'NO_DISPONIBLE';
+  readonly creado_en: string;
+  readonly url_contenido: string;
+}
+
+export interface DatosImagenClinica {
+  readonly tipo: Exclude<ImagenPacienteApi['tipo'], 'PERFIL'>;
+  readonly piezas?: readonly number[];
+  readonly tomada_en?: string | null;
+  readonly descripcion?: string | null;
+  readonly cita_id?: string | null;
+  readonly procedimiento_id?: string | null;
+}
+
+export type Denticion = 'PERMANENTE' | 'TEMPORAL' | 'MIXTA';
+export type HallazgoPieza =
+  | 'AUSENTE'
+  | 'A_EXTRAER'
+  | 'CORONA'
+  | 'ENDODONCIA'
+  | 'IMPLANTE'
+  | 'PROTESIS_FIJA'
+  | 'RESTO_RADICULAR';
+export type HallazgoCara =
+  | 'CARIES'
+  | 'OBTURACION_RESINA'
+  | 'OBTURACION_AMALGAMA'
+  | 'SELLANTE'
+  | 'FRACTURA';
+export type CaraOdontologica = 'O' | 'M' | 'D' | 'V' | 'L';
+
+export interface EstadoPiezaOdontograma {
+  readonly pieza: HallazgoPieza | null;
+  readonly caras: Readonly<Partial<Record<CaraOdontologica, HallazgoCara>>>;
+  readonly nota: string | null;
+}
+
+export interface Odontograma {
+  readonly id: string;
+  readonly paciente_id: string;
+  readonly profesional_id: string;
+  readonly version: number;
+  readonly vigente: boolean;
+  readonly motivo_modificacion: string | null;
+  readonly procedimiento_id: string | null;
+  readonly creado_en: string;
+  readonly denticion: Denticion;
+  readonly piezas: Readonly<Record<string, EstadoPiezaOdontograma>>;
+}
+
+export interface ContenidoOdontograma {
+  readonly denticion: Denticion;
+  readonly piezas: Readonly<Record<string, EstadoPiezaOdontograma>>;
+}
+
+export type EstadoPlanTratamiento = 'BORRADOR' | 'PROPUESTO' | 'ACEPTADO' | 'COMPLETADO' | 'CANCELADO';
+export type EstadoProcedimientoPlan = 'PENDIENTE' | 'COMPLETADO' | 'CANCELADO';
+
+export interface ProcedimientoPlan {
+  readonly id: string;
+  readonly fase: number;
+  readonly orden: number;
+  readonly pieza: number | null;
+  readonly caras: string | null;
+  readonly servicio_id: string | null;
+  readonly descripcion: string;
+  readonly precio: string;
+  readonly estado: EstadoProcedimientoPlan;
+  readonly hallazgo_resultante?: string | null;
+  readonly cita_id: string | null;
+  readonly completado_en: string | null;
+  readonly control_recomendado_en?: string | null;
+  readonly control_atendido_en?: string | null;
+  readonly control_nota?: string | null;
+  readonly cancelado_en?: string | null;
+  readonly motivo_cancelacion?: string | null;
+}
+
+/** Hallazgos que un procedimiento completado deja en el odontograma. */
+export type HallazgoResultante =
+  | 'CARIES'
+  | 'OBTURACION_RESINA'
+  | 'OBTURACION_AMALGAMA'
+  | 'SELLANTE'
+  | 'FRACTURA'
+  | 'AUSENTE'
+  | 'A_EXTRAER'
+  | 'CORONA'
+  | 'ENDODONCIA'
+  | 'IMPLANTE'
+  | 'PROTESIS_FIJA'
+  | 'RESTO_RADICULAR';
+
+export interface PlanTratamiento {
+  readonly id: string;
+  readonly paciente_id: string;
+  readonly profesional_id: string;
+  readonly titulo: string;
+  readonly estado: EstadoPlanTratamiento;
+  readonly moneda: string;
+  readonly observaciones: string | null;
+  readonly propuesto_en: string | null;
+  readonly aceptado_en: string | null;
+  readonly aceptacion_medio?: string | null;
+  readonly aceptacion_referencia?: string | null;
+  readonly completado_en: string | null;
+  readonly cancelado_en?: string | null;
+  readonly motivo_cancelacion?: string | null;
+  readonly creado_en: string;
+  readonly procedimientos: readonly ProcedimientoPlan[];
+}
+
+export interface ProcedimientoPlanNuevo {
+  readonly fase: number;
+  readonly orden: number;
+  readonly pieza: number | null;
+  readonly caras: string | null;
+  readonly descripcion: string;
+  readonly precio: string;
+}
+
+/** Lista de procedimientos reutilizable de la clínica. */
+export interface PlantillaPlan {
+  readonly id: string;
+  readonly nombre: string;
+  readonly descripcion: string | null;
+  readonly procedimientos: readonly ProcedimientoPlanNuevo[];
+  readonly creado_en: string;
+}
+
+export interface PlanTratamientoNuevo {
+  readonly titulo: string;
+  readonly moneda: string;
+  readonly observaciones: string | null;
+  readonly procedimientos: readonly ProcedimientoPlanNuevo[];
+}
+
 export interface Medicamento {
   readonly id: string;
   readonly nombre: string;
@@ -263,6 +638,29 @@ export interface Receta {
   readonly medicamentos: readonly Medicamento[];
 }
 
+export interface MedicamentoNuevo {
+  nombre: string;
+  dosis: string;
+  via: string;
+  concentracion: string | null;
+  cuando_sea_necesario: boolean;
+  frecuencia_horas: number | null;
+  duracion_dias: number | null;
+  instrucciones: string | null;
+}
+
+/** Autorización para firmar recetas por otro profesional. */
+export interface DelegacionFirma {
+  readonly id: string;
+  readonly delegante_id: string;
+  readonly delegado_id: string;
+  readonly vigente_desde: string;
+  readonly vigente_hasta: string;
+  readonly motivo: string;
+  readonly revocada_en: string | null;
+  readonly vigente: boolean;
+}
+
 export interface Toma {
   readonly id: string;
   readonly receta_medicamento_id: string;
@@ -272,9 +670,50 @@ export interface Toma {
   readonly registrada_en: string | null;
 }
 
+export interface AlertaAdherencia {
+  readonly id: string;
+  readonly paciente_id: string;
+  readonly receta_id: string;
+  readonly profesional_id: string;
+  readonly severidad: 'INFORMATIVA' | 'ATENCION' | 'URGENTE';
+  readonly tomas_omitidas: number;
+  readonly tomas_esperadas: number;
+  readonly periodo_desde: string;
+  readonly periodo_hasta: string;
+  readonly creado_en: string;
+}
+
 export interface Adherencia {
   readonly alerta: Readonly<Record<string, unknown>> | null;
   readonly motivo: string | null;
+}
+
+export interface ConversacionEntrante {
+  readonly id: string;
+  readonly telefono: string;
+  readonly paciente_id: string | null;
+  readonly estado: string;
+  readonly motivo_handoff: string | null;
+  readonly ultima_actividad_en: string;
+  readonly ultimo_mensaje: string | null;
+}
+
+export interface PaginaConversaciones {
+  readonly elementos: readonly ConversacionEntrante[];
+  readonly total: number;
+  readonly limite: number;
+  readonly desplazamiento: number;
+}
+
+export interface DetalleConversacionEntrante extends ConversacionEntrante {
+  readonly ventana_expira_en: string | null;
+  readonly mensajes: readonly {
+    readonly id: string;
+    readonly tipo: string;
+    readonly texto: string | null;
+    readonly intencion: string;
+    readonly recibido_en: string;
+  }[];
 }
 
 /**
@@ -307,10 +746,58 @@ export class ApiService {
   iniciarSesion(datos: {
     correo: string;
     contrasena: string;
-    clinica_id: string;
     codigo_2fa?: string | null;
   }): Observable<ParTokens> {
     return this.post<ParTokens>('/autenticacion/sesion', datos);
+  }
+
+  accesosLocales(): Observable<{ habilitado: boolean; roles: readonly { codigo: string; nombre: string }[] }> {
+    return this.get<{ habilitado: boolean; roles: readonly { codigo: string; nombre: string }[] }>(
+      '/autenticacion/accesos-locales',
+    );
+  }
+
+  iniciarSesionLocal(codigoRol: string): Observable<ParTokens> {
+    return this.post<ParTokens>('/autenticacion/sesion-local', { codigo_rol: codigoRol });
+  }
+
+  clinicasPlataforma(): Observable<readonly ClinicaPlataforma[]> {
+    return this.get<readonly ClinicaPlataforma[]>('/plataforma/clinicas');
+  }
+
+  crearClinicaPlataforma(datos: AltaClinicaPlataforma): Observable<ClinicaPlataforma> {
+    return this.post<ClinicaPlataforma>('/plataforma/clinicas', datos);
+  }
+
+  sedesPlataforma(clinicaId: string): Observable<readonly SedePlataforma[]> {
+    return this.get<readonly SedePlataforma[]>(`/plataforma/clinicas/${clinicaId}/sedes`);
+  }
+
+  crearSedePlataforma(clinicaId: string, datos: AltaSedePlataforma): Observable<SedePlataforma> {
+    return this.post<SedePlataforma>(`/plataforma/clinicas/${clinicaId}/sedes`, datos);
+  }
+
+  usuariosPlataforma(): Observable<readonly UsuarioPlataforma[]> {
+    return this.get<readonly UsuarioPlataforma[]>('/plataforma/clinicas/usuarios');
+  }
+
+  rolesPlataforma(clinicaId: string): Observable<readonly RolPlataforma[]> {
+    return this.get<readonly RolPlataforma[]>('/plataforma/clinicas/roles', { clinica_id: clinicaId });
+  }
+
+  profesionalesPlataforma(clinicaId: string, usuarioId?: string): Observable<readonly ProfesionalPlataforma[]> {
+    return this.get<readonly ProfesionalPlataforma[]>('/plataforma/clinicas/profesionales', {
+      clinica_id: clinicaId,
+      usuario_id: usuarioId,
+    });
+  }
+
+  crearUsuarioPlataforma(datos: AltaUsuarioPlataforma): Observable<UsuarioPlataforma> {
+    return this.post<UsuarioPlataforma>('/plataforma/clinicas/usuarios', datos);
+  }
+
+  actualizarAsignacionPlataforma(usuarioId: string, datos: AsignacionUsuarioPlataforma): Observable<UsuarioPlataforma> {
+    return this.put<UsuarioPlataforma>(`/plataforma/clinicas/usuarios/${usuarioId}/asignacion`, datos);
   }
 
   refrescar(tokenRefresco: string): Observable<ParTokens> {
@@ -326,6 +813,18 @@ export class ApiService {
 
   identidad(): Observable<Identidad> {
     return this.get<Identidad>('/autenticacion/yo');
+  }
+
+  conversacionesPendientes(limite = 50, desplazamiento = 0): Observable<PaginaConversaciones> {
+    return this.get<PaginaConversaciones>('/conversaciones', { limite, desplazamiento });
+  }
+
+  cuentaConversacionesPendientes(): Observable<{ readonly cantidad: number }> {
+    return this.get<{ readonly cantidad: number }>('/conversaciones/pendientes/cuenta');
+  }
+
+  conversacion(id: string): Observable<DetalleConversacionEntrante> {
+    return this.get<DetalleConversacionEntrante>(`/conversaciones/${id}`);
   }
 
   // --- Agenda ---
@@ -353,6 +852,14 @@ export class ApiService {
     return this.post<Cita>(`/agenda/citas/${id}/confirmacion`, null);
   }
 
+  registrarLlegadaCita(id: string): Observable<Cita> {
+    return this.post<Cita>(`/agenda/citas/${id}/llegada`, null);
+  }
+
+  iniciarAtencionCita(id: string): Observable<Cita> {
+    return this.post<Cita>(`/agenda/citas/${id}/inicio-atencion`, null);
+  }
+
   cancelarCita(id: string, motivo: string, horasAntelacionMinima = 0): Observable<Cita> {
     return this.post<Cita>(`/agenda/citas/${id}/cancelacion`, {
       motivo,
@@ -362,7 +869,12 @@ export class ApiService {
 
   reprogramarCita(
     id: string,
-    datos: { nuevo_inicio: string; motivo: string; nuevo_profesional_id?: string | null },
+    datos: {
+      nuevo_inicio: string;
+      motivo: string;
+      nuevo_profesional_id?: string | null;
+      nuevo_consultorio_id?: string | null;
+    },
     claveIdempotencia?: string,
   ): Observable<Cita> {
     return this.post<Cita>(`/agenda/citas/${id}/reprogramacion`, datos, claveIdempotencia);
@@ -385,7 +897,122 @@ export class ApiService {
     return this.get<PacienteDetalle>(`/pacientes/${id}`);
   }
 
+  imagenesClinicas(
+    pacienteId: string,
+    filtro: { tipo?: string; pieza?: number; procedimiento_id?: string } = {},
+  ) {
+    return this.get<readonly ImagenPacienteApi[]>(
+      `/pacientes/${pacienteId}/imagenes`,
+      aConsulta(filtro),
+    );
+  }
+
+  subirImagenClinica(
+    pacienteId: string,
+    archivo: File,
+    datos: DatosImagenClinica,
+  ): Observable<ImagenPacienteApi> {
+    const formulario = new FormData();
+    formulario.append('archivo', archivo, archivo.name);
+    formulario.append('tipo', datos.tipo);
+    for (const pieza of datos.piezas ?? []) formulario.append('piezas', String(pieza));
+    if (datos.tomada_en) formulario.append('tomada_en', datos.tomada_en);
+    if (datos.descripcion) formulario.append('descripcion', datos.descripcion);
+    if (datos.cita_id) formulario.append('cita_id', datos.cita_id);
+    if (datos.procedimiento_id) formulario.append('procedimiento_id', datos.procedimiento_id);
+    return this.http
+      .post<ImagenPacienteApi>(this.url(`/pacientes/${pacienteId}/imagenes`), formulario)
+      .pipe(catchError(traducirFallo));
+  }
+
+  /** Foto de perfil vigente, o `null` si el paciente no tiene. */
+  fotoPerfil(pacienteId: string): Observable<ImagenPacienteApi | null> {
+    return this.get<ImagenPacienteApi | null>(`/pacientes/${pacienteId}/foto-perfil`);
+  }
+
+  subirFotoPerfil(pacienteId: string, archivo: File): Observable<ImagenPacienteApi> {
+    const formulario = new FormData();
+    formulario.append('archivo', archivo, archivo.name);
+    return this.http
+      .post<ImagenPacienteApi>(this.url(`/pacientes/${pacienteId}/foto-perfil`), formulario)
+      .pipe(catchError(traducirFallo));
+  }
+
+  contenidoImagen(imagenId: string): Observable<Blob> {
+    return this.http
+      .get(this.url(`/imagenes/${imagenId}/contenido`), { responseType: 'blob' })
+      .pipe(catchError(traducirFallo));
+  }
+
+  anularImagen(imagenId: string, motivo: string): Observable<ImagenPacienteApi> {
+    return this.http
+      .patch<ImagenPacienteApi>(this.url(`/imagenes/${imagenId}/anulacion`), { motivo })
+      .pipe(catchError(traducirFallo));
+  }
+
   // --- Historia clinica ---
+  crearReceta(datos: {
+    paciente_id: string;
+    profesional_id: string;
+    indicaciones_generales: string | null;
+    medicamentos: readonly MedicamentoNuevo[];
+  }): Observable<Receta> {
+    return this.post<Receta>('/historia/recetas', datos);
+  }
+
+  /** Confirma la receta y genera las tomas. `firmante`: propio o por delegación. */
+  confirmarReceta(recetaId: string, firmante: string): Observable<unknown> {
+    return this.post<unknown>(`/historia/recetas/${recetaId}/confirmacion`, {
+      profesional_id: firmante,
+    });
+  }
+
+  delegacionesMias(): Observable<readonly DelegacionFirma[]> {
+    return this.get<readonly DelegacionFirma[]>('/profesionales/delegaciones/mias');
+  }
+
+  delegaciones(): Observable<readonly DelegacionFirma[]> {
+    return this.get<readonly DelegacionFirma[]>('/profesionales/delegaciones');
+  }
+
+  crearDelegacion(datos: {
+    delegante_id: string;
+    delegado_id: string;
+    vigente_desde: string;
+    vigente_hasta: string;
+    motivo: string;
+  }): Observable<DelegacionFirma> {
+    return this.post<DelegacionFirma>('/profesionales/delegaciones', datos);
+  }
+
+  revocarDelegacion(id: string): Observable<DelegacionFirma> {
+    return this.post<DelegacionFirma>(`/profesionales/delegaciones/${id}/revocacion`, {});
+  }
+
+  crearNota(datos: NotaNueva): Observable<Nota> {
+    return this.post<Nota>('/historia/notas', datos);
+  }
+
+  /** Crea la versión siguiente; la anterior se conserva. Exige motivo. */
+  corregirNota(raizId: string, datos: NotaNueva & { readonly motivo: string }): Observable<Nota> {
+    return this.post<Nota>(`/historia/notas/${raizId}/correccion`, datos);
+  }
+
+  indicePlaca(pacienteId: string): Observable<readonly RegistroPlaca[]> {
+    return this.get<readonly RegistroPlaca[]>(`/odontologia/pacientes/${pacienteId}/indice-placa`);
+  }
+
+  registrarIndicePlaca(
+    pacienteId: string,
+    datos: {
+      piezas_evaluadas: readonly number[];
+      superficies_con_placa: Readonly<Record<string, readonly string[]>>;
+      observacion: string | null;
+    },
+  ): Observable<RegistroPlaca> {
+    return this.post<RegistroPlaca>(`/odontologia/pacientes/${pacienteId}/indice-placa`, datos);
+  }
+
   notas(pacienteId: string, incluirHistorico = false): Observable<readonly Nota[]> {
     return this.get<readonly Nota[]>(
       `/historia/pacientes/${pacienteId}/notas`,
@@ -395,6 +1022,124 @@ export class ApiService {
 
   recetas(pacienteId: string): Observable<readonly Receta[]> {
     return this.get<readonly Receta[]>(`/historia/pacientes/${pacienteId}/recetas`);
+  }
+
+  odontograma(pacienteId: string, version?: number): Observable<Odontograma | null> {
+    return this.get<Odontograma | null>(
+      `/odontologia/pacientes/${pacienteId}/odontograma`,
+      version === undefined ? undefined : { version },
+    );
+  }
+
+  versionesOdontograma(pacienteId: string): Observable<readonly Odontograma[]> {
+    return this.get<readonly Odontograma[]>(
+      `/odontologia/pacientes/${pacienteId}/odontograma/versiones`,
+    );
+  }
+
+  crearOdontograma(pacienteId: string, contenido: ContenidoOdontograma): Observable<Odontograma> {
+    return this.post<Odontograma>(`/odontologia/pacientes/${pacienteId}/odontograma`, contenido);
+  }
+
+  versionarOdontograma(
+    pacienteId: string,
+    contenido: ContenidoOdontograma,
+    versionBase: number,
+    motivo: string,
+  ): Observable<Odontograma> {
+    return this.post<Odontograma>(`/odontologia/pacientes/${pacienteId}/odontograma/versiones`, {
+      ...contenido,
+      version_base: versionBase,
+      motivo,
+    });
+  }
+
+  planesTratamiento(pacienteId: string): Observable<readonly PlanTratamiento[]> {
+    return this.get<readonly PlanTratamiento[]>(
+      `/odontologia/pacientes/${pacienteId}/planes-tratamiento`,
+    );
+  }
+
+  crearPlanTratamiento(
+    pacienteId: string,
+    datos: PlanTratamientoNuevo,
+  ): Observable<PlanTratamiento> {
+    return this.post<PlanTratamiento>(
+      `/odontologia/pacientes/${pacienteId}/planes-tratamiento`,
+      datos,
+    );
+  }
+
+  plantillasPlan(): Observable<readonly PlantillaPlan[]> {
+    return this.get<readonly PlantillaPlan[]>('/odontologia/plantillas-plan');
+  }
+
+  crearPlantillaPlan(datos: {
+    nombre: string;
+    descripcion?: string | null;
+    procedimientos: readonly ProcedimientoPlanNuevo[];
+  }): Observable<PlantillaPlan> {
+    return this.post<PlantillaPlan>('/odontologia/plantillas-plan', datos);
+  }
+
+  proponerPlanTratamiento(planId: string): Observable<PlanTratamiento> {
+    return this.post<PlanTratamiento>(
+      `/odontologia/planes-tratamiento/${planId}/propuesta`,
+      {},
+    );
+  }
+
+  /**
+   * Registra la constancia de que el paciente acepto el plan.
+   *
+   * Es un registro de algo que ocurrio fuera del sistema (documento firmado
+   * en la clinica), no una firma digital del paciente.
+   */
+  aceptarPlanTratamiento(
+    planId: string,
+    referencia: string,
+    imagenId?: string | null,
+  ): Observable<PlanTratamiento> {
+    return this.post<PlanTratamiento>(`/odontologia/planes-tratamiento/${planId}/aceptacion`, {
+      medio: 'DOCUMENTO_FIRMADO',
+      referencia,
+      imagen_id: imagenId ?? null,
+    });
+  }
+
+  cancelarPlanTratamiento(planId: string, motivo: string): Observable<PlanTratamiento> {
+    return this.post<PlanTratamiento>(`/odontologia/planes-tratamiento/${planId}/cancelacion`, {
+      motivo,
+    });
+  }
+
+  /** Completa un procedimiento; con hallazgo crea una version nueva del odontograma. */
+  completarProcedimiento(
+    procedimientoId: string,
+    hallazgo: HallazgoResultante | null,
+    controlRecomendadoEn: string | null = null,
+  ): Observable<PlanTratamiento> {
+    return this.post<PlanTratamiento>(`/odontologia/procedimientos/${procedimientoId}/completado`, {
+      hallazgo_resultante: hallazgo,
+      control_recomendado_en: controlRecomendadoEn,
+    });
+  }
+
+  atenderControlTratamiento(
+    procedimientoId: string,
+    nota: string | null,
+  ): Observable<PlanTratamiento> {
+    return this.post<PlanTratamiento>(
+      `/odontologia/procedimientos/${procedimientoId}/control/atencion`,
+      { nota },
+    );
+  }
+
+  cancelarProcedimiento(procedimientoId: string, motivo: string): Observable<PlanTratamiento> {
+    return this.post<PlanTratamiento>(
+      `/odontologia/procedimientos/${procedimientoId}/cancelacion`,
+      { motivo },
+    );
   }
 
   /**
@@ -419,6 +1164,16 @@ export class ApiService {
     return this.get<Adherencia>(`/historia/recetas/${recetaId}/adherencia`);
   }
 
+  alertasAdherencia(): Observable<readonly AlertaAdherencia[]> {
+    return this.get<readonly AlertaAdherencia[]>('/historia/adherencia/alertas');
+  }
+
+  atenderAlertaAdherencia(alertaId: string, nota?: string): Observable<void> {
+    return this.post<void>(`/historia/adherencia/alertas/${alertaId}/atencion`, {
+      nota_profesional: nota ?? null,
+    });
+  }
+
   // --- Conocimiento ---
   documentos(filtro: FiltroDocumentos = {}): Observable<PaginaDocumentos> {
     return this.get<PaginaDocumentos>('/conocimiento/documentos', aConsulta(filtro));
@@ -433,6 +1188,137 @@ export class ApiService {
    */
   buscarConocimiento(consulta: string, limite?: number): Observable<RespuestaBusqueda> {
     return this.post<RespuestaBusqueda>('/conocimiento/busqueda', { consulta, limite });
+  }
+
+  opcionesPermisosDocumento(): Observable<OpcionesPermisosDocumento> {
+    return this.get<OpcionesPermisosDocumento>('/conocimiento/permisos/opciones');
+  }
+
+  permisosDocumento(documentoId: string): Observable<RespuestaPermisosDocumento> {
+    return this.get<RespuestaPermisosDocumento>(`/conocimiento/documentos/${documentoId}/permisos`);
+  }
+
+  reemplazarPermisosDocumento(
+    documentoId: string,
+    permisos: readonly PermisoDocumento[],
+  ): Observable<RespuestaPermisosDocumento> {
+    return this.http
+      .put<RespuestaPermisosDocumento>(
+        this.url(`/conocimiento/documentos/${documentoId}/permisos`),
+        { permisos },
+      )
+      .pipe(catchError(traducirFallo));
+  }
+
+  /** Crea un documento en `DRAFT`. Exige `conocimiento.cargar`. */
+  crearDocumento(datos: DatosDocumento): Observable<Documento> {
+    return this.post<Documento>('/conocimiento/documentos', datos);
+  }
+
+  /**
+   * Sube una version nueva de un documento.
+   *
+   * No cambia su estado: un documento publicado sigue respondiendo con su
+   * version aprobada mientras la nueva se revisa.
+   */
+  ingerirVersion(documentoId: string, datos: DatosIngesta): Observable<RespuestaIngesta> {
+    return this.post<RespuestaIngesta>(`/conocimiento/documentos/${documentoId}/versiones`, datos);
+  }
+
+  /**
+   * Cambia el estado de un documento.
+   *
+   * Aprobar y publicar exigen `conocimiento.aprobar` en el backend; esta
+   * llamada no lo comprueba porque el permiso real se valida alli.
+   */
+  cambiarEstadoDocumento(
+    documentoId: string,
+    nuevoEstado: EstadoDocumento,
+    motivo?: string,
+  ): Observable<Documento> {
+    return this.post<Documento>(`/conocimiento/documentos/${documentoId}/estado`, {
+      nuevo_estado: nuevoEstado,
+      motivo: motivo ?? null,
+    });
+  }
+
+  // --- Consentimientos de comunicacion ---
+  textosConsentimiento(): Observable<readonly TextoConsentimiento[]> {
+    return this.get<readonly TextoConsentimiento[]>('/pacientes/consentimientos/textos');
+  }
+
+  consentimientos(pacienteId: string): Observable<readonly EstadoConsentimiento[]> {
+    return this.get<readonly EstadoConsentimiento[]>(`/pacientes/${pacienteId}/consentimientos`);
+  }
+
+  otorgarConsentimiento(
+    pacienteId: string,
+    tipo: string,
+    versionTexto: string,
+  ): Observable<EstadoConsentimiento> {
+    return this.post<EstadoConsentimiento>(`/pacientes/${pacienteId}/consentimientos`, {
+      tipo,
+      version_texto: versionTexto,
+      canal: 'PRESENCIAL',
+      confirmo_lectura: true,
+    });
+  }
+
+  revocarConsentimiento(pacienteId: string, tipo: string): Observable<EstadoConsentimiento> {
+    return this.post<EstadoConsentimiento>(
+      `/pacientes/${pacienteId}/consentimientos/${tipo}/revocacion`,
+      {},
+    );
+  }
+
+  // --- Promociones ---
+  campanas(): Observable<readonly Campana[]> {
+    return this.get<readonly Campana[]>('/promociones/campanas');
+  }
+
+  crearCampana(datos: CampanaNueva): Observable<Campana> {
+    return this.post<Campana>('/promociones/campanas', datos);
+  }
+
+  subirImagenCampana(campanaId: string, archivo: File): Observable<Campana> {
+    const formulario = new FormData();
+    formulario.append('archivo', archivo, archivo.name);
+    return this.http
+      .post<Campana>(this.url(`/promociones/campanas/${campanaId}/imagen`), formulario)
+      .pipe(catchError(traducirFallo));
+  }
+
+  /** Pide al modelo de generacion una imagen. Queda como propuesta del borrador. */
+  generarImagenCampana(campanaId: string, descripcion: string): Observable<Campana> {
+    return this.post<Campana>(`/promociones/campanas/${campanaId}/imagen-generada`, {
+      descripcion,
+    });
+  }
+
+  imagenCampana(campanaId: string): Observable<Blob> {
+    return this.http
+      .get(this.url(`/promociones/campanas/${campanaId}/imagen`), { responseType: 'blob' })
+      .pipe(catchError(traducirFallo));
+  }
+
+  audienciaCampana(campanaId: string): Observable<{ readonly con_consentimiento: number }> {
+    return this.get<{ readonly con_consentimiento: number }>(
+      `/promociones/campanas/${campanaId}/audiencia`,
+    );
+  }
+
+  aprobarCampana(campanaId: string): Observable<Campana> {
+    return this.post<Campana>(`/promociones/campanas/${campanaId}/aprobacion`, {});
+  }
+
+  enviarCampana(campanaId: string, programadaPara: string | null): Observable<Campana> {
+    return this.post<Campana>(`/promociones/campanas/${campanaId}/envio`, {
+      programada_para: programadaPara,
+    });
+  }
+
+  cancelarCampana(campanaId: string, motivo: string): Observable<Campana> {
+    return this.post<Campana>(`/promociones/campanas/${campanaId}/cancelacion`, { motivo });
   }
 
   // --- Plomeria ---
@@ -454,6 +1340,10 @@ export class ApiService {
     return this.http
       .post<T>(this.url(ruta), cuerpo, { headers: cabeceras })
       .pipe(catchError(traducirFallo));
+  }
+
+  private put<T>(ruta: string, cuerpo: unknown): Observable<T> {
+    return this.http.put<T>(this.url(ruta), cuerpo).pipe(catchError(traducirFallo));
   }
 
   private url(ruta: string): string {

@@ -1,0 +1,137 @@
+<section class="galeria" aria-label="Imágenes clínicas del paciente" [attr.aria-busy]="cargando() || subiendo()">
+  <header class="galeria__cabecera">
+    <div>
+      <h3>Imágenes clínicas</h3>
+      <p>Archivos privados, cifrados y servidos por la API. Cada visualización clínica queda auditada.</p>
+    </div>
+    <span class="galeria__cantidad">{{ imagenes().length }}</span>
+  </header>
+
+  @if (puedeCargar()) {
+    <form class="galeria__carga" (ngSubmit)="subir()">
+      <h4>Cargar imagen</h4>
+      <div class="galeria__campos">
+        <label class="campo">
+          <span class="campo__etiqueta">Tipo</span>
+          <select class="campo__control" name="tipo" [(ngModel)]="tipo">
+            @for (opcion of tipos; track opcion.valor) {
+              <option [value]="opcion.valor">{{ opcion.etiqueta }}</option>
+            }
+          </select>
+        </label>
+        <label class="campo">
+          <span class="campo__etiqueta">Piezas FDI (opcional)</span>
+          <input class="campo__control" name="piezas" [(ngModel)]="piezas" placeholder="14, 15" />
+        </label>
+        <label class="campo">
+          <span class="campo__etiqueta">Fecha de toma</span>
+          <input class="campo__control" type="date" name="tomadaEn" [(ngModel)]="tomadaEn" />
+        </label>
+        <label class="campo galeria__archivo">
+          <span class="campo__etiqueta">Archivo JPEG, PNG o WebP</span>
+          <input type="file" accept="image/jpeg,image/png,image/webp" (change)="seleccionarArchivo($event)" />
+          @if (archivoNombre) { <span class="campo__ayuda">{{ archivoNombre }}</span> }
+        </label>
+        <label class="campo galeria__descripcion">
+          <span class="campo__etiqueta">Descripción (opcional)</span>
+          <input class="campo__control" name="descripcion" maxlength="500" [(ngModel)]="descripcion" />
+        </label>
+      </div>
+      <button class="boton boton--principal" type="submit" [disabled]="!archivo || subiendo()">
+        {{ subiendo() ? 'Cargando…' : 'Guardar imagen' }}
+      </button>
+      <p class="galeria__nota">
+        La imagen se limpia de metadatos y se cifra antes de almacenarla. En desarrollo puede
+        guardarse sin antivirus; la pantalla indica ese estado. Producción exige antivirus activo.
+      </p>
+    </form>
+  }
+
+  <form class="galeria__filtros" (ngSubmit)="cargar(pacienteId())">
+    <label class="campo">
+      <span class="campo__etiqueta">Tipo</span>
+      <select class="campo__control" name="filtroTipo" [(ngModel)]="filtroTipo">
+        <option value="">Todos</option>
+        @for (opcion of tipos; track opcion.valor) {
+          <option [value]="opcion.valor">{{ opcion.etiqueta }}</option>
+        }
+      </select>
+    </label>
+    <label class="campo">
+      <span class="campo__etiqueta">Pieza FDI</span>
+      <input class="campo__control" name="filtroPieza" inputmode="numeric" [(ngModel)]="filtroPieza" />
+    </label>
+    <button class="boton" type="submit">Filtrar</button>
+  </form>
+
+  @if (error()) { <p class="galeria__error" role="alert">{{ error() }}</p> }
+  @if (exito()) { <p class="galeria__exito" role="status">{{ exito() }}</p> }
+  @if (cargando()) {
+    <p class="galeria__vacio" role="status">Cargando imágenes…</p>
+  } @else if (imagenes().length === 0) {
+    <p class="galeria__vacio">No hay imágenes para estos filtros.</p>
+  } @else {
+    @if (comparacion().length) {
+      <div class="galeria__barra-comparar" role="status">
+        <span>{{ comparacion().length }} de 2 imágenes elegidas para comparar.</span>
+        <button type="button" class="boton boton--principal boton--pequeno" [disabled]="comparacion().length < 2" (click)="abrirVisor(ordenComparacion())">
+          Comparar antes / después
+        </button>
+        <button type="button" class="boton boton--plano boton--pequeno" (click)="comparacion.set([])">Quitar selección</button>
+      </div>
+    }
+    <div class="galeria__rejilla">
+      @for (imagen of imagenes(); track imagen.id) {
+        <article class="galeria__tarjeta">
+          @if (url(imagen.id); as src) {
+            <button type="button" class="galeria__abrir" (click)="abrirVisor([imagen.id])" [attr.aria-label]="'Ampliar imagen: ' + etiquetaTipo(imagen.tipo)">
+              <img [src]="src" [alt]="imagen.descripcion || etiquetaTipo(imagen.tipo)" loading="lazy" />
+            </button>
+          } @else {
+            <div class="galeria__sin-vista" role="status">Cargando vista…</div>
+          }
+          <div class="galeria__metadatos">
+            <strong>{{ etiquetaTipo(imagen.tipo) }}</strong>
+            @if (imagen.piezas.length) { <span>Pieza(s) {{ imagen.piezas.join(', ') }}</span> }
+            @if (imagen.tomada_en) { <span>Tomada {{ imagen.tomada_en | date: 'mediumDate' }}</span> }
+            @if (imagen.descripcion) { <span>{{ imagen.descripcion }}</span> }
+            <small>{{ formatearBytes(imagen.tamano_bytes) }} · {{ imagen.antivirus === 'LIMPIO' ? 'Antivirus: limpio' : 'Antivirus no disponible' }}</small>
+          </div>
+          <label class="galeria__comparar">
+            <input type="checkbox" [checked]="enComparacion(imagen.id)" [disabled]="!enComparacion(imagen.id) && comparacion().length >= 2" (change)="alternarComparacion(imagen.id)" />
+            Comparar
+          </label>
+        </article>
+      }
+    </div>
+  }
+
+  @if (visor(); as ids) {
+    <!-- Visor: zoom para leer una radiografía y, con dos imágenes, comparación
+         lado a lado ordenada por fecha de toma (antes a la izquierda). -->
+    <div class="visor" role="dialog" aria-modal="true" aria-label="Visor de imágenes">
+      <div class="visor__barra">
+        <span class="visor__titulo">{{ ids.length === 2 ? 'Antes / después' : etiquetaTipo(imagenPorId(ids[0])?.tipo ?? '') }}</span>
+        <div class="acciones">
+          <button type="button" class="boton boton--pequeno" (click)="cambiarZoom(-0.25)" [disabled]="zoom() <= 0.5" aria-label="Alejar">−</button>
+          <span class="numerico visor__zoom">{{ porcentajeZoom() }}</span>
+          <button type="button" class="boton boton--pequeno" (click)="cambiarZoom(0.25)" [disabled]="zoom() >= 4" aria-label="Acercar">+</button>
+          <button type="button" class="boton boton--pequeno" (click)="zoom.set(1)">Ajustar</button>
+          <button type="button" class="boton boton--pequeno boton--principal" (click)="cerrarVisor()">Cerrar</button>
+        </div>
+      </div>
+      <div class="visor__lienzo" [class.visor__lienzo--doble]="ids.length === 2">
+        @for (id of ids; track id; let primero = $first) {
+          <figure class="visor__figura">
+            <div class="visor__marco">
+              @if (url(id); as src) {
+                <img [src]="src" [style.transform]="transformacion()" [alt]="imagenPorId(id)?.descripcion || 'Imagen clínica'" />
+              }
+            </div>
+            <figcaption>{{ leyendaVisor(id, ids.length === 2, primero) }}</figcaption>
+          </figure>
+        }
+      </div>
+    </div>
+  }
+</section>

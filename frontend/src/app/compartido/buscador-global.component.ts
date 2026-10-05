@@ -24,6 +24,7 @@ import { Component, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 
 import { FichaPacienteComponent } from './ficha-paciente.component';
+import { FotoPerfilComponent } from './foto-perfil.component';
 import { IconoComponent } from './icono.component';
 import { VentanaFlotanteComponent } from './ventana-flotante.component';
 import { ApiService, filtroBusquedaPaciente } from '../nucleo/servicios/api.service';
@@ -34,7 +35,13 @@ import type { Paciente } from '../nucleo/modelos/dominio';
 @Component({
   selector: 'app-buscador-global',
   standalone: true,
-  imports: [FormsModule, IconoComponent, VentanaFlotanteComponent, FichaPacienteComponent],
+  imports: [
+    FormsModule,
+    IconoComponent,
+    VentanaFlotanteComponent,
+    FichaPacienteComponent,
+    FotoPerfilComponent,
+  ],
   template: `
     @if (sesion.tienePermiso(PERMISOS.pacienteLeer)) {
       <form class="buscador" (ngSubmit)="buscar()" role="search">
@@ -72,11 +79,21 @@ import type { Paciente } from '../nucleo/modelos/dominio';
             <ul class="buscador__lista">
               @for (paciente of resultados(); track paciente.id) {
                 <li>
-                  <button type="button" (click)="abrirFicha(paciente)">
-                    <span class="buscador__nombre">
-                      {{ paciente.apellido }}, {{ paciente.nombre }}
+                  <button type="button" class="buscador__opcion" (click)="abrirFicha(paciente)">
+                    <!-- La foto distingue a dos personas con el mismo nombre en el
+                         mostrador. Es N1: la ve quien ya puede ver la ficha. -->
+                    <app-foto-perfil
+                      [pacienteId]="paciente.id"
+                      [nombre]="paciente.nombre + ' ' + paciente.apellido"
+                      [iniciales]="paciente.nombre.charAt(0) + paciente.apellido.charAt(0)"
+                      [tamano]="32"
+                    />
+                    <span class="buscador__texto">
+                      <span class="buscador__nombre">
+                        {{ paciente.apellido }}, {{ paciente.nombre }}
+                      </span>
+                      <span class="buscador__doc numerico">{{ paciente.numero_documento }}</span>
                     </span>
-                    <span class="buscador__doc numerico">{{ paciente.numero_documento }}</span>
                   </button>
                 </li>
               }
@@ -111,6 +128,24 @@ import type { Paciente } from '../nucleo/modelos/dominio';
       display: flex;
       align-items: center;
       gap: var(--espacio-2);
+    }
+
+    @media (max-width: 540px) {
+      .buscador {
+        flex: 1 1 100%;
+        min-width: 0;
+        order: 5;
+      }
+
+      .buscador__campo {
+        flex: 1;
+        min-width: 0;
+      }
+
+      .buscador__campo input {
+        width: 100%;
+        min-width: 0;
+      }
     }
 
     .buscador__campo {
@@ -184,6 +219,17 @@ import type { Paciente } from '../nucleo/modelos/dominio';
 
     .buscador__nombre {
       font-weight: 600;
+    }
+
+    .buscador__lista .buscador__opcion {
+      align-items: center;
+      justify-content: flex-start;
+    }
+
+    .buscador__texto {
+      display: flex;
+      flex-direction: column;
+      min-width: 0;
     }
 
     .buscador__doc {

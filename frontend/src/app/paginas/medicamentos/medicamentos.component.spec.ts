@@ -109,6 +109,9 @@ describe('MedicamentosComponent', () => {
     });
     fixture.detectChanges();
     http.expectOne((p) => p.url.includes('/tomas')).flush(tomas);
+    if ((sesion.tienePermiso as jasmine.Spy)('adherencia.leer')) {
+      http.expectOne(`${BASE}/historia/adherencia/alertas`).flush([]);
+    }
     fixture.detectChanges();
   }
 
@@ -135,6 +138,7 @@ describe('MedicamentosComponent', () => {
     const peticion = http.expectOne((p) => p.url.includes('/tomas'));
     expect(peticion.request.params.get('dias')).toBe('7');
     peticion.flush([]);
+    http.expectOne(`${BASE}/historia/adherencia/alertas`).flush([]);
   });
 
   describe('una toma futura', () => {
@@ -182,6 +186,7 @@ describe('MedicamentosComponent', () => {
       http
         .expectOne((p) => p.url.includes('/tomas'))
         .flush([{ ...vencida, estado: 'TOMADA', registrada_en: '2026-04-15T14:00:00Z' }]);
+      http.expectOne(`${BASE}/historia/adherencia/alertas`).flush([]);
       fixture.detectChanges();
 
       expect(texto()).toContain('Tomada');

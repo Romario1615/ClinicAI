@@ -20,7 +20,7 @@
  */
 import { Injectable, computed, inject, signal } from '@angular/core';
 
-import { ApiService } from './api.service';
+import { ApiService, type AlertaAdherencia } from './api.service';
 import { PERMISOS } from './configuracion';
 import { OperacionesService, type EntradaEspera, type Pagina } from './operaciones.service';
 import { SesionService } from './sesion.service';
@@ -37,6 +37,8 @@ export class PendientesService {
   private readonly citas = signal<readonly Cita[]>([]);
   private readonly ofertas = signal<readonly EntradaEspera[]>([]);
   private readonly nombres = signal<ReadonlyMap<string, string>>(new Map());
+  private readonly alertas = signal<readonly AlertaAdherencia[]>([]);
+  private readonly conversaciones = signal(0);
 
   readonly cargando = signal(false);
 
@@ -52,6 +54,9 @@ export class PendientesService {
 
   /** Lo que muestra la insignia del menú. Cero significa cero, no «sin datos». */
   readonly cuenta = computed(() => this.tareas().length);
+  readonly notificaciones = computed(() => this.cuenta() + this.alertas().length + this.conversaciones());
+  readonly conversacionesPendientes = this.conversaciones.asReadonly();
+  readonly alertasAbiertas = this.alertas.asReadonly();
 
   /** Citas de hoy en el ámbito del usuario. Las usa el panel para la carga. */
   readonly citasDeHoy = this.citas.asReadonly();
@@ -64,6 +69,22 @@ export class PendientesService {
    * reloj que recarga solo hace que el número baile mientras alguien lo lee.
    */
   cargar(zona = 'America/Guayaquil'): void {
+    if (this.sesion.tienePermiso(PERMISOS.conversacionLeer)) {
+      this.api.cuentaConversacionesPendientes().subscribe({
+        next: ({ cantidad }) => this.conversaciones.set(cantidad),
+        error: () => this.conversaciones.set(0),
+      });
+    } else {
+      this.conversaciones.set(0);
+    }
+    if (this.sesion.tienePermiso(PERMISOS.adherenciaLeer)) {
+      this.api.alertasAdherencia().subscribe({
+        next: (alertas) => this.alertas.set(alertas),
+        error: () => this.alertas.set([]),
+      });
+    } else {
+      this.alertas.set([]);
+    }
     if (!this.sesion.tienePermiso(PERMISOS.agendaLeer)) {
       this.citas.set([]);
       this.ofertas.set([]);

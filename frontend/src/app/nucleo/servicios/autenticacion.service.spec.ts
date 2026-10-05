@@ -283,7 +283,10 @@ describe('ApiService: rutas de la agenda', () => {
 
   it('confirmar', () => {
     api.confirmarCita('c1').subscribe();
-    http.expectOne(`${BASE}/agenda/citas/c1/confirmacion`).flush({});
+    const peticion = http.expectOne(`${BASE}/agenda/citas/c1/confirmacion`);
+    expect(peticion.request.method).toBe('POST');
+    expect(peticion.request.body).toBeNull();
+    peticion.flush({});
   });
 
   it('cancelar envía el motivo', () => {
@@ -300,22 +303,50 @@ describe('ApiService: rutas de la agenda', () => {
     api
       .reprogramarCita('c1', { nuevo_inicio: '2026-04-20T14:00:00Z', motivo: 'Cambio' })
       .subscribe();
-    http.expectOne(`${BASE}/agenda/citas/c1/reprogramacion`).flush({});
+    const peticion = http.expectOne(`${BASE}/agenda/citas/c1/reprogramacion`);
+    expect(peticion.request.method).toBe('POST');
+    expect(peticion.request.body).toEqual({
+      nuevo_inicio: '2026-04-20T14:00:00Z',
+      motivo: 'Cambio',
+    });
+    peticion.flush({});
   });
 
   it('completar', () => {
     api.completarCita('c1').subscribe();
-    http.expectOne(`${BASE}/agenda/citas/c1/completado`).flush({});
+    const peticion = http.expectOne(`${BASE}/agenda/citas/c1/completado`);
+    expect(peticion.request.method).toBe('POST');
+    expect(peticion.request.body).toBeNull();
+    peticion.flush({});
   });
 
   it('marcar inasistencia', () => {
     api.marcarInasistencia('c1').subscribe();
-    http.expectOne(`${BASE}/agenda/citas/c1/inasistencia`).flush({});
+    const peticion = http.expectOne(`${BASE}/agenda/citas/c1/inasistencia`);
+    expect(peticion.request.method).toBe('POST');
+    expect(peticion.request.body).toBeNull();
+    peticion.flush({});
+  });
+
+  it('registrar llegada', () => {
+    api.registrarLlegadaCita('c1').subscribe();
+    const peticion = http.expectOne(`${BASE}/agenda/citas/c1/llegada`);
+    expect(peticion.request.method).toBe('POST');
+    peticion.flush({});
+  });
+
+  it('iniciar atención', () => {
+    api.iniciarAtencionCita('c1').subscribe();
+    const peticion = http.expectOne(`${BASE}/agenda/citas/c1/inicio-atencion`);
+    expect(peticion.request.method).toBe('POST');
+    peticion.flush({});
   });
 
   it('identidad', () => {
     api.identidad().subscribe();
-    http.expectOne(`${BASE}/autenticacion/yo`).flush({});
+    const peticion = http.expectOne(`${BASE}/autenticacion/yo`);
+    expect(peticion.request.method).toBe('GET');
+    peticion.flush({});
   });
 
   it('buscar pacientes', () => {
@@ -327,7 +358,9 @@ describe('ApiService: rutas de la agenda', () => {
 
   it('ficha de paciente', () => {
     api.paciente('p1').subscribe();
-    http.expectOne(`${BASE}/pacientes/p1`).flush({});
+    const peticion = http.expectOne(`${BASE}/pacientes/p1`);
+    expect(peticion.request.method).toBe('GET');
+    peticion.flush({});
   });
 });
 
@@ -357,7 +390,6 @@ describe('AutenticacionService: inicio de sesión', () => {
       .iniciarSesion({
         correo: '  Persona@Example.Invalid ',
         contrasena: 'x',
-        clinicaId: 'c-1',
         recordarCorreo: true,
       })
       .subscribe();
@@ -400,7 +432,7 @@ describe('AutenticacionService: inicio de sesión', () => {
 
   it('envía el código de segundo factor solo si lo hay', () => {
     autenticacion
-      .iniciarSesion({ correo: 'a@b.invalid', contrasena: 'x', clinicaId: 'c', codigo2fa: '  ' })
+      .iniciarSesion({ correo: 'a@b.invalid', contrasena: 'x', codigo2fa: '  ' })
       .subscribe({ error: () => undefined });
 
     const peticion = http.expectOne(`${BASE}/autenticacion/sesion`);

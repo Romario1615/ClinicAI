@@ -1,4 +1,11 @@
-<h1>Medicación y adherencia</h1>
+<header class="modulo-cabecera">
+  <div class="modulo-cabecera__texto">
+    <p class="ceja">SEGUIMIENTO</p>
+    <h1>Medicación y adherencia</h1>
+    <p>Registro de tomas asociado a la receta del profesional.</p>
+  </div>
+  <img class="modulo-cabecera__imagen" src="/images/medicacion-seguimiento.png" alt="" aria-hidden="true" loading="lazy" />
+</header>
 
 @if (!hayPaciente()) {
   <section class="tarjeta buscador" aria-label="Buscar paciente">
@@ -91,6 +98,24 @@
       />
     </div>
   } @else {
+    @if (errorAlertas()) {
+      <app-error
+        titulo="No se pudieron cargar las alertas"
+        [mensaje]="errorAlertas()!.message"
+        [codigo]="errorAlertas()!.codigo"
+        [correlacion]="errorAlertas()!.correlacionId ?? ''"
+        (reintentar)="cargar()"
+      />
+    }
+    @if (errorAtendiendoAlerta()) {
+      <app-error
+        titulo="No se pudo atender la alerta"
+        [mensaje]="errorAtendiendoAlerta()!.message"
+        [codigo]="errorAtendiendoAlerta()!.codigo"
+        [correlacion]="errorAtendiendoAlerta()!.correlacionId ?? ''"
+        [reintentable]="false"
+      />
+    }
     @if (errorRegistro()) {
       <app-error
         titulo="No se pudo registrar la toma"
@@ -99,6 +124,26 @@
         [correlacion]="errorRegistro()!.correlacionId ?? ''"
         [reintentable]="false"
       />
+    }
+
+    @if (alertas().length > 0) {
+      <section class="tarjeta vencidas" aria-labelledby="alertas-adherencia-titulo">
+        <h3 id="alertas-adherencia-titulo">Alertas de adherencia abiertas</h3>
+        <p>Recuento operativo de tomas pendientes u omitidas; requiere revisión del equipo clínico.</p>
+        @for (alerta of alertas(); track alerta.id) {
+          <article class="alerta-adherencia">
+            <div>
+              <strong>{{ alerta.severidad === 'URGENTE' ? 'Prioridad urgente' : 'Requiere seguimiento' }}</strong>
+              <p>{{ alerta.tomas_omitidas }} de {{ alerta.tomas_esperadas }} tomas sin registrar en el periodo.</p>
+            </div>
+            @if (sesion.tienePermiso('alerta_adherencia.atender')) {
+              <button class="boton boton--pequeno" type="button" [disabled]="atendiendoAlerta() === alerta.id" (click)="atender(alerta)">
+                {{ atendiendoAlerta() === alerta.id ? 'Guardando…' : 'Marcar atendida' }}
+              </button>
+            }
+          </article>
+        }
+      </section>
     }
 
     <!-- Lo único de esta pantalla sobre lo que hay que actuar hoy. Una toma

@@ -7,7 +7,7 @@ import type { Sede, Servicio, Profesional } from '../../nucleo/modelos/dominio';
 @Component({
   selector: 'app-catalogo', standalone: true,
   template: `
-    <h1>Catálogo de la clínica</h1><p>Sedes, servicios y profesionales disponibles para su sesión.</p>
+    <header class="modulo-cabecera"><div class="modulo-cabecera__texto"><p class="ceja">CONFIGURACIÓN</p><h1>Catálogo de la clínica</h1><p>Sedes, servicios y profesionales disponibles para su sesión.</p></div><img class="modulo-cabecera__imagen" src="/images/catalogo-clinica.png" alt="" aria-hidden="true" loading="lazy" /></header>
     @if (error()) { <p role="alert">{{ error() }}</p><button (click)="cargar()" class="boton">Reintentar</button> }
     @if (cargando()) { <p role="status">Cargando catálogo…</p> }
     <h2>Sedes</h2><div class="rejilla">@for (s of sedes(); track s.id) { <article class="tarjeta"><h3>{{ s.nombre }}</h3><p>{{ s.direccion || 'Dirección no registrada' }}</p><small>{{ s.zona_horaria }}</small></article> }</div>

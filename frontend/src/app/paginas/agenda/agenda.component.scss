@@ -156,6 +156,15 @@
 
 .dia__vacio {
   padding: var(--espacio-4);
+  text-align: center;
+}
+
+.dia__ilustracion {
+  display: block;
+  width: 124px;
+  height: 124px;
+  margin: 0 auto var(--espacio-2);
+  object-fit: contain;
 }
 
 .dia__filas {
@@ -520,4 +529,162 @@
 
 .dia__cierre .motivos {
   margin-bottom: var(--espacio-2);
+}
+
+/* ----- Tablero de consultorios ----- */
+.salas {
+  position: relative;
+  margin-bottom: var(--espacio-5);
+}
+
+.salas__cabecera {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--espacio-3);
+  margin-bottom: var(--espacio-3);
+}
+
+.salas__cabecera h2 {
+  margin: 0;
+}
+
+.salas__rejilla {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+  gap: var(--espacio-3);
+}
+
+.sala {
+  padding: var(--espacio-3) var(--espacio-4);
+  border: 1px solid var(--borde);
+  border-radius: calc(var(--radio) + 2px);
+  background: var(--superficie-elevada);
+  box-shadow: var(--sombra-1);
+}
+
+/* Borde izquierdo además del texto «Ocupado»: el estado no depende solo del tono. */
+.sala--ocupada {
+  box-shadow: inset 4px 0 0 var(--acento), var(--sombra-1);
+}
+
+.sala__cabecera {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--espacio-2);
+}
+
+.sala__nombre {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.sala__tipo {
+  font-size: 0.78rem;
+  color: var(--texto-tenue);
+}
+
+.sala__estado {
+  flex: 0 0 auto;
+  padding: 2px var(--espacio-2);
+  border-radius: 999px;
+  font-size: 0.74rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.sala__estado--libre {
+  background: var(--exito-fondo);
+  color: var(--exito);
+}
+
+.sala__estado--ocupada {
+  background: var(--acento-suave);
+  color: var(--acento-fuerte);
+}
+
+.sala__linea {
+  position: relative;
+  height: 10px;
+  margin: var(--espacio-3) 0 var(--espacio-2);
+  border-radius: 999px;
+  background: var(--superficie-hundida);
+  overflow: hidden;
+}
+
+.sala__bloque {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  border-radius: 999px;
+  background: var(--acento);
+}
+
+.sala__bloque--hecho {
+  background: var(--borde-fuerte);
+}
+
+.sala__pie {
+  margin: 0;
+  font-size: 0.8rem;
+  color: var(--texto-suave);
+}
+
+/* ----- Selector de consultorio en la reserva ----- */
+.selector-sala {
+  margin: 0 0 var(--espacio-4);
+  padding: 0;
+  border: 0;
+}
+
+.selector-sala__lista {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+  gap: var(--espacio-2);
+}
+
+.selector-sala__opcion {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  min-height: var(--toque-minimo);
+  padding: var(--espacio-2) var(--espacio-3);
+  border: 1px solid var(--borde-fuerte);
+  border-radius: var(--radio);
+  background: var(--superficie-elevada);
+  text-align: left;
+  cursor: pointer;
+}
+
+.selector-sala__opcion span {
+  font-size: 0.78rem;
+  color: var(--exito);
+}
+
+.selector-sala__opcion[aria-pressed='true'] {
+  border-color: var(--acento);
+  background: var(--acento-suave);
+  box-shadow: inset 0 0 0 1px var(--acento);
+}
+
+.selector-sala__opcion--ocupada {
+  background: var(--superficie-hundida);
+  cursor: not-allowed;
+}
+
+.selector-sala__opcion--ocupada span {
+  color: var(--texto-suave);
+}
+
+.aviso-sugerido {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--espacio-2);
+  padding: var(--espacio-3) var(--espacio-4);
+  border-left: 4px solid var(--acento);
+  border-radius: var(--radio);
+  background: var(--acento-suave);
 }

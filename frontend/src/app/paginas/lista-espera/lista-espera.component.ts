@@ -36,7 +36,7 @@ import {
   type EntradaEspera,
   type Pagina,
 } from '../../nucleo/servicios/operaciones.service';
-import type { Paciente, Sede, Servicio } from '../../nucleo/modelos/dominio';
+import type { Cita, Paciente, PaginaCitas, Profesional, Sede, Servicio } from '../../nucleo/modelos/dominio';
 import { formatearFechaHora } from '../../nucleo/utilidades/fechas';
 
 /** Traducción de los estados de una entrada. El código sigue en inglés. */
@@ -50,6 +50,12 @@ const ESTADOS: Record<string, { etiqueta: string; clase: string }> = {
 };
 
 const POR_PAGINA = 25;
+const DIAS_SEMANA = [
+  { id: 0, nombre: 'Lunes' }, { id: 1, nombre: 'Martes' },
+  { id: 2, nombre: 'Miércoles' }, { id: 3, nombre: 'Jueves' },
+  { id: 4, nombre: 'Viernes' }, { id: 5, nombre: 'Sábado' },
+  { id: 6, nombre: 'Domingo' },
+] as const;
 
 @Component({
   selector: 'app-lista-espera',
@@ -70,6 +76,7 @@ const POR_PAGINA = 25;
           Una cancelación genera una oferta para una persona a la vez, con plazo para responder.
         </p>
       </div>
+      <img class="modulo-cabecera__imagen" src="/images/lista-espera.png" alt="" aria-hidden="true" loading="lazy" />
       <div class="acciones">
         <button type="button" class="boton" (click)="cargar()" [disabled]="cargando()">
           Actualizar
@@ -213,12 +220,27 @@ const POR_PAGINA = 25;
         [cierraAlPulsarFuera]="false"
         (cerrar)="cerrarAlta()"
       >
-        <app-selector-paciente (seleccion)="paciente = $event" />
+        <app-selector-paciente (seleccion)="seleccionarPaciente($event)" />
+
+        @if (citasPrevias().length > 0) {
+          <label class="campo campo--cita-previa">
+            <span class="campo__etiqueta">Cita actual que desea cambiar (opcional)</span>
+            <select class="campo__control" name="citaPrevia" [ngModel]="citaPreviaId()" (ngModelChange)="citaPreviaId.set($event)">
+              <option value="">No tiene una cita que reemplazar</option>
+              @for (cita of citasPrevias(); track cita.id) {
+                <option [value]="cita.id">{{ fecha(cita.inicio) }} · {{ cita.estado === 'RESCHEDULED' ? 'Reprogramada' : 'Confirmada' }}</option>
+              }
+            </select>
+            <span class="campo__ayuda">Al aceptar una oferta, esta cita se cancelará en la misma operación y su horario se ofrecerá a otra persona.</span>
+          </label>
+        } @else if (buscandoCitas()) {
+          <p class="campo__ayuda" role="status">Buscando citas actuales del paciente…</p>
+        }
 
         <div class="rejilla-alta">
           <label class="campo">
             <span class="campo__etiqueta">Sede</span>
-            <select class="campo__control" name="sede" [(ngModel)]="sedeId" required>
+            <select class="campo__control" name="sede" [ngModel]="sedeId()" (ngModelChange)="cambiarSede($event)" required>
               <option value="">Seleccione</option>
               @for (sede of sedes(); track sede.id) {
                 <option [value]="sede.id">{{ sede.nombre }}</option>
@@ -227,12 +249,29 @@ const POR_PAGINA = 25;
           </label>
           <label class="campo">
             <span class="campo__etiqueta">Servicio</span>
-            <select class="campo__control" name="servicio" [(ngModel)]="servicioId" required>
+            <select class="campo__control" name="servicio" [ngModel]="servicioId()" (ngModelChange)="cambiarServicio($event)" required>
               <option value="">Seleccione</option>
               @for (servicio of servicios(); track servicio.id) {
                 <option [value]="servicio.id">{{ servicio.nombre }}</option>
               }
             </select>
+          </label>
+          <label class="campo">
+            <span class="campo__etiqueta">Profesional (opcional)</span>
+            <select class="campo__control" name="profesional" [ngModel]="profesionalId()" (ngModelChange)="profesionalId.set($event)">
+              <option value="">Cualquier profesional</option>
+              @for (profesional of profesionales(); track profesional.id) {
+                <option [value]="profesional.id">{{ profesional.nombre }} {{ profesional.apellido }}</option>
+              }
+            </select>
+          </label>
+          <label class="campo">
+            <span class="campo__etiqueta">Disponible desde (opcional)</span>
+            <input class="campo__control" type="date" name="disponibleDesde" [ngModel]="disponibleDesde()" (ngModelChange)="disponibleDesde.set($event)" />
+          </label>
+          <label class="campo">
+            <span class="campo__etiqueta">Disponible hasta (opcional)</span>
+            <input class="campo__control" type="date" name="disponibleHasta" [ngModel]="disponibleHasta()" (ngModelChange)="disponibleHasta.set($event)" />
           </label>
           <label class="campo">
             <span class="campo__etiqueta">Antelación mínima (horas)</span>
@@ -249,6 +288,35 @@ const POR_PAGINA = 25;
             </span>
           </label>
         </div>
+
+        <fieldset class="preferencias-horario">
+          <legend>Horarios aceptables (opcional)</legend>
+          <p class="campo__ayuda">La hora se interpreta en la zona horaria de la sede.</p>
+          <div class="dias-semana">
+            @for (dia of diasSemanaCatalogo; track dia.id) {
+              <label class="dia-semana">
+                <input type="checkbox" [checked]="diasPreferidos().includes(dia.id)" (change)="alternarDia(dia.id, $any($event.target).checked)" />
+                {{ dia.nombre }}
+              </label>
+            }
+          </div>
+          <div class="rejilla-alta">
+            <label class="campo">
+              <span class="campo__etiqueta">Desde las</span>
+              <input class="campo__control" type="time" name="horaDesde" [ngModel]="horaDesde()" (ngModelChange)="horaDesde.set($event)" />
+            </label>
+            <label class="campo">
+              <span class="campo__etiqueta">Hasta las</span>
+              <input class="campo__control" type="time" name="horaHasta" [ngModel]="horaHasta()" (ngModelChange)="horaHasta.set($event)" />
+            </label>
+          </div>
+          @if (!franjaCoherente()) {
+            <p class="aviso-error" role="alert">Indique las dos horas y asegúrese de que la hora final sea posterior.</p>
+          }
+          @if (!fechasCoherentes()) {
+            <p class="aviso-error" role="alert">La fecha final no puede ser anterior a la inicial.</p>
+          }
+        </fieldset>
 
         <div class="acciones acciones--final" pie>
           <button type="button" class="boton" (click)="cerrarAlta()">Cancelar</button>
@@ -290,6 +358,24 @@ const POR_PAGINA = 25;
             <dt>Antelación</dt>
             <dd class="numerico">{{ entrada.horas_antelacion_minima }} horas</dd>
           </div>
+          @if (entrada.disponible_desde || entrada.disponible_hasta) {
+            <div>
+              <dt>Disponibilidad</dt>
+              <dd>{{ entrada.disponible_desde || 'Sin fecha inicial' }} – {{ entrada.disponible_hasta || 'Sin fecha final' }}</dd>
+            </div>
+          }
+          @if (entrada.preferencias; as preferencias) {
+            <div>
+              <dt>Días y horas</dt>
+              <dd>{{ nombresDias(preferencias.dias_semana) }}{{ preferencias.hora_desde ? ' · ' + preferencias.hora_desde.slice(0, 5) + ' a ' + preferencias.hora_hasta?.slice(0, 5) : '' }}</dd>
+            </div>
+          }
+          @if (entrada.cita_previa_id) {
+            <div>
+              <dt>Reagendamiento</dt>
+              <dd>Al aceptar, se cancela la cita previa y su horario vuelve a la lista de espera.</dd>
+            </div>
+          }
           @if (entrada.oferta_id) {
             <div>
               <dt>Turno ofrecido</dt>
@@ -323,7 +409,7 @@ const POR_PAGINA = 25;
               [disabled]="ocupado()"
               (click)="resolver(entrada, 'aceptar')"
             >
-              Aceptar la oferta
+              {{ entrada.cita_previa_id ? 'Aceptar y cambiar la cita' : 'Aceptar la oferta' }}
             </button>
             <button
               type="button"
@@ -487,6 +573,20 @@ const POR_PAGINA = 25;
       margin-top: var(--espacio-4);
     }
 
+    .preferencias-horario {
+      min-width: 0;
+      margin: var(--espacio-4) 0 0;
+      padding: var(--espacio-3);
+      border: 1px solid var(--borde);
+      border-radius: var(--radio-2);
+    }
+
+    .preferencias-horario legend { padding: 0 var(--espacio-1); font-weight: 650; }
+    .campo--cita-previa { margin-top: var(--espacio-4); }
+    .preferencias-horario > .campo__ayuda { margin-top: 0; }
+    .dias-semana { display: flex; flex-wrap: wrap; gap: var(--espacio-2); }
+    .dia-semana { display: inline-flex; align-items: center; gap: var(--espacio-1); min-height: var(--toque-minimo); }
+
     /* --- Detalle --- */
     .detalle {
       margin: 0 0 var(--espacio-4);
@@ -582,13 +682,24 @@ export class ListaEsperaComponent {
   private readonly catalogo = inject(CatalogoService);
   private readonly pendientes = inject(PendientesService);
 
-  protected paciente: Paciente | null = null;
-  protected sedeId = '';
-  protected servicioId = '';
+  protected readonly paciente = signal<Paciente | null>(null);
+  protected readonly citasPrevias = signal<readonly Cita[]>([]);
+  protected readonly buscandoCitas = signal(false);
+  protected readonly citaPreviaId = signal('');
+  protected readonly sedeId = signal('');
+  protected readonly servicioId = signal('');
+  protected readonly profesionalId = signal('');
+  protected readonly disponibleDesde = signal('');
+  protected readonly disponibleHasta = signal('');
+  protected readonly diasPreferidos = signal<number[]>([]);
+  protected readonly horaDesde = signal('');
+  protected readonly horaHasta = signal('');
   protected antelacion = 4;
 
   protected readonly sedes = signal<readonly Sede[]>([]);
   protected readonly servicios = signal<readonly Servicio[]>([]);
+  protected readonly profesionales = signal<readonly Profesional[]>([]);
+  protected readonly diasSemanaCatalogo = DIAS_SEMANA;
   protected readonly entradas = signal<readonly EntradaEspera[]>([]);
   protected readonly total = signal(0);
   protected readonly pagina = signal(0);
@@ -605,6 +716,7 @@ export class ListaEsperaComponent {
   private nombres = signal<ReadonlyMap<string, string>>(new Map());
   private clave = crypto.randomUUID();
   private ultimoCuerpo = '';
+  private solicitudCitasPrevias = 0;
 
   protected readonly paginas = computed(() =>
     Math.max(1, Math.ceil(this.total() / POR_PAGINA)),
@@ -616,7 +728,17 @@ export class ListaEsperaComponent {
   );
 
   protected readonly puedeAnotar = computed(
-    () => this.paciente !== null && this.sedeId !== '' && this.servicioId !== '',
+    () => this.paciente() !== null && this.sedeId() !== '' && this.servicioId() !== '' &&
+      this.franjaCoherente() && this.fechasCoherentes(),
+  );
+
+  protected readonly franjaCoherente = computed(() =>
+    Boolean(this.horaDesde()) === Boolean(this.horaHasta()) &&
+      (!this.horaDesde() || this.horaDesde() < this.horaHasta()),
+  );
+
+  protected readonly fechasCoherentes = computed(() =>
+    !this.disponibleDesde() || !this.disponibleHasta() || this.disponibleHasta() >= this.disponibleDesde(),
   );
 
   constructor() {
@@ -631,9 +753,18 @@ export class ListaEsperaComponent {
   }
 
   protected abrirAlta(): void {
-    this.paciente = null;
-    this.sedeId = this.sedes()[0]?.id ?? '';
-    this.servicioId = '';
+    this.paciente.set(null);
+    this.citasPrevias.set([]);
+    this.citaPreviaId.set('');
+    this.sedeId.set(this.sedes()[0]?.id ?? '');
+    this.servicioId.set('');
+    this.profesionalId.set('');
+    this.profesionales.set([]);
+    this.disponibleDesde.set('');
+    this.disponibleHasta.set('');
+    this.diasPreferidos.set([]);
+    this.horaDesde.set('');
+    this.horaHasta.set('');
     this.antelacion = 4;
     this.altaAbierta.set(true);
   }
@@ -644,6 +775,84 @@ export class ListaEsperaComponent {
 
   protected abrirDetalle(entrada: EntradaEspera): void {
     this.entradaElegida.set(entrada);
+  }
+
+  protected cambiarSede(sedeId: string): void {
+    this.sedeId.set(sedeId);
+    this.citaPreviaId.set('');
+    this.cargarProfesionales();
+    this.cargarCitasPrevias();
+  }
+
+  protected cambiarServicio(servicioId: string): void {
+    this.servicioId.set(servicioId);
+    this.citaPreviaId.set('');
+    this.cargarProfesionales();
+    this.cargarCitasPrevias();
+  }
+
+  protected seleccionarPaciente(paciente: Paciente | null): void {
+    this.paciente.set(paciente);
+    this.citaPreviaId.set('');
+    this.cargarCitasPrevias();
+  }
+
+  private cargarCitasPrevias(): void {
+    const solicitud = ++this.solicitudCitasPrevias;
+    const paciente = this.paciente();
+    const sedeId = this.sedeId();
+    const servicioId = this.servicioId();
+    this.citasPrevias.set([]);
+    if (!paciente || !sedeId || !servicioId) {
+      this.buscandoCitas.set(false);
+      return;
+    }
+    this.buscandoCitas.set(true);
+    this.api.leer<PaginaCitas>('/agenda/citas', {
+      paciente_id: paciente.id,
+      sede_id: sedeId,
+      desde: new Date().toISOString(),
+      limite: 100,
+    }).subscribe({
+      next: (pagina) => {
+        if (solicitud !== this.solicitudCitasPrevias) return;
+        const citas = pagina.elementos.filter((cita) =>
+          cita.servicio_id === servicioId &&
+          ['CONFIRMED', 'RESCHEDULED'].includes(cita.estado) &&
+          Date.parse(cita.inicio) > Date.now(),
+        );
+        this.citasPrevias.set(citas);
+        this.buscandoCitas.set(false);
+      },
+      error: () => {
+        if (solicitud !== this.solicitudCitasPrevias) return;
+        this.buscandoCitas.set(false);
+        this.error.set('No se pudieron consultar las citas actuales del paciente.');
+      },
+    });
+  }
+
+  private cargarProfesionales(): void {
+    this.profesionalId.set('');
+    this.profesionales.set([]);
+    const servicio = this.servicios().find((item) => item.id === this.servicioId());
+    if (!servicio || !this.sedeId()) return;
+    this.catalogo.profesionales({ sedeId: this.sedeId(), especialidadId: servicio.especialidad_id }).subscribe({
+      next: (profesionales) => this.profesionales.set(profesionales),
+      error: () => this.error.set('No se pudieron cargar los profesionales de la sede y el servicio.'),
+    });
+  }
+
+  protected alternarDia(dia: number, activo: boolean): void {
+    this.diasPreferidos.update((dias) => activo
+      ? [...new Set([...dias, dia])].sort((a, b) => a - b)
+      : dias.filter((actual) => actual !== dia));
+  }
+
+  protected nombresDias(dias: readonly number[]): string {
+    const nombres = dias.map((dia) => DIAS_SEMANA.find((opcion) => opcion.id === dia)?.nombre)
+      .filter((nombre) => nombre !== undefined);
+    return nombres.join(', ');
   }
 
   protected alternarPendientes(valor: boolean): void {
@@ -704,15 +913,28 @@ export class ListaEsperaComponent {
   }
 
   protected anotar(): void {
-    const servicio = this.servicios().find((s) => s.id === this.servicioId);
-    if (!servicio || !this.paciente) {
+    const servicio = this.servicios().find((s) => s.id === this.servicioId());
+    const paciente = this.paciente();
+    if (!servicio || !paciente) {
       return;
     }
+    const dias = this.diasPreferidos();
+    const preferencias = dias.length || this.horaDesde()
+      ? {
+          dias_semana: dias,
+          ...(this.horaDesde() ? { hora_desde: this.horaDesde(), hora_hasta: this.horaHasta() } : {}),
+        }
+      : null;
     this.enviar('/lista-espera/', {
-      paciente_id: this.paciente.id,
-      sede_id: this.sedeId,
+      paciente_id: paciente.id,
+      sede_id: this.sedeId(),
       servicio_id: servicio.id,
       especialidad_id: servicio.especialidad_id,
+      cita_previa_id: this.citaPreviaId() || null,
+      profesional_id: this.profesionalId() || null,
+      disponible_desde: this.disponibleDesde() || null,
+      disponible_hasta: this.disponibleHasta() || null,
+      preferencias,
       horas_antelacion_minima: this.antelacion,
     });
   }
@@ -749,8 +971,10 @@ export class ListaEsperaComponent {
         this.pendientes.cargar();
       },
       error: (fallo: FalloApi) => {
+        this.cargar();
         this.error.set(fallo.message);
         this.ocupado.set(false);
+        this.pendientes.cargar();
       },
     });
   }

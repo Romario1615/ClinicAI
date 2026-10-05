@@ -1,0 +1,319 @@
+<section class="planes" aria-labelledby="titulo-planes">
+  <div class="cabecera-planes">
+    <div>
+      <p class="ceja">PLANIFICACIÓN DENTAL</p>
+      <h2 id="titulo-planes">Planes de tratamiento</h2>
+      <p>Procedimientos agrupados por fases, con sus piezas, importes y estado.</p>
+    </div>
+    @if (puedeEditar()) {
+      <button
+        class="boton boton--principal"
+        type="button"
+        (click)="abrirFormulario()"
+      >
+        {{ mostrarFormulario() ? 'Cerrar borrador' : 'Crear borrador' }}
+      </button>
+    }
+  </div>
+
+  @if (error()) {
+    <p class="aviso-error" role="alert">{{ error() }}</p>
+  }
+  @if (exito()) {
+    <p class="aviso-exito" role="status">{{ exito() }}</p>
+  }
+
+  @if (mostrarFormulario() && puedeEditar()) {
+    <form class="tarjeta editor-plan" (ngSubmit)="guardarBorrador()">
+      <h3>Nuevo borrador</h3>
+      <p>El borrador no se envía al paciente ni se incorpora a su odontograma.</p>
+      @if (plantillas()?.length) {
+        <label class="campo">
+          <span class="campo__etiqueta">Partir de una plantilla (opcional)</span>
+          <select class="campo__control" name="plantilla" [(ngModel)]="plantillaId" (ngModelChange)="usarPlantilla($event)">
+            <option value="">Sin plantilla</option>
+            @for (plantilla of plantillas(); track plantilla.id) {
+              <option [value]="plantilla.id">{{ plantilla.nombre }} ({{ plantilla.procedimientos.length }})</option>
+            }
+          </select>
+        </label>
+      }
+      <label class="campo">
+        <span class="campo__etiqueta">Título del plan</span>
+        <input
+          class="campo__control"
+          name="tituloPlan"
+          [(ngModel)]="titulo"
+          maxlength="200"
+          minlength="3"
+          required
+        />
+      </label>
+      <div class="procedimiento-editor">
+        <h4>Añadir procedimiento</h4>
+        <label class="campo">
+          <span class="campo__etiqueta">Descripción</span>
+          <input
+            class="campo__control"
+            name="descripcionProcedimiento"
+            [(ngModel)]="descripcionProcedimiento"
+            maxlength="300"
+            required
+          />
+        </label>
+        <div class="campos-procedimiento">
+          <label class="campo">
+            <span class="campo__etiqueta">Fase</span>
+            <input class="campo__control" type="number" name="fase" [(ngModel)]="fase" min="1" max="20" required />
+          </label>
+          <label class="campo">
+            <span class="campo__etiqueta">Pieza FDI (opcional)</span>
+            <input class="campo__control" type="number" name="piezaPlan" [(ngModel)]="pieza" min="11" max="85" />
+          </label>
+          <label class="campo">
+            <span class="campo__etiqueta">Caras FDI</span>
+            <input class="campo__control" name="carasPlan" [(ngModel)]="caras" placeholder="O, M, D, V, L" maxlength="5" />
+          </label>
+          <label class="campo">
+            <span class="campo__etiqueta">Precio (USD)</span>
+            <input class="campo__control" type="number" name="precioPlan" [(ngModel)]="precio" min="0" step="0.01" required />
+          </label>
+        </div>
+        <button class="boton" type="button" (click)="agregarProcedimiento()">
+          Añadir al plan
+        </button>
+      </div>
+
+      @if (procedimientos().length) {
+        <div class="procedimientos-pendientes">
+          <h4>Procedimientos del borrador</h4>
+          <ol>
+            @for (item of procedimientos(); track $index; let i = $index) {
+              <li>
+                <span>
+                  Fase {{ item.fase }} · {{ item.descripcion }}
+                  @if (item.pieza) { · Pieza {{ item.pieza }} }
+                  @if (item.caras) { · Caras {{ item.caras }} }
+                  · {{ dinero(item.precio) }}
+                </span>
+                <button class="boton boton--plano" type="button" (click)="quitarProcedimiento(i)">
+                  Quitar
+                </button>
+              </li>
+            }
+          </ol>
+          <p class="total-plan"><strong>Total estimado:</strong> {{ dinero(total().toFixed(2)) }}</p>
+        </div>
+      }
+
+      <label class="campo">
+        <span class="campo__etiqueta">Observaciones clínicas (opcional)</span>
+        <textarea class="campo__control" name="observacionesPlan" [(ngModel)]="observaciones" maxlength="2000"></textarea>
+      </label>
+      <div class="acciones-plan">
+        <button class="boton boton--principal" type="submit" [disabled]="guardando() || !procedimientos().length">
+          {{ guardando() ? 'Guardando…' : 'Guardar borrador' }}
+        </button>
+        <button class="boton" type="button" [disabled]="guardando() || !procedimientos().length" (click)="guardarComoPlantilla()">
+          Guardar como plantilla
+        </button>
+        <button class="boton" type="button" (click)="reiniciarFormulario()">Descartar</button>
+      </div>
+    </form>
+  }
+
+  @if (cargando()) {
+    <p role="status">Cargando planes…</p>
+  } @else if (!planes().length) {
+    <div class="tarjeta vacio-plan">
+      <h3>Sin planes de tratamiento</h3>
+      <p>Los planes se guardan como borradores y requieren revisión profesional antes de proponerlos.</p>
+    </div>
+  } @else {
+    <div class="lista-planes">
+      @for (plan of planes(); track plan.id) {
+        <article class="tarjeta plan">
+          <header class="plan__cabecera">
+            <div>
+              <p class="ceja">{{ etiquetaEstado(plan.estado).toUpperCase() }}</p>
+              <h3>{{ plan.titulo }}</h3>
+            </div>
+            <strong>{{ dinero(totalPlan(plan)) }}</strong>
+          </header>
+          <ol class="plan__procedimientos">
+            @for (item of plan.procedimientos; track item.id) {
+              <li [class.procedimiento--cerrado]="item.estado !== 'PENDIENTE'">
+                <span>Fase {{ item.fase }} · {{ item.descripcion }}</span>
+                @if (item.pieza) { <span>Pieza {{ item.pieza }}{{ item.caras ? ' · ' + item.caras : '' }}</span> }
+                <strong>{{ dinero(item.precio) }}</strong>
+                <span class="procedimiento__estado" [attr.data-estado]="item.estado">
+                  {{ etiquetaEstado(item.estado) }}
+                  @if (item.motivo_cancelacion) { · {{ item.motivo_cancelacion }} }
+                </span>
+                @if (item.estado === 'PENDIENTE' && item.cita_id) {
+                  <span class="procedimiento__cita" role="status">Cita agendada para esta fase</span>
+                }
+                @if (item.control_recomendado_en) {
+                  <p class="plan__control" [class.plan__control--pendiente]="!item.control_atendido_en">
+                    <strong>{{ item.control_atendido_en ? 'Control posterior atendido' : 'Control posterior pendiente' }}</strong>
+                    <span>Fecha definida por el profesional: {{ item.control_recomendado_en | date: 'mediumDate' }}</span>
+                    @if (item.control_nota) { <span>{{ item.control_nota }}</span> }
+                    @if (puedeEditar() && !item.control_atendido_en) {
+                      <button class="boton boton--pequeno" type="button" (click)="abrirAccion({ tipo: 'atender-control', procedimiento: item })">
+                        Registrar control realizado
+                      </button>
+                    }
+                  </p>
+                }
+                @if (puedeVerFotos()) {
+                  <button class="boton boton--pequeno boton--plano" type="button"
+                          [attr.aria-expanded]="fotosDe() === item.id"
+                          (click)="fotosDe.set(fotosDe() === item.id ? null : item.id)">
+                    {{ fotosDe() === item.id ? 'Ocultar fotos' : 'Fotos del tratamiento' }}
+                  </button>
+                }
+                @if (puedeEditar() && plan.estado === 'ACEPTADO' && item.estado === 'PENDIENTE') {
+                  <span class="acciones procedimiento__acciones">
+                    <button class="boton boton--pequeno boton--principal" type="button" (click)="abrirAccion({ tipo: 'completar', procedimiento: item })">
+                      Completar
+                    </button>
+                    <button class="boton boton--pequeno boton--plano" type="button" (click)="abrirAccion({ tipo: 'cancelar-procedimiento', procedimiento: item })">
+                      Cancelar
+                    </button>
+                  </span>
+                }
+                @if (fotosDe() === item.id) {
+                  <div class="procedimiento__fotos">
+                    <app-fotos-clinicas
+                      [pacienteId]="pacienteId()"
+                      [pieza]="item.pieza"
+                      [procedimientoId]="item.id"
+                      [etiqueta]="'Fotos de ' + item.descripcion"
+                      vacio="Aún no hay fotos de este procedimiento. Suba el «antes» y el «después»."
+                    />
+                  </div>
+                }
+              </li>
+            }
+          </ol>
+          @if (plan.observaciones) {
+            <p class="plan__observaciones">{{ plan.observaciones }}</p>
+          }
+          @if (puedeEditar() && plan.estado === 'BORRADOR') {
+            <button class="boton boton--principal" type="button" [disabled]="guardando()" (click)="proponer(plan)">
+              Proponer al paciente
+            </button>
+          }
+          @if (plan.estado === 'PROPUESTO') {
+            <p class="aviso-pendiente">Propuesto el {{ plan.propuesto_en | date: 'mediumDate' }}. Falta registrar la aceptación firmada del paciente.</p>
+          }
+          @if (plan.estado === 'ACEPTADO' && puedeAgendar()) {
+            @for (item of procedimientosSiguienteFase(plan); track item.id) {
+              <p class="plan__siguiente">
+                Próximo procedimiento: fase {{ item.fase }} · {{ item.descripcion }}.
+                <button class="boton boton--pequeno" type="button"
+                        (click)="agendarProcedimiento(plan, item)">
+                  Agendar esta fase
+                </button>
+              </p>
+            }
+          }
+          @if (plan.aceptado_en) {
+            <p class="plan__constancia">
+              Aceptado el {{ plan.aceptado_en | date: 'mediumDate' }} · documento firmado
+              «{{ plan.aceptacion_referencia }}»
+            </p>
+          }
+          @if (plan.motivo_cancelacion) {
+            <p class="plan__constancia">Cancelado: {{ plan.motivo_cancelacion }}</p>
+          }
+          @if (puedeEditar() && (plan.estado === 'PROPUESTO' || plan.estado === 'BORRADOR' || plan.estado === 'ACEPTADO')) {
+            <div class="acciones">
+              @if (plan.estado === 'PROPUESTO') {
+                <button class="boton boton--principal" type="button" (click)="abrirAccion({ tipo: 'aceptar', plan })">
+                  Registrar aceptación firmada
+                </button>
+              }
+              <button class="boton boton--plano" type="button" (click)="abrirAccion({ tipo: 'cancelar-plan', plan })">
+                Cancelar plan
+              </button>
+            </div>
+          }
+
+          @if (accionEnPlan(plan); as abierta) {
+            @if (abierta) {
+              <form class="accion-plan" (ngSubmit)="confirmarAccion()">
+                @switch (abierta.tipo) {
+                  @case ('aceptar') {
+                    <p class="accion-plan__aviso">
+                      Registre la aceptación solo si el paciente firmó el documento del plan en la
+                      clínica. Esto deja constancia de quién la registró; no es una firma digital.
+                    </p>
+                    <label class="campo">
+                      <span class="campo__etiqueta">Referencia del documento firmado</span>
+                      <input class="campo__control" name="referencia" maxlength="200" [(ngModel)]="referenciaAceptacion" placeholder="Ej.: Hoja de consentimiento 2026-0042" />
+                    </label>
+                  }
+                  @case ('completar') {
+                    @if (hallazgosDe(abierta.procedimiento).length) {
+                      <label class="campo">
+                        <span class="campo__etiqueta">Resultado en el odontograma (opcional)</span>
+                        <select class="campo__control" name="hallazgo" [(ngModel)]="hallazgo">
+                          <option value="">No cambiar el odontograma</option>
+                          @for (opcion of hallazgosDe(abierta.procedimiento); track opcion.valor) {
+                            <option [value]="opcion.valor">{{ opcion.texto }}</option>
+                          }
+                        </select>
+                        <span class="campo__ayuda">Si elige un resultado se crea una versión nueva del odontograma; la anterior se conserva.</span>
+                      </label>
+                    } @else {
+                      <p class="accion-plan__aviso">Este procedimiento no tiene pieza: no cambia el odontograma.</p>
+                    }
+                    <p class="accion-plan__aviso">
+                      El control es opcional y lo programa el profesional responsable. ClinicAI no
+                      recomienda intervalos ni envía mensajes al paciente.
+                    </p>
+                    <label class="campo">
+                      <span class="campo__etiqueta">Fecha de control posterior (opcional)</span>
+                      <input class="campo__control" type="date" name="controlRecomendadoEn"
+                             [min]="fechaMinimaControl()" [(ngModel)]="controlRecomendadoEn" />
+                    </label>
+                  }
+                  @case ('atender-control') {
+                    <p class="accion-plan__aviso">
+                      Registre el control solo después de realizarlo. La acción queda asociada a su
+                      usuario profesional y al procedimiento.
+                    </p>
+                    <label class="campo">
+                      <span class="campo__etiqueta">Nota del control (opcional)</span>
+                      <textarea class="campo__control" name="notaControl" maxlength="1000"
+                                [(ngModel)]="notaControl"></textarea>
+                    </label>
+                  }
+                  @default {
+                    <label class="campo">
+                      <span class="campo__etiqueta">Motivo de la cancelación</span>
+                      <input class="campo__control" name="motivo" maxlength="500" [(ngModel)]="motivoCancelacion" />
+                    </label>
+                  }
+                }
+                <div class="acciones acciones--final">
+                  <button class="boton" type="button" (click)="cerrarAccion()">Volver</button>
+                  <button class="boton boton--principal" type="submit" [disabled]="guardando()">
+                    {{ guardando() ? 'Guardando…' : 'Confirmar' }}
+                  </button>
+                </div>
+              </form>
+            }
+          }
+        </article>
+      }
+    </div>
+  }
+
+  <p class="nota-flujo">
+    Borrador → propuesto → aceptado con documento firmado → procedimientos completados. Al
+    completar un procedimiento con resultado, el odontograma recibe una versión nueva; nada se
+    sobrescribe.
+  </p>
+</section>

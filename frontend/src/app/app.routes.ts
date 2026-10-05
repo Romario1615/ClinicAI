@@ -17,22 +17,32 @@ import {
   guardiaAutenticacion,
   guardiaInvitado,
   guardiaPermiso,
+  guardiaSuperadministrador,
   guardiaSegundoFactor,
 } from './nucleo/guardias/autenticacion.guard';
 import { PERMISOS } from './nucleo/servicios/configuracion';
 
 export const routes: Routes = [
   {
+    path: 'cambiar-contrasena',
+    canActivate: [guardiaAutenticacion],
+    title: 'Cambiar contraseña · ClinicAI',
+    loadComponent: () =>
+      import('./paginas/cambiar-contrasena/cambiar-contrasena.component').then(
+        (m) => m.CambiarContrasenaComponent,
+      ),
+  },
+  {
     path: 'acceso',
     canActivate: [guardiaInvitado],
-    title: 'Acceso · Gestion clinica',
+    title: 'Acceso · ClinicAI',
     loadComponent: () =>
       import('./paginas/acceso/acceso.component').then((m) => m.AccesoComponent),
   },
   {
     path: 'panel',
     canActivate: [guardiaAutenticacion, guardiaSegundoFactor],
-    title: 'Panel · Gestion clinica',
+    title: 'Panel · ClinicAI',
     loadComponent: () =>
       import('./paginas/panel/panel.component').then(
         (m) => m.PanelComponent,
@@ -41,7 +51,7 @@ export const routes: Routes = [
   {
     path: 'agenda',
     canActivate: [guardiaAutenticacion, guardiaSegundoFactor, guardiaPermiso(PERMISOS.agendaLeer)],
-    title: 'Agenda · Gestion clinica',
+    title: 'Agenda · ClinicAI',
     loadComponent: () =>
       import('./paginas/agenda/agenda.component').then((m) => m.AgendaComponent),
   },
@@ -52,14 +62,14 @@ export const routes: Routes = [
       guardiaSegundoFactor,
       guardiaPermiso(PERMISOS.pacienteLeer),
     ],
-    title: 'Pacientes · Gestion clinica',
+    title: 'Pacientes · ClinicAI',
     loadComponent: () =>
       import('./paginas/pacientes/pacientes.component').then((m) => m.PacientesComponent),
   },
   {
     path: 'lista-espera',
     canActivate: [guardiaAutenticacion, guardiaSegundoFactor, guardiaPermiso(PERMISOS.listaEsperaGestionar)],
-    title: 'Lista de espera · Gestion clinica',
+    title: 'Lista de espera · ClinicAI',
     loadComponent: () =>
       import('./paginas/lista-espera/lista-espera.component').then(
         (m) => m.ListaEsperaComponent,
@@ -72,7 +82,7 @@ export const routes: Routes = [
       guardiaSegundoFactor,
       guardiaPermiso(PERMISOS.historiaLeer, PERMISOS.recetaLeer),
     ],
-    title: 'Historia clinica · Gestion clinica',
+    title: 'Historia clinica · ClinicAI',
     loadComponent: () =>
       import('./paginas/historia-clinica/historia-clinica.component').then(
         (m) => m.HistoriaClinicaComponent,
@@ -85,11 +95,33 @@ export const routes: Routes = [
       guardiaSegundoFactor,
       guardiaPermiso(PERMISOS.recetaLeer),
     ],
-    title: 'Medicamentos · Gestion clinica',
+    title: 'Medicamentos · ClinicAI',
     loadComponent: () =>
       import('./paginas/medicamentos/medicamentos.component').then(
         (m) => m.MedicamentosComponent,
       ),
+  },
+  {
+    path: 'delegaciones',
+    canActivate: [
+      guardiaAutenticacion,
+      guardiaSegundoFactor,
+      guardiaPermiso(PERMISOS.profesionalGestionar),
+    ],
+    title: 'Delegaciones de firma · ClinicAI',
+    loadComponent: () =>
+      import('./paginas/delegaciones/delegaciones.component').then((m) => m.DelegacionesComponent),
+  },
+  {
+    path: 'promociones',
+    canActivate: [
+      guardiaAutenticacion,
+      guardiaSegundoFactor,
+      guardiaPermiso(PERMISOS.promocionGestionar),
+    ],
+    title: 'Promociones · ClinicAI',
+    loadComponent: () =>
+      import('./paginas/promociones/promociones.component').then((m) => m.PromocionesComponent),
   },
   {
     path: 'conocimiento',
@@ -98,14 +130,14 @@ export const routes: Routes = [
       guardiaSegundoFactor,
       guardiaPermiso(PERMISOS.conocimientoLeer),
     ],
-    title: 'Conocimiento · Gestion clinica',
+    title: 'Conocimiento · ClinicAI',
     loadComponent: () =>
       import('./paginas/conocimiento/conocimiento.component').then((m) => m.ConocimientoComponent),
   },
   {
     path: 'catalogo',
     canActivate: [guardiaAutenticacion, guardiaSegundoFactor],
-    title: 'Catalogo · Gestion clinica',
+    title: 'Catalogo · ClinicAI',
     loadComponent: () =>
       import('./paginas/catalogo/catalogo.component').then(
         (m) => m.CatalogoComponent,
@@ -114,19 +146,55 @@ export const routes: Routes = [
   {
     path: 'pagos',
     canActivate: [guardiaAutenticacion, guardiaSegundoFactor, guardiaPermiso('pago.leer')],
-    title: 'Pagos · Gestión clínica',
+    title: 'Pagos · ClinicAI',
     loadComponent: () => import('./paginas/pagos/pagos.component').then(m => m.PagosComponent),
+  },
+  {
+    path: 'conversaciones',
+    canActivate: [guardiaAutenticacion, guardiaSegundoFactor, guardiaPermiso(PERMISOS.conversacionLeer)],
+    title: 'Bandeja de atención · ClinicAI',
+    loadComponent: () => import('./paginas/conversaciones/conversaciones.component').then((m) => m.ConversacionesComponent),
   },
   {
     path: 'agente-demo',
     canActivate: [guardiaAutenticacion, guardiaSegundoFactor, guardiaPermiso(PERMISOS.conversacionResponder)],
-    title: 'Agente demo · Gestión clínica',
+    title: 'Agente demo · ClinicAI',
     loadComponent: () => import('./paginas/agente-demo/agente-demo.component').then(m => m.AgenteDemoComponent),
+  },
+  {
+    path: 'usuarios',
+    canActivate: [
+      guardiaAutenticacion,
+      guardiaSegundoFactor,
+      guardiaPermiso(PERMISOS.usuarioLeer),
+    ],
+    title: 'Usuarios y roles · ClinicAI',
+    loadComponent: () =>
+      import('./paginas/usuarios/usuarios.component').then((m) => m.UsuariosComponent),
+  },
+  {
+    path: 'configuracion',
+    canActivate: [
+      guardiaAutenticacion,
+      guardiaSegundoFactor,
+      guardiaPermiso(PERMISOS.configuracionEscribir),
+    ],
+    title: 'Configuración de integraciones · ClinicAI',
+    loadComponent: () =>
+      import('./paginas/configuracion/configuracion.component').then(
+        (modulo) => modulo.ConfiguracionComponent,
+      ),
+  },
+  {
+    path: 'plataforma/clinicas',
+    canActivate: [guardiaAutenticacion, guardiaSegundoFactor, guardiaSuperadministrador],
+    title: 'Clínicas · Administración de plataforma · ClinicAI',
+    loadComponent: () => import('./paginas/plataforma/plataforma.component').then((m) => m.PlataformaComponent),
   },
   {
     path: 'sin-permiso',
     canActivate: [guardiaAutenticacion],
-    title: 'Sin acceso · Gestion clinica',
+    title: 'Sin acceso · ClinicAI',
     loadComponent: () =>
       import('./paginas/demostracion/paginas-demostracion.component').then(
         (m) => m.SinPermisoComponent,

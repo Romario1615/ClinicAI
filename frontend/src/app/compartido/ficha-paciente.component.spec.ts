@@ -59,6 +59,9 @@ function cita(estado: EstadoCita, inicio: string, extra: Partial<Cita> = {}): Ci
     origen: 'PANEL',
     expira_en: null,
     confirmada_en: null,
+    llegada_en: null,
+    atencion_iniciada_en: null,
+    completada_en: null,
     cancelada_en: null,
     motivo_cancelacion: null,
     ...extra,
@@ -83,14 +86,19 @@ describe('FichaPacienteComponent', () => {
     http = TestBed.inject(HttpTestingController);
   });
 
-  afterEach(() => http.verify());
+  afterEach(() => {
+    // La pestaña de contacto carga los consentimientos; aquí no se prueban.
+    http.match((p) => p.url.endsWith('/consentimientos')).forEach((p) => p.flush([]));
+    http.verify();
+  });
 
-  /** Arranca el panel y responde las dos peticiones que hace. */
+  /** Arranca el panel y responde identidad, foto de perfil e historial. */
   function montar(
     paciente: Record<string, unknown> = detalle(),
     citas: readonly Cita[] = [],
   ): void {
     fixture.detectChanges();
+    http.expectOne(`${BASE}/pacientes/pac-1/foto-perfil`).flush(null);
     http.expectOne(`${BASE}/pacientes/pac-1`).flush(paciente);
     fixture.detectChanges();
     const peticion = http.expectOne((r) => r.url === `${BASE}/agenda/citas`);
@@ -102,6 +110,7 @@ describe('FichaPacienteComponent', () => {
     // Leer una entrada obligatoria en el constructor lanza NG0950 y el panel
     // no llega a pintarse. Que esta prueba llegue a `flush` lo demuestra.
     fixture.detectChanges();
+    http.expectOne(`${BASE}/pacientes/pac-1/foto-perfil`).flush(null);
     http.expectOne(`${BASE}/pacientes/pac-1`).flush(detalle());
     fixture.detectChanges();
     http.expectOne((r) => r.url === `${BASE}/agenda/citas`).flush({
@@ -204,6 +213,7 @@ describe('FichaPacienteComponent', () => {
     fixture.detectChanges();
     http.expectOne(`${BASE}/pacientes/pac-1`).flush(detalle());
     fixture.detectChanges();
+    http.expectOne(`${BASE}/pacientes/pac-1/foto-perfil`).flush(null);
     http
       .expectOne((r) => r.url === `${BASE}/agenda/citas`)
       .flush({ codigo: 'PERMISO_DENEGADO', mensaje: 'No' }, { status: 403, statusText: 'Forbidden' });
@@ -217,6 +227,7 @@ describe('FichaPacienteComponent', () => {
 
   it('si falla la identidad, lo dice en lugar de mostrar una ficha vacía', () => {
     fixture.detectChanges();
+    http.expectOne(`${BASE}/pacientes/pac-1/foto-perfil`).flush(null);
     http
       .expectOne(`${BASE}/pacientes/pac-1`)
       .flush({ codigo: 'NO_ENCONTRADO', mensaje: 'No existe' }, { status: 404, statusText: 'NF' });

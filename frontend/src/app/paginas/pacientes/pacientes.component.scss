@@ -4,6 +4,14 @@
   margin: var(--espacio-4) 0;
 }
 
+.pacientes__ilustracion {
+  display: block;
+  width: 144px;
+  height: 130px;
+  margin: var(--espacio-3) auto -18px;
+  object-fit: contain;
+}
+
 .buscador__fila {
   display: flex;
   gap: var(--espacio-2);

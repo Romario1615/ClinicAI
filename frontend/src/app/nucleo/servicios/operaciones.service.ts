@@ -12,9 +12,12 @@ export interface Pago {
 }
 
 export interface EntradaEspera {
-  id: string; paciente_id: string; sede_id: string; servicio_id: string;
+  id: string; paciente_id: string; sede_id: string; especialidad_id: string; servicio_id: string;
   profesional_id: string | null; prioridad: string; estado: string;
-  horas_antelacion_minima: number; oferta_id: string | null;
+  horas_antelacion_minima: number; disponible_desde: string | null; disponible_hasta: string | null;
+  preferencias: { dias_semana: number[]; hora_desde: string | null; hora_hasta: string | null } | null;
+  cita_previa_id: string | null; cita_resultante_id: string | null;
+  oferta_id: string | null;
   oferta_inicio: string | null; oferta_expira_en: string | null;
   /**
    * Si al paciente se le pudo avisar del turno por un canal automatico.
@@ -28,6 +31,11 @@ export interface EntradaEspera {
 
 export interface ResumenPanel {
   total_citas: number; pacientes: number; citas: Record<string, number>;
+  espera: {
+    promedio_minutos: number | null;
+    personas_en_espera: number;
+    espera_mayor_15_minutos: number;
+  };
   pagos: Record<string, string> | null;
 }
 
@@ -40,6 +48,11 @@ export class OperacionesService {
 
   leer<T>(ruta: string, parametros: Record<string, string | number | boolean> = {}): Observable<T> {
     return this.http.get<T>(this.configuracion.urlApi + ruta, { params: parametros })
+      .pipe(catchError(traducirFallo));
+  }
+
+  analizar<T>(ruta: string, parametros: Record<string, string | number | boolean> = {}): Observable<T> {
+    return this.http.post<T>(this.configuracion.urlApi + ruta, null, { params: parametros })
       .pipe(catchError(traducirFallo));
   }
 

@@ -1,29 +1,72 @@
 <div class="acceso">
-  <div class="tarjeta acceso__tarjeta">
-    <h1>Gestión clínica</h1>
-    <p class="acceso__intro">Acceso del personal autorizado.</p>
+  <!-- Panel de marca. Decorativo: todo lo que dice se repite o no hace falta
+       para entrar, así que en pantallas estrechas se oculta. -->
+  <aside class="acceso__marca" aria-hidden="true">
+    <app-marca class="acceso__logo" [compacta]="true" />
+
+    <div class="acceso__mensaje">
+      <p class="acceso__ceja">GESTIÓN PARA CLÍNICAS</p>
+      <p class="acceso__titular">Agenda, pacientes y conocimiento clínico en un solo lugar.</p>
+      <ul class="acceso__puntos">
+        <li>Citas sin doble reserva</li>
+        <li>Historia clínica con versiones</li>
+        <li>Respuestas solo desde documentos aprobados</li>
+      </ul>
+    </div>
+
+    <!-- Electrocardiograma estilizado: identifica el ámbito sin fotografías. -->
+    <svg class="acceso__pulso" viewBox="0 0 600 120" preserveAspectRatio="none" focusable="false">
+      <path
+        d="M0 70h170l18-40 22 80 20-62 14 22h96l16-30 18 52 14-22h212"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="3"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      />
+    </svg>
+  </aside>
+
+  <main class="acceso__formulario">
+    <div class="tarjeta acceso__tarjeta">
+      @if (modoAccesoLocal()) {
+        <p class="acceso__ceja acceso__ceja--formulario">ACCESO LOCAL</p>
+        <h1>Elige un rol</h1>
+        <p class="acceso__intro">Entra directamente a las vistas disponibles para revisar el sistema.</p>
+        <div class="acceso__roles" aria-label="Ingresar como un rol">
+          @for (rol of rolesLocales(); track rol.codigo) {
+            <button
+              type="button"
+              class="acceso__rol"
+              [disabled]="enviando()"
+              (click)="entrarComo(rol.codigo)"
+            >
+              <span class="acceso__rol-icono" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none">
+                  <path d="M12 3.25 19 6v5.2c0 4.4-2.9 7.4-7 9.55-4.1-2.15-7-5.15-7-9.55V6l7-2.75Z" />
+                  <path d="m9 12 2 2 4-4" />
+                </svg>
+              </span>
+              <span class="acceso__rol-texto">
+                <strong>{{ rol.nombre }}</strong>
+                <small>{{ enviando() ? 'Conectando…' : 'Entrar a este espacio' }}</small>
+              </span>
+              <span class="acceso__rol-flecha" aria-hidden="true">→</span>
+            </button>
+          }
+        </div>
+        <p class="acceso__local-nota">Acceso temporal para desarrollo con datos sintéticos.</p>
+      } @else if (cargandoAccesosLocales()) {
+        <p class="acceso__ceja acceso__ceja--formulario">PORTAL DEL PERSONAL</p>
+        <h1>Preparando acceso</h1>
+        <p class="acceso__intro">Conectando con ClinicAI…</p>
+        <div class="acceso__cargando" role="status">Verificando opciones de ingreso</div>
+      } @else {
+        <p class="acceso__ceja acceso__ceja--formulario">PORTAL DEL PERSONAL</p>
+        <h1>Iniciar sesión</h1>
+        <p class="acceso__intro">Acceso seguro para el equipo de la clínica.</p>
 
     <form (ngSubmit)="entrar()" #formulario="ngForm" novalidate>
-      @if (pideClinica) {
-        <label class="campo">
-          <span class="campo__etiqueta">Identificador de la clínica</span>
-          <input
-            class="campo__control"
-            name="clinica"
-            required
-            autocomplete="off"
-            [(ngModel)]="clinicaId"
-          />
-          <!-- Se explica por qué se pide: sin esta nota parece un dato
-               arbitrario, y en realidad es lo que separa dos clínicas que
-               comparten instalación. -->
-          <span class="campo__ayuda">
-            El correo es único por clínica, no en todo el sistema. En una instalación
-            definitiva este valor lo fija el despliegue.
-          </span>
-        </label>
-      }
-
       <label class="campo">
         <span class="campo__etiqueta">Correo</span>
         <input
@@ -71,21 +114,6 @@
         <span>Recordar mi correo en este equipo</span>
       </label>
 
-      @if (error()) {
-        <div class="acceso__error" role="alert">
-          <p class="acceso__error-mensaje">{{ mensajeError() }}</p>
-          @if (esFalloDelSistema()) {
-            <p class="acceso__error-detalle">
-              No es un problema con sus datos. Vuelva a intentarlo en unos minutos o avise
-              al responsable del sistema.
-              @if (error()?.correlacionId) {
-                <span>Referencia: <code>{{ error()?.correlacionId }}</code></span>
-              }
-            </p>
-          }
-        </div>
-      }
-
       <button
         type="submit"
         class="boton boton--principal acceso__enviar"
@@ -94,10 +122,26 @@
         {{ enviando() ? 'Comprobando...' : 'Entrar' }}
       </button>
     </form>
+      }
+
+      @if (error()) {
+        <div class="acceso__error" role="alert">
+          <p class="acceso__error-mensaje">{{ mensajeError() }}</p>
+          @if (esFalloDelSistema()) {
+            <p class="acceso__error-detalle">
+              El servidor no pudo completar el ingreso. Inténtalo de nuevo en unos minutos.
+              @if (error()?.correlacionId) {
+                <span>Referencia: <code>{{ error()?.correlacionId }}</code></span>
+              }
+            </p>
+          }
+        </div>
+      }
 
     <p class="acceso__nota">
       Al cerrar esta pestaña la sesión termina: los tokens viven solo en memoria, nunca en
       el almacenamiento del navegador (ADR‑0016).
     </p>
-  </div>
+    </div>
+  </main>
 </div>

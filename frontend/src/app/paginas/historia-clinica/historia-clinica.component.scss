@@ -21,7 +21,7 @@
 .cabecera-paciente {
   display: flex;
   justify-content: space-between;
-  align-items: flex-start;
+  align-items: center;
   gap: var(--espacio-3);
   margin-bottom: var(--espacio-5);
 }
@@ -283,4 +283,39 @@
   border-top: 1px solid var(--borde);
   color: var(--texto-suave);
   font-size: 0.9rem;
+}
+
+/* ----- Pestañas de la historia ----- */
+.pestanas {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin: var(--espacio-4) 0;
+  padding: 4px;
+  border-radius: 999px;
+  background: var(--superficie-hundida);
+  width: fit-content;
+  max-width: 100%;
+}
+
+.pestanas__opcion {
+  min-height: 38px;
+  padding: 0 var(--espacio-4);
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--texto-suave);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.pestanas__opcion[aria-selected='true'] {
+  background: var(--superficie-elevada);
+  color: var(--acento-fuerte);
+  box-shadow: var(--sombra-1);
+}
+
+.cabecera-paciente__identidad {
+  flex: 1 1 auto;
+  min-width: 0;
 }

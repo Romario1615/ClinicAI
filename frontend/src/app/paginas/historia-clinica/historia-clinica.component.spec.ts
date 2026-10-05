@@ -120,7 +120,11 @@ describe('HistoriaClinicaComponent', () => {
     sesion = TestBed.inject(SesionService);
   });
 
-  afterEach(() => http.verify());
+  afterEach(() => {
+    // La cabecera pide la foto de perfil; aquí no se prueba la foto.
+    http.match((p) => p.url.endsWith('/foto-perfil')).forEach((p) => p.flush(null));
+    http.verify();
+  });
 
   /** Fija los permisos del principal, que es de donde la pantalla los lee. */
   function conPermisos(...codigos: readonly string[]): void {
@@ -172,8 +176,24 @@ describe('HistoriaClinicaComponent', () => {
     fixture.detectChanges();
   }
 
+  /**
+   * Texto de las pestañas de evolución y de recetas: las pruebas afirman lo
+   * que la historia muestra, esté en la pestaña que esté.
+   */
   function texto(): string {
-    return (fixture.nativeElement as HTMLElement).textContent ?? '';
+    const componente = fixture.componentInstance as unknown as {
+      pestana: { set(valor: string): void; (): string };
+    };
+    const actual = componente.pestana();
+    let todo = '';
+    for (const pestana of ['evolucion', 'recetas']) {
+      componente.pestana.set(pestana);
+      fixture.detectChanges();
+      todo += (fixture.nativeElement as HTMLElement).textContent ?? '';
+    }
+    componente.pestana.set(actual);
+    fixture.detectChanges();
+    return todo;
   }
 
   describe('medicacion', () => {

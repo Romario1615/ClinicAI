@@ -69,6 +69,8 @@ export interface Identidad {
   readonly dosfa_habilitado: boolean;
   readonly debe_cambiar_contrasena: boolean;
   readonly ultimo_acceso_en: string | null;
+  /** Profesional vinculado a la cuenta, si lo hay. */
+  readonly profesional_id?: string | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -108,6 +110,9 @@ export interface Cita {
   readonly origen: OrigenCita;
   readonly expira_en: string | null;
   readonly confirmada_en: string | null;
+  readonly llegada_en: string | null;
+  readonly atencion_iniciada_en: string | null;
+  readonly completada_en: string | null;
   readonly cancelada_en: string | null;
   readonly motivo_cancelacion: string | null;
 }
@@ -131,6 +136,17 @@ export interface Sede {
   readonly nombre: string;
   readonly direccion: string | null;
   readonly zona_horaria: string;
+}
+
+export type TipoConsultorio = 'CONSULTA' | 'PROCEDIMIENTOS' | 'IMAGEN' | 'LABORATORIO' | 'OTRO';
+
+/** Sala o sillon. La restriccion de exclusion impide dos citas a la vez en el. */
+export interface Consultorio {
+  readonly id: string;
+  readonly sede_id: string;
+  readonly nombre: string;
+  readonly tipo: TipoConsultorio;
+  readonly capacidad: number;
 }
 
 export interface Especialidad {

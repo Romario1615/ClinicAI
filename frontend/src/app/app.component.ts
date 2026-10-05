@@ -15,6 +15,7 @@ import { Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/rou
 
 import { BuscadorGlobalComponent } from './compartido/buscador-global.component';
 import { IconoComponent, type NombreIcono } from './compartido/icono.component';
+import { MarcaComponent } from './compartido/marca.component';
 import { PERMISOS } from './nucleo/servicios/configuracion';
 import { AutenticacionService } from './nucleo/servicios/autenticacion.service';
 import { PendientesService } from './nucleo/servicios/pendientes.service';
@@ -35,10 +36,19 @@ interface EnlaceNavegacion {
   readonly permisos: readonly string[];
   /** Cierto si la sección todavía usa datos sintéticos. */
   readonly demostracion: boolean;
+  readonly rol?: string;
 }
 
 const NAVEGACION: readonly EnlaceNavegacion[] = [
   { ruta: '/panel', etiqueta: 'Panel', icono: 'panel', permisos: [], demostracion: false },
+  { ruta: '/plataforma/clinicas', etiqueta: 'Clínicas', icono: 'configuracion', permisos: [], rol: 'superadministrador', demostracion: false },
+  {
+    ruta: '/usuarios',
+    etiqueta: 'Usuarios y roles',
+    icono: 'usuarios',
+    permisos: [PERMISOS.usuarioLeer],
+    demostracion: false,
+  },
   {
     ruta: '/agenda',
     etiqueta: 'Agenda',
@@ -83,6 +93,20 @@ const NAVEGACION: readonly EnlaceNavegacion[] = [
     demostracion: false,
   },
   {
+    ruta: '/delegaciones',
+    etiqueta: 'Delegaciones de firma',
+    icono: 'escudo',
+    permisos: [PERMISOS.profesionalGestionar],
+    demostracion: false,
+  },
+  {
+    ruta: '/promociones',
+    etiqueta: 'Promociones',
+    icono: 'megafono',
+    permisos: [PERMISOS.promocionGestionar],
+    demostracion: false,
+  },
+  {
     ruta: '/catalogo',
     etiqueta: 'Catálogo',
     icono: 'catalogo',
@@ -91,18 +115,33 @@ const NAVEGACION: readonly EnlaceNavegacion[] = [
   },
   { ruta: '/pagos', etiqueta: 'Pagos', icono: 'pagos', permisos: ['pago.leer'], demostracion: false },
   {
+    ruta: '/conversaciones',
+    etiqueta: 'Atención de mensajes',
+    icono: 'agente',
+    llevaInsignia: true,
+    permisos: [PERMISOS.conversacionLeer],
+    demostracion: false,
+  },
+  {
     ruta: '/agente-demo',
     etiqueta: 'Agente demo',
     icono: 'agente',
     permisos: [PERMISOS.conversacionResponder],
     demostracion: true,
   },
+  {
+    ruta: '/configuracion',
+    etiqueta: 'Configuración',
+    icono: 'configuracion',
+    permisos: [PERMISOS.configuracionEscribir],
+    demostracion: false,
+  },
 ];
 
 @Component({
   selector: 'app-root',
   standalone: true,
-  imports: [RouterOutlet, RouterLink, RouterLinkActive, IconoComponent, BuscadorGlobalComponent],
+  imports: [RouterOutlet, RouterLink, RouterLinkActive, IconoComponent, MarcaComponent, BuscadorGlobalComponent],
   templateUrl: './app.component.html',
   styleUrl: './app.component.scss',
 })
@@ -113,6 +152,7 @@ export class AppComponent {
   protected readonly pendientes = inject(PendientesService);
 
   protected readonly menuAbierto = signal(false);
+  protected readonly notificacionesAbiertas = signal(false);
 
   constructor() {
     // La cola se carga cuando hay sesion, y se vacia al cerrarla: dejar el
@@ -127,14 +167,34 @@ export class AppComponent {
   /** Roles del usuario, ya unidos. Cadena vacia si no hay ninguno. */
   protected readonly roles = computed(() => this.sesion.identidad()?.roles.join(' · ') ?? '');
 
+  /** Dos iniciales del nombre para el avatar de la cabecera. */
+  protected readonly iniciales = computed(() =>
+    this.sesion
+      .nombreCompleto()
+      .split(/\s+/)
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((parte) => parte[0]?.toUpperCase() ?? '')
+      .join(''),
+  );
+
   protected readonly enlaces = computed(() =>
     NAVEGACION.filter(
-      (enlace) => enlace.permisos.length === 0 || this.sesion.tieneAlgunPermiso(...enlace.permisos),
+      (enlace) => (!enlace.rol || Boolean(this.sesion.identidad()?.roles.includes(enlace.rol))) &&
+        (enlace.permisos.length === 0 || this.sesion.tieneAlgunPermiso(...enlace.permisos)),
     ),
   );
 
   protected alternarMenu(): void {
     this.menuAbierto.update((abierto) => !abierto);
+  }
+
+  protected alternarNotificaciones(): void {
+    this.notificacionesAbiertas.update((abiertas) => !abiertas);
+  }
+
+  protected cerrarNotificaciones(): void {
+    this.notificacionesAbiertas.set(false);
   }
 
   protected cerrarMenu(): void {

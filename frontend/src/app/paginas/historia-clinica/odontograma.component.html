@@ -1,0 +1,296 @@
+<section class="odontograma" aria-labelledby="titulo-odontograma">
+  <header class="odontograma__cabecera">
+    <div>
+      <p class="ceja">REGISTRO DENTAL</p>
+      <h2 id="titulo-odontograma">Odontograma</h2>
+      @if (actual(); as version) {
+        <p class="odontograma__meta">
+          Versión {{ version.version }} · {{ version.creado_en | date: 'd MMM y, HH:mm' }}
+          @if (!version.vigente) { <span>· Solo lectura</span> }
+        </p>
+      } @else {
+        <p class="odontograma__meta">Estado dental por pieza y superficie.</p>
+      }
+    </div>
+    @if (versiones().length > 1) {
+      <label class="odontograma__historial">
+        <span>Ver versión</span>
+        <select
+          [value]="actual()?.version ?? ''"
+          (change)="seleccionarVersion($any($event.target).value)"
+        >
+          @for (version of versiones(); track version.id) {
+            <option [value]="version.version">
+              Versión {{ version.version }}{{ version.vigente ? ' · vigente' : '' }}
+            </option>
+          }
+        </select>
+      </label>
+    }
+  </header>
+
+  @if (cargando()) {
+    <p class="odontograma__estado" role="status">Cargando el odontograma…</p>
+  } @else if (error() && !actual() && versiones().length === 0) {
+    <div class="odontograma__error" role="alert">
+      <span>{{ errorTexto() }}</span>
+      <button class="boton boton--pequeno" type="button" (click)="cargar()">Reintentar</button>
+    </div>
+  } @else {
+    <div class="odontograma__barra">
+      <div class="odontograma__historial">
+        <span>Tipo de dentición</span>
+        @if (!actual() && puedeGuardar()) {
+          <select aria-label="Tipo de dentición" [value]="denticion()" (change)="cambiarDenticion($any($event.target).value)">
+            <option value="PERMANENTE">Permanente</option>
+            <option value="TEMPORAL">Temporal</option>
+            <option value="MIXTA">Mixta</option>
+          </select>
+        } @else {
+          <strong>{{ denticion() === 'PERMANENTE' ? 'Permanente' : denticion() === 'TEMPORAL' ? 'Temporal' : 'Mixta' }}</strong>
+        }
+      </div>
+      @if (!puedeGuardar()) {
+        <p class="odontograma__pista">Haga clic en una pieza para ver su historial.</p>
+      }
+    </div>
+
+    @if (puedeGuardar()) {
+      <!-- Paleta: el hallazgo elegido se pinta con cada clic sobre una cara
+           o sobre el número de la pieza. Repetir el clic lo quita. -->
+      <div class="paleta" role="toolbar" aria-label="Herramientas del odontograma">
+        <button type="button" class="paleta__boton" [class.paleta__boton--activo]="herramienta() === 'SELECCIONAR'"
+                [attr.aria-pressed]="herramienta() === 'SELECCIONAR'" (click)="elegirHerramienta('SELECCIONAR')">
+          <span class="paleta__muestra paleta__muestra--seleccionar" aria-hidden="true"></span>Seleccionar
+        </button>
+        <span class="paleta__grupo">Caras</span>
+        @for (hallazgo of hallazgosCara; track hallazgo.codigo) {
+          <button type="button" class="paleta__boton" [class.paleta__boton--activo]="herramienta() === hallazgo.codigo"
+                  [attr.aria-pressed]="herramienta() === hallazgo.codigo" (click)="elegirHerramienta(hallazgo.codigo)">
+            <span [class]="'paleta__muestra cara--' + hallazgo.codigo.toLowerCase()" aria-hidden="true"></span>{{ hallazgo.nombre }}
+          </button>
+        }
+        <span class="paleta__grupo">Pieza</span>
+        @for (hallazgo of hallazgosPieza; track hallazgo.codigo) {
+          <button type="button" class="paleta__boton" [class.paleta__boton--activo]="herramienta() === hallazgo.codigo"
+                  [attr.aria-pressed]="herramienta() === hallazgo.codigo" (click)="elegirHerramienta(hallazgo.codigo)">
+            <span [class]="'paleta__muestra paleta__muestra--pieza marca-pieza--' + hallazgo.codigo.toLowerCase()" aria-hidden="true"></span>{{ hallazgo.nombre }}
+          </button>
+        }
+        <button type="button" class="paleta__boton" [class.paleta__boton--activo]="herramienta() === 'BORRAR'"
+                [attr.aria-pressed]="herramienta() === 'BORRAR'" (click)="elegirHerramienta('BORRAR')">
+          <span class="paleta__muestra paleta__muestra--borrar" aria-hidden="true"></span>Borrar
+        </button>
+      </div>
+    }
+
+    <ng-template #dibujo let-codigo let-superior="superior">
+      <div class="diente"
+           [class.diente--superior]="superior"
+           [class.diente--seleccionado]="seleccionada() === codigo"
+           [class.diente--cambiado]="cambiadas().has(codigo)"
+           [class.diente--ausente]="hallazgoDePieza(codigo) === 'AUSENTE'">
+        <button class="diente__numero" type="button"
+                [attr.aria-label]="'Pieza ' + codigo + ': ' + leyendaPieza(codigo)"
+                [attr.aria-pressed]="seleccionada() === codigo"
+                [attr.title]="'Pieza ' + codigo + ' · ' + leyendaPieza(codigo)"
+                (click)="clicPieza(codigo)">
+          {{ codigo }}@if (tieneNota(codigo)) {<span class="diente__nota" aria-hidden="true">•</span>}
+        </button>
+        <svg viewBox="-6 -6 52 52" aria-hidden="true" focusable="false" class="diente__svg">
+          @for (r of regiones; track r.region) {
+            <svg:polygon [attr.points]="r.puntos" [attr.class]="claseRegion(codigo, r.region)"
+                     (click)="clicRegion(codigo, r.region)">
+              <svg:title>{{ tituloRegion(codigo, r.region) }}</svg:title>
+            </svg:polygon>
+          }
+          @switch (hallazgoDePieza(codigo)) {
+            @case ('AUSENTE') {
+              <svg:g class="marca-pieza marca-pieza--ausente" (click)="clicPieza(codigo)">
+                <svg:line x1="-4" y1="-4" x2="44" y2="44" /><svg:line x1="44" y1="-4" x2="-4" y2="44" />
+              </svg:g>
+            }
+            @case ('A_EXTRAER') {
+              <svg:g class="marca-pieza marca-pieza--a_extraer" (click)="clicPieza(codigo)">
+                <svg:line x1="-4" y1="-4" x2="44" y2="44" /><svg:line x1="44" y1="-4" x2="-4" y2="44" />
+              </svg:g>
+            }
+            @case ('CORONA') {
+              <svg:circle class="marca-pieza marca-pieza--corona" cx="20" cy="20" r="25" (click)="clicPieza(codigo)" />
+            }
+            @case ('ENDODONCIA') {
+              <svg:line class="marca-pieza marca-pieza--endodoncia" x1="20" y1="-5" x2="20" y2="45" />
+            }
+            @case ('PROTESIS_FIJA') {
+              <svg:line class="marca-pieza marca-pieza--protesis_fija" x1="-6" y1="-3" x2="46" y2="-3" />
+            }
+            @case ('IMPLANTE') {
+              <svg:text class="marca-pieza-texto" x="20" y="25">IMP</svg:text>
+            }
+            @case ('RESTO_RADICULAR') {
+              <svg:text class="marca-pieza-texto" x="20" y="25">RR</svg:text>
+            }
+          }
+        </svg>
+      </div>
+    </ng-template>
+
+    <div class="lienzo" aria-label="Arcadas dentales">
+      <div class="lienzo__fila">
+        @for (grupo of superiores(); track grupo.nombre) {
+          <section class="arcada" [attr.aria-label]="grupo.nombre">
+            <h3>{{ grupo.nombre }}</h3>
+            <div class="arcada__piezas">
+              @for (codigo of grupo.piezas; track codigo) {
+                <ng-container *ngTemplateOutlet="dibujo; context: { $implicit: codigo, superior: true }" />
+              }
+            </div>
+          </section>
+        }
+      </div>
+      <div class="lienzo__fila lienzo__fila--inferior">
+        @for (grupo of inferiores(); track grupo.nombre) {
+          <section class="arcada" [attr.aria-label]="grupo.nombre">
+            <div class="arcada__piezas">
+              @for (codigo of grupo.piezas; track codigo) {
+                <ng-container *ngTemplateOutlet="dibujo; context: { $implicit: codigo, superior: false }" />
+              }
+            </div>
+            <h3>{{ grupo.nombre }}</h3>
+          </section>
+        }
+      </div>
+    </div>
+
+    <div class="leyenda" aria-label="Leyenda de colores">
+      @for (hallazgo of hallazgosCara; track hallazgo.codigo) {
+        <span><i [class]="'leyenda__muestra cara--' + hallazgo.codigo.toLowerCase()"></i>{{ hallazgo.nombre }}</span>
+      }
+      <span><i class="leyenda__muestra leyenda__muestra--cambiado"></i>Cambio sin guardar</span>
+      <span><i class="leyenda__muestra leyenda__muestra--nota">•</i>Tiene nota</span>
+    </div>
+
+    @if (seleccionada(); as codigo) {
+      <div class="panel">
+        <section class="editor" [attr.aria-labelledby]="'editor-diente-' + codigo">
+          <div class="editor__cabecera">
+            <div>
+              <p class="ceja">PIEZA SELECCIONADA</p>
+              <h3 [id]="'editor-diente-' + codigo">FDI {{ codigo }}</h3>
+              <p class="editor__resumen">{{ leyendaPieza(codigo) }}</p>
+            </div>
+            <button class="boton boton--pequeno" type="button" (click)="seleccionada.set(null)">Cerrar</button>
+          </div>
+
+          @if (puedeGuardar()) {
+            <p class="editor__ayuda">Registre aquí lo encontrado en esta pieza. Se guarda junto con el resto al crear la versión.</p>
+          }
+
+          <label class="editor__campo">
+            <span>Estado de la pieza</span>
+            <select
+              [value]="estadoSeleccionado().pieza ?? ''"
+              [disabled]="!puedeGuardar()"
+              (change)="cambiarHallazgoPieza($any($event.target).value)"
+            >
+              <option value="">Sin hallazgo de pieza</option>
+              @for (hallazgo of hallazgosPieza; track hallazgo.codigo) {
+                <option [value]="hallazgo.codigo">{{ hallazgo.nombre }}</option>
+              }
+            </select>
+          </label>
+
+          <fieldset class="editor__caras" [disabled]="!puedeGuardar() || estadoSeleccionado().pieza === 'AUSENTE'">
+            <legend>Hallazgos por cara</legend>
+            @for (cara of caras; track cara.codigo) {
+              <div class="cara-fila">
+                <label class="cara-fila__activar">
+                  <input
+                    type="checkbox"
+                    [checked]="!!estadoSeleccionado().caras[cara.codigo]"
+                    (change)="alternarCara(cara.codigo, $any($event.target).checked)"
+                  />
+                  <span>{{ cara.nombre }} <b>({{ cara.codigo }})</b></span>
+                </label>
+                @if (estadoSeleccionado().caras[cara.codigo]; as hallazgoActual) {
+                  <select
+                    [attr.aria-label]="'Hallazgo en cara ' + cara.codigo"
+                    [value]="hallazgoActual"
+                    (change)="cambiarHallazgoCara(cara.codigo, $any($event.target).value)"
+                  >
+                    @for (hallazgo of hallazgosCara; track hallazgo.codigo) {
+                      <option [value]="hallazgo.codigo">{{ hallazgo.nombre }}</option>
+                    }
+                  </select>
+                }
+              </div>
+            }
+          </fieldset>
+
+          <label class="editor__campo">
+            <span>Nota clínica de esta pieza</span>
+            <textarea
+              rows="3"
+              maxlength="500"
+              [value]="estadoSeleccionado().nota ?? ''"
+              [disabled]="!puedeGuardar()"
+              (input)="cambiarNota($any($event.target).value)"
+              placeholder="Ej.: sensibilidad al frío, control en 6 meses"
+            ></textarea>
+          </label>
+          @if (puedeGuardar() && cambiadas().has(codigo)) {
+            <button class="boton boton--plano boton--pequeno" type="button" (click)="deshacerPieza()">
+              Deshacer cambios de esta pieza
+            </button>
+          }
+        </section>
+
+        <app-historial-pieza
+          class="panel__historial"
+          [pacienteId]="pacienteId()"
+          [pieza]="codigo"
+          [versiones]="versiones()"
+          [planes]="planes()"
+        />
+      </div>
+    }
+
+    @if (puedeEditar && (!actual() || actual()?.vigente)) {
+      <div class="odontograma__guardar">
+        @if (actual()) {
+          <label class="editor__campo editor__campo--motivo">
+            <span>
+              Motivo de la versión nueva
+              @if (cambiadas().size) { <b class="odontograma__pendientes">· {{ cambiadas().size }} pieza(s) con cambios</b> }
+            </span>
+            <input
+              type="text"
+              maxlength="500"
+              minlength="8"
+              [value]="motivo()"
+              (input)="motivo.set($any($event.target).value)"
+              placeholder="Ej.: hallazgos de la consulta de control"
+            />
+          </label>
+        } @else {
+          <p>Aún no hay un odontograma. Pinte los hallazgos y cree la primera versión.</p>
+        }
+        <button class="boton boton--principal" type="button" [disabled]="guardando()" (click)="guardar()">
+          {{ guardando() ? 'Guardando…' : actual() ? 'Guardar nueva versión' : 'Crear odontograma' }}
+        </button>
+      </div>
+    } @else if (!puedeEditar) {
+      <p class="odontograma__lectura">Su rol puede consultar el odontograma, pero no modificarlo.</p>
+    }
+
+    @if (error()) {
+      <p class="odontograma__error" role="alert">
+        {{ errorTexto() }}
+        @if (conflicto()) {
+          <button class="boton boton--pequeno" type="button" (click)="cargar()">Recargar versión vigente</button>
+        }
+      </p>
+    }
+    @if (aviso()) { <p class="odontograma__aviso" role="status">{{ aviso() }}</p> }
+  }
+</section>

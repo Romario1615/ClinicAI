@@ -1,8 +1,9 @@
 <header class="cabecera-pagina">
   <div><p class="ceja">DEMOSTRACIÓN LOCAL</p><h1>Agente demo</h1></div>
-  <span class="modo">Modo simulado</span>
+  <img class="modulo-cabecera__imagen" src="/images/conversacion-asistente.png" alt="" aria-hidden="true" loading="lazy" />
+  <span class="modo">{{ modo === 'simulado' ? 'Modo simulado' : 'Modelo configurado' }}</span>
 </header>
-<p class="introduccion">Pruebe una conversación administrativa con datos sintéticos. Las reservas se guardan en la agenda local. Este asistente sigue un guion, sin un modelo de lenguaje ni conexión a WhatsApp.</p>
+<p class="introduccion">Pruebe una conversación administrativa con datos sintéticos. Las reservas se guardan en la agenda local. Esta pantalla no envía mensajes de WhatsApp.</p>
 
 @if (cargando()) {
   <app-cargando mensaje="Preparando la demostración…" />
@@ -13,6 +14,11 @@
       <h2 id="preparar-demo">Prepare una conversación</h2>
       <form (ngSubmit)="iniciar()">
         <fieldset [disabled]="ocupado()">
+          <label>Asistente<select name="modo" [(ngModel)]="modo">
+            <option value="simulado">Simulador local (sin conexión externa)</option>
+            <option value="configurado">Modelo configurado en el servidor</option>
+          </select></label>
+          <p class="ayuda-demo">El simulador sigue un guion. El modelo configurado puede enviar la conversación sintética al proveedor contratado.</p>
           <app-selector-paciente (seleccion)="paciente.set($event)" />
           <div class="formulario-demo">
             <label>Sede<select name="sede" [ngModel]="sedeId()" (ngModelChange)="sedeId.set($event); cambiarSeleccion()" required>

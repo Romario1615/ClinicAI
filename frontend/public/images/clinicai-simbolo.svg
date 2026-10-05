@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" fill="none">
+  <defs>
+    <linearGradient id="clinicai" x1="5" y1="4" x2="43" y2="44" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#75e0d1" />
+      <stop offset="1" stop-color="#22a89e" />
+    </linearGradient>
+  </defs>
+  <rect x="2" y="2" width="44" height="44" rx="14" fill="url(#clinicai)" />
+  <path d="M20 10h8v10h10v8H28v10h-8V28H10v-8h10V10Z" fill="#073b3d" />
+  <path d="m32.5 10 4-3m-2 8h5" stroke="#fff" stroke-width="2" stroke-linecap="round" />
+  <circle cx="38" cy="6" r="2" fill="#fff" />
+  <circle cx="40" cy="15" r="2" fill="#fff" />
+</svg>

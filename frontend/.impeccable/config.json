@@ -1,0 +1,34 @@
+{
+  "detector": {
+    "ignoreRules": [],
+    "ignoreFiles": [],
+    "ignoreValues": [
+      {
+        "rule": "broken-image",
+        "value": "*",
+        "files": [
+          "src/app/compartido/foto-perfil.component.ts"
+        ],
+        "createdAt": "2026-10-05T10:29:21.009Z",
+        "reason": "Claude: src es binding [src] a URL de objeto; el img solo se renderiza dentro de @if (url())"
+      },
+      {
+        "rule": "broken-image",
+        "value": "*",
+        "files": [
+          "src/app/paginas/promociones/promociones.component.html"
+        ],
+        "createdAt": "2026-10-05T10:45:43.125Z",
+        "reason": "Claude: [src] enlazado a URL de objeto; el img solo se renderiza dentro de @if (imagenUrl())"
+      },
+      {
+        "rule": "broken-image",
+        "value": "*",
+        "files": [
+          "src/app/compartido/fotos-clinicas.component.ts"
+        ],
+        "createdAt": "2026-10-05T17:19:51.484Z"
+      }
+    ]
+  }
+}

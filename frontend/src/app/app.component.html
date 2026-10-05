@@ -16,20 +16,63 @@
         <span class="solo-lectores">Alternar navegación</span>
       </button>
 
-      <span class="cabecera__marca">Gestión clínica</span>
+      <app-marca class="cabecera__marca" [compacta]="true" [fondoClaro]="true" />
 
       <!-- Buscar un paciente desde cualquier pantalla, y verlo sin salir de
            ella: la ficha se abre en una ventana flotante. -->
       <app-buscador-global />
 
-      <div class="cabecera__usuario">
-        <span class="cabecera__nombre">{{ sesion.nombreCompleto() }}</span>
-        @if (roles(); as listaRoles) {
-          <span class="cabecera__roles">{{ listaRoles }}</span>
+      <div class="cabecera__notificaciones">
+        <button type="button" class="boton boton--plano campana" (click)="alternarNotificaciones()" [attr.aria-expanded]="notificacionesAbiertas()" aria-label="Notificaciones de seguimiento">
+          <app-icono nombre="espera" [tamano]="19" />
+          @if (pendientes.notificaciones() > 0) { <span class="campana__cuenta">{{ pendientes.notificaciones() }}</span> }
+        </button>
+        @if (notificacionesAbiertas()) {
+          <section class="notificaciones" aria-label="Notificaciones de seguimiento">
+            <header><strong>Seguimiento de hoy</strong><span>{{ pendientes.notificaciones() }}</span></header>
+            @if (pendientes.cargando()) { <p class="notificaciones__vacio">Actualizando avisos…</p> }
+            @else if (pendientes.tareas().length) {
+              @for (tarea of pendientes.tareas(); track tarea.clase) {
+                <a class="notificaciones__item" [routerLink]="tarea.clase === 'llamar' ? '/lista-espera' : '/agenda'" (click)="cerrarNotificaciones()">
+                  <span class="notificaciones__etiqueta">{{ tarea.etiqueta }} · {{ tarea.plazo }}</span>
+                  <strong>{{ tarea.titulo }}</strong>
+                </a>
+              }
+            }
+            @if (pendientes.alertasAbiertas().length) {
+              <a class="notificaciones__item" routerLink="/medicamentos" (click)="cerrarNotificaciones()">
+                <span class="notificaciones__etiqueta">Seguimiento clínico</span>
+                <strong>{{ pendientes.alertasAbiertas().length }} alerta(s) de adherencia abiertas</strong>
+              </a>
+            }
+            @if (pendientes.conversacionesPendientes() > 0) {
+              <a class="notificaciones__item" routerLink="/conversaciones" (click)="cerrarNotificaciones()">
+                <span class="notificaciones__etiqueta">Atención de mensajes</span>
+                <strong>{{ pendientes.conversacionesPendientes() }} conversación(es) derivada(s)</strong>
+              </a>
+            }
+            @if (!pendientes.cargando() && pendientes.tareas().length === 0 && pendientes.alertasAbiertas().length === 0 && pendientes.conversacionesPendientes() === 0) {
+              <p class="notificaciones__vacio">No hay tareas ni alertas pendientes.</p>
+            }
+            <a class="notificaciones__todo" routerLink="/panel" (click)="cerrarNotificaciones()">Ver seguimiento en el panel</a>
+          </section>
         }
       </div>
 
-      <button type="button" class="boton boton--pequeno" (click)="cerrarSesion()">
+      <div class="cabecera__usuario">
+        <!-- Iniciales, no foto: la cabecera identifica la sesión abierta sin
+             cargar imágenes del personal. -->
+        <span class="cabecera__avatar" aria-hidden="true">{{ iniciales() }}</span>
+        <span class="cabecera__identidad">
+          <span class="cabecera__nombre">{{ sesion.nombreCompleto() }}</span>
+          @if (roles(); as listaRoles) {
+            <span class="cabecera__roles">{{ listaRoles }}</span>
+          }
+        </span>
+      </div>
+
+      <button type="button" class="boton boton--pequeno cabecera__salir" (click)="cerrarSesion()">
+        <app-icono nombre="salir" [tamano]="17" />
         Cerrar sesión
       </button>
     </header>
@@ -40,9 +83,15 @@
       [class.navegacion--abierta]="menuAbierto()"
       aria-label="Secciones"
     >
+      <div class="navegacion__marca">
+        <app-marca />
+      </div>
+
+      <p class="navegacion__grupo">Secciones</p>
       <ul class="navegacion__lista">
         @for (enlace of enlaces(); track enlace.ruta) {
           <li>
+            @let cantidadInsignia = enlace.ruta === '/conversaciones' ? pendientes.conversacionesPendientes() : pendientes.cuenta();
             <a
               [routerLink]="enlace.ruta"
               routerLinkActive="navegacion__enlace--activo"
@@ -53,14 +102,14 @@
                 <app-icono [nombre]="enlace.icono" [tamano]="19" />
                 {{ enlace.etiqueta }}
               </span>
-              @if (enlace.llevaInsignia && pendientes.cuenta() > 0) {
+              @if (enlace.llevaInsignia && cantidadInsignia > 0) {
                 <!-- El número, no un punto: «3» dice cuánto trabajo hay; un
                      punto solo dice que hay algo. -->
                 <span
                   class="navegacion__pendientes numerico"
-                  [attr.aria-label]="pendientes.cuenta() + ' tareas con plazo'"
+                  [attr.aria-label]="cantidadInsignia + (enlace.ruta === '/conversaciones' ? ' conversaciones pendientes' : ' tareas con plazo')"
                 >
-                  {{ pendientes.cuenta() }}
+                  {{ cantidadInsignia }}
                 </span>
               }
               @if (enlace.demostracion) {
@@ -75,6 +124,11 @@
           </li>
         }
       </ul>
+
+      <p class="navegacion__pie">
+        <app-icono nombre="escudo" [tamano]="16" />
+        Acceso auditado
+      </p>
     </nav>
 
     <main id="contenido" class="contenido" tabindex="-1">

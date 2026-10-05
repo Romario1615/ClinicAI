@@ -99,6 +99,26 @@
   background: var(--aviso-fondo);
 }
 
+.alerta-adherencia {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--espacio-4);
+  padding: var(--espacio-3) 0;
+  border-top: 1px solid var(--borde);
+}
+
+.alerta-adherencia p {
+  margin: var(--espacio-1) 0 0;
+}
+
+@media (max-width: 640px) {
+  .alerta-adherencia {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}
+
 .marca-vencida {
   display: inline-block;
   margin-left: var(--espacio-2);

@@ -1,0 +1,213 @@
+.portada {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--espacio-5);
+  flex-wrap: wrap;
+  margin-bottom: var(--espacio-5);
+}
+
+.portada__sub {
+  max-width: 44rem;
+  margin: 0;
+  color: var(--texto-suave);
+}
+
+.nueva {
+  margin-bottom: var(--espacio-5);
+}
+
+.nueva__rejilla {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: var(--espacio-4);
+}
+
+.segmento {
+  margin: 0 0 var(--espacio-4);
+  padding: var(--espacio-4);
+  border: 1px solid var(--borde);
+  border-radius: var(--radio);
+}
+
+.columnas {
+  display: grid;
+  grid-template-columns: minmax(260px, 340px) 1fr;
+  gap: var(--espacio-5);
+  align-items: start;
+}
+
+@media (max-width: 960px) {
+  .columnas {
+    grid-template-columns: 1fr;
+  }
+}
+
+.lista {
+  display: flex;
+  flex-direction: column;
+  gap: var(--espacio-2);
+}
+
+.vacio {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--espacio-2);
+  color: var(--texto-suave);
+  text-align: center;
+}
+
+.campana {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: var(--espacio-3) var(--espacio-4);
+  border: 1px solid var(--borde);
+  border-radius: var(--radio);
+  background: var(--superficie-elevada);
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 140ms ease, box-shadow 140ms ease;
+}
+
+.campana:hover {
+  border-color: var(--acento);
+}
+
+.campana--activa {
+  border-color: var(--acento);
+  box-shadow: inset 3px 0 0 var(--acento), var(--sombra-1);
+}
+
+.campana__cabecera {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--espacio-2);
+}
+
+.campana__texto {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  font-size: 0.88rem;
+  color: var(--texto-suave);
+}
+
+.campana__pie {
+  font-size: 0.78rem;
+  color: var(--texto-tenue);
+}
+
+.estado {
+  flex: 0 0 auto;
+  height: fit-content;
+  padding: 2px var(--espacio-2);
+  border-radius: 999px;
+  font-size: 0.74rem;
+  font-weight: 700;
+  background: var(--superficie-hundida);
+  color: var(--texto-suave);
+}
+
+.estado[data-tono='info'] {
+  background: var(--info-fondo);
+  color: var(--info);
+}
+
+.estado[data-tono='exito'] {
+  background: var(--exito-fondo);
+  color: var(--exito);
+}
+
+.detalle__cabecera {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--espacio-3);
+  margin-bottom: var(--espacio-4);
+}
+
+.detalle__cabecera h2 {
+  margin: 0;
+}
+
+.detalle__sub {
+  margin: 4px 0 0;
+  font-size: 0.88rem;
+  color: var(--texto-suave);
+}
+
+.detalle__cuerpo {
+  display: grid;
+  grid-template-columns: minmax(240px, 320px) 1fr;
+  gap: var(--espacio-5);
+}
+
+@media (max-width: 720px) {
+  .detalle__cuerpo {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Fondo de chat para que la vista previa se lea como lo verá el paciente. */
+.vista-previa {
+  padding: var(--espacio-4);
+  border-radius: calc(var(--radio) + 4px);
+  background: #e9f1ec;
+}
+
+.burbuja {
+  overflow: hidden;
+  border-radius: 12px 12px 12px 4px;
+  background: #fff;
+  box-shadow: var(--sombra-1);
+}
+
+.burbuja__imagen {
+  display: block;
+  width: 100%;
+  aspect-ratio: 1;
+  object-fit: cover;
+}
+
+.burbuja__sin-imagen {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--espacio-2);
+  aspect-ratio: 1;
+  background: var(--superficie-hundida);
+  color: var(--texto-tenue);
+  font-size: 0.85rem;
+}
+
+.burbuja__texto {
+  margin: 0;
+  padding: var(--espacio-3);
+  font-size: 0.9rem;
+  white-space: pre-wrap;
+}
+
+.vista-previa__nota {
+  display: flex;
+  align-items: center;
+  gap: var(--espacio-1);
+  margin: var(--espacio-2) 0 0;
+  font-size: 0.78rem;
+  color: var(--texto-suave);
+}
+
+.panel-acciones h3 {
+  margin: var(--espacio-4) 0 var(--espacio-2);
+  font-size: 0.95rem;
+}
+
+.panel-acciones h3:first-child {
+  margin-top: 0;
+}
+
+.audiencia {
+  margin: 0 0 var(--espacio-4);
+}

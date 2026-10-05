@@ -30,15 +30,6 @@ export interface ConfiguracionCliente {
   /** Base de la API, sin barra final. */
   readonly urlApi: string;
   readonly origenDatos: OrigenDatos;
-  /**
-   * Identificador de la clinica para el formulario de acceso.
-   *
-   * El backend exige `clinica_id` al iniciar sesion porque el correo es unico
-   * por clinica, no globalmente. En una instalacion real lo fija el
-   * despliegue (un dominio por clinica); aqui queda configurable y, si esta
-   * vacio, el formulario lo pide.
-   */
-  readonly clinicaPorDefecto: string;
   /** Zona horaria de presentacion mientras no haya sede seleccionada. */
   readonly zonaHorariaPorDefecto: string;
 }
@@ -48,7 +39,6 @@ export const CONFIGURACION = new InjectionToken<ConfiguracionCliente>('Configura
 export const CONFIGURACION_POR_DEFECTO: ConfiguracionCliente = {
   urlApi: 'http://127.0.0.1:8000/api/v1',
   origenDatos: 'api',
-  clinicaPorDefecto: '',
   zonaHorariaPorDefecto: 'America/Guayaquil',
 };
 
@@ -61,23 +51,46 @@ export const CONFIGURACION_POR_DEFECTO: ConfiguracionCliente = {
  * datos (CLAUDE.md, regla 7).
  */
 export const PERMISOS = {
+  configuracionEscribir: 'configuracion.escribir',
+  clinicaLeer: 'clinica.leer',
+  clinicaEscribir: 'clinica.escribir',
   agendaLeer: 'agenda.leer',
   citaCrear: 'cita.crear',
   citaCancelar: 'cita.cancelar',
   citaReprogramar: 'cita.reprogramar',
   citaCompletar: 'cita.completar',
   citaInasistencia: 'cita.marcar_inasistencia',
+  citaRegistrarLlegada: 'cita.registrar_llegada',
+  citaIniciarAtencion: 'cita.iniciar_atencion',
   pacienteLeer: 'paciente.leer_administrativo',
+  imagenClinicaLeer: 'imagen_clinica.leer',
+  imagenClinicaCargar: 'imagen_clinica.cargar',
   pacienteCrear: 'paciente.crear',
+  pacienteEditar: 'paciente.editar',
   historiaLeer: 'historia_clinica.leer',
   historiaEscribir: 'historia_clinica.escribir',
+  odontogramaLeer: 'odontograma.leer',
+  planTratamientoLeer: 'plan_tratamiento.leer',
+  planTratamientoEscribir: 'plan_tratamiento.escribir',
+  odontogramaEscribir: 'odontograma.escribir',
   recetaCrear: 'receta.crear',
   // Un asistente tiene `receta.leer` y `adherencia.leer` sin tener
   // `historia_clinica.leer`: puede seguir la medicacion y no leer las notas.
   recetaLeer: 'receta.leer',
+  recetaConfirmar: 'receta.confirmar',
+  profesionalGestionar: 'profesional.gestionar',
   adherenciaLeer: 'adherencia.leer',
   listaEsperaGestionar: 'lista_espera.gestionar',
   conocimientoLeer: 'conocimiento.leer',
+  conocimientoCargar: 'conocimiento.cargar',
+  conocimientoAprobar: 'conocimiento.aprobar',
+  consentimientoGestionar: 'consentimiento.gestionar',
+  promocionGestionar: 'promocion.gestionar',
+  promocionAprobar: 'promocion.aprobar',
   metricasLeer: 'dashboard.leer',
   conversacionResponder: 'conversacion.responder',
+  conversacionLeer: 'conversacion.leer',
+  usuarioLeer: 'usuario.leer',
+  usuarioCrear: 'usuario.crear',
+  rolAsignar: 'rol.asignar',
 } as const;

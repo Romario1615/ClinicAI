@@ -1,0 +1,168 @@
+:host {
+  display: block;
+  /* Colores clínicos convencionales: rojo caries, azul resina, gris amalgama. */
+  --odo-caries: #d2463a;
+  --odo-resina: #3b82b8;
+  --odo-amalgama: #6b7280;
+  --odo-sellante: #2f9e6a;
+  --odo-fractura: #e08a1e;
+  --odo-ausente: #2c5aa0;
+  --odo-extraer: #c0392b;
+  --odo-sana: #ffffff;
+  --odo-trazo: #8aa0a6;
+}
+
+.odontograma {
+  padding: var(--espacio-5);
+  border: 1px solid var(--borde);
+  border-radius: var(--radio-lg);
+  background: var(--superficie);
+}
+
+.odontograma__cabecera,
+.odontograma__barra,
+.odontograma__guardar,
+.editor__cabecera {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--espacio-4);
+}
+
+.odontograma__cabecera h2,
+.editor__cabecera h3 { margin: 0; }
+.ceja { margin: 0 0 var(--espacio-1); color: var(--texto-suave); font-size: .72rem; font-weight: 750; letter-spacing: .1em; }
+.odontograma__meta { margin: var(--espacio-1) 0 0; color: var(--texto-suave); font-size: .88rem; }
+.odontograma__historial { display: grid; gap: var(--espacio-1); min-width: 12rem; font-size: .82rem; font-weight: 650; }
+.odontograma__historial select,
+.editor__campo select,
+.editor__campo input,
+.editor__campo textarea,
+.cara-fila select {
+  width: 100%; min-height: 2.6rem; border: 1px solid var(--borde); border-radius: var(--radio-md);
+  padding: .45rem .7rem; color: var(--texto); background: var(--fondo);
+}
+.odontograma__barra { margin: var(--espacio-4) 0 var(--espacio-3); align-items: end; flex-wrap: wrap; }
+.odontograma__pista { margin: 0; color: var(--texto-suave); font-size: .85rem; }
+
+/* ---------- Paleta de herramientas ---------- */
+.paleta {
+  display: flex; flex-wrap: wrap; align-items: center; gap: .35rem;
+  padding: var(--espacio-2); margin-bottom: var(--espacio-3);
+  border: 1px solid var(--borde); border-radius: var(--radio-md); background: var(--fondo);
+}
+.paleta__grupo { margin-left: .4rem; color: var(--texto-suave); font-size: .7rem; font-weight: 750; letter-spacing: .08em; text-transform: uppercase; }
+.paleta__boton {
+  display: inline-flex; align-items: center; gap: .35rem; min-height: 2.1rem; padding: .25rem .6rem;
+  border: 1px solid var(--borde); border-radius: 999px; background: var(--superficie); color: var(--texto);
+  font-size: .78rem; cursor: pointer;
+}
+.paleta__boton:hover { border-color: var(--acento); }
+.paleta__boton:focus-visible { outline: 3px solid var(--acento); outline-offset: 2px; }
+.paleta__boton--activo { border-color: var(--acento); background: var(--acento-suave); color: var(--acento-fuerte); font-weight: 700; }
+.paleta__muestra { display: inline-block; width: .85rem; height: .85rem; border-radius: 3px; border: 1px solid var(--odo-trazo); background: var(--odo-sana); }
+.paleta__muestra--seleccionar { border-radius: 50%; border: 2px solid var(--acento); }
+.paleta__muestra--borrar { background: repeating-linear-gradient(45deg, var(--odo-sana) 0 2px, var(--odo-trazo) 2px 3px); }
+.paleta__muestra--pieza { border-radius: 50%; border-width: 2px; background: transparent; }
+.paleta__muestra.marca-pieza--ausente { border-color: var(--odo-ausente); }
+.paleta__muestra.marca-pieza--a_extraer { border-color: var(--odo-extraer); }
+.paleta__muestra.marca-pieza--corona { border-color: #b07d1e; }
+.paleta__muestra.marca-pieza--endodoncia { border-color: var(--odo-extraer); }
+.paleta__muestra.marca-pieza--implante,
+.paleta__muestra.marca-pieza--resto_radicular,
+.paleta__muestra.marca-pieza--protesis_fija { border-color: var(--odo-ausente); }
+
+/* ---------- Colores por hallazgo de cara (lienzo, paleta y leyenda) ---------- */
+.cara--caries { background: var(--odo-caries); fill: var(--odo-caries); }
+.cara--obturacion_resina { background: var(--odo-resina); fill: var(--odo-resina); }
+.cara--obturacion_amalgama { background: var(--odo-amalgama); fill: var(--odo-amalgama); }
+.cara--sellante { background: var(--odo-sellante); fill: var(--odo-sellante); }
+.cara--fractura { background: var(--odo-fractura); fill: var(--odo-fractura); }
+
+/* ---------- Lienzo ---------- */
+.lienzo { display: grid; gap: var(--espacio-2); overflow-x: auto; padding-bottom: var(--espacio-1); }
+.lienzo__fila { display: grid; grid-template-columns: repeat(2, max-content); justify-content: center; }
+.lienzo__fila--inferior { padding-top: var(--espacio-2); border-top: 2px dashed var(--borde); }
+.arcada { padding: 0 var(--espacio-2); }
+.arcada + .arcada { border-left: 2px dashed var(--borde); }
+.arcada h3 { margin: 0 0 var(--espacio-1); color: var(--texto-suave); font-size: .72rem; font-weight: 650; text-align: center; }
+.lienzo__fila--inferior .arcada h3 { margin: var(--espacio-1) 0 0; }
+.arcada__piezas { display: flex; gap: 2px; }
+
+.diente { display: flex; flex-direction: column-reverse; align-items: center; width: 3.5rem; border-radius: var(--radio-sm); padding: 2px 0; }
+.diente--superior { flex-direction: column; }
+.diente--seleccionado { background: color-mix(in srgb, var(--acento) 14%, transparent); box-shadow: 0 0 0 2px var(--acento); }
+.diente__numero {
+  min-width: 2.2rem; padding: 1px 2px; border: 0; border-radius: 4px; background: transparent; color: var(--texto);
+  font: 700 .72rem var(--fuente-mono, monospace); cursor: pointer;
+}
+.diente__numero:hover { background: var(--acento-suave); }
+.diente__numero:focus-visible { outline: 3px solid var(--acento); outline-offset: 1px; }
+.diente--cambiado .diente__numero { color: var(--acento-fuerte); text-decoration: underline wavy var(--odo-fractura); }
+.diente__nota { color: var(--odo-fractura); margin-left: 1px; }
+.diente__svg { width: 3.2rem; height: 3.2rem; display: block; overflow: visible; }
+.diente__svg .cara { fill: var(--odo-sana); stroke: var(--odo-trazo); stroke-width: 1.4; cursor: pointer; transition: fill .12s, filter .12s; }
+.diente__svg .cara:hover { filter: brightness(.9); stroke: var(--acento); stroke-width: 2; }
+.diente--ausente .diente__svg .cara { fill: #eef2f3; }
+.diente__svg .cara.cara--caries { fill: var(--odo-caries); }
+.diente__svg .cara.cara--obturacion_resina { fill: var(--odo-resina); }
+.diente__svg .cara.cara--obturacion_amalgama { fill: var(--odo-amalgama); }
+.diente__svg .cara.cara--sellante { fill: var(--odo-sellante); }
+.diente__svg .cara.cara--fractura { fill: var(--odo-fractura); }
+.marca-pieza { fill: none; stroke-width: 3.5; stroke-linecap: round; cursor: pointer; }
+.marca-pieza--ausente { stroke: var(--odo-ausente); }
+.marca-pieza--a_extraer { stroke: var(--odo-extraer); }
+.marca-pieza--corona { stroke: #b07d1e; stroke-width: 2.5; }
+.marca-pieza--endodoncia { stroke: var(--odo-extraer); stroke-width: 3; pointer-events: none; }
+.marca-pieza--protesis_fija { stroke: var(--odo-ausente); stroke-width: 4; pointer-events: none; }
+.marca-pieza-texto { fill: var(--odo-ausente); font: 800 11px var(--fuente-mono, monospace); text-anchor: middle; pointer-events: none; }
+
+/* ---------- Leyenda ---------- */
+.leyenda { display: flex; flex-wrap: wrap; justify-content: center; gap: var(--espacio-3); margin-top: var(--espacio-3); color: var(--texto-suave); font-size: .76rem; }
+.leyenda span { display: inline-flex; align-items: center; gap: .35rem; }
+.leyenda__muestra { display: inline-grid; place-items: center; width: .8rem; height: .8rem; border-radius: 3px; font-style: normal; }
+.leyenda__muestra--cambiado { border: 2px solid var(--odo-fractura); }
+.leyenda__muestra--nota { color: var(--odo-fractura); font-weight: 800; }
+
+/* ---------- Panel de la pieza: registro + historial ---------- */
+.panel {
+  display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--espacio-4);
+  margin-top: var(--espacio-4); padding: var(--espacio-4);
+  border: 1px solid var(--borde); border-radius: var(--radio-md); background: var(--fondo);
+}
+.panel__historial { display: block; padding-left: var(--espacio-4); border-left: 1px solid var(--borde); }
+.editor__cabecera { margin-bottom: var(--espacio-2); align-items: start; }
+.editor__resumen { margin: 2px 0 0; color: var(--texto-suave); font-size: .84rem; }
+.editor__ayuda { margin: 0; color: var(--texto-suave); font-size: .82rem; }
+.editor__campo { display: grid; gap: .4rem; margin: var(--espacio-3) 0; font-size: .84rem; font-weight: 650; }
+.editor__caras { display: grid; gap: var(--espacio-2); margin: var(--espacio-3) 0; padding: var(--espacio-3); border: 1px solid var(--borde); border-radius: var(--radio-md); }
+.editor__caras legend { padding: 0 .35rem; font-size: .84rem; font-weight: 700; }
+.cara-fila { display: grid; grid-template-columns: minmax(9rem, 1fr) minmax(9rem, 1.2fr); align-items: center; gap: var(--espacio-2); }
+.cara-fila__activar { display: flex; align-items: center; gap: .5rem; min-height: 2.4rem; font-size: .82rem; }
+.cara-fila__activar input { width: 1rem; height: 1rem; accent-color: var(--acento); }
+.cara-fila__activar b { color: var(--texto-suave); font-family: var(--fuente-mono, monospace); }
+
+.odontograma__guardar { margin-top: var(--espacio-4); align-items: end; }
+.odontograma__guardar p, .odontograma__lectura { margin: 0; color: var(--texto-suave); font-size: .86rem; }
+.odontograma__pendientes { color: var(--acento-fuerte); }
+.editor__campo--motivo { flex: 1; margin: 0; }
+.odontograma__estado { color: var(--texto-suave); }
+.odontograma__error, .odontograma__aviso { display: flex; align-items: center; gap: var(--espacio-2); margin: var(--espacio-3) 0 0; padding: var(--espacio-3); border-radius: var(--radio-md); font-size: .88rem; }
+.odontograma__error { color: #7c2f28; background: #fff1ee; }
+.odontograma__aviso { color: #165a47; background: #eaf7f2; }
+.odontograma__lectura { margin-top: var(--espacio-4); }
+
+@media (max-width: 900px) {
+  .odontograma { padding: var(--espacio-3); }
+  .lienzo__fila { grid-template-columns: max-content; justify-content: start; }
+  .arcada + .arcada { border-left: 0; padding-top: var(--espacio-2); }
+  .panel { grid-template-columns: 1fr; }
+  .panel__historial { padding-left: 0; padding-top: var(--espacio-3); border-left: 0; border-top: 1px solid var(--borde); }
+}
+@media (max-width: 540px) {
+  .odontograma__cabecera, .odontograma__guardar { align-items: stretch; flex-direction: column; }
+  .odontograma__historial { width: 100%; }
+  .diente { width: 2.4rem; }
+  .diente__svg { width: 2.2rem; height: 2.2rem; }
+  .cara-fila { grid-template-columns: 1fr; }
+}

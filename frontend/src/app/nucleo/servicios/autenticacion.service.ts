@@ -24,7 +24,6 @@ import type { Identidad, ParTokens } from '../modelos/dominio';
 export interface CredencialesAcceso {
   readonly correo: string;
   readonly contrasena: string;
-  readonly clinicaId: string;
   readonly codigo2fa?: string | null;
   readonly recordarCorreo?: boolean;
 }
@@ -42,7 +41,6 @@ export class AutenticacionService {
       .iniciarSesion({
         correo: credenciales.correo.trim(),
         contrasena: credenciales.contrasena,
-        clinica_id: credenciales.clinicaId.trim(),
         codigo_2fa: credenciales.codigo2fa?.trim() || null,
       })
       .pipe(
@@ -54,6 +52,13 @@ export class AutenticacionService {
         }),
         switchMap(() => this.cargarIdentidad()),
       );
+  }
+
+  iniciarSesionLocal(codigoRol: string): Observable<Identidad> {
+    return this.api.iniciarSesionLocal(codigoRol).pipe(
+      tap((tokens) => this.sesion.establecerTokens(tokens)),
+      switchMap(() => this.cargarIdentidad()),
+    );
   }
 
   cargarIdentidad(): Observable<Identidad> {

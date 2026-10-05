@@ -1,13 +1,13 @@
-/* Disposición en rejilla: cabecera arriba, navegación a la izquierda,
- * contenido ocupando el resto. En pantallas estrechas la navegación se
- * convierte en un panel desplegable, porque una tableta en recepción no tiene
- * ancho para las dos columnas. */
+/* Disposición en rejilla: la navegación ocupa todo el alto a la izquierda y
+ * lleva la marca; la cabecera y el contenido comparten la columna derecha.
+ * En pantallas estrechas la navegación se convierte en un panel desplegable,
+ * porque una tableta en recepción no tiene ancho para las dos columnas. */
 .armazon {
   display: grid;
   grid-template-areas:
-    'cabecera cabecera'
+    'navegacion cabecera'
     'navegacion contenido';
-  grid-template-columns: 232px 1fr;
+  grid-template-columns: 252px 1fr;
   grid-template-rows: auto 1fr;
   min-height: 100vh;
 }
@@ -17,10 +17,11 @@
   display: flex;
   align-items: center;
   gap: var(--espacio-4);
-  padding: var(--espacio-2) var(--espacio-5);
+  padding: var(--espacio-3) var(--espacio-5);
   /* El buscador despliega sus resultados anclados a la cabecera. */
   position: sticky;
-  background: var(--superficie-elevada);
+  background: rgb(255 255 255 / 86%);
+  backdrop-filter: saturate(160%) blur(10px);
   border-bottom: 1px solid var(--borde);
   /* Se mantiene visible al desplazar: el nombre del usuario conectado es la
    * forma de detectar que alguien dejó la sesión de otra persona abierta. */
@@ -33,34 +34,98 @@
   min-width: var(--toque-minimo);
 }
 
+/* La marca vive en la barra lateral; en la cabecera solo aparece cuando la
+   barra está plegada (pantallas estrechas). */
 .cabecera__marca {
-  font-weight: 700;
-  letter-spacing: -0.01em;
+  display: none;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: var(--acento-fuerte);
 }
 
 .cabecera__usuario {
   margin-left: auto;
   display: flex;
+  align-items: center;
+  gap: var(--espacio-3);
+}
+
+.cabecera__notificaciones { position:relative; }
+.campana { position:relative; display:grid; place-items:center; min-width:42px; min-height:42px; color:var(--texto-suave); }
+.campana__cuenta { position:absolute; top:0; right:0; min-width:18px; padding:0 4px; border-radius:999px; background:#f6c766; color:#3d2800; font-size:.68rem; font-weight:800; text-align:center; }
+.notificaciones { position:absolute; z-index:30; top:calc(100% + 10px); right:0; width:min(360px, calc(100vw - 24px)); padding:var(--espacio-3); border:1px solid var(--borde); border-radius:var(--radio); background:var(--superficie-elevada); color:var(--texto); box-shadow:0 16px 40px rgb(20 40 50 / 18%); }
+.notificaciones header { display:flex; justify-content:space-between; padding:var(--espacio-2); border-bottom:1px solid var(--borde); }
+.notificaciones header span { color:var(--texto-tenue); }
+.notificaciones__item { display:grid; gap:4px; padding:var(--espacio-3) var(--espacio-2); border-bottom:1px solid var(--borde); color:var(--texto); text-decoration:none; }
+.notificaciones__item:hover { background:var(--superficie-hundida); }
+.notificaciones__etiqueta { color:var(--aviso); font-size:.78rem; font-weight:700; }
+.notificaciones__vacio { margin:0; padding:var(--espacio-4) var(--espacio-2); color:var(--texto-suave); }
+.notificaciones__todo { display:block; padding:var(--espacio-3) var(--espacio-2) var(--espacio-1); color:var(--acento-fuerte); font-weight:650; text-decoration:none; }
+
+.cabecera__avatar {
+  display: inline-grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--acento), var(--acento-fuerte));
+  color: var(--acento-texto);
+  font-size: 0.85rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.cabecera__identidad {
+  display: flex;
   flex-direction: column;
-  align-items: flex-end;
   line-height: 1.25;
 }
 
 .cabecera__nombre {
-  font-weight: 600;
+  font-weight: 650;
   font-size: 0.95rem;
 }
 
 .cabecera__roles {
-  font-size: 0.8rem;
+  font-size: 0.78rem;
   color: var(--texto-tenue);
 }
 
+.cabecera__salir {
+  color: var(--texto-suave);
+}
+
+/* ----- Barra lateral ----- */
 .navegacion {
   grid-area: navegacion;
+  position: sticky;
+  top: 0;
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  overflow-y: auto;
   padding: var(--espacio-4) var(--espacio-3);
-  background: var(--superficie-elevada);
-  border-right: 1px solid var(--borde);
+  background:
+    radial-gradient(400px 260px at 0% 0%, rgb(95 209 196 / 14%), transparent 70%),
+    linear-gradient(180deg, var(--marca-fondo-2), var(--marca-fondo));
+  color: var(--marca-texto);
+}
+
+.navegacion__marca {
+  display: flex;
+  align-items: center;
+  gap: var(--espacio-3);
+  padding: var(--espacio-2) var(--espacio-2) var(--espacio-5);
+}
+
+.navegacion__grupo {
+  margin: 0 0 var(--espacio-2);
+  padding: 0 var(--espacio-3);
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--marca-tenue);
 }
 
 .navegacion__lista {
@@ -80,26 +145,32 @@
   min-height: var(--toque-minimo);
   padding: 0 var(--espacio-3);
   border-radius: var(--radio);
-  color: var(--texto);
+  color: var(--marca-texto);
   text-decoration: none;
   font-weight: 550;
+  font-size: 0.95rem;
+  transition: background-color 140ms ease, color 140ms ease;
+}
+
+.navegacion__enlace:focus-visible {
+  outline-color: var(--marca-brillo);
 }
 
 .navegacion__texto {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
   min-width: 0;
 }
 
 /* El icono pesa menos que la palabra: acompaña a la lectura, no compite con
-   ella. En el enlace activo se tiñe con el texto, por `currentColor`. */
+   ella. En el enlace activo se tiñe con el brillo de marca. */
 .navegacion__enlace app-icono {
-  color: var(--texto-tenue);
+  color: var(--marca-tenue);
 }
 
 .navegacion__enlace--activo app-icono {
-  color: var(--acento);
+  color: var(--marca-brillo);
 }
 
 /* El numero de tareas con plazo. Ambar y cifra: el tono acompaña, la cifra
@@ -107,36 +178,46 @@
 .navegacion__pendientes {
   min-width: 22px;
   padding: 0 6px;
-  border: 1px solid var(--aviso);
   border-radius: 999px;
-  background: var(--aviso-fondo);
-  color: var(--aviso);
+  background: #f6c766;
+  color: #3d2800;
   font-size: 0.75rem;
-  font-weight: 700;
+  font-weight: 800;
   text-align: center;
 }
 
 .navegacion__enlace:hover {
-  background: var(--superficie-hundida);
+  background: rgb(255 255 255 / 7%);
+  color: #fff;
 }
 
 .navegacion__enlace--activo {
-  background: var(--acento-suave);
-  color: var(--acento-fuerte);
+  background: rgb(95 209 196 / 16%);
+  color: #fff;
   /* Barra lateral además del color: la sección activa tiene que distinguirse
    * sin depender de percibir el tono. */
-  box-shadow: inset 3px 0 0 var(--acento);
+  box-shadow: inset 3px 0 0 var(--marca-brillo);
 }
 
 .navegacion__demo {
-  font-size: 0.7rem;
+  font-size: 0.66rem;
   font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.06em;
   padding: 1px var(--espacio-1);
-  border: 1px dashed var(--aviso);
+  border: 1px dashed #f6c766;
   border-radius: var(--radio-pequeno);
-  color: var(--aviso);
+  color: #f6c766;
+}
+
+.navegacion__pie {
+  display: flex;
+  align-items: center;
+  gap: var(--espacio-2);
+  margin: auto 0 0;
+  padding: var(--espacio-5) var(--espacio-3) var(--espacio-2);
+  font-size: 0.78rem;
+  color: var(--marca-tenue);
 }
 
 /* El contenido ocupa el ancho disponible con un tope generoso: a 1440 px, un
@@ -144,8 +225,9 @@
    panel contextual de la agenda. */
 .contenido {
   grid-area: contenido;
-  padding: var(--espacio-5);
+  padding: var(--espacio-6) var(--espacio-6) var(--espacio-7);
   max-width: 1600px;
+  width: 100%;
   /* Que el contenido pueda llenar el alto: una lista corta con media pantalla
      vacia debajo se lee como si algo no hubiera cargado. */
   min-height: 0;
@@ -154,11 +236,17 @@
 
 .contenido--suelto {
   display: flex;
-  align-items: center;
+  align-items: stretch;
   justify-content: center;
   min-height: 100vh;
-  padding: var(--espacio-5);
+  padding: 0;
   max-width: none;
+}
+
+@media (max-width: 1100px) {
+  .cabecera__identidad {
+    display: none;
+  }
 }
 
 @media (max-width: 820px) {
@@ -169,7 +257,12 @@
     grid-template-columns: 1fr;
   }
 
-  .cabecera__menu {
+  .cabecera {
+    padding: var(--espacio-2) var(--espacio-4);
+  }
+
+  .cabecera__menu,
+  .cabecera__marca {
     display: inline-flex;
   }
 
@@ -178,13 +271,29 @@
   }
 
   .navegacion--abierta {
-    display: block;
+    display: flex;
+    position: static;
+    height: auto;
     grid-area: contenido;
-    border-right: none;
-    border-bottom: 1px solid var(--borde);
+  }
+
+  .navegacion__marca {
+    display: none;
   }
 
   .contenido {
     padding: var(--espacio-4);
+  }
+}
+
+@media (max-width: 540px) {
+  .cabecera {
+    flex-wrap: wrap;
+    gap: var(--espacio-2);
+    padding: var(--espacio-2) var(--espacio-3);
+  }
+
+  .cabecera__usuario {
+    margin-left: auto;
   }
 }

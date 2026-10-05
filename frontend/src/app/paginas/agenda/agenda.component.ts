@@ -23,6 +23,7 @@
  * «error inesperado».
  */
 import { Component, computed, inject, signal } from '@angular/core';
+import { ActivatedRoute } from '@angular/router';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormsModule } from '@angular/forms';
 import { Subject, catchError, forkJoin, map, of, switchMap, type Observable } from 'rxjs';
@@ -56,6 +57,7 @@ import {
 import { derivarPendientes, type TareaPendiente } from '../../nucleo/utilidades/pendientes';
 import type {
   Cita,
+  Consultorio,
   Disponibilidad,
   Especialidad,
   Paciente,
@@ -82,6 +84,48 @@ import {
 type CargaDelDia =
   | { readonly citas: readonly Cita[]; readonly disponibilidad: Disponibilidad | null }
   | { readonly fallo: FalloApi };
+
+/**
+ * Estados que cuentan como sala ocupada en la interfaz.
+ *
+ * La base de datos bloquea con `HELD`, `CONFIRMED` y `RESCHEDULED`. Aqui se
+ * suma `PENDING` a proposito: una cita pendiente en un sillon todavia no lo
+ * bloquea, pero ofrecerlo a otra persona produce un 409 en cuanto la primera
+ * se confirme. Es mas prudente que la restriccion, nunca menos.
+ */
+const ESTADOS_QUE_OCUPAN_SALA: ReadonlySet<string> = new Set([
+  'PENDING',
+  'HELD',
+  'CONFIRMED',
+  'RESCHEDULED',
+]);
+
+/** Ventana del tablero de consultorios, en minutos desde medianoche local. */
+const TABLERO_DESDE = 7 * 60;
+const TABLERO_HASTA = 21 * 60;
+
+const TIPOS_CONSULTORIO: Record<string, string> = {
+  CONSULTA: 'Consulta',
+  PROCEDIMIENTOS: 'Procedimientos',
+  IMAGEN: 'Imagen',
+  LABORATORIO: 'Laboratorio',
+  OTRO: 'Otro',
+};
+
+/** Ocupacion de un consultorio en el dia mostrado. */
+export interface OcupacionConsultorio {
+  readonly consultorio: Consultorio;
+  readonly tipo: string;
+  readonly citas: readonly Cita[];
+  readonly ocupadoAhora: Cita | null;
+  readonly proxima: Cita | null;
+  /** Bloques del dia en porcentaje de la ventana del tablero. */
+  readonly bloques: readonly {
+    readonly izquierda: number;
+    readonly ancho: number;
+    readonly cita: Cita;
+  }[];
+}
 
 /** Traducción de los motivos por los que un hueco no se ofrece. */
 const MOTIVOS: Record<string, string> = {
@@ -117,6 +161,18 @@ export class AgendaComponent {
   private readonly catalogo = inject(CatalogoService);
   private readonly operaciones = inject(OperacionesService);
   protected readonly sesion = inject(SesionService);
+  /**
+   * Paciente que llega preseleccionado (por ejemplo, desde un plan de
+   * tratamiento con una fase por agendar). Solo rellena el formulario de
+   * reserva: el hueco lo sigue eligiendo quien agenda.
+   */
+  protected readonly pacienteSugerido = signal<string | null>(
+    inject(ActivatedRoute).snapshot.queryParamMap.get('paciente'),
+  );
+  /** Procedimiento seleccionado desde un plan aceptado; el servidor valida el vínculo. */
+  protected readonly procedimientoPlanSugerido = signal<string | null>(
+    inject(ActivatedRoute).snapshot.queryParamMap.get('procedimiento_plan'),
+  );
 
   // --- Catálogo ---
   protected readonly sedes = signal<readonly Sede[]>([]);
@@ -124,6 +180,7 @@ export class AgendaComponent {
   protected readonly servicios = signal<readonly Servicio[]>([]);
   protected readonly profesionales = signal<readonly Profesional[]>([]);
   protected readonly pacientes = signal<readonly Paciente[]>([]);
+  protected readonly consultorios = signal<readonly Consultorio[]>([]);
 
   // --- Selección ---
   protected readonly sedeId = signal('');
@@ -140,12 +197,22 @@ export class AgendaComponent {
 
   // --- Datos ---
   protected readonly citas = signal<readonly Cita[]>([]);
+  /**
+   * Todas las citas de la sede en el dia, sin filtrar por profesional.
+   *
+   * La ocupacion de una sala no depende de quien este elegido en el filtro:
+   * un sillon lo puede tener otra persona, y ofrecerlo como libre por no
+   * verla es como se produce el 409 al reservar.
+   */
+  protected readonly citasSede = signal<readonly Cita[]>([]);
   protected readonly disponibilidad = signal<Disponibilidad | null>(null);
 
   // --- Reserva ---
   protected readonly turnoElegido = signal<TurnoDisponible | null>(null);
   protected pacienteId = '';
   protected notas = '';
+  /** Consultorio elegido para la reserva. Vacio: sin sala asignada. */
+  protected readonly consultorioId = signal('');
   /**
    * Clave de idempotencia del formulario abierto.
    *
@@ -225,6 +292,11 @@ export class AgendaComponent {
     };
   });
 
+  protected readonly nombreSugerido = computed(() => {
+    const id = this.pacienteSugerido();
+    return id ? this.nombrePaciente(id) : '';
+  });
+
   protected readonly zona = computed(
     () => this.sedes().find((sede) => sede.id === this.sedeId())?.zona_horaria ?? 'America/Guayaquil',
   );
@@ -301,7 +373,13 @@ export class AgendaComponent {
           this.errorAgenda.set(resultado.fallo);
           return;
         }
-        this.citas.set(resultado.citas);
+        this.citasSede.set(resultado.citas);
+        const profesional = this.profesionalId();
+        this.citas.set(
+          profesional
+            ? resultado.citas.filter((cita) => cita.profesional_id === profesional)
+            : resultado.citas,
+        );
         this.disponibilidad.set(resultado.disponibilidad);
       });
     this.cargarCatalogo();
@@ -315,11 +393,12 @@ export class AgendaComponent {
    */
   private peticionDelDia(): Observable<CargaDelDia> {
     const { desde, hasta } = rangoDelDia(this.fecha(), this.zona());
+    // Sin filtro de profesional: el tablero de consultorios necesita ver a
+    // toda la sede. El filtro se aplica despues, en el cliente.
     const citas$ = this.api.citas({
       desde,
       hasta,
       sede_id: this.sedeId(),
-      profesional_id: this.profesionalId() || undefined,
       limite: 200,
     });
 
@@ -375,6 +454,7 @@ export class AgendaComponent {
         this.servicios.set(datos.servicios);
         this.profesionales.set(datos.profesionales);
         this.pacientes.set(datos.pacientes.elementos);
+        this.incluirPacienteSugerido();
 
         // Preselección con el primer valor de cada lista. Es lo que hace que
         // la pantalla sea útil al abrirla en lugar de pedir cuatro clics
@@ -414,9 +494,121 @@ export class AgendaComponent {
     this.errorAgenda.set(null);
     this.cerrarPanel();
     this.cargarOfertasSinAvisar();
+    this.cargarConsultorios();
     // El `switchMap` del constructor cancela la carga anterior: solo se aplica
     // la respuesta de la seleccion vigente.
     this.recargar.next();
+  }
+
+  /**
+   * El paciente sugerido puede no estar entre los primeros cien del listado:
+   * se pide su ficha administrativa para poder mostrarlo en el selector.
+   */
+  private incluirPacienteSugerido(): void {
+    const sugerido = this.pacienteSugerido();
+    if (!sugerido || this.pacientes().some((paciente) => paciente.id === sugerido)) {
+      return;
+    }
+    this.api.paciente(sugerido).subscribe({
+      next: (paciente) => this.pacientes.update((lista) => [paciente, ...lista]),
+      // Fuera de ámbito o inexistente: se descarta la sugerencia.
+      error: () => {
+        this.pacienteSugerido.set(null);
+        this.procedimientoPlanSugerido.set(null);
+      },
+    });
+  }
+
+  /**
+   * Consultorios de la sede elegida.
+   *
+   * Un fallo aqui no rompe la agenda: sin la lista se sigue pudiendo
+   * reservar, solo que sin sala asignada.
+   */
+  private cargarConsultorios(): void {
+    const sede = this.sedeId();
+    this.catalogo.consultorios(sede).subscribe({
+      next: (lista) =>
+        this.consultorios.set(lista.filter((consultorio) => consultorio.sede_id === sede)),
+      error: () => this.consultorios.set([]),
+    });
+  }
+
+  /** Tablero: cada sala con sus citas del dia, lo que pasa ahora y lo siguiente. */
+  protected readonly tableroConsultorios = computed<readonly OcupacionConsultorio[]>(() => {
+    const ahora = Date.now();
+    const zona = this.zona();
+    const ventana = TABLERO_HASTA - TABLERO_DESDE;
+    return this.consultorios().map((consultorio) => {
+      const citas = this.citasSede()
+        .filter(
+          (cita) =>
+            cita.consultorio_id === consultorio.id &&
+            (ESTADOS_QUE_OCUPAN_SALA.has(cita.estado) || cita.estado === 'COMPLETED'),
+        )
+        .sort((a, b) => a.inicio.localeCompare(b.inicio));
+      const ocupadoAhora =
+        citas.find((cita) => Date.parse(cita.inicio) <= ahora && ahora < Date.parse(cita.fin)) ??
+        null;
+      const proxima = citas.find((cita) => Date.parse(cita.inicio) > ahora) ?? null;
+      const bloques = citas.map((cita) => {
+        const inicio = Math.max(minutosLocales(cita.inicio, zona), TABLERO_DESDE);
+        const fin = Math.min(minutosLocales(cita.fin, zona), TABLERO_HASTA);
+        return {
+          izquierda: ((inicio - TABLERO_DESDE) / ventana) * 100,
+          ancho: Math.max(((fin - inicio) / ventana) * 100, 0.8),
+          cita,
+        };
+      });
+      return {
+        consultorio,
+        tipo: TIPOS_CONSULTORIO[consultorio.tipo] ?? consultorio.tipo,
+        citas,
+        ocupadoAhora,
+        proxima,
+        bloques,
+      };
+    });
+  });
+
+  /**
+   * Cita que ocupa la sala durante el turno elegido, o `null` si esta libre.
+   *
+   * Se compara contra el bloque completo del turno (consulta mas
+   * preparacion), que es el rango que la restriccion de exclusion evalua.
+   */
+  protected choqueConsultorio(consultorioId: string): Cita | null {
+    const turno = this.turnoElegido();
+    if (!turno) {
+      return null;
+    }
+    const inicio = Date.parse(turno.inicio);
+    const fin = Date.parse(turno.fin_bloque);
+    return (
+      this.citasSede().find(
+        (cita) =>
+          cita.consultorio_id === consultorioId &&
+          ESTADOS_QUE_OCUPAN_SALA.has(cita.estado) &&
+          Date.parse(cita.inicio) < fin &&
+          inicio < Date.parse(cita.fin),
+      ) ?? null
+    );
+  }
+
+  protected elegirConsultorio(consultorioId: string): void {
+    if (consultorioId && this.choqueConsultorio(consultorioId)) {
+      return;
+    }
+    this.consultorioId.set(consultorioId);
+  }
+
+  protected nombreConsultorio(id: string | null): string {
+    if (!id) {
+      return 'Sin consultorio asignado';
+    }
+    return (
+      this.consultorios().find((consultorio) => consultorio.id === id)?.nombre ?? 'Consultorio'
+    );
   }
 
   /**
@@ -448,6 +640,10 @@ export class AgendaComponent {
     }
     this.citaSeleccionada.set(null);
     this.huecoElegido.set(fila);
+    const sugerido = this.pacienteSugerido();
+    if (sugerido && !this.pacienteId) {
+      this.pacienteId = sugerido;
+    }
     // El tramo es un rango; la reserva necesita un punto. Se preselecciona el
     // primer arranque y se dejan los demás a un clic.
     this.elegirTurno(fila.turnos[0]);
@@ -465,6 +661,7 @@ export class AgendaComponent {
     this.turnoElegido.set(null);
     this.pacienteId = '';
     this.notas = '';
+    this.consultorioId.set('');
     this.errorReserva.set(null);
   }
 
@@ -590,6 +787,10 @@ export class AgendaComponent {
     this.mensajeExito.set('');
     // Clave nueva por formulario abierto. Ver la nota del campo.
     this.claveIdempotencia = `reserva-${crypto.randomUUID()}`;
+    // La sala elegida puede estar ocupada a la nueva hora.
+    if (this.consultorioId() && this.choqueConsultorio(this.consultorioId())) {
+      this.consultorioId.set('');
+    }
   }
 
   protected cancelarReserva(): void {
@@ -612,6 +813,8 @@ export class AgendaComponent {
           profesional_id: this.profesionalId(),
           servicio_id: this.servicioId(),
           sede_id: this.sedeId(),
+          consultorio_id: this.consultorioId() || null,
+          procedimiento_plan_id: this.procedimientoPlanSugerido(),
           inicio: turno.inicio,
           notas_recepcion: this.notas.trim() || null,
         },
@@ -623,6 +826,7 @@ export class AgendaComponent {
           this.mensajeExito.set(
             `Cita creada para ${this.nombrePaciente(cita.paciente_id)} a las ${this.hora(cita.inicio)}.`,
           );
+          this.procedimientoPlanSugerido.set(null);
           this.cancelarReserva();
           this.cargarAgenda();
         },
@@ -648,6 +852,9 @@ export class AgendaComponent {
     if (fallo.estado === 409) {
       // Un 409 no es un fallo del sistema: es la carrera resuelta por la
       // restricción de exclusión de PostgreSQL.
+      if (fallo.message.toLowerCase().includes('consultorio')) {
+        return 'Ese consultorio acaba de ocuparse en ese horario. Elija otro o reserve sin sala.';
+      }
       return 'Ese turno acaba de ocuparse. La lista se ha actualizado; elija otro.';
     }
     return fallo.message;
@@ -711,6 +918,20 @@ export class AgendaComponent {
     );
   }
 
+  protected registrarLlegada(cita: Cita): void {
+    this.ejecutar(() => this.api.registrarLlegadaCita(cita.id), 'Llegada registrada en la sala de espera.');
+  }
+
+  protected iniciarAtencion(cita: Cita): void {
+    this.ejecutar(() => this.api.iniciarAtencionCita(cita.id), 'Atención iniciada.');
+  }
+
+  protected minutosEspera(cita: Cita): number | null {
+    if (!cita.llegada_en) return null;
+    const fin = cita.atencion_iniciada_en ? new Date(cita.atencion_iniciada_en) : new Date();
+    return Math.max(0, Math.floor((fin.getTime() - new Date(cita.llegada_en).getTime()) / 60_000));
+  }
+
   private ejecutar(accion: () => ReturnType<ApiService['confirmarCita']>, exito: string): void {
     this.errorAgenda.set(null);
     accion().subscribe({
@@ -727,6 +948,8 @@ export class AgendaComponent {
     confirmar: boolean;
     cancelar: boolean;
     reprogramar: boolean;
+    registrarLlegada: boolean;
+    iniciarAtencion: boolean;
     completar: boolean;
     inasistencia: boolean;
   } {
@@ -736,6 +959,15 @@ export class AgendaComponent {
       confirmar: abierta && this.puedeCrear(),
       cancelar: viva && this.puedeCancelar(),
       reprogramar: (cita.estado === 'CONFIRMED' || cita.estado === 'RESCHEDULED') && this.sesion.tienePermiso(PERMISOS.citaReprogramar),
+      registrarLlegada:
+        (cita.estado === 'CONFIRMED' || cita.estado === 'RESCHEDULED') &&
+        !cita.llegada_en &&
+        this.sesion.tienePermiso(PERMISOS.citaRegistrarLlegada),
+      iniciarAtencion:
+        (cita.estado === 'CONFIRMED' || cita.estado === 'RESCHEDULED') &&
+        Boolean(cita.llegada_en) &&
+        !cita.atencion_iniciada_en &&
+        this.sesion.tienePermiso(PERMISOS.citaIniciarAtencion),
       completar:
         (cita.estado === 'CONFIRMED' || cita.estado === 'RESCHEDULED') && this.puedeCompletar(),
       inasistencia:
@@ -749,4 +981,17 @@ export class AgendaComponent {
       ? error
       : new FalloApi('ERROR_DESCONOCIDO', 'Ocurrió un error inesperado.', 0);
   }
+}
+
+/** Minutos desde la medianoche local de la sede. */
+function minutosLocales(instanteIso: string, zona: string): number {
+  const partes = new Intl.DateTimeFormat('en-GB', {
+    timeZone: zona,
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+  }).formatToParts(new Date(instanteIso));
+  const hora = Number(partes.find((parte) => parte.type === 'hour')?.value ?? 0);
+  const minuto = Number(partes.find((parte) => parte.type === 'minute')?.value ?? 0);
+  return hora * 60 + minuto;
 }

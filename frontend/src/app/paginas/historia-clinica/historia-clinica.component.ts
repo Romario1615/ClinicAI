@@ -53,6 +53,13 @@ import type {
 } from '../../nucleo/servicios/api.service';
 import { PERMISOS } from '../../nucleo/servicios/configuracion';
 import { SesionService } from '../../nucleo/servicios/sesion.service';
+import { FotoPerfilComponent } from '../../compartido/foto-perfil.component';
+import { GaleriaImagenesComponent } from '../../compartido/galeria-imagenes.component';
+import { IndicePlacaComponent } from './indice-placa.component';
+import { NotaEditorComponent } from './nota-editor.component';
+import { RecetaEditorComponent } from './receta-editor.component';
+import { OdontogramaComponent } from './odontograma.component';
+import { PlanesTratamientoComponent } from './planes-tratamiento.component';
 import type { Paciente } from '../../nucleo/modelos/dominio';
 import { formatearFechaLarga, formatearHora } from '../../nucleo/utilidades/fechas';
 
@@ -91,10 +98,24 @@ const VIAS: Record<string, string> = {
   INTRAVENOSA: 'via intravenosa',
 };
 
+type Pestana = 'evolucion' | 'odontograma' | 'periodoncia' | 'imagenes' | 'planes' | 'recetas';
+
 @Component({
   selector: 'app-historia-clinica',
   standalone: true,
-  imports: [FormsModule, CargandoComponent, ErrorComponent, VacioComponent],
+  imports: [
+    FormsModule,
+    CargandoComponent,
+    ErrorComponent,
+    VacioComponent,
+    OdontogramaComponent,
+    PlanesTratamientoComponent,
+    FotoPerfilComponent,
+    GaleriaImagenesComponent,
+    IndicePlacaComponent,
+    NotaEditorComponent,
+    RecetaEditorComponent,
+  ],
   templateUrl: './historia-clinica.component.html',
   styleUrl: './historia-clinica.component.scss',
 })
@@ -117,6 +138,8 @@ export class HistoriaClinicaComponent {
   protected readonly errorHistoria = signal<FalloApi | null>(null);
   /** Cierto cuando el backend nego las notas por permiso, no por un fallo. */
   protected readonly notasDenegadas = signal(false);
+  /** El 403 fue por falta de vinculo con ESTE paciente, no por el rol. */
+  protected readonly sinRelacion = signal(false);
 
   // --- Permisos ---
   // Se leen del principal, no se adivinan: el backend es la autoridad y
@@ -127,6 +150,83 @@ export class HistoriaClinicaComponent {
   protected readonly puedeLeerRecetas = computed(() =>
     this.sesion.tienePermiso(PERMISOS.recetaLeer),
   );
+  protected readonly puedeLeerOdontograma = computed(() =>
+    this.sesion.tienePermiso(PERMISOS.odontogramaLeer),
+  );
+  protected readonly puedeLeerPlanes = computed(() =>
+    this.sesion.tieneAlgunPermiso(
+      PERMISOS.planTratamientoLeer,
+      PERMISOS.planTratamientoEscribir,
+    ),
+  );
+  protected readonly puedeEditarPlanes = computed(() =>
+    this.sesion.tienePermiso(PERMISOS.planTratamientoEscribir),
+  );
+
+  protected readonly puedeEscribirNotas = computed(() =>
+    this.sesion.tienePermiso(PERMISOS.historiaEscribir),
+  );
+  protected readonly puedeEditarFoto = computed(() =>
+    this.sesion.tienePermiso(PERMISOS.pacienteEditar),
+  );
+
+  /** Pestaña visible. Solo se ofrecen las que el rol puede leer. */
+  protected readonly pestana = signal<Pestana>('evolucion');
+  protected readonly pestanas = computed(() => {
+    const lista: { clave: Pestana; texto: string }[] = [
+      { clave: 'evolucion', texto: 'Evolución' },
+    ];
+    if (this.puedeLeerOdontograma()) {
+      lista.push({ clave: 'odontograma', texto: 'Odontograma' });
+      lista.push({ clave: 'periodoncia', texto: 'Periodoncia · placa' });
+    }
+    if (this.sesion.tienePermiso(PERMISOS.imagenClinicaLeer)) {
+      lista.push({ clave: 'imagenes', texto: 'Imágenes y radiografías' });
+    }
+    if (this.puedeLeerPlanes()) lista.push({ clave: 'planes', texto: 'Planes de tratamiento' });
+    lista.push({ clave: 'recetas', texto: 'Recetas' });
+    return lista;
+  });
+
+  protected readonly puedeCrearRecetas = computed(() =>
+    this.sesion.tienePermiso(PERMISOS.recetaCrear),
+  );
+  protected readonly puedeConfirmarRecetas = computed(() =>
+    this.sesion.tienePermiso(PERMISOS.recetaConfirmar),
+  );
+  protected readonly creandoReceta = signal(false);
+  protected readonly confirmando = signal(false);
+  protected readonly avisoReceta = signal('');
+
+  protected alGuardarReceta(): void {
+    this.creandoReceta.set(false);
+    this.avisoReceta.set('Receta guardada como borrador. Confírmela para generar las tomas.');
+    this.cargarHistoria();
+  }
+
+  /**
+   * Confirma con la misma firma del borrador: el servidor acepta la propia o
+   * una delegación vigente y lo audita.
+   */
+  protected confirmarReceta(receta: Receta): void {
+    if (this.confirmando()) return;
+    this.confirmando.set(true);
+    this.api.confirmarReceta(receta.id, receta.profesional_id).subscribe({
+      next: () => {
+        this.confirmando.set(false);
+        this.avisoReceta.set('Receta confirmada. Se generó el calendario de tomas.');
+        this.cargarHistoria();
+      },
+      error: (fallo: FalloApi) => {
+        this.confirmando.set(false);
+        this.avisoReceta.set('');
+        this.errorHistoria.set(fallo);
+      },
+    });
+  }
+
+  /** `undefined`: sin editor; `null`: nota nueva; una nota: su corrección. */
+  protected readonly editando = signal<Nota | null | undefined>(undefined);
 
   protected readonly hayPaciente = computed(() => this.paciente() !== null);
 
@@ -181,6 +281,7 @@ export class HistoriaClinicaComponent {
     this.cargandoHistoria.set(true);
     this.errorHistoria.set(null);
     this.notasDenegadas.set(false);
+    this.sinRelacion.set(false);
     this.notas.set([]);
     this.recetas.set([]);
 
@@ -196,12 +297,20 @@ export class HistoriaClinicaComponent {
     });
   }
 
+  protected alGuardarNota(): void {
+    this.editando.set(undefined);
+    this.cargarHistoria();
+  }
+
   protected cerrar(): void {
+    this.pestana.set('evolucion');
+    this.editando.set(undefined);
     this.paciente.set(null);
     this.notas.set([]);
     this.recetas.set([]);
     this.errorHistoria.set(null);
     this.notasDenegadas.set(false);
+    this.sinRelacion.set(false);
   }
 
   // ======================================================================
@@ -230,6 +339,7 @@ export class HistoriaClinicaComponent {
             catchError((fallo: FalloApi) => {
               if (fallo.estado === 403) {
                 this.notasDenegadas.set(true);
+                this.sinRelacion.set(fallo.codigo === 'RELACION_ASISTENCIAL_REQUERIDA');
                 return of([] as readonly Nota[]);
               }
               throw fallo;

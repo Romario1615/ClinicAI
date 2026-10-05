@@ -1,4 +1,11 @@
-<h1>Historia clínica</h1>
+<header class="modulo-cabecera">
+  <div class="modulo-cabecera__texto">
+    <p class="ceja">REGISTRO ASISTENCIAL</p>
+    <h1>Historia clínica</h1>
+    <p>Notas y recetas asociadas al paciente seleccionado.</p>
+  </div>
+  <img class="modulo-cabecera__imagen" src="/images/historia-segura.png" alt="" aria-hidden="true" loading="lazy" />
+</header>
 
 @if (!hayPaciente()) {
   <section class="tarjeta buscador" aria-label="Buscar paciente">
@@ -65,7 +72,17 @@
 } @else {
   <!-- ===================== Historia del paciente ===================== -->
   <header class="cabecera-paciente tarjeta">
-    <div>
+    <!-- La ficha lleva la foto del paciente: confirma de un vistazo a quién
+         pertenece la historia que se está leyendo. -->
+    <app-foto-perfil
+      [pacienteId]="paciente()!.id"
+      [nombre]="nombreCompleto(paciente()!)"
+      [iniciales]="paciente()!.nombre.charAt(0) + paciente()!.apellido.charAt(0)"
+      [tamano]="80"
+      [puedeEditar]="puedeEditarFoto()"
+      [conBotones]="true"
+    />
+    <div class="cabecera-paciente__identidad">
       <h2>{{ nombreCompleto(paciente()!) }}</h2>
       <p class="cabecera-paciente__sub">
         {{ paciente()!.tipo_documento }} {{ paciente()!.numero_documento }}
@@ -85,16 +102,63 @@
       (reintentar)="cargarHistoria()"
     />
   } @else {
+    <nav class="pestanas" role="tablist" aria-label="Secciones de la historia clínica">
+      @for (opcion of pestanas(); track opcion.clave) {
+        <button
+          type="button"
+          role="tab"
+          class="pestanas__opcion"
+          [attr.aria-selected]="pestana() === opcion.clave"
+          (click)="pestana.set(opcion.clave)"
+        >
+          {{ opcion.texto }}
+        </button>
+      }
+    </nav>
+
+    @switch (pestana()) {
+      @case ('odontograma') {
+        <app-odontograma [pacienteId]="paciente()!.id" />
+      }
+      @case ('periodoncia') {
+        <app-indice-placa [pacienteId]="paciente()!.id" />
+      }
+      @case ('imagenes') {
+        <app-galeria-imagenes [pacienteId]="paciente()!.id" />
+      }
+      @case ('planes') {
+        <app-planes-tratamiento
+          [pacienteId]="paciente()!.id"
+          [puedeEditar]="puedeEditarPlanes()"
+        />
+      }
+      @case ('evolucion') {
     <!-- ===================== Notas ===================== -->
     <section aria-label="Notas de evolución">
       <div class="seccion__cabecera">
         <h2>Notas de evolución</h2>
-        @if (puedeLeerNotas() && !notasDenegadas()) {
-          <button class="boton boton--pequeno" type="button" (click)="alternarHistorico()">
-            {{ incluirHistorico() ? 'Ocultar versiones anteriores' : 'Ver versiones anteriores' }}
-          </button>
-        }
+        <div class="acciones">
+          @if (puedeLeerNotas() && !notasDenegadas()) {
+            <button class="boton boton--pequeno" type="button" (click)="alternarHistorico()">
+              {{ incluirHistorico() ? 'Ocultar versiones anteriores' : 'Ver versiones anteriores' }}
+            </button>
+          }
+          @if (puedeEscribirNotas() && !notasDenegadas() && editando() === undefined) {
+            <button class="boton boton--principal boton--pequeno" type="button" (click)="editando.set(null)">
+              Nueva nota
+            </button>
+          }
+        </div>
       </div>
+
+      @if (editando() !== undefined) {
+        <app-nota-editor
+          [pacienteId]="paciente()!.id"
+          [base]="editando() ?? null"
+          (guardada)="alGuardarNota()"
+          (cancelado)="editando.set(undefined)"
+        />
+      }
 
       <!-- Que un rol no pueda leer notas no es un error del sistema: es el
            control funcionando. Se dice así, y no con un mensaje rojo que
@@ -102,11 +166,19 @@
       @if (!puedeLeerNotas() || notasDenegadas()) {
         <div class="tarjeta sin-acceso">
           <h3>Las notas de evolución no están a su alcance</h3>
-          <p>
-            Su rol no incluye <code>historia_clinica.leer</code>. Puede seguir la medicación
-            del paciente, que es lo que su trabajo requiere, pero el contenido de las notas
-            es de acceso restringido.
-          </p>
+          @if (sinRelacion()) {
+            <p>
+              No tiene una relación asistencial vigente con este paciente. Se crea al agendarle
+              una cita con usted, por asignación o por derivación. Sin ella no se leen ni se
+              escriben sus notas.
+            </p>
+          } @else {
+            <p>
+              Su rol no incluye <code>historia_clinica.leer</code>. Puede seguir la medicación
+              del paciente, que es lo que su trabajo requiere, pero el contenido de las notas
+              es de acceso restringido.
+            </p>
+          }
         </div>
       } @else if (historias().length === 0) {
         <div class="tarjeta">
@@ -166,6 +238,11 @@
             <!-- La historia clínica no se borra: se versiona. Si la interfaz
                  solo mostrara la versión vigente, esa garantía existiría en la
                  base de datos y no le serviría de nada a quien la audita. -->
+            @if (puedeEscribirNotas() && editando() === undefined) {
+              <button class="boton boton--plano boton--pequeno" type="button" (click)="editando.set(historia.vigente)">
+                Corregir (crea versión nueva)
+              </button>
+            }
             @if (historia.anteriores.length > 0) {
               <details class="versiones">
                 <summary>
@@ -191,11 +268,29 @@
       }
     </section>
 
+      }
+      @case ('recetas') {
     <!-- ===================== Recetas ===================== -->
     <section aria-label="Recetas">
       <div class="seccion__cabecera">
         <h2>Recetas</h2>
+        @if (puedeCrearRecetas() && !creandoReceta()) {
+          <button class="boton boton--principal boton--pequeno" type="button" (click)="creandoReceta.set(true)">
+            Nueva receta
+          </button>
+        }
       </div>
+
+      @if (creandoReceta()) {
+        <app-receta-editor
+          [pacienteId]="paciente()!.id"
+          (guardada)="alGuardarReceta()"
+          (cancelado)="creandoReceta.set(false)"
+        />
+      }
+      @if (avisoReceta()) {
+        <p class="exito" role="status">{{ avisoReceta() }}</p>
+      }
 
       @if (!puedeLeerRecetas()) {
         <div class="tarjeta sin-acceso">
@@ -228,6 +323,11 @@
                 indicación vigente: solo una receta confirmada por el profesional produce
                 calendario de tomas.
               </p>
+              @if (puedeConfirmarRecetas()) {
+                <button class="boton boton--principal boton--pequeno" type="button" [disabled]="confirmando()" (click)="confirmarReceta(receta)">
+                  Confirmar y generar tomas
+                </button>
+              }
             }
             @if (receta.motivo_suspension) {
               <!-- La receta suspendida sigue visible con su motivo. Ocultarla
@@ -272,10 +372,12 @@
       }
     </section>
 
+      }
+    }
+
     <p class="pie">
-      Esta pantalla es de <strong>consulta</strong>. Escribir notas, crear recetas y
-      confirmarlas se hace todavía por la API; llegará a la interfaz con su propio recorrido
-      de revisión.
+      Las notas y recetas conservan su flujo de revisión clínica. Los cambios del odontograma
+      crean versiones nuevas auditadas; las versiones anteriores siguen disponibles.
     </p>
   }
 }

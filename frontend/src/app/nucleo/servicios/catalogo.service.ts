@@ -22,6 +22,7 @@ import { Observable, map, shareReplay } from 'rxjs';
 
 import { CONFIGURACION } from './configuracion';
 import type {
+  Consultorio,
   Especialidad,
   Profesional,
   Sede,
@@ -55,6 +56,7 @@ export class CatalogoService {
   private cacheEspecialidades?: Observable<readonly Especialidad[]>;
   private readonly cacheServicios = new Map<string, Observable<readonly Servicio[]>>();
   private readonly cacheProfesionales = new Map<string, Observable<readonly Profesional[]>>();
+  private readonly cacheConsultorios = new Map<string, Observable<readonly Consultorio[]>>();
 
   clinica(): Observable<RespuestaClinica> {
     this.cacheClinica ??= this.http
@@ -123,6 +125,20 @@ export class CatalogoService {
     return peticion;
   }
 
+  /** Consultorios de una sede (o de todas las alcanzables). */
+  consultorios(sedeId?: string): Observable<readonly Consultorio[]> {
+    const clave = sedeId ?? '*';
+    let peticion = this.cacheConsultorios.get(clave);
+    if (!peticion) {
+      const consulta = sedeId ? `?sede_id=${sedeId}` : '';
+      peticion = this.http
+        .get<readonly Consultorio[]>(this.url(`/catalogo/consultorios${consulta}`))
+        .pipe(shareReplay({ bufferSize: 1, refCount: false }));
+      this.cacheConsultorios.set(clave, peticion);
+    }
+    return peticion;
+  }
+
   /**
    * Vacía la caché.
    *
@@ -136,6 +152,7 @@ export class CatalogoService {
     this.cacheEspecialidades = undefined;
     this.cacheServicios.clear();
     this.cacheProfesionales.clear();
+    this.cacheConsultorios.clear();
   }
 
   private url(ruta: string): string {

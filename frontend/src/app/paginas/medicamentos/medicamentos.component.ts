@@ -40,7 +40,7 @@ import {
   FalloApi,
   filtroBusquedaPaciente,
 } from '../../nucleo/servicios/api.service';
-import type { PacienteDetalle, Receta, Toma } from '../../nucleo/servicios/api.service';
+import type { AlertaAdherencia, PacienteDetalle, Receta, Toma } from '../../nucleo/servicios/api.service';
 import { PERMISOS } from '../../nucleo/servicios/configuracion';
 import { SesionService } from '../../nucleo/servicios/sesion.service';
 import type { Paciente } from '../../nucleo/modelos/dominio';
@@ -87,6 +87,10 @@ export class MedicamentosComponent {
   // --- Datos ---
   protected readonly tomas = signal<readonly Toma[]>([]);
   protected readonly recetas = signal<readonly Receta[]>([]);
+  protected readonly alertas = signal<readonly AlertaAdherencia[]>([]);
+  protected readonly atendiendoAlerta = signal<string | null>(null);
+  protected readonly errorAlertas = signal<FalloApi | null>(null);
+  protected readonly errorAtendiendoAlerta = signal<FalloApi | null>(null);
   protected readonly cargando = signal(false);
   protected readonly error = signal<FalloApi | null>(null);
 
@@ -176,6 +180,8 @@ export class MedicamentosComponent {
     this.error.set(null);
     this.tomas.set([]);
     this.recetas.set([]);
+    this.alertas.set([]);
+    this.errorAlertas.set(null);
 
     this.api.paciente(paciente.id).subscribe({
       next: (detalle) => {
@@ -193,6 +199,9 @@ export class MedicamentosComponent {
     this.paciente.set(null);
     this.tomas.set([]);
     this.recetas.set([]);
+    this.alertas.set([]);
+    this.errorAlertas.set(null);
+    this.errorAtendiendoAlerta.set(null);
     this.error.set(null);
     this.errorRegistro.set(null);
   }
@@ -217,6 +226,27 @@ export class MedicamentosComponent {
       error: (fallo: FalloApi) => {
         this.error.set(fallo);
         this.cargando.set(false);
+      },
+    });
+    if (this.sesion.tienePermiso(PERMISOS.adherenciaLeer)) {
+      this.api.alertasAdherencia().subscribe({
+        next: (alertas) => this.alertas.set(alertas.filter((alerta) => alerta.paciente_id === paciente.id)),
+        error: (fallo: FalloApi) => this.errorAlertas.set(fallo),
+      });
+    }
+  }
+
+  protected atender(alerta: AlertaAdherencia): void {
+    this.atendiendoAlerta.set(alerta.id);
+    this.errorAtendiendoAlerta.set(null);
+    this.api.atenderAlertaAdherencia(alerta.id).subscribe({
+      next: () => {
+        this.atendiendoAlerta.set(null);
+        this.cargar();
+      },
+      error: (fallo: FalloApi) => {
+        this.errorAtendiendoAlerta.set(fallo);
+        this.atendiendoAlerta.set(null);
       },
     });
   }

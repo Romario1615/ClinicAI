@@ -70,7 +70,7 @@ const DIAS_POR_PERIODO: Record<string, number> = { hoy: 1, '7': 7, '30': 30 };
     <div class="cabecera-pagina">
       <div>
         <p class="ceja">GESTIÓN CLÍNICA</p>
-        <h1>Inicio de turno</h1>
+        <h1>Panel de seguimiento</h1>
         <p class="panel__contexto">{{ hoyLegible() }} · horario de {{ zona() }}</p>
       </div>
       <a class="boton boton--principal" routerLink="/agenda">Abrir agenda</a>
@@ -182,6 +182,25 @@ const DIAS_POR_PERIODO: Record<string, number> = { hoy: 1, '7': 7, '30': 30 };
               <p class="campo__ayuda">{{ r.pacientes }} paciente(s) distintos</p>
             </article>
 
+            <article class="tarjeta">
+              <p class="cifra__titulo">Sala de espera</p>
+              <strong class="cifra numerico">{{ r.espera.personas_en_espera }}</strong>
+              <p class="campo__ayuda">paciente(s) esperando en el periodo</p>
+              <p class="campo__ayuda">
+                Espera media hasta iniciar:
+                @if (r.espera.promedio_minutos === null) {
+                  sin atenciones iniciadas
+                } @else {
+                  {{ r.espera.promedio_minutos }} min
+                }
+              </p>
+              @if (r.espera.espera_mayor_15_minutos > 0) {
+                <p class="carga__demora" role="status">
+                  {{ r.espera.espera_mayor_15_minutos }} supera 15 minutos
+                </p>
+              }
+            </article>
+
             @if (r.pagos; as pagos) {
               <article class="tarjeta">
                 <p class="cifra__titulo">Pagos de esas citas</p>
@@ -223,8 +242,62 @@ const DIAS_POR_PERIODO: Record<string, number> = { hoy: 1, '7': 7, '30': 30 };
         <p>Use el menú para acceder a las gestiones habilitadas para su rol.</p>
       </div>
     }
+
+    @if (sesion.tienePermiso(PERMISOS.metricasLeer)) {
+      <section class="bloque seguimiento" aria-labelledby="seguimiento-inteligente">
+        <div class="bloque__cabecera">
+          <h2 id="seguimiento-inteligente">Seguimiento inteligente</h2>
+          <span class="bloque__linea" aria-hidden="true"></span>
+          <span class="seguimiento__metodo">Señales basadas en actividad real</span>
+          @if (sesion.tienePermiso(PERMISOS.configuracionEscribir)) {
+            <button class="boton boton--pequeno" type="button" (click)="generarAnalisisIA()" [disabled]="analizandoIA()">
+              {{ analizandoIA() ? 'Analizando…' : 'Analizar con IA' }}
+            </button>
+          }
+        </div>
+        @if (errorIA()) { <p class="aviso-error" role="alert">{{ errorIA() }}</p> }
+        @if (analisisIA()) { <article class="tarjeta analisis-ia"><p class="ceja">ANÁLISIS OPERATIVO · {{ periodo() === 'hoy' ? 'HOY' : periodo() + ' DÍAS' }}</p><p>{{ analisisIA() }}</p></article> }
+        <div class="seguimiento__rejilla">
+          @for (senal of senalesSeguimiento(); track senal.titulo) {
+            <article class="tarjeta seguimiento__senal" [class.seguimiento__senal--alerta]="senal.alerta">
+              <span class="seguimiento__punto" aria-hidden="true"></span>
+              <div><h3>{{ senal.titulo }}</h3><p>{{ senal.detalle }}</p></div>
+            </article>
+          }
+        </div>
+        <p class="seguimiento__nota">Estas señales usan reglas transparentes sobre agenda y cobros; no generan diagnósticos ni predicciones clínicas.</p>
+      </section>
+    }
   `,
   styles: `
+    .cabecera-pagina {
+      position: relative;
+      min-height: 138px;
+      padding: var(--espacio-5) var(--espacio-6);
+      overflow: hidden;
+      border: 1px solid var(--borde);
+      border-radius: var(--radio);
+      background-image:
+        linear-gradient(90deg, rgb(255 255 255 / 96%) 0%, rgb(255 255 255 / 87%) 48%, rgb(255 255 255 / 22%) 100%),
+        url('/images/inicio-coordinacion.png');
+      background-position: center, center 58%;
+      background-size: cover;
+    }
+
+    .cabecera-pagina > div,
+    .cabecera-pagina > a {
+      position: relative;
+      z-index: 1;
+    }
+
+    @media (max-width: 600px) {
+      .cabecera-pagina {
+        min-height: 132px;
+        padding: var(--espacio-4);
+        background-position: center, 68% center;
+      }
+    }
+
     .panel__contexto {
       margin: 2px 0 0;
       color: var(--texto-suave);
@@ -234,6 +307,18 @@ const DIAS_POR_PERIODO: Record<string, number> = { hoy: 1, '7': 7, '30': 30 };
     .bloque {
       margin-top: var(--espacio-5);
     }
+
+    .seguimiento__metodo { color:var(--texto-tenue); font-size:.78rem; }
+    .seguimiento__rejilla { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:var(--espacio-3); }
+    .seguimiento__senal { display:flex; align-items:flex-start; gap:var(--espacio-3); padding:var(--espacio-4); }
+    .seguimiento__senal h3 { margin:0; font-size:.98rem; }
+    .seguimiento__senal p { margin:var(--espacio-1) 0 0; color:var(--texto-suave); font-size:.9rem; }
+    .seguimiento__punto { flex:0 0 10px; width:10px; height:10px; margin-top:5px; border-radius:50%; background:var(--exito); }
+    .seguimiento__senal--alerta .seguimiento__punto { background:var(--aviso); }
+    .seguimiento__nota { margin:var(--espacio-2) 0 0; color:var(--texto-tenue); font-size:.8rem; }
+    .analisis-ia { margin:0 0 var(--espacio-3); padding:var(--espacio-4); border-color:var(--acento); white-space:pre-line; }
+    .analisis-ia p:last-child { margin-bottom:0; }
+    @media (max-width:700px) { .seguimiento__rejilla { grid-template-columns:1fr; } }
 
     .bloque__cabecera {
       display: flex;
@@ -338,6 +423,12 @@ const DIAS_POR_PERIODO: Record<string, number> = { hoy: 1, '7': 7, '30': 30 };
     .carga__nota,
     .carga__vacio {
       margin: 0;
+    }
+
+    .carga__demora {
+      margin: var(--espacio-2) 0 0;
+      color: var(--aviso);
+      font-weight: 650;
     }
 
     /* --- Cifras --- */
@@ -497,6 +588,9 @@ export class PanelComponent {
   protected readonly cargandoResumen = signal(false);
   protected readonly cargandoHoy = signal(false);
   protected readonly error = signal('');
+  protected readonly analisisIA = signal('');
+  protected readonly errorIA = signal('');
+  protected readonly analizandoIA = signal(false);
 
   protected readonly hoyLegible = computed(() =>
     new Intl.DateTimeFormat('es-EC', {
@@ -582,6 +676,40 @@ export class PanelComponent {
     }));
   });
 
+  protected readonly senalesSeguimiento = computed(() => {
+    const resumen = this.resumen();
+    const abiertas = this.pendientes().length;
+    const inasistencia = resumen?.total_citas
+      ? ((resumen.citas['NO_SHOW'] ?? 0) / resumen.total_citas) * 100
+      : null;
+    const senales: { titulo: string; detalle: string; alerta: boolean }[] = [];
+    senales.push(abiertas > 0
+      ? { titulo: `${abiertas} tarea(s) requieren seguimiento`, detalle: 'Hay citas por confirmar, turnos que vencen u ofertas de espera sin comunicar en la jornada.', alerta: true }
+      : { titulo: 'La cola de hoy está al día', detalle: 'No hay tareas operativas urgentes en la agenda consultada.', alerta: false });
+    if (inasistencia !== null) {
+      senales.push(inasistencia >= 10
+        ? { titulo: 'Inasistencia sobre 10 %', detalle: `La tasa del periodo es ${inasistencia.toFixed(1)} %. Revise confirmaciones y los periodos comparables.`, alerta: true }
+        : { titulo: 'Inasistencia bajo control', detalle: `La tasa del periodo es ${inasistencia.toFixed(1)} % sobre ${resumen!.total_citas} citas.`, alerta: false });
+    } else {
+      senales.push({ titulo: 'Aún no hay base para comparar', detalle: 'El periodo no contiene citas para calcular indicadores de asistencia.', alerta: false });
+    }
+    const esperando = resumen?.espera;
+    if (esperando && esperando.personas_en_espera > 0) {
+      senales.push({
+        titulo: `${esperando.personas_en_espera} paciente(s) en sala de espera`,
+        detalle: esperando.espera_mayor_15_minutos > 0
+          ? `${esperando.espera_mayor_15_minutos} superan 15 minutos; revise la atención pendiente.`
+          : 'La espera registrada todavía no supera 15 minutos.',
+        alerta: esperando.espera_mayor_15_minutos > 0,
+      });
+    }
+    const pendientesPago = Object.entries(resumen?.pagos ?? {}).find(([estado]) => ['PENDING', 'UNDER_REVIEW', 'PROOF_RECEIVED'].includes(estado));
+    if (pendientesPago) {
+      senales.push({ titulo: 'Cobros en seguimiento', detalle: `El estado ${pendientesPago[0]} suma ${pendientesPago[1]}.`, alerta: true });
+    }
+    return senales;
+  });
+
   constructor() {
     this.catalogo.profesionales().subscribe({
       next: (lista) => this.profesionales.set(lista),
@@ -592,7 +720,23 @@ export class PanelComponent {
 
   protected cambiarPeriodo(clave: string): void {
     this.periodo.set(clave);
+    this.analisisIA.set('');
     this.cargarResumen();
+  }
+
+  protected generarAnalisisIA(): void {
+    const dias = DIAS_POR_PERIODO[this.periodo()] ?? 1;
+    const hoy = hoyEnZona(this.zona());
+    const inicio = sumarDias(hoy, -(dias - 1));
+    const desde = rangoDelDia(inicio, this.zona()).desde;
+    const hasta = rangoDelDia(hoy, this.zona()).hasta;
+    this.analizandoIA.set(true);
+    this.errorIA.set('');
+    this.analisisIA.set('');
+    this.operaciones.analizar<{ analisis: string }>('/dashboard/analisis-ia', { desde, hasta }).subscribe({
+      next: (resultado) => { this.analisisIA.set(resultado.analisis); this.analizandoIA.set(false); },
+      error: (fallo: unknown) => { this.errorIA.set(fallo instanceof FalloApi ? fallo.message : 'No se pudo generar el análisis.'); this.analizandoIA.set(false); },
+    });
   }
 
   protected irALaAgenda(): void {
