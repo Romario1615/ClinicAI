@@ -82,6 +82,10 @@ class ProveedorDemostracion(ProveedorConversacional):
                     for k in ("profesional_id", "servicio_id", "sede_id", "desde", "hasta")
                 },
             )
+        if limpio in {"mis pagos", "pagos", "cuanto debo", "cuánto debo", "saldo"} and negocio.get(
+            "paciente_id"
+        ):
+            return Decision("get_patient_payments", {"paciente_id": negocio["paciente_id"]})
         if limpio in {"mis citas", "consultar citas", "ver citas"}:
             return Decision("get_patient_appointments", {"paciente_id": negocio["paciente_id"]})
         if limpio in {"confirmar", "confirmo", "si confirmo"}:

@@ -50,6 +50,7 @@ from app.ia.herramientas.contrato import (
 )
 from app.ia.herramientas.derivacion import HERRAMIENTA_DERIVACION
 from app.ia.herramientas.limites import MotivoDerivacion, explicar
+from app.ia.herramientas.pagos import HERRAMIENTAS_PAGOS
 from app.modulos.auditoria.repositorio import RepositorioAuditoria
 from app.nucleo.auditoria import (
     AccionAuditada,
@@ -72,7 +73,7 @@ logger = obtener_logger(__name__)
 
 # El catalogo. Los nombres son los que fija la especificacion.
 HERRAMIENTAS: Final[dict[str, Herramienta]] = {
-    h.nombre: h for h in (*HERRAMIENTAS_AGENDA, HERRAMIENTA_DERIVACION)
+    h.nombre: h for h in (*HERRAMIENTAS_AGENDA, *HERRAMIENTAS_PAGOS, HERRAMIENTA_DERIVACION)
 }
 
 # Se declara aparte y se compara en una prueba. Si alguien anade o quita una
@@ -86,6 +87,9 @@ NOMBRES_ESPERADOS: Final[frozenset[str]] = frozenset(
         "cancel_appointment",
         "reschedule_appointment",
         "get_patient_appointments",
+        # Solo lectura: lo que el paciente debe. Anadida a peticion de la
+        # clinica (pagos por WhatsApp); no registra ni cobra nada.
+        "get_patient_payments",
         "handoff_to_human",
     }
 )

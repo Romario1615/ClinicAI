@@ -62,6 +62,9 @@ Estas no desaparecen al terminar las fases. Son propiedades del alcance acordado
 | E‑33 | **Imágenes clínicas: sin miniaturas, sin DICOM, sin antivirus operativo en desarrollo** | Pillow fuera del árbol a propósito (E‑12); clamd ausente | La galería descarga la imagen completa. DICOM no se acepta todavía. Sin `ANTIVIRUS_HABILITADO` la carga se registra `NO_DISPONIBLE` en desarrollo y **se rechaza en producción** |
 | E‑34 | **El seguimiento de tratamientos por chat no lee el plan** | Deliberado (CLAUDE.md, reglas 4, 5 y 10) | La IA no accede al plan ni al odontograma (N2). Al cerrar una fase con otras pendientes se encola, sin IA, un recordatorio genérico para agendar; en el chat, la pregunta por el tratamiento se etiqueta y deriva al personal |
 | E‑35 | **Odontograma: las caras se pintan con ratón o pantalla táctil** | Accesibilidad parcial | Con teclado se abre la pieza por su número y se registra con el formulario del panel (estado, caras, nota); no hay foco por cara dentro del dibujo. Las miniaturas de fotos por pieza o procedimiento descargan la imagen completa (E‑33) |
+| E‑36 | **La redacción del resumen clínico requiere un Ollama local operativo** | Sin servidor de IA local | Desactivada por defecto (`PROVEEDOR_RESUMEN_CLINICO=desactivado`): el profesional ve el resumen estructurado. La calidad depende del modelo local elegido; no se probó con un modelo real en este entorno |
+| E‑37 | **El comprobante por WhatsApp no se descarga** | Credenciales de Meta ausentes (sandbox) | Una imagen del paciente identificado con un único pago pendiente lo pasa a «Comprobante recibido» con la referencia del mensaje; la imagen se ve en WhatsApp Business, no en la plataforma |
+| E‑38 | **La toma solo se confirma con «TOMADA» dentro de la ventana del recordatorio** | Diseño | De 3 h antes a 30 min después de la hora programada y con el paciente identificado en el hilo; fuera de eso se deriva a una persona |
 
 ---
 

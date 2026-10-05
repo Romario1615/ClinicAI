@@ -63,7 +63,7 @@ petición de "solo para probar".
   `effective_until`, `sensitivity_level`.
 * Herramientas del agente: `find_availability`, `hold_slot`, `confirm_appointment`,
   `cancel_appointment`, `reschedule_appointment`, `get_patient_appointments`,
-  `handoff_to_human`.
+  `get_patient_payments` (solo lectura), `handoff_to_human`.
 * Nombres impuestos por Alembic, OAuth, la API de WhatsApp y cabeceras HTTP estándar.
 
 Sin tildes ni `ñ` en identificadores de código y base de datos: `contrasena`, `ano`,

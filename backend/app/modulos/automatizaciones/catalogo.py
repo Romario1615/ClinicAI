@@ -189,10 +189,13 @@ FLUJOS: tuple[Flujo, ...] = (
         nombre="Alarma de cada toma",
         fase=Fase.MEDICACION,
         disparador="Llega la hora de una toma de una receta confirmada.",
-        accion="WhatsApp «Tiene una toma programada a las HH:MM. Responda 1 si la tomó.» sin medicamento.",
+        accion=(
+            "WhatsApp genérico sin medicamento; si el paciente responde TOMADA, la toma se "
+            "registra sola."
+        ),
         canal="WhatsApp",
         quien_ve=("Paciente",),
-        quien_interviene=("Paciente (responde 1)",),
+        quien_interviene=("Paciente (responde TOMADA)",),
         tipos=(TipoMensajeOutbox.TOMA_RECORDATORIO,),
         nota="Exige el consentimiento propio de recordatorios de medicación.",
     ),
@@ -224,7 +227,10 @@ FLUJOS: tuple[Flujo, ...] = (
         nombre="Comprobante de pago recibido",
         fase=Fase.PAGOS,
         disparador="El paciente envía la foto del comprobante por WhatsApp.",
-        accion="El pago pasa a «Comprobante recibido» y aparece en «Por validar» del panel.",
+        accion=(
+            "Si tiene un único pago pendiente, pasa a «Comprobante recibido» y aparece en "
+            "«Por validar»; si no, la imagen va a «Atención de mensajes»."
+        ),
         canal="Panel",
         quien_ve=("Recepción", "Administración"),
         quien_interviene=("Quien valida pagos (confirma o rechaza)",),

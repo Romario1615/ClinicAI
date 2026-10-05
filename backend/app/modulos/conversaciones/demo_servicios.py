@@ -146,6 +146,7 @@ async def responder(
                 "cita.cancelar",
                 "cita.reprogramar",
                 "conversacion.responder",
+                "pago.leer",
             }
         ),
         origen="DEMO_LOCAL",

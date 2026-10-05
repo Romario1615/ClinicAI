@@ -5,6 +5,7 @@ from typing import Any
 from sqlalchemy import Select, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.modulos.agenda.modelos import Cita
 from app.modulos.agenda.repositorio import RepositorioAgenda
 from app.modulos.pagos.modelos import Pago
 from app.nucleo.autorizacion import Principal
@@ -47,3 +48,16 @@ class RepositorioPagos:
             select(pagos.c.estado, func.sum(pagos.c.importe)).group_by(pagos.c.estado)
         )
         return {str(estado): Decimal(importe) for estado, importe in filas}
+
+    async def abiertos_de_paciente(
+        self, principal: Principal, paciente_id: uuid.UUID, estados: tuple[str, ...]
+    ) -> list[tuple[Decimal, str, str, Any]]:
+        """Pagos sin cerrar de un paciente, dentro del ambito del principal."""
+        pagos = self.consulta(principal).where(Pago.estado.in_(estados)).subquery()
+        filas = await self.sesion.execute(
+            select(pagos.c.importe, pagos.c.moneda, pagos.c.estado, Cita.inicio)
+            .join(Cita, Cita.id == pagos.c.cita_id)
+            .where(Cita.paciente_id == paciente_id)
+            .order_by(Cita.inicio)
+        )
+        return [(importe, moneda, estado, inicio) for importe, moneda, estado, inicio in filas]

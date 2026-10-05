@@ -53,15 +53,16 @@ from __future__ import annotations
 
 import uuid
 from dataclasses import dataclass
-from datetime import timedelta
+from datetime import datetime, timedelta
 
-from sqlalchemy import select, update
+from sqlalchemy import func, select, update
 from sqlalchemy.dialects.postgresql import insert as insert_pg
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.ia.decisiones import ClasificadorIntencion, Intencion
 from app.mensajeria.carga_whatsapp import CargaWebhook, MensajeEntranteCrudo
 from app.mensajeria.destinatarios import normalizar_telefono
+from app.modulos.agenda.modelos import Cita
 from app.modulos.conversaciones.identificacion import (
     Opciones,
     identificar,
@@ -75,13 +76,15 @@ from app.modulos.conversaciones.modelos import (
     IntencionEntrante,
     MensajeEntrante,
 )
+from app.modulos.historia.modelos import EstadoToma, Toma
 from app.modulos.pacientes.modelos import (
     Consentimiento,
     Paciente,
     TipoConsentimiento,
     telefono_normalizado,
 )
-from app.nucleo.autorizacion import Principal
+from app.modulos.pagos.modelos import Pago
+from app.nucleo.autorizacion import Principal, TipoActor
 from app.nucleo.bd import ejecutar_escritura
 from app.nucleo.registro import obtener_logger
 from app.nucleo.reloj import Reloj
@@ -148,6 +151,10 @@ class ResumenEntrada:
     preguntas_identidad: int = 0
     #: Mensajes que resolvieron una identidad eligiendo de esa lista.
     identidades_resueltas: int = 0
+    #: Tomas que el paciente confirmó respondiendo al recordatorio.
+    tomas_registradas: int = 0
+    #: Imágenes asociadas como comprobante a un pago pendiente.
+    comprobantes: int = 0
 
 
 class ServicioConversaciones:
@@ -258,6 +265,18 @@ class ServicioConversaciones:
             if preguntado:
                 return _con(resumen, preguntas_identidad=resumen.preguntas_identidad + 1)
 
+        aplicado = await self._aplicar_sin_persona(
+            conversacion, intencion, crudo, clinica_id, resumen
+        )
+        return aplicado or await self._derivar(conversacion, intencion, crudo, resumen)
+
+    async def _derivar(
+        self,
+        conversacion: Conversacion,
+        intencion: IntencionEntrante,
+        crudo: MensajeEntranteCrudo,
+        resumen: ResumenEntrada,
+    ) -> ResumenEntrada:
         conversacion.estado = EstadoConversacion.EN_HANDOFF.value
         conversacion.motivo_handoff = MOTIVOS_HANDOFF.get(
             intencion, MOTIVOS_HANDOFF[IntencionEntrante.DESCONOCIDA]
@@ -265,6 +284,97 @@ class ServicioConversaciones:
         if intencion is IntencionEntrante.DESCONOCIDA and crudo.texto:
             conversacion.motivo_handoff = await self._motivo_tipado(crudo.texto)
         return _con(resumen, derivados=resumen.derivados + 1)
+
+    async def _aplicar_sin_persona(
+        self,
+        conversacion: Conversacion,
+        intencion: IntencionEntrante,
+        crudo: MensajeEntranteCrudo,
+        clinica_id: uuid.UUID,
+        resumen: ResumenEntrada,
+    ) -> ResumenEntrada | None:
+        """Respuestas del paciente que se aplican sin una persona.
+
+        Solo con el paciente ya identificado en el hilo (un número puede ser
+        de varias personas) y solo con un único destino posible. Devuelve
+        `None` cuando no aplica: entonces se deriva como siempre.
+        """
+        if conversacion.paciente_id is None:
+            return None
+        if intencion is IntencionEntrante.REGISTRAR_TOMA and await self._registrar_toma(
+            conversacion.paciente_id, crudo.recibido_en
+        ):
+            return _con(resumen, tomas_registradas=resumen.tomas_registradas + 1)
+        if crudo.tipo != "image":
+            return None
+        asociado = await self._asociar_comprobante(
+            conversacion.paciente_id, clinica_id, crudo.external_id
+        )
+        conversacion.estado = EstadoConversacion.EN_HANDOFF.value
+        if asociado:
+            conversacion.motivo_handoff = "Comprobante de pago recibido: validar en Pagos."
+            return _con(resumen, comprobantes=resumen.comprobantes + 1)
+        conversacion.motivo_handoff = (
+            "Envió una imagen (¿comprobante?) que no se pudo asociar a un pago."
+        )
+        return _con(resumen, derivados=resumen.derivados + 1)
+
+    async def _registrar_toma(self, paciente_id: uuid.UUID, recibido_en: datetime) -> bool:
+        """Marca TOMADA la toma pendiente más cercana al mensaje.
+
+        Ventana: desde tres horas antes hasta media hora después de la hora
+        programada. Es lo que dura un recordatorio útil; una respuesta fuera
+        de esa ventana no se sabe a qué toma se refiere y va a una persona.
+        """
+        toma = (
+            await self._sesion.execute(
+                select(Toma)
+                .where(
+                    Toma.paciente_id == paciente_id,
+                    Toma.estado == EstadoToma.PENDIENTE.value,
+                    Toma.programada_en >= recibido_en - timedelta(hours=3),
+                    Toma.programada_en <= recibido_en + timedelta(minutes=30),
+                )
+                .order_by(func.abs(func.extract("epoch", Toma.programada_en - recibido_en)))
+                .limit(1)
+            )
+        ).scalar_one_or_none()
+        if toma is None:
+            return False
+        toma.estado = EstadoToma.TOMADA.value
+        toma.registrada_en = recibido_en
+        toma.registrada_por_tipo = TipoActor.PACIENTE.value
+        toma.registrada_por_id = paciente_id
+        await self._sesion.flush()
+        logger.info("whatsapp.toma_registrada", toma_id=str(toma.id))
+        return True
+
+    async def _asociar_comprobante(
+        self, paciente_id: uuid.UUID, clinica_id: uuid.UUID, external_id: str
+    ) -> bool:
+        """Pasa a «comprobante recibido» el único pago pendiente del paciente."""
+        pendientes = list(
+            (
+                await self._sesion.execute(
+                    select(Pago)
+                    .join(Cita, Cita.id == Pago.cita_id)
+                    .where(
+                        Cita.paciente_id == paciente_id,
+                        Pago.clinica_id == clinica_id,
+                        Pago.estado.in_(["PENDING", "REJECTED"]),
+                    )
+                )
+            ).scalars()
+        )
+        if len(pendientes) != 1:
+            return False
+        pago = pendientes[0]
+        pago.estado = "PROOF_RECEIVED"
+        pago.referencia = f"WhatsApp {external_id}"[:100]
+        pago.comentario = "Comprobante enviado por el paciente por WhatsApp; falta validarlo."
+        await self._sesion.flush()
+        logger.info("whatsapp.comprobante_asociado", pago_id=str(pago.id))
+        return True
 
     async def _motivo_tipado(self, texto: str) -> str:
         """Motivo de derivacion segun el modelo de decision, o el generico.
