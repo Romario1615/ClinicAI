@@ -45,6 +45,12 @@ describe('formato de fechas', () => {
     expect(formatearFecha(madrugada, 'America/Guayaquil')).toBe('15/04/2026');
   });
 
+  it('una fecha de calendario no se mueve de día con la zona', () => {
+    // La fecha de nacimiento 2012-03-01 se mostraba como 29/02/2012.
+    expect(formatearFecha('2012-03-01', 'America/Guayaquil')).toBe('01/03/2012');
+    expect(formatearFecha('2012-03-01', 'Asia/Tokyo')).toBe('01/03/2012');
+  });
+
   it('combina fecha y hora de forma coherente', () => {
     expect(formatearFechaHora(INSTANTE, 'America/Guayaquil')).toBe('15/04/2026 09:00');
   });

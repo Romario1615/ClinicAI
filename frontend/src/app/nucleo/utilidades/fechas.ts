@@ -27,11 +27,15 @@ export function formatearHora(instanteIso: string, zona: string): string {
 }
 
 export function formatearFecha(instanteIso: string, zona: string): string {
-  return new Date(instanteIso).toLocaleDateString(LOCALE, {
+  // Una fecha de calendario (`AAAA-MM-DD`, p. ej. la de nacimiento) no es un
+  // instante: convertirla a la zona de la sede la movía un día hacia atrás
+  // en husos negativos (2012-03-01 se mostraba como 29/02/2012).
+  const soloFecha = /^\d{4}-\d{2}-\d{2}$/.test(instanteIso);
+  return new Date(soloFecha ? `${instanteIso}T00:00:00Z` : instanteIso).toLocaleDateString(LOCALE, {
     day: '2-digit',
     month: '2-digit',
     year: 'numeric',
-    timeZone: zona,
+    timeZone: soloFecha ? 'UTC' : zona,
   });
 }
 
