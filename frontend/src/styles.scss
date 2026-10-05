@@ -207,6 +207,11 @@ textarea {
   background: var(--superficie-elevada);
   color: var(--texto);
   font-weight: 600;
+  line-height: 1.2;
+  /* Un enlace con forma de boton no se subraya, y el texto de un boton no se
+     parte en dos lineas: si no cabe, el contenedor se reorganiza. */
+  text-decoration: none;
+  white-space: nowrap;
   cursor: pointer;
   transition: background-color 140ms ease, border-color 140ms ease, box-shadow 140ms ease,
     transform 140ms ease;
@@ -282,13 +287,6 @@ textarea {
 }
 
 .obligatorio {
-  color: var(--peligro);
-  font-weight: 700;
-}
-
-/* Formularios sin `.campo` (etiqueta con el control dentro): mismo aviso. */
-label:not(.campo):has(> :is(input, select, textarea):required)::before {
-  content: '* ';
   color: var(--peligro);
   font-weight: 700;
 }
@@ -562,6 +560,15 @@ textarea.campo__control {
   gap: var(--espacio-3);
   flex-wrap: wrap;
 }
+
+/* En una celda, «acciones» no puede ser flex: rompería la tabla. Va a la
+   derecha, como en el resto de listados. */
+td.acciones {
+  display: table-cell;
+  text-align: right;
+  white-space: nowrap;
+}
+
 
 /* Acciones alineadas al final: lo que cierra un formulario o una ventana. */
 .acciones--final {

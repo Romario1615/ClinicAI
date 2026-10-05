@@ -85,7 +85,7 @@
     <div class="cabecera-paciente__identidad">
       <h2>{{ nombreCompleto(paciente()!) }}</h2>
       <p class="cabecera-paciente__sub">
-        {{ paciente()!.tipo_documento }} {{ paciente()!.numero_documento }}
+        {{ paciente()!.tipo_documento | tipoDocumento }} {{ paciente()!.numero_documento }}
       </p>
     </div>
     <button class="boton" type="button" (click)="cerrar()">Volver al listado</button>

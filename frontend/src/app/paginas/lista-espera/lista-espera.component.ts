@@ -47,6 +47,7 @@ const ESTADOS: Record<string, { etiqueta: string; clase: string }> = {
   RECHAZADA: { etiqueta: 'Rechazada', clase: 'peligro' },
   EXPIRADA: { etiqueta: 'Expirada', clase: 'peligro' },
   CANCELADA: { etiqueta: 'Retirada', clase: 'neutra' },
+  CUMPLIDA: { etiqueta: 'Con cita', clase: 'exito' },
 };
 
 const POR_PAGINA = 25;

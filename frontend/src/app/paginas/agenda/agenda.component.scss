@@ -54,6 +54,7 @@
 
 .barra-contexto__dia {
   display: flex;
+  flex-wrap: wrap;
   align-items: flex-end;
   gap: var(--espacio-2);
   margin-left: auto;
@@ -738,4 +739,17 @@
   border: 1px solid var(--borde);
   border-radius: var(--radio);
   background: var(--superficie);
+}
+
+/* En móvil el selector de vista ocupa su propia fila y se reparte el ancho. */
+@media (max-width: 600px) {
+  .selector-vista {
+    display: flex;
+    width: 100%;
+  }
+
+  .selector-vista__opcion {
+    flex: 1 1 0;
+    padding: 0 6px;
+  }
 }

@@ -534,10 +534,13 @@ export class ConocimientoComponent {
 
   protected vigencia(documento: Documento): string {
     if (!documento.effective_from && !documento.effective_until) {
-      return 'Sin limite de vigencia';
+      return 'Sin límite de vigencia';
     }
-    const desde = documento.effective_from ? `desde ${documento.effective_from}` : '';
-    const hasta = documento.effective_until ? `hasta ${documento.effective_until}` : '';
+    // Fecha corta legible: el instante ISO completo no le dice nada a quien lee.
+    const corta = (iso: string) =>
+      new Intl.DateTimeFormat('es', { day: '2-digit', month: 'short', year: 'numeric' }).format(new Date(iso));
+    const desde = documento.effective_from ? `Desde ${corta(documento.effective_from)}` : '';
+    const hasta = documento.effective_until ? `hasta ${corta(documento.effective_until)}` : '';
     return [desde, hasta].filter(Boolean).join(' ');
   }
 }

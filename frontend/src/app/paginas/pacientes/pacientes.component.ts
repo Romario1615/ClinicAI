@@ -85,11 +85,13 @@ const VERIFICACION: Record<string, { texto: string; detalle: string; tono: strin
   },
 };
 
+import { TipoDocumentoPipe } from '../../compartido/tipo-documento.pipe';
 @Component({
   selector: 'app-pacientes',
   standalone: true,
   imports: [
     FormsModule,
+    TipoDocumentoPipe,
     CargandoComponent,
     ErrorComponent,
     VacioComponent,

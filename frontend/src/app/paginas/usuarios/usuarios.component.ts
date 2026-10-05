@@ -1,4 +1,4 @@
-import { Component, inject, signal } from '@angular/core';
+import { Component, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 
 import { FalloApi } from '../../nucleo/servicios/api.service';
@@ -87,7 +87,7 @@ interface ProfesionalClinica {
           }
         </div>
         @if (requiereProfesional()) {
-          <label>Perfil profesional<select [value]="profesionalId" (change)="profesionalId = $any($event.target).value" required>
+          <label><span>Perfil profesional <span class="obligatorio">*</span></span><select [value]="profesionalId" (change)="profesionalId = $any($event.target).value" required>
             <option value="">Seleccione un profesional</option>@for (profesional of profesionales(); track profesional.id) { <option [value]="profesional.id">{{ profesional.nombre }} {{ profesional.apellido }}</option> }
           </select></label>
         }
@@ -102,15 +102,21 @@ interface ProfesionalClinica {
         <p>Selecciona los permisos que puede usar ese grupo. No puedes delegar permisos que tu cuenta no tiene.</p>
         <form (ngSubmit)="crearRol()">
           <div class="campos">
-            <label>Nombre del rol<input name="nombreRol" [(ngModel)]="nombreRol" required minlength="2" maxlength="100" placeholder="Ej. Coordinación de agenda" /></label>
-            <label>Código interno<input name="codigoRol" [(ngModel)]="codigoRol" required pattern="[a-z][a-z0-9_]+" maxlength="50" placeholder="coordinacion_agenda" /></label>
+            <label><span>Nombre del rol <span class="obligatorio">*</span></span><input name="nombreRol" [(ngModel)]="nombreRol" required minlength="2" maxlength="100" placeholder="Ej. Coordinación de agenda" /></label>
+            <label><span>Código interno <span class="obligatorio">*</span></span><input name="codigoRol" [(ngModel)]="codigoRol" required pattern="[a-z][a-z0-9_]+" maxlength="50" placeholder="coordinacion_agenda" /></label>
           </div>
-          <div class="permisos">
-            @for (permiso of permisos(); track permiso.codigo) {
-              <label class="permiso"><input type="checkbox" [checked]="permisosSeleccionados().has(permiso.codigo)" (change)="alternarPermiso(permiso.codigo, $any($event.target).checked)" />
-                <span>{{ permiso.descripcion }} <small>{{ permiso.categoria }}</small></span></label>
-            }
-          </div>
+          <!-- Agrupados por módulo: sesenta casillas sueltas no se pueden leer. -->
+          @for (grupo of permisosPorCategoria(); track grupo.categoria) {
+            <fieldset class="grupo-permisos">
+              <legend>{{ grupo.nombre }}</legend>
+              <div class="permisos">
+                @for (permiso of grupo.permisos; track permiso.codigo) {
+                  <label class="permiso"><input type="checkbox" [checked]="permisosSeleccionados().has(permiso.codigo)" (change)="alternarPermiso(permiso.codigo, $any($event.target).checked)" />
+                    <span>{{ permiso.descripcion }}</span></label>
+                }
+              </div>
+            </fieldset>
+          }
           <button class="boton boton--principal" [disabled]="ocupado() || permisosSeleccionados().size === 0">Crear rol</button>
         </form>
       </section>
@@ -122,10 +128,10 @@ interface ProfesionalClinica {
         <p>La cuenta quedará vinculada a tu clínica. Comparte la contraseña inicial de forma segura; se solicitará cambiarla al iniciar sesión.</p>
         <form (ngSubmit)="crearUsuario()">
           <div class="campos">
-            <label>Nombre<input name="nombre" [(ngModel)]="nombre" required maxlength="100" /></label>
-            <label>Apellido<input name="apellido" [(ngModel)]="apellido" required maxlength="100" /></label>
-            <label>Correo<input name="correo" [(ngModel)]="correo" type="email" required maxlength="200" /></label>
-            <label>Contraseña inicial<input name="contrasena" [(ngModel)]="contrasenaInicial" type="password" required minlength="12" maxlength="128" autocomplete="new-password" /></label>
+            <label><span>Nombre <span class="obligatorio">*</span></span><input name="nombre" [(ngModel)]="nombre" required maxlength="100" /></label>
+            <label><span>Apellido <span class="obligatorio">*</span></span><input name="apellido" [(ngModel)]="apellido" required maxlength="100" /></label>
+            <label><span>Correo <span class="obligatorio">*</span></span><input name="correo" [(ngModel)]="correo" type="email" required maxlength="200" /></label>
+            <label><span>Contraseña inicial <span class="obligatorio">*</span></span><input name="contrasena" [(ngModel)]="contrasenaInicial" type="password" required minlength="12" maxlength="128" autocomplete="new-password" /></label>
           </div>
           <h3>Roles y módulos</h3>
           <div class="opciones">
@@ -135,7 +141,7 @@ interface ProfesionalClinica {
           }
         </div>
           @if (requiereProfesional()) {
-            <label>Perfil profesional<select name="perfilProfesional" [(ngModel)]="profesionalId" required>
+            <label><span>Perfil profesional <span class="obligatorio">*</span></span><select name="perfilProfesional" [(ngModel)]="profesionalId" required>
               <option value="">Seleccione un profesional</option>@for (profesional of profesionales(); track profesional.id) { <option [value]="profesional.id">{{ profesional.nombre }} {{ profesional.apellido }}</option> }
             </select></label>
           }
@@ -156,7 +162,13 @@ interface ProfesionalClinica {
     .tarjeta { padding:1.25rem; border:1px solid var(--borde,#e4e7ec); border-radius:14px; background:var(--superficie,#fff); }
     h2 { margin:.1rem 0 .4rem; font-size:1.15rem; } h3 { margin:1rem 0 .5rem; }
     .tarjeta p,.datos span { color:var(--texto-secundario,#667085); }
-    .fila { padding:.85rem 0; border-top:1px solid var(--borde,#eaecf0); }
+    .fila { padding:.85rem 0; border-top:1px solid var(--borde,#eaecf0); display:grid; grid-template-columns:minmax(0,1fr) auto auto; align-items:center; }
+    :host > * { min-width:0; }
+    .datos span { overflow-wrap:anywhere; }
+    .grupo-permisos { margin:1rem 0 .75rem; padding:.75rem; border:1px solid var(--borde,#eaecf0); border-radius:10px; }
+    .grupo-permisos legend { padding:0 .4rem; font-weight:700; font-size:.85rem; }
+    .grupo-permisos .permisos { margin:.25rem 0 0; }
+    .obligatorio { color:var(--peligro); }
     .datos { display:grid; gap:.25rem; } .etiquetas { display:flex; gap:.35rem; flex-wrap:wrap; }
     .etiqueta { padding:.15rem .5rem; border-radius:999px; background:#edf5f3; color:#245b55!important; font-size:.8rem; }
     .campos { display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:.8rem; }
@@ -169,7 +181,7 @@ interface ProfesionalClinica {
     .acciones { justify-content:flex-start; margin-top:1rem; }
     .mensaje { padding:.8rem 1rem; border-radius:8px; } .mensaje--error { background:#fef3f2; color:#b42318; } .mensaje--bien { background:#ecfdf3; color:#027a48; }
     .vacio { padding:1rem 0; } .boton { cursor:pointer; } .boton:disabled { cursor:wait; opacity:.6; }
-    @media (max-width:600px) { .encabezado,.fila { align-items:flex-start; flex-direction:column; } }
+    @media (max-width:600px) { .encabezado { align-items:flex-start; flex-direction:column; } .fila { grid-template-columns:1fr 1fr; } .fila .datos { grid-column:1 / -1; } }
   `,
 })
 export class UsuariosComponent {
@@ -179,6 +191,23 @@ export class UsuariosComponent {
   protected readonly usuarios = signal<UsuarioClinica[]>([]);
   protected readonly roles = signal<RolClinica[]>([]);
   protected readonly permisos = signal<PermisoClinica[]>([]);
+  protected readonly permisosPorCategoria = computed(() => {
+    const nombres: Record<string, string> = {
+      agenda: 'Agenda y citas', analitica: 'Panel y reportes', auditoria: 'Auditoría',
+      clinico: 'Historia clínica', comunicacion: 'Mensajes y promociones', conocimiento: 'Base de conocimiento',
+      organizacion: 'Clínica y catálogo', pacientes: 'Pacientes', pagos: 'Pagos', profesionales: 'Profesionales',
+      recetas: 'Recetas y adherencia', usuarios: 'Usuarios y roles',
+    };
+    const grupos = new Map<string, PermisoClinica[]>();
+    for (const permiso of this.permisos()) {
+      const lista = grupos.get(permiso.categoria) ?? [];
+      lista.push(permiso);
+      grupos.set(permiso.categoria, lista);
+    }
+    return [...grupos.entries()]
+      .map(([categoria, permisos]) => ({ categoria, nombre: nombres[categoria] ?? categoria, permisos }))
+      .sort((a, b) => a.nombre.localeCompare(b.nombre));
+  });
   protected readonly profesionales = signal<ProfesionalClinica[]>([]);
   protected readonly rolesSeleccionados = signal<Set<string>>(new Set());
   protected readonly permisosSeleccionados = signal<Set<string>>(new Set());

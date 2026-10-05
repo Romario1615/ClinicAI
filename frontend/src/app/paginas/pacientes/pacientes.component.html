@@ -136,7 +136,7 @@
           <tr>
             <td>{{ paciente.apellido }}, {{ paciente.nombre }}</td>
             <td class="numerico">
-              <span class="tipo-doc">{{ paciente.tipo_documento }}</span>
+              <span class="tipo-doc">{{ paciente.tipo_documento | tipoDocumento }}</span>
               {{ paciente.numero_documento }}
             </td>
             <td>{{ contacto(paciente) }}</td>

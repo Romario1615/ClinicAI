@@ -210,6 +210,8 @@ const DIAS_POR_PERIODO: Record<string, number> = { hoy: 1, '7': 7, '30': 30 };
                       <span>{{ par.estado }}</span>
                       <span class="numerico">{{ par.importe }}</span>
                     </li>
+                  } @empty {
+                    <li class="pagos__vacio">Sin pagos registrados para esas citas.</li>
                   }
                 </ul>
               </article>
@@ -358,6 +360,7 @@ const DIAS_POR_PERIODO: Record<string, number> = { hoy: 1, '7': 7, '30': 30 };
     }
 
     .periodos__boton {
+      white-space: nowrap;
       min-height: 34px;
       padding: 0 var(--espacio-3);
       border: 0;
@@ -412,6 +415,25 @@ const DIAS_POR_PERIODO: Record<string, number> = { hoy: 1, '7': 7, '30': 30 };
       height: 10px;
       border-radius: 0 4px 4px 0;
       background: var(--acento);
+    }
+
+    /* En pantallas estrechas el nombre va arriba y la barra ocupa todo el ancho:
+       con tres columnas la barra se quedaba en un punto. */
+    @media (max-width: 600px) {
+      .carga__fila {
+        grid-template-columns: minmax(0, 1fr) auto;
+        row-gap: 4px;
+      }
+
+      .carga__pista {
+        grid-column: 1 / -1;
+        grid-row: 2;
+      }
+    }
+
+    .pagos__vacio {
+      color: var(--texto-tenue);
+      font-size: 0.88rem;
     }
 
     .carga__valor {
@@ -822,6 +844,17 @@ export class PanelComponent {
   }
 
   protected pagosLegibles(pagos: Record<string, string>): { estado: string; importe: string }[] {
-    return Object.entries(pagos).map(([estado, importe]) => ({ estado, importe }));
+    const nombres: Record<string, string> = {
+      PENDING: 'Pendiente',
+      PROOF_RECEIVED: 'Comprobante recibido',
+      UNDER_REVIEW: 'En revisión',
+      CONFIRMED: 'Confirmado',
+      REJECTED: 'Rechazado',
+      REFUND_PENDING: 'Devolución pendiente',
+    };
+    return Object.entries(pagos).map(([estado, importe]) => ({
+      estado: nombres[estado] ?? estado,
+      importe: Number.isFinite(Number(importe)) ? `$${Number(importe).toFixed(2)}` : importe,
+    }));
   }
 }

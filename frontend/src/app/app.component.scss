@@ -288,12 +288,29 @@
 
 @media (max-width: 540px) {
   .cabecera {
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
     gap: var(--espacio-2);
     padding: var(--espacio-2) var(--espacio-3);
   }
 
   .cabecera__usuario {
     margin-left: auto;
+  }
+}
+
+/* En teléfono, «Cerrar sesión» queda como icono con nombre accesible: con
+   texto ocupaba una fila entera debajo de la marca. */
+@media (max-width: 540px) {
+  .cabecera__salir {
+    padding: 0 var(--espacio-2);
+  }
+
+  .cabecera__salir-texto {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
   }
 }

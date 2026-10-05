@@ -449,6 +449,14 @@
 .vigencia {
   font-size: 0.88rem;
   color: var(--texto-suave);
+  min-width: 9rem;
+}
+
+/* El título es lo que se busca con la vista: no puede quedar en cinco líneas
+   mientras las acciones ocupan media tabla. */
+tbody td:first-child {
+  min-width: 15rem;
+  font-weight: 550;
 }
 
 .pie-listado {

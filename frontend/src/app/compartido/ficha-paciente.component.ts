@@ -53,6 +53,7 @@ import { InsigniaEstadoComponent } from './insignia-estado.component';
 import type { Cita } from '../nucleo/modelos/dominio';
 import { formatearFecha, formatearFechaHora } from '../nucleo/utilidades/fechas';
 import { IconoComponent } from './icono.component';
+import { TipoDocumentoPipe } from './tipo-documento.pipe';
 
 /** Traducción del nivel de verificación, con lo que implica para quien atiende. */
 const VERIFICACION: Record<string, { etiqueta: string; consecuencia: string; alerta: boolean }> = {
@@ -115,6 +116,7 @@ const DETALLE_CLINICO: Partial<Record<Pestana, string>> = {
     ConsentimientosPacienteComponent,
     OdontogramaComponent,
     PlanesTratamientoComponent,
+    TipoDocumentoPipe,
   ],
   template: `
     <div class="ficha" [class.ficha--embebida]="sinCabecera()" [attr.aria-label]="'Ficha de ' + nombre()">
@@ -135,7 +137,7 @@ const DETALLE_CLINICO: Partial<Record<Pestana, string>> = {
         }
         @if (paciente(); as p) {
           <p class="ficha__documento numerico">
-            {{ p.tipo_documento }} {{ p.numero_documento }}
+            {{ p.tipo_documento | tipoDocumento }} {{ p.numero_documento }}
             @if (edad()) {
               <span> · {{ edad() }}</span>
             }
