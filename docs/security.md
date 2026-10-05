@@ -98,6 +98,17 @@ Observaciones que importan:
   preparar el sillón y sube radiografías y fotos, pero no registra hallazgos.
 * **Promociones: quien redacta no tiene por qué aprobar.** `promocion.aprobar` es el único
   que envía. Ningún rol asistencial tiene permisos de promoción.
+* **La interfaz oculta lo que el rol no puede hacer, el backend lo impide.** Menú, rutas,
+  pestañas de la ficha y botones se muestran solo con el permiso que el endpoint exige
+  (`guardiaPermiso` en rutas; `tienePermiso` en componentes). Ocultar es comodidad: la
+  autorización real sigue siendo la del backend. Cambios de esta revisión: el *Agente
+  demo* (simulador) exige `configuracion.escribir`, ya no `conversacion.responder`; la
+  ruta `/catalogo` exige `agenda.leer` (antes solo autenticación); la ficha del paciente
+  muestra historia, recetas, odontograma, plan e imágenes solo con su permiso de lectura.
+* **Usuarios y roles** incluye la tabla «Qué puede hacer cada rol», calculada de los
+  permisos reales de cada rol: *Gestiona* (algún permiso de escritura), *Consulta* (solo
+  lectura), *Solo registros* (`historia_clinica.leer_metadatos`: sabe que existe un
+  registro y quién lo consultó, no su contenido) y *Sin acceso*.
 
 ### Permiso exigido por cada endpoint
 

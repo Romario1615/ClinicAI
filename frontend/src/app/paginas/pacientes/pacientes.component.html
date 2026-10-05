@@ -181,8 +181,9 @@
   <app-ventana-flotante
     ceja="Ficha del paciente"
     [titulo]="elegido.apellido + ', ' + elegido.nombre"
-    forma="lateral"
-    [anchoMaximo]="480"
+    forma="centrada"
+    [anchoMaximo]="1180"
+    [altoCompleto]="true"
     (cerrar)="cerrarFicha()"
   >
     <app-ficha-paciente [pacienteId]="elegido.id" [sinCabecera]="true" />

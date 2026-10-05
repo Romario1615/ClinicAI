@@ -118,6 +118,45 @@
   }
 }
 
+/* --- Selector de vista --- */
+.selector-vista {
+  display: inline-flex;
+  padding: 2px;
+  border: 1px solid var(--borde);
+  border-radius: 999px;
+  background: var(--superficie);
+}
+
+.selector-vista__opcion {
+  min-height: 32px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--texto-suave);
+  font-weight: 600;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.selector-vista__opcion:hover {
+  color: var(--texto);
+}
+
+.selector-vista__opcion:focus-visible {
+  outline: 3px solid var(--acento);
+  outline-offset: 1px;
+}
+
+.selector-vista__opcion--activa {
+  background: var(--acento);
+  color: var(--acento-texto, #fff);
+}
+
+.calendario {
+  min-width: 0;
+}
+
 /* --- El día --- */
 .dia {
   display: flex;
@@ -687,4 +726,16 @@
   border-left: 4px solid var(--acento);
   border-radius: var(--radio);
   background: var(--acento-suave);
+}
+
+.reserva__paciente {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--espacio-2);
+  margin: 0;
+  padding: var(--espacio-2) var(--espacio-3);
+  border: 1px solid var(--borde);
+  border-radius: var(--radio);
+  background: var(--superficie);
 }

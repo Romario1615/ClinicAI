@@ -1,5 +1,5 @@
-import { Component, EventEmitter, Input, OnChanges, Output, inject, signal } from '@angular/core';
-import { FormsModule } from '@angular/forms';
+import { Component, EventEmitter, Input, OnChanges, Output, ViewChild, inject, signal } from '@angular/core';
+import { FormsModule, NgForm } from '@angular/forms';
 
 import { VentanaFlotanteComponent } from '../../compartido/ventana-flotante.component';
 import type { Paciente } from '../../nucleo/modelos/dominio';
@@ -31,23 +31,30 @@ import { OperacionesService } from '../../nucleo/servicios/operaciones.service';
       [cierraAlPulsarFuera]="false"
       (cerrar)="cerrar.emit()"
     >
-      <form #formulario="ngForm" (ngSubmit)="guardar()">
+      <form #formulario="ngForm" (ngSubmit)="guardar()" novalidate>
+        <p class="campo__ayuda formulario__leyenda">Los campos con <span class="obligatorio">*</span> son obligatorios.</p>
         <div class="rejilla-campos">
           <label class="campo">
             <span class="campo__etiqueta">Nombres</span>
-            <input class="campo__control" name="nombre" [(ngModel)]="nombre" required maxlength="100" />
+            <input class="campo__control" name="nombre" [(ngModel)]="nombre" required maxlength="100" #campoNombre="ngModel" autocomplete="off" />
+            @if (campoNombre.invalid && (campoNombre.touched || intentado())) {
+              <span class="campo__error">Escriba los nombres del paciente.</span>
+            }
           </label>
           <label class="campo">
             <span class="campo__etiqueta">Apellidos</span>
-            <input class="campo__control" name="apellido" [(ngModel)]="apellido" required maxlength="100" />
+            <input class="campo__control" name="apellido" [(ngModel)]="apellido" required maxlength="100" #campoApellido="ngModel" autocomplete="off" />
+            @if (campoApellido.invalid && (campoApellido.touched || intentado())) {
+              <span class="campo__error">Escriba los apellidos del paciente.</span>
+            }
           </label>
           <label class="campo">
             <span class="campo__etiqueta">Tipo de documento</span>
-            <select class="campo__control" name="tipo" [(ngModel)]="tipo">
-              <option>CEDULA</option>
-              <option>PASAPORTE</option>
-              <option>RUC</option>
-              <option>SIN_DOCUMENTO</option>
+            <select class="campo__control" name="tipo" [(ngModel)]="tipo" required>
+              <option value="CEDULA">Cédula</option>
+              <option value="PASAPORTE">Pasaporte</option>
+              <option value="RUC">RUC</option>
+              <option value="SIN_DOCUMENTO">Sin documento</option>
             </select>
           </label>
           @if (tipo !== 'SIN_DOCUMENTO') {
@@ -60,12 +67,29 @@ import { OperacionesService } from '../../nucleo/servicios/operaciones.service';
                 required
                 minlength="3"
                 maxlength="32"
+                #campoNumero="ngModel"
+                autocomplete="off"
               />
+              @if (campoNumero.invalid && (campoNumero.touched || intentado())) {
+                <span class="campo__error">Indique el número (mínimo 3 caracteres).</span>
+              }
             </label>
           }
           <label class="campo">
             <span class="campo__etiqueta">Fecha de nacimiento</span>
-            <input class="campo__control" type="date" name="nacimiento" [(ngModel)]="nacimiento" />
+            <input class="campo__control" type="date" name="nacimiento" [(ngModel)]="nacimiento" [max]="hoy" />
+            @if (nacimiento && nacimiento > hoy) {
+              <span class="campo__error">La fecha de nacimiento no puede estar en el futuro.</span>
+            }
+          </label>
+          <label class="campo">
+            <span class="campo__etiqueta">Sexo</span>
+            <select class="campo__control" name="sexo" [(ngModel)]="sexo">
+              <option value="">Sin registrar</option>
+              <option value="F">Femenino</option>
+              <option value="M">Masculino</option>
+              <option value="OTRO">Otro</option>
+            </select>
           </label>
           <label class="campo">
             <span class="campo__etiqueta">WhatsApp</span>
@@ -75,9 +99,15 @@ import { OperacionesService } from '../../nucleo/servicios/operaciones.service';
               name="telefono"
               [(ngModel)]="telefono"
               maxlength="32"
-              placeholder="Código de país y número"
+              pattern="^\\+?[0-9 ()-]{7,32}$"
+              placeholder="+593 99 999 9999"
+              #campoTelefono="ngModel"
             />
-            <span class="campo__ayuda">Sin teléfono no recibe recordatorios ni ofertas.</span>
+            @if (campoTelefono.invalid && (campoTelefono.touched || intentado())) {
+              <span class="campo__error">Use solo números, con el código de país (ej. +593…).</span>
+            } @else {
+              <span class="campo__ayuda">Sin teléfono no recibe recordatorios ni ofertas.</span>
+            }
           </label>
           <label class="campo">
             <span class="campo__etiqueta">Correo</span>
@@ -88,7 +118,11 @@ import { OperacionesService } from '../../nucleo/servicios/operaciones.service';
               [(ngModel)]="correo"
               email
               maxlength="200"
+              #campoCorreo="ngModel"
             />
+            @if (campoCorreo.invalid && (campoCorreo.touched || intentado())) {
+              <span class="campo__error">Revise el correo: debe tener la forma nombre&#64;dominio.com.</span>
+            }
           </label>
           <label class="campo">
             <span class="campo__etiqueta">Dirección</span>
@@ -107,7 +141,8 @@ import { OperacionesService } from '../../nucleo/servicios/operaciones.service';
           <button
             type="submit"
             class="boton boton--principal"
-            [disabled]="formulario.invalid || ocupado()"
+            [disabled]="ocupado()"
+            (click)="intentado.set(true)"
           >
             {{ ocupado() ? 'Guardando…' : 'Guardar paciente' }}
           </button>
@@ -141,18 +176,30 @@ export class EditorPacienteComponent implements OnChanges {
   protected nombre = ''; protected apellido = ''; protected tipo = 'CEDULA'; protected numero = '';
   protected nacimiento = ''; protected telefono = ''; protected correo = ''; protected direccion = '';
   protected readonly ocupado = signal(false); protected readonly error = signal('');
+  /** Tras el primer intento de guardar, todos los errores se muestran aunque el campo no se haya tocado. */
+  protected readonly intentado = signal(false);
+  protected sexo = '';
+  protected readonly hoy = new Date().toISOString().slice(0, 10);
+  @ViewChild('formulario') private formulario?: NgForm;
   private clave = crypto.randomUUID(); private ultimoCuerpo = '';
   ngOnChanges(): void {
     const p = this.paciente;
     this.nombre = p?.nombre ?? ''; this.apellido = p?.apellido ?? ''; this.tipo = p?.tipo_documento ?? 'CEDULA';
     this.numero = p?.numero_documento ?? ''; this.nacimiento = p?.fecha_nacimiento ?? '';
     this.telefono = p?.telefono_whatsapp ?? ''; this.correo = p?.correo ?? ''; this.direccion = p?.direccion ?? '';
-    this.clave = crypto.randomUUID(); this.ultimoCuerpo = ''; this.error.set('');
+    this.sexo = (p as { sexo?: string | null } | null)?.sexo ?? '';
+    this.clave = crypto.randomUUID(); this.ultimoCuerpo = ''; this.error.set(''); this.intentado.set(false);
   }
   protected guardar(): void {
+    this.intentado.set(true);
     if (this.ocupado()) return;
+    if (this.formulario?.invalid || (this.nacimiento && this.nacimiento > this.hoy)) {
+      this.error.set('Revise los campos marcados antes de guardar.');
+      return;
+    }
     const datos = { nombre: this.nombre.trim(), apellido: this.apellido.trim(), tipo_documento: this.tipo,
       numero_documento: this.tipo === 'SIN_DOCUMENTO' ? null : this.numero.trim(), fecha_nacimiento: this.nacimiento || null,
+      sexo: this.sexo || null,
       telefono_whatsapp: this.telefono.trim() || null, correo: this.correo.trim() || null, direccion: this.direccion.trim() || null };
     const cuerpo = JSON.stringify(datos);
     if (this.ultimoCuerpo && cuerpo !== this.ultimoCuerpo) this.clave = crypto.randomUUID();

@@ -32,6 +32,7 @@
  */
 import { Component, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { ActivatedRoute } from '@angular/router';
 import { forkJoin, of } from 'rxjs';
 import { catchError } from 'rxjs/operators';
 
@@ -255,6 +256,11 @@ export class HistoriaClinicaComponent {
 
   constructor() {
     this.cargarPacientes();
+    // «Abrir historia completa» desde la ficha llega con ?paciente=<id>.
+    const pacienteId = inject(ActivatedRoute).snapshot.queryParamMap.get('paciente');
+    if (pacienteId) {
+      this.abrir({ id: pacienteId } as Paciente);
+    }
   }
 
   // ======================================================================

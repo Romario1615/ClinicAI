@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import date
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -36,6 +37,7 @@ class DatosPaciente(BaseModel):
     tipo_documento: TipoDocumento = TipoDocumento.CEDULA
     numero_documento: str | None = Field(default=None, min_length=3, max_length=32)
     fecha_nacimiento: date | None = None
+    sexo: Literal["F", "M", "OTRO"] | None = None
     telefono_whatsapp: str | None = Field(default=None, pattern=r"^\+?[0-9 ()-]{7,32}$")
     correo: str | None = Field(default=None, max_length=200, pattern=r"^[^\s@]+@[^\s@]+\.[^\s@]+$")
     direccion: str | None = Field(default=None, max_length=500)

@@ -319,6 +319,9 @@ const DIAS_SEMANA = [
         </fieldset>
 
         <div class="acciones acciones--final" pie>
+          @if (faltaParaAnotar(); as falta) {
+            <span class="campo__ayuda alta__falta" role="status">{{ falta }}</span>
+          }
           <button type="button" class="boton" (click)="cerrarAlta()">Cancelar</button>
           <button
             type="button"
@@ -437,10 +440,24 @@ const DIAS_SEMANA = [
           </div>
         }
 
-        <details class="detalle__ficha">
-          <summary>Ver la ficha del paciente</summary>
-          <app-ficha-paciente [pacienteId]="entrada.paciente_id" [sinCabecera]="true" />
-        </details>
+        <div class="detalle__ficha">
+          <button type="button" class="boton" (click)="fichaDe.set(entrada.paciente_id)">
+            Ver la ficha completa del paciente
+          </button>
+        </div>
+      </app-ventana-flotante>
+    }
+
+    @if (fichaDe(); as pacienteId) {
+      <app-ventana-flotante
+        ceja="Paciente"
+        titulo="Ficha del paciente"
+        forma="centrada"
+        [anchoMaximo]="1180"
+        [altoCompleto]="true"
+        (cerrar)="fichaDe.set(null)"
+      >
+        <app-ficha-paciente [pacienteId]="pacienteId" [sinCabecera]="true" />
       </app-ventana-flotante>
     }
   `,
@@ -628,20 +645,18 @@ const DIAS_SEMANA = [
       margin-top: var(--espacio-2);
     }
 
+    .alta__falta {
+      margin-right: auto;
+      align-self: center;
+    }
+
     .detalle__ficha {
       margin-top: var(--espacio-5);
       padding-top: var(--espacio-4);
       border-top: 1px solid var(--borde);
     }
 
-    .detalle__ficha summary {
-      min-height: var(--toque-minimo);
-      display: flex;
-      align-items: center;
-      color: var(--acento);
-      font-weight: 600;
-      cursor: pointer;
-    }
+
 
     .vacio__titulo {
       margin: 0 0 var(--espacio-1);
@@ -732,6 +747,16 @@ export class ListaEsperaComponent {
       this.franjaCoherente() && this.fechasCoherentes(),
   );
 
+  /** Por qué el botón está apagado, dicho junto al botón. */
+  protected readonly faltaParaAnotar = computed(() => {
+    if (this.paciente() === null) return 'Elija primero al paciente.';
+    if (!this.sedeId()) return 'Elija la sede.';
+    if (!this.servicioId()) return 'Elija el servicio.';
+    if (!this.franjaCoherente()) return 'Revise la franja horaria.';
+    if (!this.fechasCoherentes()) return 'Revise las fechas.';
+    return '';
+  });
+
   protected readonly franjaCoherente = computed(() =>
     Boolean(this.horaDesde()) === Boolean(this.horaHasta()) &&
       (!this.horaDesde() || this.horaDesde() < this.horaHasta()),
@@ -772,6 +797,9 @@ export class ListaEsperaComponent {
   protected cerrarAlta(): void {
     this.altaAbierta.set(false);
   }
+
+  /** Paciente cuya ficha completa está abierta encima del detalle. */
+  protected readonly fichaDe = signal<string | null>(null);
 
   protected abrirDetalle(entrada: EntradaEspera): void {
     this.entradaElegida.set(entrada);

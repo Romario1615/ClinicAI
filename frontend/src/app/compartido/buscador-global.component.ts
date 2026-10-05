@@ -110,8 +110,9 @@ import type { Paciente } from '../nucleo/modelos/dominio';
         <app-ventana-flotante
           ceja="Ficha del paciente"
           [titulo]="elegido.apellido + ', ' + elegido.nombre"
-          forma="lateral"
-          [anchoMaximo]="460"
+          forma="centrada"
+          [anchoMaximo]="1180"
+          [altoCompleto]="true"
           (cerrar)="pacienteElegido.set(null)"
         >
           <app-ficha-paciente [pacienteId]="elegido.id" [sinCabecera]="true" />

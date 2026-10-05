@@ -1,5 +1,7 @@
 :host {
   display: block;
+  /* Se adapta al ancho de quien lo contiene (pagina o ficha flotante), no al de la ventana. */
+  container-type: inline-size;
   /* Colores clínicos convencionales: rojo caries, azul resina, gris amalgama. */
   --odo-caries: #d2463a;
   --odo-resina: #3b82b8;
@@ -165,4 +167,14 @@
   .diente { width: 2.4rem; }
   .diente__svg { width: 2.2rem; height: 2.2rem; }
   .cara-fila { grid-template-columns: 1fr; }
+}
+
+/* Dentro de la ficha flotante o en pantallas medianas: piezas mas compactas
+   para que las dos hemiarcadas quepan sin desplazamiento horizontal. */
+@container (max-width: 900px) {
+  .diente { width: 2.75rem; }
+  .diente__svg { width: 2.5rem; height: 2.5rem; }
+  .arcada { padding: 0 var(--espacio-1); }
+  .panel { grid-template-columns: 1fr; }
+  .panel__historial { padding-left: 0; padding-top: var(--espacio-3); border-left: 0; border-top: 1px solid var(--borde); }
 }

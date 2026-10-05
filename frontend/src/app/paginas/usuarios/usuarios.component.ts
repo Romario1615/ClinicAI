@@ -5,6 +5,7 @@ import { FalloApi } from '../../nucleo/servicios/api.service';
 import { OperacionesService } from '../../nucleo/servicios/operaciones.service';
 import { PERMISOS } from '../../nucleo/servicios/configuracion';
 import { SesionService } from '../../nucleo/servicios/sesion.service';
+import { MatrizAccesosComponent } from './matriz-accesos.component';
 
 interface UsuarioClinica {
   readonly id: string;
@@ -41,7 +42,7 @@ interface ProfesionalClinica {
 @Component({
   selector: 'app-usuarios',
   standalone: true,
-  imports: [FormsModule],
+  imports: [FormsModule, MatrizAccesosComponent],
   template: `
     <header class="encabezado">
       <div><p class="sobretitulo">Administración de accesos</p><h1>Usuarios y roles</h1>
@@ -141,6 +142,10 @@ interface ProfesionalClinica {
           <button class="boton boton--principal" [disabled]="ocupado() || rolesSeleccionados().size === 0">Crear cuenta y conceder acceso</button>
         </form>
       </section>
+    }
+
+    @if (roles().length) {
+      <app-matriz-accesos [roles]="roles()" />
     }
   `,
   styles: `

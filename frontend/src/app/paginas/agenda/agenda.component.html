@@ -96,7 +96,7 @@
         type="button"
         class="boton boton--pequeno"
         (click)="cambiarDia(-1)"
-        aria-label="Día anterior"
+        [attr.aria-label]="vista() === 'semana' ? 'Semana anterior' : vista() === 'mes' ? 'Mes anterior' : 'Día anterior'"
       >
         <span aria-hidden="true">←</span>
       </button>
@@ -105,7 +105,7 @@
         type="button"
         class="boton boton--pequeno"
         (click)="cambiarDia(1)"
-        aria-label="Día siguiente"
+        [attr.aria-label]="vista() === 'semana' ? 'Semana siguiente' : vista() === 'mes' ? 'Mes siguiente' : 'Día siguiente'"
       >
         <span aria-hidden="true">→</span>
       </button>
@@ -119,6 +119,19 @@
           (ngModelChange)="fecha.set($event); cargarAgenda()"
         />
       </label>
+      <div class="selector-vista" role="group" aria-label="Vista de la agenda">
+        @for (opcion of vistas; track opcion.valor) {
+          <button
+            type="button"
+            class="selector-vista__opcion"
+            [class.selector-vista__opcion--activa]="vista() === opcion.valor"
+            [attr.aria-pressed]="vista() === opcion.valor"
+            (click)="cambiarVista(opcion.valor)"
+          >
+            {{ opcion.etiqueta }}
+          </button>
+        }
+      </div>
     </div>
   </section>
 
@@ -182,7 +195,7 @@
       </label>
     </div>
 
-    @if (tableroConsultorios().length > 0) {
+    @if (tableroConsultorios().length > 0 && (vista() === 'dia' || vista() === 'lista')) {
       <!-- ================= Consultorios ================= -->
       <!-- Todas las salas de la sede a la vez: quién está en cuál y cuándo se
            libera. Incluye las citas de todos los profesionales, no solo las
@@ -233,6 +246,32 @@
     }
 
     <div class="columnas">
+      @if (vista() !== 'lista') {
+        <!-- ================= Calendario con leyenda de colores ================= -->
+        <section class="calendario" aria-label="Calendario de la agenda">
+          @if (cargandoRango() && vista() !== 'dia') {
+            <app-cargando mensaje="Cargando las citas del periodo..." />
+          } @else {
+            <app-calendario-agenda
+              [vista]="$any(vista())"
+              [fecha]="fecha()"
+              [zona]="zona()"
+              [citas]="citasCalendario()"
+              [huecos]="huecosDia()"
+              [profesionales]="profesionales()"
+              [profesionalId]="profesionalId()"
+              [citaSeleccionadaId]="citaSeleccionada()?.id ?? null"
+              [puedeReservar]="puedeCrear()"
+              [verCanceladas]="verCanceladas()"
+              [etiquetaPaciente]="etiquetaPaciente"
+              [etiquetaServicio]="etiquetaServicio"
+              (citaElegida)="abrirCita($event)"
+              (huecoElegido)="abrirHueco($event)"
+              (diaElegido)="elegirDia($event)"
+            />
+          }
+        </section>
+      } @else {
       <!-- ================= El día, en orden ================= -->
       <section class="dia" aria-labelledby="titulo-dia">
         <div class="dia__cabecera">
@@ -347,6 +386,7 @@
           }
         }
       </section>
+      }
 
       <!-- ================= Panel contextual ================= -->
       <aside class="panel" aria-live="polite">
@@ -452,18 +492,23 @@
                   </fieldset>
                 }
 
-                <label class="campo">
-                  <span class="campo__etiqueta">Paciente</span>
-                  <select class="campo__control" name="paciente" [(ngModel)]="pacienteId"
-                          [disabled]="!!procedimientoPlanSugerido()">
-                    <option value="">Seleccione…</option>
-                    @for (paciente of pacientes(); track paciente.id) {
-                      <option [value]="paciente.id">
-                        {{ paciente.apellido }}, {{ paciente.nombre }}
-                      </option>
-                    }
-                  </select>
-                </label>
+                <!-- Se busca al paciente: una lista desplegable solo alcanzaba a los
+                     primeros cien y en una clínica real el buscado no estaba. -->
+                <div class="campo">
+                  <span class="campo__etiqueta">Paciente <span class="obligatorio">*</span></span>
+                  @if (pacienteId) {
+                    <p class="reserva__paciente">
+                      <strong>{{ nombrePaciente(pacienteId) }}</strong>
+                      @if (!procedimientoPlanSugerido()) {
+                        <button type="button" class="boton boton--plano boton--pequeno" (click)="pacienteId = ''">
+                          Cambiar
+                        </button>
+                      }
+                    </p>
+                  } @else {
+                    <app-selector-paciente (seleccion)="elegirPacienteReserva($event)" />
+                  }
+                </div>
 
                 <label class="campo">
                   <span class="campo__etiqueta">Notas de recepción (opcional)</span>
@@ -484,6 +529,9 @@
                 }
 
                 <div class="fila">
+                  @if (!pacienteId) {
+                    <span class="campo__ayuda">Busque y elija al paciente para confirmar.</span>
+                  }
                   <button
                     type="button"
                     class="boton boton--principal"
@@ -639,8 +687,9 @@
     <app-ventana-flotante
       ceja="Ficha del paciente"
       [titulo]="nombrePaciente(pacienteId)"
-      forma="lateral"
-      [anchoMaximo]="460"
+      forma="centrada"
+      [anchoMaximo]="1180"
+      [altoCompleto]="true"
       (cerrar)="cerrarFicha()"
     >
       <app-ficha-paciente [pacienteId]="pacienteId" [zona]="zona()" [sinCabecera]="true" />

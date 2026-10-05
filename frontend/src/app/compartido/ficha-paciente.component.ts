@@ -1,35 +1,51 @@
 /**
- * Ficha del paciente, como panel lateral sobre la pantalla actual.
+ * Ficha del paciente: todo lo que el rol puede ver, en una sola ventana.
  *
- * Por qué un panel y no una pantalla
- * ----------------------------------
+ * Por qué una ventana y no una pantalla
+ * -------------------------------------
  * Antes, saber quién es el paciente de las 10:30 exigía salir de la agenda,
  * buscarlo en la pantalla de pacientes y volver. Con un paciente delante y el
  * teléfono sonando, eso significa que no se consulta: se atiende a ciegas.
+ * La ficha se abre encima, no navega, y al cerrarla la pantalla de detrás
+ * sigue donde estaba.
  *
- * El panel se abre encima, no navega, y al cerrarlo la agenda sigue donde
- * estaba —mismo día, misma selección—.
+ * Qué muestra
+ * -----------
+ * A la izquierda, siempre: foto (con «Subir foto» / «Tomar foto» si el rol
+ * puede editar la ficha), documento, edad, nivel de verificación y contacto
+ * rápido. A la derecha, pestañas: resumen, citas y contacto para todos; y las
+ * clínicas —historia y recetas, odontograma, plan de tratamiento e imágenes—
+ * **solo** si el rol tiene el permiso que el backend exige para cada una. El
+ * backend vuelve a comprobarlo todo: ocultar una pestaña aquí es comodidad,
+ * no seguridad.
  *
- * Lo que muestra y lo que no
- * --------------------------
- * Muestra lo **administrativo**: identidad, nivel de verificación, próxima
- * cita, historial de citas y contacto. No muestra historia clínica, ni
- * diagnósticos, ni medicación, y lo **dice en la propia pantalla** en lugar de
- * dejar que parezca que esos datos no existen. Un hueco sin explicación se
- * interpreta como un error del sistema; un límite declarado se entiende.
+ * Si el rol no alcanza nada clínico, la ficha lo **dice** en lugar de dejar
+ * que parezca que esos datos no existen.
+ *
+ * Lo clínico se pide al abrir su pestaña, no al abrir la ficha: cada lectura
+ * queda auditada y no debe registrarse una consulta que nadie hizo.
  *
  * Sobre el número de documento
  * ----------------------------
  * Se muestra completo. La minimización de ADR‑0020 se aplica al menú que el
  * agente ofrece por WhatsApp a quien tenga el teléfono en la mano, no aquí:
- * este panel lo abre personal con permiso de ficha, y comprobar el documento
- * en el mostrador es precisamente cómo se verifica una identidad.
+ * esta ficha la abre personal con permiso, y comprobar el documento en el
+ * mostrador es precisamente cómo se verifica una identidad.
  */
 import { Component, computed, inject, input, type OnInit, output, signal } from '@angular/core';
+import { Router } from '@angular/router';
 
-import { ApiService, FalloApi, type PacienteDetalle } from '../nucleo/servicios/api.service';
+import {
+  ApiService,
+  FalloApi,
+  type Nota,
+  type PacienteDetalle,
+  type Receta,
+} from '../nucleo/servicios/api.service';
 import { PERMISOS } from '../nucleo/servicios/configuracion';
 import { SesionService } from '../nucleo/servicios/sesion.service';
+import { OdontogramaComponent } from '../paginas/historia-clinica/odontograma.component';
+import { PlanesTratamientoComponent } from '../paginas/historia-clinica/planes-tratamiento.component';
 import { ConsentimientosPacienteComponent } from './consentimientos-paciente.component';
 import { FotoPerfilComponent } from './foto-perfil.component';
 import { GaleriaImagenesComponent } from './galeria-imagenes.component';
@@ -64,7 +80,29 @@ const VERIFICACION: Record<string, { etiqueta: string; consecuencia: string; ale
   },
 };
 
-type Pestana = 'resumen' | 'citas' | 'contacto' | 'imagenes';
+type Pestana =
+  | 'resumen'
+  | 'citas'
+  | 'contacto'
+  | 'historia'
+  | 'odontograma'
+  | 'planes'
+  | 'imagenes';
+
+/** Estados de receta en palabras de quien atiende. */
+const ESTADO_RECETA: Record<string, string> = {
+  BORRADOR: 'Borrador',
+  PENDIENTE_CONFIRMACION: 'Por confirmar',
+  CONFIRMADA: 'Confirmada',
+  SUSPENDIDA: 'Suspendida',
+};
+
+const DETALLE_CLINICO: Partial<Record<Pestana, string>> = {
+  historia: 'Notas de evolución y recetas',
+  odontograma: 'Estado por pieza e historial de cada diente',
+  planes: 'Fases, procedimientos y fotos del tratamiento',
+  imagenes: 'Radiografías y fotos clínicas',
+};
 
 @Component({
   selector: 'app-ficha-paciente',
@@ -75,31 +113,62 @@ type Pestana = 'resumen' | 'citas' | 'contacto' | 'imagenes';
     GaleriaImagenesComponent,
     FotoPerfilComponent,
     ConsentimientosPacienteComponent,
+    OdontogramaComponent,
+    PlanesTratamientoComponent,
   ],
   template: `
-    <aside class="ficha" [class.ficha--embebida]="sinCabecera()" [attr.aria-label]="sinCabecera() ? null : 'Ficha de ' + nombre()">
-      @if (!sinCabecera()) {
-      <header class="ficha__cabecera">
-        <div class="ficha__identidad">
+    <div class="ficha" [class.ficha--embebida]="sinCabecera()" [attr.aria-label]="'Ficha de ' + nombre()">
+      <!-- ============ Identidad: foto, documento y lo urgente ============ -->
+      <aside class="ficha__lado">
+        <div class="ficha__foto">
           <app-foto-perfil
             [pacienteId]="pacienteId()"
             [nombre]="nombre()"
             [iniciales]="iniciales()"
-            [tamano]="72"
+            [tamano]="112"
             [puedeEditar]="puedeEditarFoto()"
             [conBotones]="true"
           />
-          <div class="ficha__nombre">
-            <h2>{{ nombre() }}</h2>
-            @if (paciente(); as p) {
-              <p class="numerico">
-                {{ p.tipo_documento }} {{ p.numero_documento }}
-                @if (edad()) {
-                  <span> · {{ edad() }}</span>
-                }
-              </p>
+        </div>
+        @if (!sinCabecera()) {
+          <h2 class="ficha__nombre">{{ nombre() }}</h2>
+        }
+        @if (paciente(); as p) {
+          <p class="ficha__documento numerico">
+            {{ p.tipo_documento }} {{ p.numero_documento }}
+            @if (edad()) {
+              <span> · {{ edad() }}</span>
             }
-          </div>
+          </p>
+        }
+        @if (verificacion(); as v) {
+          <p class="ficha__verificacion" [class.ficha__verificacion--alerta]="v.alerta">
+            <strong>{{ v.etiqueta }}.</strong> {{ v.consecuencia }}
+          </p>
+        }
+        @if (paciente(); as p) {
+          <dl class="ficha__rapido">
+            <div>
+              <dt>WhatsApp</dt>
+              <dd class="numerico">{{ p.telefono_whatsapp ?? 'sin registrar' }}</dd>
+            </div>
+            <div>
+              <dt>Correo</dt>
+              <dd>{{ p.correo ?? 'sin registrar' }}</dd>
+            </div>
+            <div>
+              <dt>Próxima cita</dt>
+              <dd>
+                @if (proxima(); as cita) {
+                  <span class="numerico">{{ fechaHora(cita.inicio) }}</span>
+                } @else {
+                  sin citas futuras
+                }
+              </dd>
+            </div>
+          </dl>
+        }
+        @if (!sinCabecera()) {
           <button
             type="button"
             class="boton boton--plano ficha__cerrar"
@@ -108,155 +177,222 @@ type Pestana = 'resumen' | 'citas' | 'contacto' | 'imagenes';
           >
             <app-icono nombre="cerrar" [tamano]="18" />
           </button>
-        </div>
+        }
+      </aside>
 
-      </header>
-      }
+      <!-- ===================== Contenido por pestañas ===================== -->
+      <section class="ficha__principal">
+        @if (cargando()) {
+          <p class="ficha__aviso" role="status">Cargando la ficha…</p>
+        } @else if (error()) {
+          <p class="ficha__error" role="alert">{{ error()!.message }}</p>
+        } @else {
+          <div class="ficha__pestanas" role="tablist" aria-label="Secciones de la ficha">
+            @for (tab of pestanas(); track tab.clave) {
+              <button
+                type="button"
+                role="tab"
+                class="ficha__pestana"
+                [class.ficha__pestana--activa]="pestana() === tab.clave"
+                [attr.aria-selected]="pestana() === tab.clave"
+                (click)="elegir(tab.clave)"
+              >
+                {{ tab.etiqueta }}
+                @if (tab.clave === 'citas' && citas().length > 0) {
+                  <span class="ficha__cuenta numerico">{{ citas().length }}</span>
+                }
+              </button>
+            }
+          </div>
 
-      @if (verificacion(); as v) {
-        <p class="ficha__verificacion" [class.ficha__verificacion--alerta]="v.alerta">
-          <strong>{{ v.etiqueta }}.</strong> {{ v.consecuencia }}
-        </p>
-      }
+          <div class="ficha__cuerpo" role="tabpanel">
+            @switch (pestana()) {
+              @case ('resumen') {
+                <div class="ficha__rejilla">
+                  <section class="ficha__bloque">
+                    <h3>Próxima cita</h3>
+                    @if (proxima(); as cita) {
+                      <p class="ficha__hora numerico">
+                        {{ fechaHora(cita.inicio) }}
+                        <app-insignia-estado [estado]="cita.estado" />
+                      </p>
+                      @if (cita.estado === 'HELD' && cita.expira_en) {
+                        <p class="ficha__caduca">
+                          Turno apartado sin confirmar: caduca el {{ fechaHora(cita.expira_en) }}.
+                        </p>
+                      }
+                    } @else {
+                      <p class="ficha__nada">Sin citas futuras.</p>
+                    }
+                  </section>
 
-      @if (sinCabecera() && paciente(); as p) {
-        <p class="ficha__documento numerico">
-          {{ p.tipo_documento }} {{ p.numero_documento }}
-          @if (edad()) {
-            <span> · {{ edad() }}</span>
-          }
-        </p>
-      }
+                  <section class="ficha__bloque">
+                    <h3>Cómo tratarle</h3>
+                    <ul class="ficha__banderas">
+                      @for (bandera of banderas(); track bandera.titulo) {
+                        <li>
+                          <strong>{{ bandera.titulo }}</strong>
+                          <span>{{ bandera.detalle }}</span>
+                        </li>
+                      } @empty {
+                        <li><span>Nada que destacar en el historial administrativo.</span></li>
+                      }
+                    </ul>
+                  </section>
 
-      @if (cargando()) {
-        <p class="ficha__aviso" role="status">Cargando la ficha…</p>
-      } @else if (error()) {
-        <p class="ficha__error" role="alert">{{ error()!.message }}</p>
-      } @else {
-        <div class="ficha__pestanas" role="tablist">
-          @for (tab of pestanas(); track tab.clave) {
-            <button
-              type="button"
-              role="tab"
-              class="ficha__pestana"
-              [class.ficha__pestana--activa]="pestana() === tab.clave"
-              [attr.aria-selected]="pestana() === tab.clave"
-              (click)="pestana.set(tab.clave)"
-            >
-              {{ tab.etiqueta }}
-              @if (tab.clave === 'citas' && citas().length > 0) {
-                <span class="ficha__cuenta numerico">{{ citas().length }}</span>
+                  <section class="ficha__bloque">
+                    <h3>Datos personales</h3>
+                    <dl class="ficha__datos">
+                      @for (dato of contacto(); track dato.campo) {
+                        <div>
+                          <dt>{{ dato.campo }}</dt>
+                          <dd>{{ dato.valor }}</dd>
+                        </div>
+                      }
+                    </dl>
+                  </section>
+
+                  @if (accesosClinicos().length) {
+                    <section class="ficha__bloque">
+                      <h3>Información clínica</h3>
+                      <div class="ficha__atajos">
+                        @for (atajo of accesosClinicos(); track atajo.clave) {
+                          <button type="button" class="ficha__atajo" (click)="elegir(atajo.clave)">
+                            <strong>{{ atajo.etiqueta }}</strong>
+                            <span>{{ atajo.detalle }}</span>
+                          </button>
+                        }
+                      </div>
+                      <p class="campo__ayuda">
+                        Cada lectura de datos clínicos queda registrada con nombre y hora.
+                      </p>
+                    </section>
+                  } @else {
+                    <!-- El límite de ámbito, dicho aquí: un hueco sin explicar se lee como un fallo. -->
+                    <section class="ficha__bloque ficha__limite">
+                      <h3>Sin información clínica</h3>
+                      <p>
+                        Esta ficha muestra lo administrativo. El historial, los diagnósticos y la
+                        medicación no están aquí porque su rol no los alcanza, no porque falten.
+                      </p>
+                    </section>
+                  }
+                </div>
               }
-            </button>
-          }
-        </div>
 
-        <div class="ficha__cuerpo">
-          @switch (pestana()) {
-            @case ('resumen') {
-              <section>
-                <h3>Próxima cita</h3>
-                @if (proxima(); as cita) {
-                  <div class="tarjeta ficha__proxima">
-                    <p class="ficha__hora numerico">
-                      {{ fechaHora(cita.inicio) }}
-                      <app-insignia-estado [estado]="cita.estado" />
-                    </p>
-                    @if (cita.estado === 'HELD' && cita.expira_en) {
-                      <p class="ficha__caduca">
-                        Turno apartado sin confirmar: caduca el {{ fechaHora(cita.expira_en) }}.
+              @case ('citas') {
+                <section>
+                  <h3>Historial de citas</h3>
+                  @if (citas().length === 0) {
+                    <p class="ficha__nada">Sin citas registradas.</p>
+                  } @else {
+                    <ul class="ficha__citas">
+                      @for (cita of citas(); track cita.id) {
+                        <li>
+                          <span class="numerico">{{ fechaHora(cita.inicio) }}</span>
+                          <app-insignia-estado [estado]="cita.estado" />
+                        </li>
+                      }
+                    </ul>
+                    @if (inasistencias() > 0) {
+                      <p class="ficha__ojo">
+                        <strong>{{ inasistencias() }} inasistencia(s) registradas.</strong>
+                        Conviene confirmar por llamada en lugar de solo enviar el recordatorio.
                       </p>
                     }
-                  </div>
-                } @else {
-                  <p class="ficha__nada">Sin citas futuras.</p>
-                }
-              </section>
-
-              <section>
-                <h3>Cómo tratarle</h3>
-                <ul class="ficha__banderas">
-                  @for (bandera of banderas(); track bandera.titulo) {
-                    <li>
-                      <strong>{{ bandera.titulo }}</strong>
-                      <span>{{ bandera.detalle }}</span>
-                    </li>
                   }
-                  @if (banderas().length === 0) {
-                    <li><span>Nada que destacar en el historial administrativo.</span></li>
-                  }
-                </ul>
-              </section>
+                </section>
+              }
 
-              <!-- El límite de ámbito, dicho aquí y no solo en la documentación.
-                   Un hueco sin explicar se lee como un fallo del sistema. -->
-              <section class="ficha__limite">
-                <h3>Sin información clínica</h3>
-                <p>
-                  Esta ficha muestra lo administrativo. El historial, los diagnósticos y la
-                  medicación no están aquí porque su rol no los alcanza, no porque falten.
-                </p>
-                <p class="campo__ayuda">
-                  Cada lectura de datos clínicos queda registrada con nombre y hora.
-                </p>
-              </section>
-            }
-
-            @case ('citas') {
-              <section>
-                <h3>Historial de citas</h3>
-                @if (citas().length === 0) {
-                  <p class="ficha__nada">Sin citas registradas.</p>
-                } @else {
-                  <ul class="ficha__citas">
-                    @for (cita of citas(); track cita.id) {
-                      <li>
-                        <span class="numerico">{{ fecha(cita.inicio) }}</span>
-                        <app-insignia-estado [estado]="cita.estado" />
-                      </li>
+              @case ('contacto') {
+                <section>
+                  <h3>Contacto</h3>
+                  <dl class="ficha__datos">
+                    @for (dato of contacto(); track dato.campo) {
+                      <div>
+                        <dt>{{ dato.campo }}</dt>
+                        <dd class="numerico">{{ dato.valor }}</dd>
+                      </div>
                     }
-                  </ul>
-                  @if (inasistencias() > 0) {
-                    <p class="ficha__ojo">
-                      <strong>{{ inasistencias() }} inasistencia(s) registradas.</strong>
-                      Conviene confirmar por llamada en lugar de solo enviar el recordatorio.
-                    </p>
-                  }
-                }
-              </section>
-            }
-
-            @case ('contacto') {
-              <section>
-                <h3>Contacto</h3>
-                <dl class="ficha__datos">
-                  @for (dato of contacto(); track dato.campo) {
-                    <div>
-                      <dt>{{ dato.campo }}</dt>
-                      <dd class="numerico">{{ dato.valor }}</dd>
-                    </div>
-                  }
-                </dl>
-                <p class="campo__ayuda">
-                  Ningún recordatorio automático incluye diagnóstico, medicamento ni motivo de
-                  consulta.
-                </p>
+                  </dl>
+                  <p class="campo__ayuda">
+                    Ningún recordatorio automático incluye diagnóstico, medicamento ni motivo de
+                    consulta.
+                  </p>
+                </section>
                 <app-consentimientos-paciente [pacienteId]="pacienteId()" />
-              </section>
-            }
+              }
 
-            @case ('imagenes') {
-              <app-galeria-imagenes [pacienteId]="pacienteId()" />
+              @case ('historia') {
+                <section>
+                  <div class="ficha__titulo-accion">
+                    <h3>Historia clínica</h3>
+                    <button type="button" class="boton boton--pequeno" (click)="abrirHistoria()">
+                      Abrir historia completa
+                    </button>
+                  </div>
+                  @if (cargandoClinico()) {
+                    <p class="ficha__nada" role="status">Cargando…</p>
+                  } @else if (avisoClinico()) {
+                    <p class="ficha__ojo" role="status">{{ avisoClinico() }}</p>
+                  } @else {
+                    @if (puedeLeerHistoria()) {
+                      <h4 class="ficha__subtitulo">Últimas notas de evolución</h4>
+                      <ul class="ficha__notas">
+                        @for (nota of notas(); track nota.id) {
+                          <li>
+                            <span class="numerico">{{ fecha(nota.creado_en) }}</span>
+                            <strong>{{ nota.tipo }}</strong>
+                            <span>{{ nota.motivo_consulta || 'Sin motivo de consulta registrado' }}</span>
+                          </li>
+                        } @empty {
+                          <li class="ficha__nada">Sin notas registradas.</li>
+                        }
+                      </ul>
+                    }
+                    @if (puedeLeerRecetas()) {
+                      <h4 class="ficha__subtitulo">Recetas</h4>
+                      <ul class="ficha__notas">
+                        @for (receta of recetas(); track receta.id) {
+                          <li>
+                            <span class="numerico">{{ fecha(receta.creado_en) }}</span>
+                            <strong>{{ estadoReceta(receta.estado) }}</strong>
+                            <span>{{ medicamentos(receta) }}</span>
+                          </li>
+                        } @empty {
+                          <li class="ficha__nada">Sin recetas registradas.</li>
+                        }
+                      </ul>
+                    }
+                  }
+                </section>
+              }
+
+              @case ('odontograma') {
+                <app-odontograma [pacienteId]="pacienteId()" />
+              }
+
+              @case ('planes') {
+                <app-planes-tratamiento
+                  [pacienteId]="pacienteId()"
+                  [puedeEditar]="puedeEditarPlanes()"
+                />
+              }
+
+              @case ('imagenes') {
+                <app-galeria-imagenes [pacienteId]="pacienteId()" />
+              }
             }
-          }
-        </div>
-      }
-    </aside>
+          </div>
+        }
+      </section>
+    </div>
   `,
   styles: `
     .ficha {
-      display: flex;
-      flex-direction: column;
+      position: relative;
+      display: grid;
+      grid-template-columns: 272px minmax(0, 1fr);
       height: 100%;
       min-height: 0;
       border: 1px solid var(--borde);
@@ -273,83 +409,96 @@ type Pestana = 'resumen' | 'citas' | 'contacto' | 'imagenes';
       border-radius: 0;
       box-shadow: none;
       margin: calc(var(--espacio-4) * -1);
+      height: calc(100% + var(--espacio-4) * 2);
+    }
+
+    .ficha__lado {
+      display: flex;
+      flex-direction: column;
+      gap: var(--espacio-3);
+      padding: var(--espacio-5) var(--espacio-4);
+      border-right: 1px solid var(--borde);
+      background: var(--superficie);
+      overflow-y: auto;
+    }
+
+    .ficha__foto {
+      display: flex;
+      justify-content: center;
+    }
+
+    .ficha__nombre {
+      margin: 0;
+      font-size: 1.2rem;
+      text-align: center;
     }
 
     .ficha__documento {
       margin: 0;
-      padding: var(--espacio-3) var(--espacio-4) 0;
+      text-align: center;
       color: var(--texto-suave);
       font-size: 0.9rem;
     }
 
-    .ficha--embebida .ficha__verificacion {
-      margin: var(--espacio-4) var(--espacio-4) 0;
-    }
-
-    .ficha__cabecera {
-      padding: var(--espacio-4);
-      border-bottom: 1px solid var(--borde);
-    }
-
-    .ficha__identidad {
-      display: flex;
-      align-items: flex-start;
-      gap: var(--espacio-3);
-    }
-
-    .ficha__inicial {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      width: 44px;
-      height: 44px;
-      flex: 0 0 44px;
-      border-radius: 999px;
-      background: var(--acento-suave);
-      color: var(--acento-fuerte);
-      font-weight: 700;
-    }
-
-    .ficha__nombre {
-      flex: 1 1 auto;
-      min-width: 0;
-    }
-
-    .ficha__nombre h2 {
+    .ficha__verificacion {
       margin: 0;
-      font-size: 1.25rem;
+      padding: var(--espacio-2) var(--espacio-3);
+      border: 1px solid var(--borde);
+      border-radius: var(--radio);
+      background: var(--superficie-hundida);
+      font-size: 0.84rem;
     }
 
-    .ficha__nombre p {
-      margin: 2px 0 0;
-      color: var(--texto-suave);
-      font-size: 0.88rem;
+    .ficha__verificacion--alerta {
+      border-color: color-mix(in srgb, var(--aviso) 40%, transparent);
+      background: var(--aviso-fondo);
+      color: var(--aviso);
+    }
+
+    .ficha__rapido {
+      margin: 0;
+      display: grid;
+      gap: var(--espacio-2);
+    }
+
+    .ficha__rapido div {
+      display: grid;
+      gap: 2px;
+    }
+
+    .ficha__rapido dt {
+      color: var(--texto-tenue);
+      font-size: 0.72rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .ficha__rapido dd {
+      margin: 0;
+      font-size: 0.9rem;
+      overflow-wrap: anywhere;
     }
 
     .ficha__cerrar {
+      position: absolute;
+      top: var(--espacio-2);
+      right: var(--espacio-2);
       min-width: 36px;
       min-height: 36px;
       padding: 0;
     }
 
-    .ficha__verificacion {
-      margin: var(--espacio-3) 0 0;
-      padding: var(--espacio-2) var(--espacio-3);
-      border: 1px solid var(--borde);
-      border-left-width: 4px;
-      border-radius: var(--radio);
-      background: var(--superficie-hundida);
-      font-size: 0.88rem;
-    }
-
-    .ficha__verificacion--alerta {
-      border-color: var(--aviso);
-      background: var(--aviso-fondo);
-      color: var(--aviso);
+    .ficha__principal {
+      display: flex;
+      flex-direction: column;
+      min-width: 0;
+      min-height: 0;
     }
 
     .ficha__pestanas {
       display: flex;
+      flex-wrap: wrap;
       gap: 2px;
       padding: 0 var(--espacio-3);
       border-bottom: 1px solid var(--borde);
@@ -363,6 +512,15 @@ type Pestana = 'resumen' | 'citas' | 'contacto' | 'imagenes';
       color: var(--texto-suave);
       font-weight: 600;
       cursor: pointer;
+    }
+
+    .ficha__pestana:hover {
+      color: var(--texto);
+    }
+
+    .ficha__pestana:focus-visible {
+      outline: 3px solid var(--acento);
+      outline-offset: -3px;
     }
 
     .ficha__pestana--activa {
@@ -384,28 +542,43 @@ type Pestana = 'resumen' | 'citas' | 'contacto' | 'imagenes';
       flex: 1 1 auto;
       min-height: 0;
       overflow-y: auto;
-      padding: var(--espacio-4);
+      padding: var(--espacio-4) var(--espacio-5);
       display: flex;
       flex-direction: column;
-      gap: var(--espacio-5);
+      gap: var(--espacio-4);
     }
 
     .ficha__cuerpo h3 {
       margin: 0 0 var(--espacio-2);
-      font-size: 0.85rem;
+      font-size: 0.8rem;
       font-weight: 700;
       text-transform: uppercase;
-      letter-spacing: 0.04em;
+      letter-spacing: 0.05em;
       color: var(--texto-suave);
     }
 
-    .ficha__proxima {
-      padding: var(--espacio-3);
+    .ficha__subtitulo {
+      margin: var(--espacio-3) 0 var(--espacio-1);
+      font-size: 0.9rem;
+    }
+
+    .ficha__rejilla {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: var(--espacio-3);
+    }
+
+    .ficha__bloque {
+      padding: var(--espacio-3) var(--espacio-4);
+      border: 1px solid var(--borde);
+      border-radius: var(--radio);
+      background: var(--superficie);
     }
 
     .ficha__hora {
       display: flex;
       align-items: center;
+      flex-wrap: wrap;
       gap: var(--espacio-2);
       margin: 0;
       font-size: 1.05rem;
@@ -447,8 +620,6 @@ type Pestana = 'resumen' | 'citas' | 'contacto' | 'imagenes';
     .ficha__banderas li {
       display: flex;
       flex-direction: column;
-      padding-bottom: var(--espacio-2);
-      border-bottom: 1px solid var(--superficie-hundida);
       font-size: 0.9rem;
     }
 
@@ -457,7 +628,8 @@ type Pestana = 'resumen' | 'citas' | 'contacto' | 'imagenes';
       font-size: 0.86rem;
     }
 
-    .ficha__citas {
+    .ficha__citas,
+    .ficha__notas {
       list-style: none;
       margin: 0;
       padding: 0;
@@ -465,14 +637,26 @@ type Pestana = 'resumen' | 'citas' | 'contacto' | 'imagenes';
       flex-direction: column;
     }
 
-    .ficha__citas li {
+    .ficha__citas li,
+    .ficha__notas li {
       display: flex;
       align-items: center;
-      justify-content: space-between;
       gap: var(--espacio-3);
       padding: var(--espacio-2) 0;
       border-bottom: 1px solid var(--superficie-hundida);
       font-size: 0.9rem;
+    }
+
+    .ficha__citas li {
+      justify-content: space-between;
+    }
+
+    .ficha__notas li span:last-child {
+      min-width: 0;
+      color: var(--texto-suave);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
     }
 
     .ficha__ojo {
@@ -496,22 +680,61 @@ type Pestana = 'resumen' | 'citas' | 'contacto' | 'imagenes';
     }
 
     .ficha__datos dt {
-      flex: 0 0 120px;
+      flex: 0 0 110px;
       color: var(--texto-tenue);
-      font-size: 0.88rem;
+      font-size: 0.86rem;
     }
 
     .ficha__datos dd {
       margin: 0;
       flex: 1 1 auto;
-      font-size: 0.92rem;
+      font-size: 0.9rem;
+    }
+
+    .ficha__atajos {
+      display: grid;
+      gap: var(--espacio-2);
+    }
+
+    .ficha__atajo {
+      display: grid;
+      gap: 2px;
+      padding: var(--espacio-2) var(--espacio-3);
+      border: 1px solid var(--borde);
+      border-radius: var(--radio);
+      background: var(--superficie-elevada);
+      color: var(--texto);
+      text-align: left;
+      cursor: pointer;
+    }
+
+    .ficha__atajo:hover {
+      border-color: var(--acento);
+    }
+
+    .ficha__atajo:focus-visible {
+      outline: 3px solid var(--acento);
+      outline-offset: 2px;
+    }
+
+    .ficha__atajo span {
+      color: var(--texto-suave);
+      font-size: 0.82rem;
+    }
+
+    .ficha__titulo-accion {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: var(--espacio-3);
+    }
+
+    .ficha__titulo-accion h3 {
+      margin: 0;
     }
 
     .ficha__limite {
-      padding: var(--espacio-3);
-      border: 1px dashed var(--borde-fuerte);
-      border-radius: var(--radio);
-      background: var(--superficie);
+      border-style: dashed;
     }
 
     .ficha__limite p {
@@ -520,44 +743,93 @@ type Pestana = 'resumen' | 'citas' | 'contacto' | 'imagenes';
       font-size: 0.88rem;
     }
 
-    .ficha__limite .campo__ayuda {
-      margin-top: var(--espacio-2);
+    @media (max-width: 860px) {
+      .ficha {
+        grid-template-columns: 1fr;
+        overflow-y: auto;
+      }
+
+      .ficha__lado {
+        border-right: 0;
+        border-bottom: 1px solid var(--borde);
+        overflow: visible;
+      }
+
+      .ficha__cuerpo {
+        overflow: visible;
+        padding: var(--espacio-4);
+      }
+
+      .ficha__rejilla {
+        grid-template-columns: 1fr;
+      }
     }
   `,
 })
 export class FichaPacienteComponent implements OnInit {
   private readonly api = inject(ApiService);
   private readonly sesion = inject(SesionService);
+  private readonly router = inject(Router);
 
   readonly pacienteId = input.required<string>();
   /**
-   * Cierto cuando va dentro de una ventana flotante, que ya pone su cabecera.
-   *
-   * Sin esto habria dos titulos y dos botones de cerrar, y el de dentro no
-   * cerraria nada.
+   * Cierto cuando va dentro de una ventana flotante, que ya pone su título
+   * (el nombre) y su botón de cerrar.
    */
   readonly sinCabecera = input(false);
   /** Zona de presentación de la sede, nunca la del equipo. */
   readonly zona = input('America/Guayaquil');
   readonly cerrar = output<void>();
 
+  protected readonly puedeLeerHistoria = computed(() =>
+    this.sesion.tienePermiso(PERMISOS.historiaLeer),
+  );
+  protected readonly puedeLeerRecetas = computed(() =>
+    this.sesion.tienePermiso(PERMISOS.recetaLeer),
+  );
+  protected readonly puedeEditarPlanes = computed(() =>
+    this.sesion.tienePermiso(PERMISOS.planTratamientoEscribir),
+  );
+
+  /** Cada pestaña clínica aparece solo si el rol tiene el permiso que el backend exige. */
   protected readonly pestanas = computed(() => {
-    const pestañas: { clave: Pestana; etiqueta: string }[] = [
+    const lista: { clave: Pestana; etiqueta: string }[] = [
       { clave: 'resumen', etiqueta: 'Resumen' },
       { clave: 'citas', etiqueta: 'Citas' },
-      { clave: 'contacto', etiqueta: 'Contacto' },
+      { clave: 'contacto', etiqueta: 'Contacto y consentimientos' },
     ];
-    if (this.sesion.tienePermiso(PERMISOS.imagenClinicaLeer)) {
-      pestañas.push({ clave: 'imagenes', etiqueta: 'Imágenes clínicas' });
+    if (this.puedeLeerHistoria() || this.puedeLeerRecetas()) {
+      lista.push({ clave: 'historia', etiqueta: 'Historia y recetas' });
     }
-    return pestañas;
+    if (this.sesion.tienePermiso(PERMISOS.odontogramaLeer)) {
+      lista.push({ clave: 'odontograma', etiqueta: 'Odontograma' });
+    }
+    if (this.sesion.tienePermiso(PERMISOS.planTratamientoLeer)) {
+      lista.push({ clave: 'planes', etiqueta: 'Plan de tratamiento' });
+    }
+    if (this.sesion.tienePermiso(PERMISOS.imagenClinicaLeer)) {
+      lista.push({ clave: 'imagenes', etiqueta: 'Imágenes' });
+    }
+    return lista;
   });
+
+  /** Atajos del resumen a las secciones clínicas que el rol puede abrir. */
+  protected readonly accesosClinicos = computed(() =>
+    this.pestanas()
+      .filter((tab) => DETALLE_CLINICO[tab.clave])
+      .map((tab) => ({ ...tab, detalle: DETALLE_CLINICO[tab.clave] ?? '' })),
+  );
 
   protected readonly pestana = signal<Pestana>('resumen');
   protected readonly paciente = signal<PacienteDetalle | null>(null);
   protected readonly citas = signal<readonly Cita[]>([]);
   protected readonly cargando = signal(true);
   protected readonly error = signal<FalloApi | null>(null);
+  protected readonly notas = signal<readonly Nota[]>([]);
+  protected readonly recetas = signal<readonly Receta[]>([]);
+  protected readonly cargandoClinico = signal(false);
+  protected readonly avisoClinico = signal('');
+  private clinicoCargado = false;
 
   protected readonly nombre = computed(() => {
     const p = this.paciente();
@@ -678,12 +950,9 @@ export class FichaPacienteComponent implements OnInit {
   });
 
   /**
-   * La carga va en `ngOnInit` y no en el constructor.
-   *
-   * No es una preferencia de estilo: una entrada obligatoria **no existe
-   * todavía** cuando corre el constructor, así que leerla ahí lanza NG0950 y
-   * el panel no llega a pintarse. Este panel se destruye y se vuelve a crear
-   * al cambiar de paciente, así que una carga única aquí es correcta.
+   * La carga va en `ngOnInit` y no en el constructor: una entrada obligatoria
+   * no existe todavía cuando corre el constructor (NG0950). La ficha se
+   * destruye y se vuelve a crear al cambiar de paciente.
    */
   ngOnInit(): void {
     this.cargar();
@@ -720,6 +989,75 @@ export class FichaPacienteComponent implements OnInit {
         );
       },
     });
+  }
+
+  protected elegir(clave: Pestana): void {
+    this.pestana.set(clave);
+    if (clave === 'historia' && !this.clinicoCargado) {
+      this.cargarClinico();
+    }
+  }
+
+  /** Notas y recetas, cada una solo si el rol puede leerlas. */
+  private cargarClinico(): void {
+    this.clinicoCargado = true;
+    this.cargandoClinico.set(true);
+    this.avisoClinico.set('');
+    const id = this.pacienteId();
+    let pendientes = (this.puedeLeerHistoria() ? 1 : 0) + (this.puedeLeerRecetas() ? 1 : 0);
+    const terminar = () => {
+      pendientes -= 1;
+      if (pendientes <= 0) {
+        this.cargandoClinico.set(false);
+      }
+    };
+    const denegado = (fallo: unknown) => {
+      this.avisoClinico.set(
+        fallo instanceof FalloApi && fallo.codigo === 'RELACION_ASISTENCIAL_REQUERIDA'
+          ? 'No tiene relación asistencial con este paciente: la historia solo la ve quien le atiende.'
+          : fallo instanceof FalloApi
+            ? fallo.message
+            : 'No se pudo cargar la historia.',
+      );
+      terminar();
+    };
+    if (this.puedeLeerHistoria()) {
+      this.api.notas(id).subscribe({
+        next: (notas) => {
+          this.notas.set(
+            [...notas].sort((a, b) => Date.parse(b.creado_en) - Date.parse(a.creado_en)).slice(0, 8),
+          );
+          terminar();
+        },
+        error: denegado,
+      });
+    }
+    if (this.puedeLeerRecetas()) {
+      this.api.recetas(id).subscribe({
+        next: (recetas) => {
+          this.recetas.set(recetas);
+          terminar();
+        },
+        error: denegado,
+      });
+    }
+  }
+
+  protected abrirHistoria(): void {
+    void this.router.navigate(['/historia-clinica'], {
+      queryParams: { paciente: this.pacienteId() },
+    });
+    this.cerrar.emit();
+  }
+
+  protected estadoReceta(estado: string): string {
+    return ESTADO_RECETA[estado] ?? estado;
+  }
+
+  protected medicamentos(receta: Receta): string {
+    return (
+      receta.medicamentos.map((m) => `${m.nombre} ${m.dosis}`).join(' · ') || 'Sin medicamentos'
+    );
   }
 
   protected fecha(instante: string): string {

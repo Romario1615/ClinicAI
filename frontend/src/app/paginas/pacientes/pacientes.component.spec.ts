@@ -72,7 +72,12 @@ describe('PacientesComponent', () => {
     http = TestBed.inject(HttpTestingController);
   });
 
-  afterEach(() => http.verify());
+  afterEach(() => {
+    // Abrir la ficha consulta la foto por separado; este componente no prueba
+    // esa carga y la respuesta nula expresa que no hay foto configurada.
+    http.match((p) => p.url.endsWith('/foto-perfil')).forEach((p) => p.flush(null));
+    http.verify();
+  });
 
   /** Resuelve la carga inicial que dispara el constructor. */
   function responderCargaInicial(cuerpo: object): void {

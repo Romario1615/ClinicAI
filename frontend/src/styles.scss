@@ -273,6 +273,44 @@ textarea {
   color: var(--texto-suave);
 }
 
+/* Obligatorio a la vista: el asterisco sale solo del atributo `required`,
+   asi ningun formulario puede marcarlo distinto de lo que valida. */
+.campo:has(.campo__control:required) .campo__etiqueta::after {
+  content: ' *';
+  color: var(--peligro);
+  font-weight: 700;
+}
+
+.obligatorio {
+  color: var(--peligro);
+  font-weight: 700;
+}
+
+/* Formularios sin `.campo` (etiqueta con el control dentro): mismo aviso. */
+label:not(.campo):has(> :is(input, select, textarea):required)::before {
+  content: '* ';
+  color: var(--peligro);
+  font-weight: 700;
+}
+
+.formulario__leyenda {
+  margin: 0 0 var(--espacio-3);
+}
+
+/* Campo invalido ya tocado (o tras intentar guardar): borde y mensaje. */
+.campo__control.ng-invalid.ng-touched,
+form.ng-submitted .campo__control.ng-invalid {
+  border-color: var(--peligro);
+}
+
+.campo__error {
+  display: block;
+  margin-top: var(--espacio-1);
+  color: var(--peligro);
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
 .campo__control {
   width: 100%;
   min-height: var(--toque-minimo);

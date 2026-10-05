@@ -126,7 +126,9 @@ const NAVEGACION: readonly EnlaceNavegacion[] = [
     ruta: '/agente-demo',
     etiqueta: 'Agente demo',
     icono: 'agente',
-    permisos: [PERMISOS.conversacionResponder],
+    // Simulador para probar el agente: es de administración, no del día a día
+    // de recepción ni del personal clínico.
+    permisos: [PERMISOS.configuracionEscribir],
     demostracion: true,
   },
   {

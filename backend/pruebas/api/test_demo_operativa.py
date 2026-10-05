@@ -89,6 +89,14 @@ async def test_paciente_crear_editar_reintento_y_auditoria(cliente, api, acceso,
     assert editado.status_code == 200, editado.text
     assert editado.json()["nombre"] == "Corregido"
     assert editado.json()["nivel_verificacion"] == "NO_VERIFICADO"
+    con_sexo = await cliente.put(
+        f"{api}/pacientes/{identificador}",
+        json={**datos, "nombre": "Corregido", "sexo": "F"},
+        headers=cabeceras(acceso, "editar-demo-002"),
+    )
+    assert con_sexo.status_code == 200, con_sexo.text
+    detalle = await cliente.get(f"{api}/pacientes/{identificador}", headers=cabeceras(acceso))
+    assert detalle.json()["sexo"] == "F"
     acciones = (
         (
             await sesion.execute(
@@ -119,6 +127,7 @@ async def test_paciente_crear_editar_reintento_y_auditoria(cliente, api, acceso,
             "tipo_documento": "SIN_DOCUMENTO",
             "fecha_nacimiento": "2099-01-01",
         },
+        {"nombre": "A", "apellido": "B", "tipo_documento": "SIN_DOCUMENTO", "sexo": "X"},
     ],
 )
 async def test_paciente_entrada_invalida(cliente, api, acceso, datos):

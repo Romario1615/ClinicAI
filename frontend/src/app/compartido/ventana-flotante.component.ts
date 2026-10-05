@@ -65,6 +65,7 @@ import { IconoComponent } from './icono.component';
       <div
         class="ventana"
         [class.ventana--centrada]="forma() === 'centrada'"
+        [class.ventana--alta]="altoCompleto()"
         [style.max-width.px]="anchoMaximo()"
         role="dialog"
         aria-modal="true"
@@ -133,6 +134,11 @@ import { IconoComponent } from './icono.component';
       box-shadow: var(--sombra-2), 0 24px 48px rgb(22 32 46 / 18%);
       overflow: hidden;
       animation: entrar-lateral 160ms cubic-bezier(0.2, 0.8, 0.3, 1);
+    }
+
+    /* Alto fijo: al cambiar de pestana la ventana no salta de tamano. */
+    .ventana--alta {
+      height: 100%;
     }
 
     .ventana--centrada {
@@ -239,6 +245,8 @@ export class VentanaFlotanteComponent implements AfterViewInit, OnDestroy {
   readonly ceja = input('');
   readonly forma = input<'lateral' | 'centrada'>('lateral');
   readonly anchoMaximo = input(460);
+  /** Ocupa todo el alto disponible (fichas con pestanas de distinto largo). */
+  readonly altoCompleto = input(false);
   /**
    * Si pulsar el fondo cierra.
    *

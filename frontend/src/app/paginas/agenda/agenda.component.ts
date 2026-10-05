@@ -35,9 +35,15 @@ import {
 } from '../../compartido/estados.component';
 import { ColaTrabajoComponent } from '../../compartido/cola-trabajo.component';
 import { FichaPacienteComponent } from '../../compartido/ficha-paciente.component';
+import { SelectorPacienteComponent } from '../../compartido/selector-paciente.component';
 import { InsigniaEstadoComponent } from '../../compartido/insignia-estado.component';
 import { VentanaFlotanteComponent } from '../../compartido/ventana-flotante.component';
 import { ReprogramarCitaComponent } from './reprogramar-cita.component';
+import {
+  CalendarioAgendaComponent,
+  rangoVista,
+  type VistaCalendario,
+} from './calendario-agenda.component';
 import { ApiService, FalloApi } from '../../nucleo/servicios/api.service';
 import { CatalogoService } from '../../nucleo/servicios/catalogo.service';
 import { PERMISOS } from '../../nucleo/servicios/configuracion';
@@ -70,6 +76,7 @@ import {
   formatearFechaLarga,
   formatearHora,
   hoyEnZona,
+  instanteLocal,
   rangoDelDia,
   sumarDias,
 } from '../../nucleo/utilidades/fechas';
@@ -139,6 +146,18 @@ const MOTIVOS: Record<string, string> = {
   GRANULARIDAD_INCOMPATIBLE: 'el hueco no encaja con la duración del servicio',
 };
 
+const CLAVE_VISTA = 'agenda.vista';
+
+/** Vista recordada; si no hay o no se puede leer, el calendario del día. */
+function leerVista(): VistaCalendario | 'lista' {
+  try {
+    const valor = localStorage.getItem(CLAVE_VISTA);
+    return valor === 'semana' || valor === 'mes' || valor === 'lista' ? valor : 'dia';
+  } catch {
+    return 'dia';
+  }
+}
+
 @Component({
   selector: 'app-agenda',
   standalone: true,
@@ -152,6 +171,8 @@ const MOTIVOS: Record<string, string> = {
     InsigniaEstadoComponent,
     ReprogramarCitaComponent,
     VentanaFlotanteComponent,
+    CalendarioAgendaComponent,
+    SelectorPacienteComponent,
   ],
   templateUrl: './agenda.component.html',
   styleUrl: './agenda.component.scss',
@@ -188,6 +209,18 @@ export class AgendaComponent {
   protected readonly servicioId = signal('');
   protected readonly profesionalId = signal('');
   protected readonly fecha = signal('');
+  /** Cómo se ve la agenda. Se recuerda por navegador: es preferencia de quien la usa. */
+  protected readonly vista = signal<VistaCalendario | 'lista'>(leerVista());
+  protected readonly vistas: readonly { valor: VistaCalendario | 'lista'; etiqueta: string }[] = [
+    { valor: 'dia', etiqueta: 'Día' },
+    { valor: 'semana', etiqueta: 'Semana' },
+    { valor: 'mes', etiqueta: 'Mes' },
+    { valor: 'lista', etiqueta: 'Lista' },
+  ];
+  /** Citas de la semana o del mes visibles (las del día van en `citasSede`). */
+  protected readonly citasRango = signal<readonly Cita[]>([]);
+  protected readonly cargandoRango = signal(false);
+  private solicitudRango = 0;
 
   // --- Estado de carga ---
   protected readonly cargandoCatalogo = signal(true);
@@ -317,8 +350,35 @@ export class AgendaComponent {
     if (!fecha) {
       return '';
     }
+    const vista = this.vista();
+    if (vista === 'mes') {
+      const texto = new Intl.DateTimeFormat('es', { month: 'long', year: 'numeric', timeZone: 'UTC' }).format(
+        new Date(`${fecha}T12:00:00Z`),
+      );
+      return texto.charAt(0).toUpperCase() + texto.slice(1);
+    }
+    if (vista === 'semana') {
+      const { desde, hasta } = rangoVista('semana', fecha);
+      const corto = (dia: string) =>
+        new Intl.DateTimeFormat('es', { day: 'numeric', month: 'short', timeZone: 'UTC' }).format(
+          new Date(`${dia}T12:00:00Z`),
+        );
+      return `Semana del ${corto(desde)} al ${corto(sumarDias(hasta, -1))}`;
+    }
     return formatearFechaLarga(`${fecha}T12:00:00Z`, this.zona());
   });
+
+  /** Tramos libres del día para pintarlos en el calendario. */
+  protected readonly huecosDia = computed(() =>
+    this.secuencia().filter((fila): fila is FilaDia & { tipo: 'hueco' } => fila.tipo === 'hueco'),
+  );
+
+  protected readonly citasCalendario = computed(() =>
+    this.vista() === 'dia' ? this.citasSede() : this.citasRango(),
+  );
+
+  protected readonly etiquetaPaciente = (id: string): string => this.nombrePaciente(id);
+  protected readonly etiquetaServicio = (id: string): string => this.nombreServicio(id);
 
   /** Cierto cuando faltan datos para poder consultar la disponibilidad. */
   protected readonly seleccionIncompleta = computed(
@@ -495,6 +555,7 @@ export class AgendaComponent {
     this.cerrarPanel();
     this.cargarOfertasSinAvisar();
     this.cargarConsultorios();
+    this.cargarRango();
     // El `switchMap` del constructor cancela la carga anterior: solo se aplica
     // la respuesta de la seleccion vigente.
     this.recargar.next();
@@ -649,6 +710,15 @@ export class AgendaComponent {
     this.elegirTurno(fila.turnos[0]);
   }
 
+  /** Paciente elegido en el buscador de la reserva. */
+  protected elegirPacienteReserva(paciente: Paciente | null): void {
+    if (!paciente) return;
+    if (!this.pacientes().some((p) => p.id === paciente.id)) {
+      this.pacientes.update((lista) => [...lista, paciente]);
+    }
+    this.pacienteId = paciente.id;
+  }
+
   protected abrirCita(cita: Cita): void {
     this.huecoElegido.set(null);
     this.turnoElegido.set(null);
@@ -712,9 +782,78 @@ export class AgendaComponent {
   // ======================================================================
   //  Navegación
   // ======================================================================
-  protected cambiarDia(dias: number): void {
-    this.fecha.update((actual) => sumarDias(actual, dias));
+  /** Flechas: un día, una semana o un mes según la vista. */
+  protected cambiarDia(pasos: number): void {
+    const vista = this.vista();
+    if (vista === 'mes') {
+      this.fecha.update((actual) => {
+        const fecha = new Date(`${actual.slice(0, 8)}01T00:00:00Z`);
+        fecha.setUTCMonth(fecha.getUTCMonth() + pasos);
+        return fecha.toISOString().slice(0, 10);
+      });
+    } else {
+      this.fecha.update((actual) => sumarDias(actual, vista === 'semana' ? pasos * 7 : pasos));
+    }
     this.cargarAgenda();
+  }
+
+  protected cambiarVista(vista: VistaCalendario | 'lista'): void {
+    this.vista.set(vista);
+    try {
+      localStorage.setItem(CLAVE_VISTA, vista);
+    } catch {
+      // Sin almacenamiento (ventana privada) la vista simplemente no se recuerda.
+    }
+    this.cargarRango();
+  }
+
+  /** Clic en un día de la semana o del mes: se abre ese día. */
+  protected elegirDia(fecha: string): void {
+    this.fecha.set(fecha);
+    this.vista.set('dia');
+    this.cargarAgenda();
+  }
+
+  /**
+   * Citas de la semana o del mes, de toda la sede. Se pagina porque el API
+   * entrega como máximo 200 por petición y un mes con mucha actividad pasa.
+   */
+  private cargarRango(): void {
+    const vista = this.vista();
+    if ((vista !== 'semana' && vista !== 'mes') || !this.sedeId() || !this.fecha()) {
+      return;
+    }
+    const solicitud = ++this.solicitudRango;
+    const { desde, hasta } = rangoVista(vista, this.fecha());
+    const filtro = {
+      sede_id: this.sedeId(),
+      desde: instanteLocal(desde, '00:00', this.zona()),
+      hasta: instanteLocal(hasta, '00:00', this.zona()),
+      limite: 200,
+    };
+    const acumuladas: Cita[] = [];
+    this.cargandoRango.set(true);
+    const pagina = (desplazamiento: number): void => {
+      this.api.citas({ ...filtro, desplazamiento }).subscribe({
+        next: (resultado) => {
+          if (solicitud !== this.solicitudRango) return;
+          acumuladas.push(...resultado.elementos);
+          const siguiente = desplazamiento + resultado.elementos.length;
+          if (resultado.elementos.length > 0 && siguiente < resultado.total && siguiente < 2000) {
+            pagina(siguiente);
+          } else {
+            this.citasRango.set(acumuladas);
+            this.cargandoRango.set(false);
+          }
+        },
+        error: (fallo: unknown) => {
+          if (solicitud !== this.solicitudRango) return;
+          this.cargandoRango.set(false);
+          this.errorAgenda.set(this.aFallo(fallo));
+        },
+      });
+    };
+    pagina(0);
   }
 
   protected irAHoy(): void {

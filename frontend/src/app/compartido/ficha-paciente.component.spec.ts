@@ -22,6 +22,8 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { FichaPacienteComponent } from './ficha-paciente.component';
 import { CONFIGURACION, CONFIGURACION_POR_DEFECTO } from '../nucleo/servicios/configuracion';
 import type { Cita, EstadoCita } from '../nucleo/modelos/dominio';
+import { Router } from '@angular/router';
+import { PROVEEDORES_PRUEBA, iniciarSesionCon } from '../nucleo/pruebas/sesion-sintetica';
 
 const BASE = CONFIGURACION_POR_DEFECTO.urlApi;
 
@@ -258,5 +260,76 @@ describe('FichaPacienteComponent', () => {
     ((fixture.nativeElement as HTMLElement).querySelector('.ficha__cerrar') as HTMLButtonElement).click();
 
     expect(cerrado).toBeTrue();
+  });
+});
+
+describe('FichaPacienteComponent con permisos clínicos', () => {
+  let fixture: ComponentFixture<FichaPacienteComponent>;
+  let http: HttpTestingController;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let c: any;
+
+  beforeEach(() => {
+    TestBed.configureTestingModule({ imports: [FichaPacienteComponent], providers: PROVEEDORES_PRUEBA });
+    http = TestBed.inject(HttpTestingController);
+    iniciarSesionCon(['historia_clinica.leer', 'receta.leer', 'odontograma.leer', 'plan_tratamiento.leer']);
+    fixture = TestBed.createComponent(FichaPacienteComponent);
+    c = fixture.componentInstance;
+    fixture.componentRef.setInput('pacienteId', 'pac-1');
+    fixture.componentRef.setInput('sinCabecera', true);
+    fixture.detectChanges();
+    http.expectOne(`${BASE}/pacientes/pac-1/foto-perfil`).flush(null);
+    http.expectOne(`${BASE}/pacientes/pac-1`).flush(detalle());
+    http.expectOne((r) => r.url === `${BASE}/agenda/citas`).flush({ elementos: [], total: 0, limite: 50, desplazamiento: 0 });
+    fixture.detectChanges();
+  });
+
+  afterEach(() => http.verify());
+
+  it('muestra pestañas y atajos clínicos según permisos y pide lo clínico al abrirlo', () => {
+    const claves = c.pestanas().map((p: { clave: string }) => p.clave);
+    expect(claves).toEqual(['resumen', 'citas', 'contacto', 'historia', 'odontograma', 'planes']);
+    expect((fixture.nativeElement as HTMLElement).textContent).toContain('Información clínica');
+    expect((fixture.nativeElement as HTMLElement).textContent).not.toContain('su rol no los alcanza');
+
+    c.elegir('historia');
+    http.expectOne(`${BASE}/historia/pacientes/pac-1/notas`).flush([
+      { id: 'n1', tipo: 'EVOLUCION', motivo_consulta: 'Control sintético', creado_en: '2026-10-01T10:00:00Z' },
+      { id: 'n2', tipo: 'EVOLUCION', motivo_consulta: null, creado_en: '2026-10-03T10:00:00Z' },
+    ]);
+    http.expectOne(`${BASE}/historia/pacientes/pac-1/recetas`).flush([
+      { id: 'r1', estado: 'CONFIRMADA', creado_en: '2026-10-02T10:00:00Z', medicamentos: [{ nombre: 'Sintético', dosis: '1 unidad' }] },
+      { id: 'r2', estado: 'OTRO', creado_en: '2026-10-02T10:00:00Z', medicamentos: [] },
+    ]);
+    fixture.detectChanges();
+    expect(c.notas()[0].id).toBe('n2');
+    const texto = (fixture.nativeElement as HTMLElement).textContent ?? '';
+    expect(texto).toContain('Control sintético');
+    expect(texto).toContain('Confirmada');
+    expect(texto).toContain('Sintético 1 unidad');
+    expect(texto).toContain('Sin medicamentos');
+
+    // Volver a la pestaña no repite la lectura auditada.
+    c.elegir('resumen');
+    c.elegir('historia');
+
+    const navegar = spyOn(TestBed.inject(Router), 'navigate').and.resolveTo(true);
+    let cerrado = false;
+    c.cerrar.subscribe(() => (cerrado = true));
+    c.abrirHistoria();
+    expect(navegar).toHaveBeenCalledWith(['/historia-clinica'], { queryParams: { paciente: 'pac-1' } });
+    expect(cerrado).toBeTrue();
+  });
+
+  it('explica la falta de relación asistencial', () => {
+    c.elegir('historia');
+    http
+      .expectOne(`${BASE}/historia/pacientes/pac-1/notas`)
+      .flush({ codigo: 'RELACION_ASISTENCIAL_REQUERIDA', mensaje: 'x' }, { status: 403, statusText: 'F' });
+    http
+      .expectOne(`${BASE}/historia/pacientes/pac-1/recetas`)
+      .flush({ codigo: 'X', mensaje: 'Sin acceso a recetas' }, { status: 403, statusText: 'F' });
+    expect(c.avisoClinico()).toBe('Sin acceso a recetas');
+    expect(c.cargandoClinico()).toBeFalse();
   });
 });

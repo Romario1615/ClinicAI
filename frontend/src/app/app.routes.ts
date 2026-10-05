@@ -136,7 +136,7 @@ export const routes: Routes = [
   },
   {
     path: 'catalogo',
-    canActivate: [guardiaAutenticacion, guardiaSegundoFactor],
+    canActivate: [guardiaAutenticacion, guardiaSegundoFactor, guardiaPermiso(PERMISOS.agendaLeer)],
     title: 'Catalogo · ClinicAI',
     loadComponent: () =>
       import('./paginas/catalogo/catalogo.component').then(
@@ -157,7 +157,7 @@ export const routes: Routes = [
   },
   {
     path: 'agente-demo',
-    canActivate: [guardiaAutenticacion, guardiaSegundoFactor, guardiaPermiso(PERMISOS.conversacionResponder)],
+    canActivate: [guardiaAutenticacion, guardiaSegundoFactor, guardiaPermiso(PERMISOS.configuracionEscribir)],
     title: 'Agente demo · ClinicAI',
     loadComponent: () => import('./paginas/agente-demo/agente-demo.component').then(m => m.AgenteDemoComponent),
   },

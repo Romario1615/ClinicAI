@@ -17,13 +17,16 @@ import type { Cita, Paciente } from '../../nucleo/modelos/dominio';
         <form #formulario="ngForm" (ngSubmit)="registrar()">
           <div class="formulario-demo">
             <label>Cita<select name="cita" [(ngModel)]="citaId" required><option value="">Seleccione una cita</option>
-              @for (c of citas(); track c.id) { <option [value]="c.id">{{ fecha(c.inicio) }} · {{ c.estado }}</option> }
+              @for (c of citas(); track c.id) { <option [value]="c.id">{{ fecha(c.inicio) }} · {{ estadoCita(c.estado) }}</option> }
             </select></label>
             <label>Importe (USD)<input type="number" name="importe" [(ngModel)]="importe" min="0.01" max="9999999999" step="0.01" required /></label>
             <label>Método<select name="metodo" [(ngModel)]="metodo"><option value="EFECTIVO">Efectivo</option><option value="TRANSFERENCIA">Transferencia</option></select></label>
             <label>Referencia del comprobante (opcional)<input name="referencia" [(ngModel)]="referencia" maxlength="100" /></label>
           </div>
           <p class="ayuda-demo">Registre solo la referencia administrativa. No introduzca tarjetas, claves ni códigos de seguridad.</p>
+          @if (formulario.invalid) {
+            <p class="ayuda-demo" role="status">Para registrar: elija al paciente, una de sus citas y el importe.</p>
+          }
           <button class="boton boton--principal" [disabled]="formulario.invalid || ocupado()">Registrar pago pendiente</button>
         </form>
       </section>
@@ -89,6 +92,14 @@ export class PagosComponent {
       error: (e: FalloApi) => { this.error.set(e.message); this.ocupado.set(false); },
     });
   }
+  protected estadoCita(estado: string): string {
+    const nombres: Record<string, string> = {
+      PENDING: 'Pendiente', HELD: 'Apartada', CONFIRMED: 'Confirmada', RESCHEDULED: 'Reprogramada',
+      COMPLETED: 'Atendida', NO_SHOW: 'No asistió', CANCELLED: 'Cancelada',
+    };
+    return nombres[estado] ?? estado;
+  }
+
   protected fecha(s: string): string { return new Date(s).toLocaleString('es-EC', { timeZone: 'America/Guayaquil' }); }
   protected moneda(s: string): string { return new Intl.NumberFormat('es-EC', { style: 'currency', currency: 'USD' }).format(Number(s)); }
   protected estado(s: string): string { return ({ PENDING: 'Pendiente', PROOF_RECEIVED: 'Comprobante recibido', UNDER_REVIEW: 'En revisión', CONFIRMED: 'Confirmado', REJECTED: 'Rechazado', REFUND_PENDING: 'Devolución pendiente' } as Record<string, string>)[s] || s; }
