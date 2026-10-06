@@ -53,25 +53,25 @@ import { IconoComponent } from './icono.component';
   imports: [IconoComponent],
   template: `
     <!-- El fondo cierra al pulsarlo, y eso es una comodidad de raton: el
-         camino de teclado es la tecla Escape, que atiende la propia ventana
-         mas abajo. El linter no puede verlo desde aqui, asi que se le explica
-         en lugar de convertir el fondo en un boton gigante. -->
-    <!-- eslint-disable-next-line @angular-eslint/template/click-events-have-key-events, @angular-eslint/template/interactive-supports-focus -->
-    <div
+         camino de teclado es la tecla Escape, que atiende la propia ventana. -->
+    <dialog
       class="capa"
       [class.capa--centrada]="forma() === 'centrada'"
+      role="dialog"
+      aria-modal="true"
+      [attr.aria-label]="titulo()"
+      #capa
       (click)="alPulsarFondo($event)"
+      (keydown)="alTeclear($event)"
+      (cancel)="alCancelar($event)"
     >
       <div
         class="ventana"
         [class.ventana--centrada]="forma() === 'centrada'"
         [class.ventana--alta]="altoCompleto()"
         [style.max-width.px]="anchoMaximo()"
-        role="dialog"
-        aria-modal="true"
-        [attr.aria-label]="titulo()"
+        tabindex="-1"
         #ventana
-        (keydown)="alTeclear($event)"
       >
         <header class="ventana__cabecera">
           <div class="ventana__titulos">
@@ -94,14 +94,25 @@ import { IconoComponent } from './icono.component';
           <ng-content select="[pie]" />
         </footer>
       </div>
-    </div>
+    </dialog>
   `,
   styles: `
+    /* <dialog> abierto con showModal(): se pinta en la capa superior del
+       navegador, por encima de la cabecera aunque el contenido cree su propio
+       contexto de apilamiento (isolation, transform, z-index). Un z-index
+       alto no basta para eso. Se anulan los estilos por defecto del dialog. */
     .capa {
       position: fixed;
       inset: 0;
       z-index: 60;
-      display: flex;
+      width: 100%;
+      height: 100%;
+      max-width: none;
+      max-height: none;
+      margin: 0;
+      border: 0;
+      color: inherit;
+      box-sizing: border-box;
       /* Se ajusta al contenido en lugar de estirarse: una ficha corta en una
          ventana de alto completo deja medio panel vacio, y eso se lee como si
          faltara algo por cargar. Con contenido largo crece hasta el tope y el
@@ -114,6 +125,15 @@ import { IconoComponent } from './icono.component';
          nada está donde se dejó. */
       overscroll-behavior: contain;
       animation: aparecer 140ms ease-out;
+    }
+
+    .capa[open] {
+      display: flex;
+    }
+
+    /* El oscurecido lo pone la propia capa, con la misma animación. */
+    .capa::backdrop {
+      background: transparent;
     }
 
     .capa--centrada {
@@ -259,10 +279,17 @@ export class VentanaFlotanteComponent implements AfterViewInit, OnDestroy {
   readonly cerrar = output<void>();
 
   private readonly ventana = viewChild<ElementRef<HTMLElement>>('ventana');
+  private readonly capa = viewChild<ElementRef<HTMLDialogElement>>('capa');
   /** A dónde devolver el foco al cerrar: donde estaba antes de abrir. */
   private readonly origenDelFoco = document.activeElement as HTMLElement | null;
 
   ngAfterViewInit(): void {
+    const capa = this.capa()?.nativeElement;
+    if (capa && !capa.open) {
+      // Fuera del documento showModal() lanza; entonces se abre sin capa superior.
+      if (capa.isConnected && typeof capa.showModal === 'function') capa.showModal();
+      else capa.setAttribute('open', '');
+    }
     document.body.style.overflow = 'hidden';
     // Al primer elemento enfocable, y si no hay ninguno a la propia ventana:
     // quien navega con teclado tiene que aterrizar dentro.
@@ -271,6 +298,8 @@ export class VentanaFlotanteComponent implements AfterViewInit, OnDestroy {
   }
 
   ngOnDestroy(): void {
+    const capa = this.capa()?.nativeElement;
+    if (capa?.open && typeof capa.close === 'function') capa.close();
     document.body.style.overflow = '';
     this.origenDelFoco?.focus?.();
   }
@@ -286,8 +315,16 @@ export class VentanaFlotanteComponent implements AfterViewInit, OnDestroy {
     }
   }
 
+  /** Escape nativo del dialog: lo cierra quien abrió la ventana, no el navegador. */
+  protected alCancelar(evento: Event): void {
+    evento.preventDefault();
+    this.cerrar.emit();
+  }
+
   protected alTeclear(evento: KeyboardEvent): void {
     if (evento.key === 'Escape') {
+      // Sin preventDefault el navegador dispararía también `cancel`.
+      evento.preventDefault();
       evento.stopPropagation();
       this.cerrar.emit();
       return;

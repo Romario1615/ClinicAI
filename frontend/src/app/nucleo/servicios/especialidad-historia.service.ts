@@ -37,7 +37,7 @@ export class EspecialidadHistoriaService {
   private usuarioCargado: string | null = null;
 
   /** La elegida o, si no hay, la propia (el backend la pone primero). */
-  readonly elegida = computed(() => {
+  readonly elegida = computed<EspecialidadHistoria | null>(() => {
     const lista = this.disponibles();
     return lista.find((e) => e.id === this.elegidaId()) ?? lista[0] ?? null;
   });

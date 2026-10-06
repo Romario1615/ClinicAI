@@ -75,6 +75,7 @@
           <button class="boton" type="button" [disabled]="ocupado()" (click)="enviar('buscar horarios')">Buscar horarios</button>
           @if (puedeConfirmar()) { <button class="boton boton--principal" type="button" [disabled]="ocupado()" (click)="enviar('confirmar')">Confirmar cita</button> }
           <button class="boton" type="button" [disabled]="ocupado()" (click)="enviar('mis citas')">Mis citas</button>
+          <button class="boton" type="button" [disabled]="ocupado()" (click)="enviar('mis pagos')">Mis pagos</button>
           <button class="boton" type="button" [disabled]="ocupado()" (click)="enviar('hablar con una persona')">Hablar con una persona</button>
         </div>
         <form class="compositor" (ngSubmit)="enviar()">

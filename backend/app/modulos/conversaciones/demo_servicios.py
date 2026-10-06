@@ -73,7 +73,7 @@ async def abrir(
     respuesta = RespuestaDemo(
         sesion_id=demo.id,
         modo=datos.modo,
-        mensaje="Conversacion iniciada. Escriba 'buscar horarios' o 'mis citas'.",
+        mensaje=("Conversacion iniciada. Escriba 'buscar horarios', 'mis citas' o 'mis pagos'."),
     )
     completar_operacion(operacion, respuesta.model_dump(mode="json"), reloj)
     return respuesta
