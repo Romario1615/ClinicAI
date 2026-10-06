@@ -30,6 +30,7 @@ import { SesionService } from '../../nucleo/servicios/sesion.service';
 import { IndicadoresService } from '../../nucleo/servicios/indicadores.service';
 import { ResumenModuloComponent } from '../../compartido/resumen-modulo.component';
 import { VentanaFlotanteComponent } from '../../compartido/ventana-flotante.component';
+import { FotoPersonaComponent } from '../../compartido/foto-persona.component';
 import { MatrizAccesosComponent } from './matriz-accesos.component';
 
 interface UsuarioClinica {
@@ -90,7 +91,15 @@ const CATEGORIAS: Record<string, string> = {
 @Component({
   selector: 'app-usuarios',
   standalone: true,
-  imports: [FormsModule, DatePipe, NgTemplateOutlet, MatrizAccesosComponent, ResumenModuloComponent, VentanaFlotanteComponent],
+  imports: [
+    FormsModule,
+    DatePipe,
+    NgTemplateOutlet,
+    MatrizAccesosComponent,
+    ResumenModuloComponent,
+    VentanaFlotanteComponent,
+    FotoPersonaComponent,
+  ],
   template: `
     <header class="encabezado">
       <div>
@@ -177,7 +186,7 @@ const CATEGORIAS: Record<string, string> = {
                     <tr [class.fila--inactiva]="!usuario.activo">
                       <td>
                         <div class="persona">
-                          <span class="persona__inicial" aria-hidden="true">{{ usuario.nombre.charAt(0) }}{{ usuario.apellido.charAt(0) }}</span>
+                          <app-foto-persona [usuarioId]="usuario.id" [nombre]="usuario.nombre + ' ' + usuario.apellido" [tamano]="36" />
                           <span>
                             <strong>{{ usuario.nombre }} {{ usuario.apellido }}</strong>
                             <small>{{ usuario.correo }}</small>
@@ -287,7 +296,15 @@ const CATEGORIAS: Record<string, string> = {
         @case ('accesos') {
           <app-ventana-flotante ceja="Gestionar accesos" [titulo]="v.usuario.nombre + ' ' + v.usuario.apellido" forma="centrada"
                                 [anchoMaximo]="640" (cerrar)="cerrarVentana()">
-            <p class="campo__ayuda">{{ v.usuario.correo }}. Los cambios se aplican en el servidor y actualizan sus permisos en la próxima petición.</p>
+            <div class="persona-ventana">
+              <app-foto-persona
+                [usuarioId]="v.usuario.id"
+                [nombre]="v.usuario.nombre + ' ' + v.usuario.apellido"
+                [tamano]="88"
+                [puedeEditar]="sesion.tienePermiso('usuario.editar')"
+              />
+              <p class="campo__ayuda">{{ v.usuario.correo }}. Los cambios de rol se aplican en el servidor y actualizan sus permisos en la próxima petición.</p>
+            </div>
             <ng-container *ngTemplateOutlet="eleccionRoles" />
             @if (error()) { <p class="aviso-error" role="alert">{{ error() }}</p> }
             <div class="acciones acciones--final" pie>
@@ -432,6 +449,7 @@ const CATEGORIAS: Record<string, string> = {
     .persona { display: flex; align-items: center; gap: var(--espacio-3); }
     .persona span:last-child { display: grid; }
     .persona small { color: var(--texto-suave); overflow-wrap: anywhere; }
+    .persona-ventana { display: flex; align-items: center; gap: var(--espacio-4); margin-bottom: var(--espacio-3); }
     .persona__inicial { display: inline-grid; place-items: center; width: 36px; height: 36px; flex: 0 0 36px; border-radius: 50%;
       background: var(--acento-suave); color: var(--acento-fuerte); font-weight: 700; font-size: 0.8rem; text-transform: uppercase; }
     .etiquetas { display: flex; gap: 4px; flex-wrap: wrap; }

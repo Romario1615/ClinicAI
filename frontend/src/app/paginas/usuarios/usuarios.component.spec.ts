@@ -47,7 +47,11 @@ describe('UsuariosComponent', () => {
     http = TestBed.inject(HttpTestingController);
   });
 
-  afterEach(() => http.verify());
+  afterEach(() => {
+    // Las fotos del equipo tienen su propia prueba.
+    http.match((p) => p.url.endsWith('/foto')).forEach((p) => p.flush(null, { status: 204, statusText: 'No Content' }));
+    http.verify();
+  });
 
   it('filtra el personal por texto, rol y estado', () => {
     montar(['usuario.leer']);

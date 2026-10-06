@@ -57,6 +57,7 @@ class AccionAuditada(StrEnum):
     # --- Usuarios y permisos ---
     USUARIO_CREADO = "usuario.creado"
     USUARIO_MODIFICADO = "usuario.modificado"
+    USUARIO_FOTO_ACTUALIZADA = "usuario.foto_actualizada"
     USUARIO_DESACTIVADO = "usuario.desactivado"
     ROL_ASIGNADO = "rol.asignado"
     ROL_REVOCADO = "rol.revocado"

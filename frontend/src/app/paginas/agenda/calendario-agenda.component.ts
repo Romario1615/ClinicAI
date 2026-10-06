@@ -24,6 +24,7 @@ import { Component, computed, input, output } from '@angular/core';
 import type { Cita, Profesional } from '../../nucleo/modelos/dominio';
 import type { FilaDia } from '../../nucleo/utilidades/secuencia-dia';
 import { hoyEnZona, sumarDias } from '../../nucleo/utilidades/fechas';
+import { FotoPersonaComponent } from '../../compartido/foto-persona.component';
 
 export type VistaCalendario = 'dia' | 'semana' | 'mes';
 
@@ -132,6 +133,7 @@ interface Columna {
 @Component({
   selector: 'app-calendario-agenda',
   standalone: true,
+  imports: [FotoPersonaComponent],
   template: `
     <div class="leyenda" aria-label="Leyenda de colores">
       @for (item of leyenda; track item.estado) {
@@ -184,8 +186,13 @@ interface Columna {
                 <strong>{{ col.titulo }}</strong> <span class="numerico">{{ col.subtitulo }}</span>
               </button>
             } @else {
-              <strong>{{ col.titulo }}</strong>
-              <span>{{ col.subtitulo }}</span>
+              <span class="tiempo__profesional">
+                <app-foto-persona [profesionalId]="col.clave" [nombre]="col.titulo" [tamano]="30" />
+                <span>
+                  <strong>{{ col.titulo }}</strong>
+                  <span>{{ col.subtitulo }}</span>
+                </span>
+              </span>
             }
           </div>
         }
@@ -296,6 +303,9 @@ interface Columna {
       font-size: 0.85rem;
     }
     .tiempo__titulo span { color: var(--texto-suave); font-size: 0.75rem; }
+    .tiempo__profesional { display: inline-flex; align-items: center; gap: 8px; justify-content: center; text-align: left; }
+    .tiempo__profesional > span { display: grid; }
+    .tiempo__profesional strong { color: var(--texto); font-size: 0.85rem; }
     .tiempo__titulo--hoy { background: var(--acento-suave); color: var(--acento-fuerte); }
     .tiempo__dia { display: inline-flex; gap: 4px; align-items: baseline; border: 0; background: transparent; color: inherit; font: inherit; cursor: pointer; border-radius: 6px; padding: 2px; }
     .tiempo__dia:hover { background: var(--superficie-hundida); }

@@ -94,6 +94,9 @@ Observaciones que importan:
   se cambia con `paciente.editar`. Radiografías y fotos clínicas son N2 y exigen
   `imagen_clinica.*`, relación asistencial (si el principal es profesional) y auditoría de
   cada descarga.
+* **La foto de una persona del equipo es N1.** La ve el personal de la misma clínica (nunca el
+  agente) y la cambia la propia persona o quien tiene `usuario.editar`. Mismo saneado y cifrado
+  que la foto del paciente; cambiarla deja la anterior como no vigente.
 * **Solo el profesional escribe odontograma y plan.** El asistente los consulta para
   preparar el sillón y sube radiografías y fotos, pero no registra hallazgos.
 * **Promociones: quien redacta no tiene por qué aprobar.** `promocion.aprobar` es el único
@@ -133,6 +136,8 @@ IDOR.
 | `POST /api/v1/usuarios` | `usuario.crear` + `rol.asignar` | Correo globalmente único; roles limitados a la clínica; contraseña inicial marcada para cambio |
 | `PUT /api/v1/usuarios/{id}/roles` | `rol.asignar` | El usuario debe pertenecer a la clínica del principal; reemplaza asignaciones dentro de esa clínica |
 | `PUT /api/v1/usuarios/{id}/estado` | `usuario.editar` para reactivar, `usuario.desactivar` para desactivar | Solo en la clínica del principal; la desactivación revoca sus sesiones activas |
+| `GET /api/v1/usuarios/{id}/foto` · `GET /api/v1/profesionales/{id}/foto` | Personal con sesión (no el agente) | N1. Solo personas y fichas de la clínica del principal; otra clínica responde 404; sin foto responde 204 |
+| `PUT /api/v1/usuarios/{id}/foto` | La propia persona o `usuario.editar` | Solo en la clínica del principal; tipo real por contenido, sin EXIF, cifrada; auditada `usuario.foto_actualizada` |
 | `GET /api/v1/configuracion/integraciones` | `configuracion.escribir` | Devuelve los ajustes y solo el indicador de presencia de cada credencial; las claves nunca se devuelven |
 | `PUT /api/v1/configuracion/integraciones/{codigo}` | `configuracion.escribir` | Lista cerrada de proveedores y campos; cifra cada secreto con contexto ligado a clínica, proveedor y campo; rota por versiones sin copiar secretos al historial y audita el cambio |
 | `POST /api/v1/autenticacion/cambio-contrasena` | — (solo autenticación propia) | Comprueba la contraseña inicial, registra auditoría y revoca sesiones al terminar |

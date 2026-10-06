@@ -314,3 +314,31 @@
     white-space: nowrap;
   }
 }
+
+.cabecera__foto {
+  display: inline-grid;
+  padding: 0;
+  border: 2px solid transparent;
+  border-radius: 50%;
+  background: transparent;
+  cursor: pointer;
+}
+
+.cabecera__foto:hover,
+.cabecera__foto:focus-visible {
+  border-color: var(--acento);
+  outline: none;
+}
+
+.mi-foto {
+  display: grid;
+  justify-items: center;
+  gap: var(--espacio-3);
+  text-align: center;
+}
+
+.mi-foto p {
+  margin: 0;
+  color: var(--texto-suave);
+  font-size: 0.9rem;
+}

@@ -127,6 +127,7 @@ from app.modulos.profesionales.modelos import (
     ProfesionalServicio,
 )
 from app.modulos.promociones.modelos import CampanaPromocion, EstadoCampana, OrigenImagen
+from app.modulos.usuarios.fotos import FotoUsuario
 from app.modulos.usuarios.modelos import (
     AmbitoAsignacion,
     CodigoRecuperacion2FA,
@@ -188,6 +189,7 @@ __all__ = [
     "EstadoSincronizacion",
     "EstadoToma",
     "Feriado",
+    "FotoUsuario",
     "HistorialAcceso",
     "HorarioAtencion",
     "ImagenPaciente",

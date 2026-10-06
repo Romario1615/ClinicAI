@@ -13,6 +13,7 @@ import {
   rangoVista,
 } from './calendario-agenda.component';
 import type { Cita } from '../../nucleo/modelos/dominio';
+import { PROVEEDORES_PRUEBA } from '../../nucleo/pruebas/sesion-sintetica';
 
 const ZONA = 'America/Guayaquil';
 
@@ -69,7 +70,7 @@ describe('CalendarioAgendaComponent', () => {
   let c: any;
 
   function montar(entradas: Record<string, unknown>): void {
-    TestBed.configureTestingModule({ imports: [CalendarioAgendaComponent] });
+    TestBed.configureTestingModule({ imports: [CalendarioAgendaComponent], providers: PROVEEDORES_PRUEBA });
     fixture = TestBed.createComponent(CalendarioAgendaComponent);
     c = fixture.componentInstance;
     fixture.componentRef.setInput('fecha', '2026-10-05');

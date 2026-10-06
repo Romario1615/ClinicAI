@@ -60,9 +60,10 @@
       </div>
 
       <div class="cabecera__usuario">
-        <!-- Iniciales, no foto: la cabecera identifica la sesión abierta sin
-             cargar imágenes del personal. -->
-        <span class="cabecera__avatar" aria-hidden="true">{{ iniciales() }}</span>
+        <!-- La foto de la sesión abierta; pulsarla abre «Mi foto» para cambiarla. -->
+        <button type="button" class="cabecera__foto" aria-label="Mi foto" (click)="miFotoAbierta.set(true)">
+          <app-foto-persona [usuarioId]="sesion.identidad()?.usuario_id ?? null" [nombre]="sesion.nombreCompleto()" [tamano]="38" />
+        </button>
         <span class="cabecera__identidad">
           <span class="cabecera__nombre">{{ sesion.nombreCompleto() }}</span>
           @if (roles(); as listaRoles) {
@@ -76,6 +77,20 @@
         <span class="cabecera__salir-texto">Cerrar sesión</span>
       </button>
     </header>
+
+    @if (miFotoAbierta()) {
+      <app-ventana-flotante ceja="Mi perfil" titulo="Mi foto" forma="centrada" [anchoMaximo]="420" (cerrar)="miFotoAbierta.set(false)">
+        <div class="mi-foto">
+          <app-foto-persona
+            [usuarioId]="sesion.identidad()?.usuario_id ?? null"
+            [nombre]="sesion.nombreCompleto()"
+            [tamano]="120"
+            [puedeEditar]="true"
+          />
+          <p>Su foto ayuda al equipo a reconocerle en la agenda, en las tareas y en las firmas.</p>
+        </div>
+      </app-ventana-flotante>
+    }
 
     <nav
       id="navegacion-principal"

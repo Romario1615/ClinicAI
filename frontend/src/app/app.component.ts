@@ -14,8 +14,10 @@ import { Component, computed, effect, inject, signal } from '@angular/core';
 import { Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 
 import { BuscadorGlobalComponent } from './compartido/buscador-global.component';
+import { FotoPersonaComponent } from './compartido/foto-persona.component';
 import { IconoComponent, type NombreIcono } from './compartido/icono.component';
 import { MarcaComponent } from './compartido/marca.component';
+import { VentanaFlotanteComponent } from './compartido/ventana-flotante.component';
 import { PERMISOS } from './nucleo/servicios/configuracion';
 import { AutenticacionService } from './nucleo/servicios/autenticacion.service';
 import { PendientesService } from './nucleo/servicios/pendientes.service';
@@ -150,7 +152,16 @@ const NAVEGACION: readonly EnlaceNavegacion[] = [
 @Component({
   selector: 'app-root',
   standalone: true,
-  imports: [RouterOutlet, RouterLink, RouterLinkActive, IconoComponent, MarcaComponent, BuscadorGlobalComponent],
+  imports: [
+    RouterOutlet,
+    RouterLink,
+    RouterLinkActive,
+    IconoComponent,
+    MarcaComponent,
+    BuscadorGlobalComponent,
+    FotoPersonaComponent,
+    VentanaFlotanteComponent,
+  ],
   templateUrl: './app.component.html',
   styleUrl: './app.component.scss',
 })
@@ -161,6 +172,7 @@ export class AppComponent {
   protected readonly pendientes = inject(PendientesService);
 
   protected readonly menuAbierto = signal(false);
+  protected readonly miFotoAbierta = signal(false);
   protected readonly notificacionesAbiertas = signal(false);
 
   constructor() {
