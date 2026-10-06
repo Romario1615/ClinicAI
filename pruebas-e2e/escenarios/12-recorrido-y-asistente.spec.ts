@@ -8,16 +8,24 @@
  * configura JEV y el modelo de respuestas.
  */
 import { randomUUID } from 'node:crypto';
-import type { APIRequestContext } from '@playwright/test';
+import type { APIRequestContext, Page } from '@playwright/test';
 
 import { expect, test } from '../apoyo/prueba';
-import { seleccionarCitaEnAgenda } from '../apoyo/agenda';
 import { acceder, CODIGOS_ROL, irA, type Rol } from '../apoyo/sesion';
 
 const API = process.env.URL_API ?? 'http://127.0.0.1:8000/api/v1';
 const fecha = (iso: string) => new Intl.DateTimeFormat('en-CA', {
   timeZone: 'America/Guayaquil', year: 'numeric', month: '2-digit', day: '2-digit',
 }).format(new Date(iso));
+
+/** La cita en la vista de lista o en el calendario por horas, la que esté visible. */
+async function seleccionarCitaEnAgenda(page: Page, nombre: string): Promise<void> {
+  const fila = page.locator('.fila-dia').filter({ hasText: nombre }).first();
+  const bloque = page.locator('app-calendario-agenda button.bloque').filter({ hasText: nombre }).first();
+  const objetivo = (await fila.count()) > 0 ? fila : bloque;
+  await expect(objetivo, `la agenda debe mostrar la cita de ${nombre}`).toBeVisible({ timeout: 6_000 });
+  await objetivo.click();
+}
 
 async function cabeceras(request: APIRequestContext, rol: Rol) {
   const acceso = await request.post(`${API}/autenticacion/sesion-local`, {
