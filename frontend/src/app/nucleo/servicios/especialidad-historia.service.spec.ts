@@ -43,6 +43,14 @@ describe('EspecialidadHistoriaService', () => {
 
   afterEach(() => http.verify());
 
+  it('sin permisos clínicos no la pide (el backend respondería 403)', () => {
+    iniciarSesionCon(['paciente.leer']);
+    servicio.cargar();
+    http.expectNone(`${BASE}/historia/especialidades`);
+    expect(servicio.elegida()).toBeNull();
+    expect(servicio.tieneModulo('imagenes')).toBeFalse();
+  });
+
   it('revisa desde la propia y solo muestra sus módulos', () => {
     expect(servicio.tieneModulo('odontograma')).toBeFalse();
     servicio.cargar();
@@ -63,7 +71,7 @@ describe('EspecialidadHistoriaService', () => {
     http.expectOne(`${BASE}/historia/especialidades`).flush([ODO, DERM]);
     servicio.elegir('derm');
 
-    TestBed.inject(SesionService).establecerIdentidad({ ...identidadCon([]), usuario_id: 'otra-persona' });
+    TestBed.inject(SesionService).establecerIdentidad({ ...identidadCon(['historia_clinica.leer']), usuario_id: 'otra-persona' });
     servicio.cargar();
     http.expectOne(`${BASE}/historia/especialidades`).flush([ODO, DERM]);
     expect(servicio.elegida()?.id).toBe('derm');

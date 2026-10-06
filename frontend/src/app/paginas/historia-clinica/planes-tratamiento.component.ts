@@ -6,7 +6,7 @@ import { SesionService } from '../../nucleo/servicios/sesion.service';
 import { Router } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 
-import { ApiService, FalloApi } from '../../nucleo/servicios/api.service';
+import { ApiService } from '../../nucleo/servicios/api.service';
 import type {
   HallazgoResultante,
   PlantillaPlan,
@@ -15,6 +15,7 @@ import type {
   ProcedimientoPlan,
   ProcedimientoPlanNuevo,
 } from '../../nucleo/servicios/api.service';
+import { esSinAccesoClinico, mensajeFalloClinico } from '../../nucleo/utilidades/acceso-clinico';
 
 /** Opciones del resultado al completar: por cara solo si el procedimiento tiene caras. */
 const HALLAZGOS_CARA: readonly { valor: HallazgoResultante; texto: string }[] = [
@@ -62,6 +63,8 @@ export class PlanesTratamientoComponent {
   protected readonly cargando = signal(true);
   protected readonly guardando = signal(false);
   protected readonly error = signal('');
+  /** La carga devolvió el 404 de acceso clínico: no se ofrece crear nada. */
+  protected readonly sinAcceso = signal(false);
   protected readonly exito = signal('');
   protected readonly mostrarFormulario = signal(false);
   protected readonly procedimientos = signal<readonly ProcedimientoPlanNuevo[]>([]);
@@ -100,6 +103,7 @@ export class PlanesTratamientoComponent {
     const solicitud = ++this.solicitud;
     this.cargando.set(true);
     this.error.set('');
+    this.sinAcceso.set(false);
     this.api.planesTratamiento(pacienteId).subscribe({
       next: (planes) => {
         if (solicitud !== this.solicitud) return;
@@ -108,6 +112,7 @@ export class PlanesTratamientoComponent {
       },
       error: (fallo: unknown) => {
         if (solicitud !== this.solicitud) return;
+        this.sinAcceso.set(esSinAccesoClinico(fallo));
         this.error.set(this.mensaje(fallo));
         this.cargando.set(false);
       },
@@ -445,8 +450,6 @@ export class PlanesTratamientoComponent {
   }
 
   private mensaje(fallo: unknown): string {
-    return fallo instanceof FalloApi
-      ? fallo.message
-      : 'No se pudo completar la operación del plan. Inténtalo de nuevo.';
+    return mensajeFalloClinico(fallo, 'No se pudo completar la operación del plan. Inténtalo de nuevo.');
   }
 }

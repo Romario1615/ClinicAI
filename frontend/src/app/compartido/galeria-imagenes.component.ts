@@ -11,9 +11,10 @@ import {
 import { DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 
-import { ApiService, FalloApi, type ImagenPacienteApi } from '../nucleo/servicios/api.service';
+import { ApiService, type ImagenPacienteApi } from '../nucleo/servicios/api.service';
 import { PERMISOS } from '../nucleo/servicios/configuracion';
 import { SesionService } from '../nucleo/servicios/sesion.service';
+import { esSinAccesoClinico, mensajeFalloClinico } from '../nucleo/utilidades/acceso-clinico';
 
 const TIPOS = [
   { valor: 'RADIOGRAFIA_PERIAPICAL', etiqueta: 'Radiografía periapical' },
@@ -49,6 +50,8 @@ export class GaleriaImagenesComponent {
   protected readonly cargando = signal(true);
   protected readonly subiendo = signal(false);
   protected readonly error = signal('');
+  /** La carga devolvió el 404 de acceso clínico: no se ofrece cargar imágenes. */
+  protected readonly sinAcceso = signal(false);
   protected readonly exito = signal('');
 
   protected tipo = 'FOTO_INTRAORAL';
@@ -72,6 +75,7 @@ export class GaleriaImagenesComponent {
     const solicitud = ++this.solicitud;
     this.cargando.set(true);
     this.error.set('');
+    this.sinAcceso.set(false);
     this.visor.set(null);
     this.comparacion.set([]);
     this.liberarUrls();
@@ -90,6 +94,7 @@ export class GaleriaImagenesComponent {
         },
         error: (fallo: unknown) => {
           if (solicitud !== this.solicitud) return;
+          this.sinAcceso.set(esSinAccesoClinico(fallo));
           this.error.set(this.mensaje(fallo));
           this.cargando.set(false);
         },
@@ -229,8 +234,6 @@ export class GaleriaImagenesComponent {
   }
 
   private mensaje(fallo: unknown): string {
-    return fallo instanceof FalloApi
-      ? fallo.message
-      : 'No se pudo completar la operación de imágenes.';
+    return mensajeFalloClinico(fallo, 'No se pudo completar la operación de imágenes.');
   }
 }

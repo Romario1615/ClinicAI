@@ -61,6 +61,7 @@ import type { Cita } from '../nucleo/modelos/dominio';
 import { formatearFecha, formatearFechaHora } from '../nucleo/utilidades/fechas';
 import { IconoComponent } from './icono.component';
 import { TipoDocumentoPipe } from './tipo-documento.pipe';
+import { mensajeFalloClinico } from '../nucleo/utilidades/acceso-clinico';
 
 /** Traducción del nivel de verificación, con lo que implica para quien atiende. */
 const VERIFICACION: Record<string, { etiqueta: string; consecuencia: string; alerta: boolean }> = {
@@ -1052,9 +1053,7 @@ export class FichaPacienteComponent implements OnInit {
       this.avisoClinico.set(
         fallo instanceof FalloApi && fallo.codigo === 'RELACION_ASISTENCIAL_REQUERIDA'
           ? 'No tiene relación asistencial con este paciente: la historia solo la ve quien le atiende.'
-          : fallo instanceof FalloApi
-            ? fallo.message
-            : 'No se pudo cargar la historia.',
+          : mensajeFalloClinico(fallo, 'No se pudo cargar la historia.'),
       );
       terminar();
     };

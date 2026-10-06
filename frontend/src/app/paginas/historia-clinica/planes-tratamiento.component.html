@@ -5,7 +5,7 @@
       <h2 id="titulo-planes">Planes de tratamiento</h2>
       <p>Procedimientos agrupados por fases, con sus piezas, importes y estado.</p>
     </div>
-    @if (puedeEditar()) {
+    @if (puedeEditar() && !sinAcceso()) {
       <button
         class="boton boton--principal"
         type="button"
@@ -124,6 +124,8 @@
 
   @if (cargando()) {
     <p role="status">Cargando planes…</p>
+  } @else if (sinAcceso()) {
+    <!-- El aviso de acceso ya se muestra; «sin planes» sería falso. -->
   } @else if (!planes().length) {
     <div class="tarjeta vacio-plan">
       <h3>Sin planes de tratamiento</h3>

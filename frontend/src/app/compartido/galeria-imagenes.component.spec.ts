@@ -65,6 +65,17 @@ describe('GaleriaImagenesComponent', () => {
     expect(c.puedeCargar()).toBeTrue();
   });
 
+  it('sin acceso clínico no ofrece cargar y lo explica', () => {
+    http
+      .expectOne((p) => p.url === LISTA)
+      .flush({ codigo: 'RECURSO_NO_ENCONTRADO', mensaje: 'El paciente solicitado no existe.' }, { status: 404, statusText: 'F' });
+    fixture.detectChanges();
+    const texto = (fixture.nativeElement as HTMLElement).textContent ?? '';
+    expect(texto).toContain('Sin acceso clínico a este paciente');
+    expect(texto).not.toContain('no existe');
+    expect(texto).not.toContain('Cargar imagen');
+  });
+
   it('filtra por tipo y pieza', () => {
     http.expectOne((p) => p.url === LISTA).flush([]);
     c.filtroTipo = 'FOTO_INTRAORAL';

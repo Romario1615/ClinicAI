@@ -42,6 +42,7 @@ import {
   mismoEstado,
   nombreHallazgoCara,
 } from './odontograma.vocabulario';
+import { falloClinicoLegible } from '../../nucleo/utilidades/acceso-clinico';
 
 /** Herramienta activa de la paleta. */
 export type Herramienta = 'SELECCIONAR' | 'BORRAR' | HallazgoCara | HallazgoPieza;
@@ -139,7 +140,7 @@ export class OdontogramaComponent {
         this.cargando.set(false);
       },
       error: (fallo: FalloApi) => {
-        this.error.set(fallo);
+        this.error.set(falloClinicoLegible(fallo));
         this.cargando.set(false);
       },
     });

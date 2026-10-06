@@ -14,6 +14,9 @@ import { HttpClient } from '@angular/common/http';
 import { CONFIGURACION } from './configuracion';
 import { SesionService } from './sesion.service';
 
+/** Permisos con los que `GET /historia/especialidades` responde. */
+const PERMISOS_REVISION = ['historia_clinica.leer', 'odontograma.leer', 'plan_tratamiento.leer', 'imagen_clinica.leer'];
+
 export type ModuloHistoria = 'odontograma' | 'periodoncia' | 'planes' | 'imagenes';
 
 export interface EspecialidadHistoria {
@@ -51,6 +54,13 @@ export class EspecialidadHistoriaService {
     const usuario = this.sesion.identidad()?.usuario_id ?? null;
     if (this.usuarioCargado === usuario && this.cargada()) return;
     this.usuarioCargado = usuario;
+    // Mismos permisos que exige el backend: sin ninguno, pedirla solo da un 403.
+    if (!this.sesion.tieneAlgunPermiso(...PERMISOS_REVISION)) {
+      this.disponibles.set([]);
+      this.elegidaId.set(null);
+      this.cargada.set(true);
+      return;
+    }
     this.cargada.set(false);
     this.http
       .get<readonly EspecialidadHistoria[]>(`${this.configuracion.urlApi}/historia/especialidades`)

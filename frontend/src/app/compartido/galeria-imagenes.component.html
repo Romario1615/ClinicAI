@@ -7,7 +7,7 @@
     <span class="galeria__cantidad">{{ imagenes().length }}</span>
   </header>
 
-  @if (puedeCargar()) {
+  @if (puedeCargar() && !sinAcceso()) {
     <form class="galeria__carga" (ngSubmit)="subir()">
       <h4>Cargar imagen</h4>
       <div class="galeria__campos">
