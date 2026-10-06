@@ -32,6 +32,7 @@ from fastapi.responses import PlainTextResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.ia.proveedores_clinica import decisiones_de_clinica
 from app.mensajeria import carga_whatsapp
 from app.mensajeria.adaptadores import RegistroCanales
 from app.mensajeria.firma import verificar_firma, verificar_reto
@@ -43,6 +44,7 @@ from app.nucleo.auditoria import AccionAuditada, EntradaAuditoria, ResultadoAudi
 from app.nucleo.autorizacion import TipoActor
 from app.nucleo.dependencias import (
     Auditor,
+    CifradorActual,
     ConfiguracionActual,
     Limitador,
     RelojActual,
@@ -116,6 +118,7 @@ async def recibir_webhook(
     configuracion: ConfiguracionActual,
     limitador: Limitador,
     auditor: Auditor,
+    cifrador: CifradorActual,
     respuesta: Response,
     firma: Annotated[str | None, Header(alias="X-Hub-Signature-256")] = None,
 ) -> dict[str, Any]:
@@ -190,11 +193,16 @@ async def recibir_webhook(
                 mensajes_descartados=len(carga.mensajes),
             )
         else:
+            # El modelo de decision es el de la clinica (su cuenta de JEV) o,
+            # sin configuracion propia, el del entorno.
+            decisiones = await decisiones_de_clinica(
+                sesion, cifrador, configuracion, clinica_id, peticion.app.state.clasificador
+            )
             servicio = ServicioConversaciones(
                 sesion,
                 reloj,
-                clasificador=peticion.app.state.clasificador,
-                umbral_clinico=configuracion.decisiones_umbral_clinico,
+                clasificador=decisiones.clasificador,
+                umbral_clinico=decisiones.umbral_clinico,
             )
             resumen = await servicio.procesar(carga, clinica_id=clinica_id)
 

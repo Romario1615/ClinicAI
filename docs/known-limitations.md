@@ -98,6 +98,8 @@ No son defectos. Se listan para que no se «arreglen» por error.
 | P‑11 | La especialidad de una nota es la de su autor; no hay columna propia | El autor no cambia. Consecuencia: si un profesional cambia de especialidad, sus notas anteriores pasan a verse desde la nueva. Las imágenes clínicas no se separan por especialidad: se activan o no como módulo completo |
 | P‑12 | Una prolongación que pisa a otro paciente nunca se resuelve sola | Recepción elige; mover a alguien sin que nadie lo decida rompe la confianza del paciente movido |
 | P‑13 | El asistente interno decide qué datos tocar por reglas, no con un modelo de lenguaje | Un modelo puede redactar a partir de lo ya recuperado, pero nunca elegir a qué datos acceder. Por eso entiende frases concretas («mi agenda», «quién sigue», «agrega al conocimiento: …») y no conversación libre |
+| P‑14 | El agente de WhatsApp no pone historia clínica (diagnósticos, notas, medicación) en el texto del chat, aunque se pida | Reglas 5 y 10: la IA no interpreta lo clínico y WhatsApp se lee en la pantalla bloqueada. La información clínica llega por el enlace seguro con verificación de identidad (indicaciones postconsulta) |
+| P‑15 | Un documento publicado solo lo cita el agente si sus «Accesos» lo habilitan para el asistente | Publicar no basta: la ACL por documento decide si el agente puede usarlo, para que un documento interno publicado no acabe en un chat de paciente |
 
 ---
 

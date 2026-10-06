@@ -39,6 +39,7 @@ from app.api.middleware import MiddlewareCorrelacion
 from app.ia.decisiones import construir_clasificador
 from app.ia.embeddings import construir_proveedor_embeddings
 from app.ia.imagenes_generativas import construir_generador
+from app.ia.proveedores_clinica import cerrar_proveedores_clinica
 from app.ia.seleccion_llm import construir_fabrica_conversacional
 from app.mensajeria import rutas as rutas_whatsapp
 from app.modulos.agenda import recorrido_rutas as rutas_recorrido
@@ -145,6 +146,7 @@ async def _ciclo_de_vida(aplicacion: FastAPI) -> AsyncIterator[None]:
     fabrica = getattr(aplicacion.state, "fabrica_conversacional", None)
     if fabrica is not None:
         await fabrica.cerrar()
+    await cerrar_proveedores_clinica()
     cliente = getattr(aplicacion.state, "redis", None)
     if cliente is not None:
         cerrar = getattr(cliente, "aclose", None) or getattr(cliente, "close", None)

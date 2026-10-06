@@ -67,6 +67,7 @@ class AccionAuditada(StrEnum):
     CITA_PROLONGACION_SOLICITADA = "cita.prolongacion_solicitada"
     CITA_PROLONGACION_RECHAZADA = "cita.prolongacion_rechazada"
     ASISTENTE_CONSULTADO = "asistente.consultado"
+    INTEGRACION_PROBADA = "integracion.probada"
     USUARIO_DESACTIVADO = "usuario.desactivado"
     ROL_ASIGNADO = "rol.asignado"
     ROL_REVOCADO = "rol.revocado"

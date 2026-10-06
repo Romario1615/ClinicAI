@@ -5,8 +5,10 @@ from datetime import timedelta
 from sqlalchemy import inspect, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.ia.conocimiento_paciente import buscador_publicado
 from app.ia.conversacion import ProveedorDemostracion, ejecutar_turno
 from app.ia.decisiones import ClasificadorIntencion
+from app.ia.embeddings import ProveedorEmbeddings
 from app.ia.herramientas.contrato import ContextoHerramienta
 from app.ia.seleccion_llm import FabricaConversacional
 from app.modulos.conversaciones.demo_esquemas import AbrirDemo, RespuestaDemo
@@ -16,6 +18,7 @@ from app.modulos.lista_espera.repositorio import RepositorioListaEspera
 from app.modulos.organizacion.repositorio import RepositorioCatalogo
 from app.modulos.pacientes.repositorio import RepositorioPacientes
 from app.nucleo.autorizacion import NivelSensibilidad, Principal, TipoActor
+from app.nucleo.configuracion import Configuracion
 from app.nucleo.errores import DatosInvalidos, PermisoDenegado, RecursoNoEncontrado
 from app.nucleo.operaciones import completar_operacion, iniciar_operacion
 from app.nucleo.reloj import Reloj
@@ -111,6 +114,7 @@ async def responder(
     fabrica: FabricaConversacional,
     clasificador: ClasificadorIntencion | None = None,
     umbrales: tuple[float, float] = (0.35, 0.85),
+    conocimiento: tuple[ProveedorEmbeddings, Configuracion] | None = None,
 ) -> RespuestaDemo:
     demo = await obtener(sesion, principal, reloj, identificador)
     registro = await iniciar_operacion(
@@ -162,6 +166,11 @@ async def responder(
         clasificador=clasificador,
         umbral_clinico=umbrales[0],
         umbral_intencion=umbrales[1],
+        buscar_conocimiento=(
+            buscador_publicado(sesion, conocimiento[0], conocimiento[1], actor, reloj)
+            if conocimiento is not None
+            else None
+        ),
     )
     # Una colision de agenda puede deshacer la transaccion. Recuperamos el
     # registro del canal sin perder la respuesta segura que tradujo la herramienta.

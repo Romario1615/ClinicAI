@@ -1,5 +1,8 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
+import { provideHttpClient } from '@angular/common/http';
+import { provideHttpClientTesting } from '@angular/common/http/testing';
+import { CONFIGURACION, CONFIGURACION_POR_DEFECTO } from '../../nucleo/servicios/configuracion';
 import { of } from 'rxjs';
 
 import { ConfiguracionComponent } from './configuracion.component';
@@ -82,6 +85,10 @@ describe('ConfiguracionComponent', () => {
       imports: [ConfiguracionComponent],
       providers: [
         provideRouter([]),
+        // Las tarjetas de IA (JEV y respuestas) piden su configuración por su cuenta.
+        provideHttpClient(),
+        provideHttpClientTesting(),
+        { provide: CONFIGURACION, useValue: CONFIGURACION_POR_DEFECTO },
         { provide: IntegracionesService, useValue: servicio },
         { provide: CatalogoService, useValue: { limpiar: jasmine.createSpy('limpiar') } },
         { provide: SesionService, useValue: { tienePermiso: () => true } },

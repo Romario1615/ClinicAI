@@ -183,7 +183,14 @@ async def test_get_muestra_estado_sin_revelar_valores_de_credenciales(
 
     assert respuesta.status_code == 200
     integraciones = {fila["codigo"]: fila for fila in respuesta.json()}
-    assert set(integraciones) == {"anthropic", "whatsapp", "google_calendar", "smtp"}
+    assert set(integraciones) == {
+        "anthropic",
+        "whatsapp",
+        "google_calendar",
+        "smtp",
+        "typesafe",
+        "respuestas_ia",
+    }
     assert integraciones["anthropic"]["habilitada"] is False
     assert integraciones["anthropic"]["secretos"]["api_key"]["configurado"] is False
     assert "valor" not in respuesta.text

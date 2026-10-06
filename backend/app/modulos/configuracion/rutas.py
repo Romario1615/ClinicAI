@@ -7,13 +7,19 @@ nunca vuelve a salir por la API.
 
 from __future__ import annotations
 
+import time
 import uuid
 from typing import Annotated, Any
 
+import httpx
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.ia.decisiones import ClasificadorJev
+from app.ia.proveedores_clinica import contexto_cifrado, descifrar, leer_integracion
+from app.ia.resumen_clinico import _url_local
 from app.modulos.organizacion.modelos import ConfiguracionClinica
 from app.nucleo.auditoria import AccionAuditada, construir_entrada
 from app.nucleo.autorizacion import Principal
@@ -69,6 +75,16 @@ _CAMPOS_AJUSTES: dict[str, dict[str, str]] = {
         "redirect_uri": "url",
         "scopes": "texto_largo",
     },
+    "typesafe": {
+        "modelo": "texto",
+        "tiempo_limite": "segundos",
+        "umbral_confianza": "probabilidad",
+    },
+    "respuestas_ia": {
+        "proveedor": "opcion_llm",
+        "ollama_url": "url_local",
+        "ollama_modelo": "texto",
+    },
     "smtp": {
         "host": "texto",
         "puerto": "puerto",
@@ -84,6 +100,8 @@ _CAMPOS_SECRETOS: dict[str, tuple[str, ...]] = {
     "whatsapp": ("token_acceso", "token_verificacion", "secreto_app"),
     "google_calendar": ("client_secret",),
     "smtp": ("contrasena",),
+    "typesafe": ("api_key",),
+    "respuestas_ia": (),
 }
 
 _AJUSTES_POR_DEFECTO: dict[str, dict[str, Any]] = {
@@ -94,11 +112,19 @@ _AJUSTES_POR_DEFECTO: dict[str, dict[str, Any]] = {
         "scopes": "https://www.googleapis.com/auth/calendar.events",
     },
     "smtp": {"puerto": 587, "tls": True, "correo_remitente": "", "nombre_remitente": ""},
+    "typesafe": {"modelo": "jev-latest", "tiempo_limite": 3.0, "umbral_confianza": 0.85},
+    "respuestas_ia": {"proveedor": "entorno", "ollama_url": "", "ollama_modelo": ""},
 }
+PROVEEDORES_RESPUESTA = frozenset({"entorno", "anthropic", "ollama"})
+SEGUNDOS_MINIMOS = 0.2
+SEGUNDOS_MAXIMOS = 30.0
+UMBRAL_MINIMO = 0.5
+UMBRAL_MAXIMO = 0.99
+MENSAJE_PRUEBA = "Hola, quiero reservar una cita de limpieza dental para la proxima semana."
 
 
 def _contexto_cifrado(clinica_id: uuid.UUID, codigo: str, campo: str) -> bytes:
-    return b"integracion:" + clinica_id.bytes + b":" + codigo.encode() + b":" + campo.encode()
+    return contexto_cifrado(clinica_id, codigo, campo)
 
 
 def _validar_ajuste(campo: str, tipo: str, valor: Any) -> Any:  # noqa: PLR0911, PLR0912
@@ -138,6 +164,33 @@ def _validar_ajuste(campo: str, tipo: str, valor: Any) -> Any:  # noqa: PLR0911,
         if valor and not valor.startswith(("https://", "http://localhost", "http://127.0.0.1")):
             raise DatosInvalidos("La URL de retorno debe usar HTTPS.")
         return valor.strip()
+    return _validar_ajuste_ia(campo, tipo, valor)
+
+
+def _validar_ajuste_ia(campo: str, tipo: str, valor: Any) -> Any:
+    """Ajustes del modelo de decision y del LLM que redacta."""
+    numero = type(valor) in {int, float}
+    if tipo == "segundos":
+        if not numero or not SEGUNDOS_MINIMOS <= float(valor) <= SEGUNDOS_MAXIMOS:
+            raise DatosInvalidos("El tiempo maximo debe estar entre 0,2 y 30 segundos.")
+        return float(valor)
+    if tipo == "probabilidad":
+        if not numero or not UMBRAL_MINIMO <= float(valor) <= UMBRAL_MAXIMO:
+            raise DatosInvalidos("El umbral de confianza debe estar entre 0,5 y 0,99.")
+        return float(valor)
+    if tipo == "opcion_llm":
+        if valor not in PROVEEDORES_RESPUESTA:
+            raise DatosInvalidos("Elija Anthropic, Ollama o el proveedor del servidor.")
+        return valor
+    if tipo == "url_local":
+        if not isinstance(valor, str) or len(valor) > URL_MAXIMA:
+            raise DatosInvalidos(f"El campo {campo} no es una URL valida.")
+        texto = valor.strip()
+        if texto and (not texto.startswith(("http://", "https://")) or not _url_local(texto)):
+            raise DatosInvalidos(
+                "Ollama solo se admite en la maquina local o en la red privada de la clinica."
+            )
+        return texto
     raise DatosInvalidos("El tipo de ajuste no esta admitido.")
 
 
@@ -269,6 +322,9 @@ async def actualizar_integracion(  # noqa: PLR0912
         and (not ajustes.get("client_id") or "client_secret" not in secretos_cifrados)
     ):
         raise DatosInvalidos("Google Calendar requiere client ID y client secret.")
+    await _validar_habilitacion_ia(
+        sesion, clinica_id, codigo, datos.habilitada, ajustes, secretos_cifrados
+    )
     if (
         codigo == "smtp"
         and datos.habilitada
@@ -313,6 +369,100 @@ async def actualizar_integracion(  # noqa: PLR0912
     )
     await sesion.commit()
     return _estado(codigo, nueva)
+
+
+async def _validar_habilitacion_ia(
+    sesion: AsyncSession,
+    clinica_id: uuid.UUID,
+    codigo: str,
+    habilitada: bool,
+    ajustes: dict[str, Any],
+    secretos_cifrados: dict[str, Any],
+) -> None:
+    if not habilitada:
+        return
+    if codigo == "typesafe" and "api_key" not in secretos_cifrados:
+        raise DatosInvalidos("Guarde la clave API de JEV antes de habilitar esta integracion.")
+    if codigo != "respuestas_ia":
+        return
+    if ajustes.get("proveedor") == "ollama" and (
+        not ajustes.get("ollama_url") or not ajustes.get("ollama_modelo")
+    ):
+        raise DatosInvalidos("Para usar Ollama indique su URL local y el modelo.")
+    if ajustes.get("proveedor") == "anthropic":
+        anthropic = await leer_integracion(sesion, clinica_id, "anthropic")
+        if (
+            anthropic is None
+            or not anthropic.habilitada
+            or "api_key" not in anthropic.secretos_cifrados
+        ):
+            raise DatosInvalidos(
+                "Habilite primero la integracion de Anthropic con su clave para usarla aqui."
+            )
+
+
+class PruebaJev(BaseModel):
+    respondio: bool
+    mensaje: str
+    intencion: str
+    confianza: float
+    pregunta_clinica: float
+    urgencia: float
+    milisegundos: int
+
+
+@enrutador.post("/integraciones/typesafe/prueba", response_model=PruebaJev)
+async def probar_jev(
+    principal: PuedeConfigurar,
+    sesion: Sesion,
+    cifrador: CifradorActual,
+    reloj: RelojActual,
+    auditor: Auditor,
+) -> PruebaJev:
+    """Llama a JEV con un mensaje sintetico, sin datos de pacientes."""
+    clinica_id = principal.clinica_id
+    if clinica_id is None:
+        raise RecursoNoEncontrado("La sesion no tiene una clinica asociada.")
+    integ = await leer_integracion(sesion, clinica_id, "typesafe")
+    clave = descifrar(cifrador, clinica_id, "typesafe", "api_key", integ) if integ else None
+    if integ is None or not clave:
+        raise DatosInvalidos("Guarde primero la clave API de JEV.")
+    limite = float(integ.ajustes.get("tiempo_limite") or 3.0)
+    inicio = time.perf_counter()
+    async with httpx.AsyncClient(timeout=limite) as cliente:
+        decision = await ClasificadorJev(
+            clave=clave, modelo=str(integ.ajustes.get("modelo") or "jev-latest"), cliente=cliente
+        ).clasificar(MENSAJE_PRUEBA)
+    milisegundos = int((time.perf_counter() - inicio) * 1000)
+    respondio = decision.proveedor == "jev"
+    await auditor.registrar(
+        [
+            construir_entrada(
+                accion=AccionAuditada.INTEGRACION_PROBADA,
+                principal=principal,
+                ahora=reloj.ahora(),
+                entidad_tipo="integracion",
+                entidad_id=None,
+                integracion="typesafe",
+                respondio=respondio,
+            )
+        ]
+    )
+    await sesion.commit()
+    return PruebaJev(
+        respondio=respondio,
+        mensaje=(
+            "JEV respondio correctamente."
+            if respondio
+            else "JEV no respondio: revise la clave o la conexion. Mientras tanto el agente usa "
+            "las reglas locales."
+        ),
+        intencion=decision.intencion.value,
+        confianza=round(decision.confianza, 3),
+        pregunta_clinica=round(decision.pregunta_clinica, 3),
+        urgencia=round(decision.urgencia, 3),
+        milisegundos=milisegundos,
+    )
 
 
 __all__ = ["enrutador"]

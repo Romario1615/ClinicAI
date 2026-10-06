@@ -3,11 +3,18 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, Header, Request
 
+from app.ia.proveedores_clinica import decisiones_de_clinica, fabrica_de_clinica
 from app.ia.seleccion_llm import FabricaConversacional
 from app.modulos.conversaciones import demo_servicios
 from app.modulos.conversaciones.demo_esquemas import AbrirDemo, MensajeDemo, RespuestaDemo
 from app.nucleo.autorizacion import Principal
-from app.nucleo.dependencias import ConfiguracionActual, RelojActual, Sesion, exige_permiso
+from app.nucleo.dependencias import (
+    CifradorActual,
+    ConfiguracionActual,
+    RelojActual,
+    Sesion,
+    exige_permiso,
+)
 from app.nucleo.errores import RecursoNoEncontrado
 
 
@@ -54,7 +61,19 @@ async def responder(
     reloj: RelojActual,
     clave: Clave,
     configuracion: ConfiguracionActual,
+    cifrador: CifradorActual,
 ) -> RespuestaDemo:
+    # Cada clinica decide con su cuenta de JEV y redacta con su LLM; sin
+    # configuracion propia se usa lo del entorno.
+    clinica_id = principal.clinica_id
+    if clinica_id is None:
+        raise RecursoNoEncontrado("La sesion no tiene una clinica asociada.")
+    decisiones = await decisiones_de_clinica(
+        sesion, cifrador, configuracion, clinica_id, peticion.app.state.clasificador
+    )
+    fabrica = await fabrica_de_clinica(
+        sesion, cifrador, configuracion, clinica_id, _fabrica(peticion)
+    )
     respuesta = await demo_servicios.responder(
         sesion,
         principal,
@@ -62,9 +81,10 @@ async def responder(
         identificador,
         datos.texto,
         clave,
-        _fabrica(peticion),
-        peticion.app.state.clasificador,
-        (configuracion.decisiones_umbral_clinico, configuracion.decisiones_umbral_intencion),
+        fabrica,
+        decisiones.clasificador,
+        (decisiones.umbral_clinico, decisiones.umbral_intencion),
+        (peticion.app.state.embeddings, configuracion),
     )
     await sesion.commit()
     return respuesta

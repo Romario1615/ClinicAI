@@ -5,6 +5,7 @@ pertenecen al servicio del canal. El proveedor local no es un LLM real.
 """
 
 from abc import ABC, abstractmethod
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -23,6 +24,25 @@ solamente despues de la confirmacion expresa del usuario. No afirme que una oper
 tuvo exito hasta recibir el resultado de la herramienta. El contexto de permisos e
 identidad esta fuera de su control. Responda en espanol sin datos clinicos."""
 MAXIMO_PASOS = 4
+
+# Cuando JEV no esta seguro de que quiere el paciente, se le pregunta en lugar
+# de adivinar: una herramienta mal elegida (cancelar en vez de reprogramar)
+# cuesta mas que una pregunta.
+MENSAJE_ACLARACION = (
+    "No estoy seguro de haberle entendido. Puede escribir: «buscar horarios», "
+    "«mis citas», «mis pagos» o «hablar con una persona»."
+)
+MENSAJE_SIN_FUENTE = (
+    "No tengo informacion aprobada sobre eso. Si quiere, escriba «hablar con una persona» "
+    "y el equipo se lo confirma."
+)
+PROMPT_FUENTES = """
+Responda SOLO con lo que dicen las fuentes aprobadas que estan en la memoria
+(`fuentes_aprobadas`). Si no responden la pregunta, digalo y ofrezca hablar con
+una persona. No use herramientas para esta respuesta. Maximo tres frases."""
+
+#: Busca en la base de conocimiento publicada; devuelve (titulo, fragmento).
+BuscadorConocimiento = Callable[[str], Awaitable[list[tuple[str, str]]]]
 
 
 @dataclass(frozen=True)
@@ -160,6 +180,86 @@ def decision_determinista(  # noqa: PLR0911 - una salida por regla, en orden de 
     return None
 
 
+async def responder_con_conocimiento(
+    proveedor: "ProveedorConversacional",
+    texto: str,
+    memoria: dict[str, Any],
+    negocio: dict[str, Any],
+    buscar: BuscadorConocimiento,
+) -> ResultadoHerramienta:
+    """Respuesta desde documentos publicados, nunca improvisada.
+
+    Con un LLM configurado, este redacta solo con esas fuentes; si se sale del
+    guion (pide una herramienta o no dice nada), se cita la fuente tal cual.
+    Sin LLM, se cita. Sin fuente, se dice y se ofrece una persona.
+    """
+    fuentes = await buscar(texto)
+    if not fuentes:
+        return ResultadoHerramienta(exito=True, mensaje=MENSAJE_SIN_FUENTE, codigo="SIN_FUENTE")
+    titulo, fragmento = fuentes[0]
+    cita = f"Segun «{titulo}»: {fragmento}"
+    if isinstance(proveedor, ProveedorDemostracion):
+        return ResultadoHerramienta(exito=True, mensaje=cita, codigo="FUENTE_CITADA")
+    decision = await proveedor.decidir(
+        sistema=PROMPT_SISTEMA + PROMPT_FUENTES,
+        texto=texto,
+        memoria={
+            **memoria,
+            "fuentes_aprobadas": [{"titulo": t, "texto": f} for t, f in fuentes],
+        },
+        negocio=negocio,
+        resultado=None,
+    )
+    if decision.herramienta is not None or not decision.mensaje.strip():
+        return ResultadoHerramienta(exito=True, mensaje=cita, codigo="FUENTE_CITADA")
+    return ResultadoHerramienta(
+        exito=True,
+        mensaje=f"{decision.mensaje.strip()}\n\nFuente: {titulo}",
+        codigo="FUENTE_REDACTADA",
+    )
+
+
+async def _turno_tipado(
+    proveedor: ProveedorConversacional,
+    texto: str,
+    memoria: dict[str, Any],
+    negocio: dict[str, Any],
+    contexto: ContextoHerramienta,
+    *,
+    clasificador: ClasificadorIntencion,
+    umbrales: tuple[float, float],
+    buscar_conocimiento: BuscadorConocimiento | None,
+) -> tuple[ResultadoHerramienta, list[str]] | None:
+    """Segunda barrera y atajos con un modelo de decision (JEV o reglas).
+
+    Responde con valores tipados y nunca ejecuta nada por si mismo: o elige
+    una herramienta del catalogo, o pide aclarar, o responde desde documentos
+    publicados. Si no hay nada que hacer aqui, sigue el proveedor.
+    """
+    umbral_clinico, umbral_intencion = umbrales
+    tipada = await clasificador.clasificar(texto)
+    atajo = decision_determinista(
+        tipada, negocio, umbral_clinico=umbral_clinico, umbral_intencion=umbral_intencion
+    )
+    if atajo is not None and atajo.herramienta is not None:
+        argumentos = dict(atajo.argumentos)
+        if atajo.herramienta == "get_patient_appointments":
+            argumentos["paciente_id"] = negocio["paciente_id"]
+        return await despachar(atajo.herramienta, argumentos, contexto), [atajo.herramienta]
+    if tipada.proveedor == "jev" and tipada.confianza < umbral_intencion:
+        return ResultadoHerramienta(exito=True, mensaje=MENSAJE_ACLARACION, codigo="ACLARACION"), []
+    if (
+        tipada.intencion is Intencion.INFORMACION
+        and tipada.confianza >= umbral_intencion
+        and buscar_conocimiento is not None
+    ):
+        respuesta = await responder_con_conocimiento(
+            proveedor, texto, memoria, negocio, buscar_conocimiento
+        )
+        return respuesta, []
+    return None
+
+
 async def ejecutar_turno(
     proveedor: ProveedorConversacional,
     texto: str,
@@ -170,6 +270,7 @@ async def ejecutar_turno(
     clasificador: ClasificadorIntencion | None = None,
     umbral_clinico: float = 0.35,
     umbral_intencion: float = 0.85,
+    buscar_conocimiento: BuscadorConocimiento | None = None,
 ) -> tuple[ResultadoHerramienta, list[str]]:
     resultado: ResultadoHerramienta | None = None
     limite = evaluar(texto)
@@ -179,21 +280,18 @@ async def ejecutar_turno(
     invocaciones: list[str] = []
 
     if clasificador is not None and texto.strip():
-        # Segunda barrera y atajo: un modelo de decision (Jev o reglas)
-        # responde con valores tipados. Nunca ejecuta nada por si mismo.
-        tipada = await clasificador.clasificar(texto)
-        atajo = decision_determinista(
-            tipada,
+        tipado = await _turno_tipado(
+            proveedor,
+            texto,
+            memoria,
             negocio,
-            umbral_clinico=umbral_clinico,
-            umbral_intencion=umbral_intencion,
+            contexto,
+            clasificador=clasificador,
+            umbrales=(umbral_clinico, umbral_intencion),
+            buscar_conocimiento=buscar_conocimiento,
         )
-        if atajo is not None and atajo.herramienta is not None:
-            argumentos = dict(atajo.argumentos)
-            if atajo.herramienta == "get_patient_appointments":
-                argumentos["paciente_id"] = negocio["paciente_id"]
-            resultado = await despachar(atajo.herramienta, argumentos, contexto)
-            return resultado, [atajo.herramienta]
+        if tipado is not None:
+            return tipado
 
     for _ in range(MAXIMO_PASOS):
         decision = await proveedor.decidir(

@@ -29,10 +29,12 @@ const formularioVacio = (ajustes: FormularioIntegracion['ajustes'], secretos: st
   guardados: Object.fromEntries(secretos.map((campo) => [campo, false])) as Record<string, boolean>,
 });
 
+import { IntegracionesIaComponent } from './integraciones-ia.component';
+
 @Component({
   selector: 'app-configuracion',
   standalone: true,
-  imports: [FormsModule, RouterLink],
+  imports: [FormsModule, RouterLink, IntegracionesIaComponent],
   template: `
     <header class="pagina-cabecera">
       <div>
@@ -222,6 +224,7 @@ const formularioVacio = (ajustes: FormularioIntegracion['ajustes'], secretos: st
         </form>
       </section>
     </div>
+    <app-integraciones-ia />
     }
 
     }
