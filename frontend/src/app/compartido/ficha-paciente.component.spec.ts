@@ -288,6 +288,7 @@ describe('FichaPacienteComponent con permisos clínicos', () => {
     http.expectOne(`${BASE}/pacientes/pac-1/foto-perfil`).flush(null);
     http.expectOne(`${BASE}/pacientes/pac-1`).flush(detalle());
     http.expectOne((r) => r.url === `${BASE}/agenda/citas`).flush({ elementos: [], total: 0, limite: 50, desplazamiento: 0 });
+    http.expectOne(`${BASE}/pacientes/pac-1/acceso-clinico`).flush({ acceso_clinico: true });
     fixture.detectChanges();
   });
 
@@ -329,6 +330,19 @@ describe('FichaPacienteComponent con permisos clínicos', () => {
     c.abrirHistoria();
     expect(navegar).toHaveBeenCalledWith(['/historia-clinica'], { queryParams: { paciente: 'pac-1' } });
     expect(cerrado).toBeTrue();
+  });
+
+  it('sin relación asistencial no pide notas ni ofrece pestañas clínicas, y lo explica', () => {
+    c.accesoClinico.set(false);
+    expect(c.pestanas().map((p: { clave: string }) => p.clave)).toEqual(['resumen', 'citas', 'contacto', 'historia']);
+    c.elegir('historia');
+    http.expectNone((r) => r.url.endsWith('/notas'));
+    http.expectOne(`${BASE}/historia/pacientes/pac-1/recetas`).flush([]);
+    fixture.detectChanges();
+    const texto = (fixture.nativeElement as HTMLElement).textContent ?? '';
+    expect(texto).toContain('Sin acceso clínico a este paciente');
+    expect(texto).toContain('Sin recetas registradas');
+    expect(texto).not.toContain('no existe');
   });
 
   it('al revisar desde otra especialidad cambia sus módulos y vuelve a pedir las notas', () => {

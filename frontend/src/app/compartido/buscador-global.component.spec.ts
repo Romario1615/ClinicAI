@@ -30,6 +30,9 @@ class SesionFalsa {
   tienePermiso(codigo: string): boolean {
     return this.permitido && codigo === PERMISOS.pacienteLeer;
   }
+  tieneAlgunPermiso(...codigos: readonly string[]): boolean {
+    return codigos.some((codigo) => this.tienePermiso(codigo));
+  }
 }
 
 function paciente(extra: Record<string, unknown> = {}) {

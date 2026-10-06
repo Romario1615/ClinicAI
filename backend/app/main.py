@@ -65,6 +65,7 @@ from app.modulos.odontologia import planes_rutas
 from app.modulos.odontologia import rutas as rutas_odontologia
 from app.modulos.organizacion import plataforma as rutas_plataforma
 from app.modulos.organizacion import rutas as rutas_catalogo
+from app.modulos.pacientes import acceso_clinico_rutas as rutas_acceso_clinico
 from app.modulos.pacientes import consentimientos as rutas_consentimientos
 from app.modulos.pacientes import rutas as rutas_pacientes
 from app.modulos.pagos import rutas as rutas_pagos
@@ -257,6 +258,7 @@ def _registrar_rutas_del_equipo(aplicacion: FastAPI) -> None:
     aplicacion.include_router(rutas_recorrido.enrutador, prefix=PREFIJO_API)
     aplicacion.include_router(rutas_asistente.enrutador, prefix=PREFIJO_API)
     aplicacion.include_router(rutas_revision_riesgo.enrutador, prefix=PREFIJO_API)
+    aplicacion.include_router(rutas_acceso_clinico.enrutador, prefix=PREFIJO_API)
 
 
 def _registrar_rutas(aplicacion: FastAPI) -> None:

@@ -61,7 +61,8 @@ import type { Cita } from '../nucleo/modelos/dominio';
 import { formatearFecha, formatearFechaHora } from '../nucleo/utilidades/fechas';
 import { IconoComponent } from './icono.component';
 import { TipoDocumentoPipe } from './tipo-documento.pipe';
-import { mensajeFalloClinico } from '../nucleo/utilidades/acceso-clinico';
+import { MENSAJE_SIN_ACCESO_CLINICO, mensajeFalloClinico } from '../nucleo/utilidades/acceso-clinico';
+import { OperacionesService } from '../nucleo/servicios/operaciones.service';
 
 /** Traducción del nivel de verificación, con lo que implica para quien atiende. */
 const VERIFICACION: Record<string, { etiqueta: string; consecuencia: string; alerta: boolean }> = {
@@ -346,15 +347,16 @@ const DETALLE_CLINICO: Partial<Record<Pestana, string>> = {
                       Abrir historia completa
                     </button>
                   </div>
-                  @if (puedeLeerHistoria()) {
+                  @if (puedeLeerHistoria() && !consultandoAcceso() && !sinAccesoClinico()) {
                     <app-resumen-clinico [pacienteId]="pacienteId()" />
                   }
                   @if (cargandoClinico()) {
                     <p class="ficha__nada" role="status">Cargando…</p>
-                  } @else if (avisoClinico()) {
-                    <p class="ficha__ojo" role="status">{{ avisoClinico() }}</p>
                   } @else {
-                    @if (puedeLeerHistoria()) {
+                    @if (avisoClinico()) {
+                      <p class="ficha__ojo" role="status">{{ avisoClinico() }}</p>
+                    }
+                    @if (puedeLeerHistoria() && !avisoClinico()) {
                       <h4 class="ficha__subtitulo">Últimas notas de evolución</h4>
                       <ul class="ficha__notas">
                         @for (nota of notas(); track nota.id) {
@@ -368,7 +370,7 @@ const DETALLE_CLINICO: Partial<Record<Pestana, string>> = {
                         }
                       </ul>
                     }
-                    @if (puedeLeerRecetas()) {
+                    @if (puedeLeerRecetas() && !recetasNoDisponibles()) {
                       <h4 class="ficha__subtitulo">Recetas</h4>
                       <ul class="ficha__notas">
                         @for (receta of recetas(); track receta.id) {
@@ -793,6 +795,7 @@ export class FichaPacienteComponent implements OnInit {
   private readonly sesion = inject(SesionService);
   protected readonly especialidades = inject(EspecialidadHistoriaService);
   private readonly router = inject(Router);
+  private readonly operaciones = inject(OperacionesService);
 
   readonly pacienteId = input.required<string>();
   /**
@@ -830,13 +833,15 @@ export class FichaPacienteComponent implements OnInit {
     }
     // Además del permiso, el módulo debe estar activo en la especialidad elegida.
     const modulo = (m: ModuloHistoria) => this.especialidades.tieneModulo(m);
-    if (this.sesion.tienePermiso(PERMISOS.odontogramaLeer) && modulo('odontograma')) {
+    // Sin acceso clínico no se ofrecen: solo darían «no disponible».
+    const clinico = !this.sinAccesoClinico();
+    if (clinico && this.sesion.tienePermiso(PERMISOS.odontogramaLeer) && modulo('odontograma')) {
       lista.push({ clave: 'odontograma', etiqueta: 'Odontograma' });
     }
-    if (this.sesion.tienePermiso(PERMISOS.planTratamientoLeer) && modulo('planes')) {
+    if (clinico && this.sesion.tienePermiso(PERMISOS.planTratamientoLeer) && modulo('planes')) {
       lista.push({ clave: 'planes', etiqueta: 'Plan de tratamiento' });
     }
-    if (this.sesion.tienePermiso(PERMISOS.imagenClinicaLeer) && modulo('imagenes')) {
+    if (clinico && this.sesion.tienePermiso(PERMISOS.imagenClinicaLeer) && modulo('imagenes')) {
       lista.push({ clave: 'imagenes', etiqueta: 'Imágenes' });
     }
     return lista;
@@ -857,6 +862,16 @@ export class FichaPacienteComponent implements OnInit {
   protected readonly notas = signal<readonly Nota[]>([]);
   protected readonly recetas = signal<readonly Receta[]>([]);
   protected readonly cargandoClinico = signal(false);
+  /**
+   * Si quien mira puede pedir los datos clínicos de este paciente. `null`:
+   * aún no se sabe o no aplica. Con `false` no se piden (el backend daría 404:
+   * falta relación asistencial) y se explica en su lugar.
+   */
+  protected readonly accesoClinico = signal<boolean | null>(null);
+  protected readonly sinAccesoClinico = computed(() => this.accesoClinico() === false);
+  protected readonly consultandoAcceso = signal(false);
+  /** Las recetas no se pudieron cargar: no se dice «sin recetas». */
+  protected readonly recetasNoDisponibles = signal(false);
   protected readonly avisoClinico = signal('');
   private clinicoCargado = false;
 
@@ -986,6 +1001,27 @@ export class FichaPacienteComponent implements OnInit {
   ngOnInit(): void {
     this.especialidades.cargar();
     this.cargar();
+    this.consultarAccesoClinico();
+  }
+
+  /** Pregunta una vez si se pueden pedir los datos clínicos (200 sí/no, nunca 404 en cadena). */
+  private consultarAccesoClinico(): void {
+    const clinicos = ['historia_clinica.leer', 'odontograma.leer', 'plan_tratamiento.leer', 'imagen_clinica.leer'];
+    if (!this.sesion.tieneAlgunPermiso(...clinicos)) return;
+    this.consultandoAcceso.set(true);
+    this.operaciones
+      .leer<{ acceso_clinico: boolean }>(`/pacientes/${this.pacienteId()}/acceso-clinico`)
+      .subscribe({
+        next: (r) => this.accesoClinico.set(r.acceso_clinico),
+        // Si no se puede saber, se intenta como antes y cada pestaña explica su fallo.
+        error: () => this.accesoClinico.set(null),
+        complete: () => this.trasConsultarAcceso(),
+      });
+  }
+
+  private trasConsultarAcceso(): void {
+    this.consultandoAcceso.set(false);
+    if (this.pestana() === 'historia' && !this.clinicoCargado) this.cargarClinico();
   }
 
   /** Otra especialidad: las notas se vuelven a pedir y las pestañas cambian. */
@@ -1031,7 +1067,8 @@ export class FichaPacienteComponent implements OnInit {
 
   protected elegir(clave: Pestana): void {
     this.pestana.set(clave);
-    if (clave === 'historia' && !this.clinicoCargado) {
+    // Si aún se está consultando el acceso, se carga al terminar la consulta.
+    if (clave === 'historia' && !this.clinicoCargado && !this.consultandoAcceso()) {
       this.cargarClinico();
     }
   }
@@ -1041,8 +1078,13 @@ export class FichaPacienteComponent implements OnInit {
     this.clinicoCargado = true;
     this.cargandoClinico.set(true);
     this.avisoClinico.set('');
+    this.recetasNoDisponibles.set(false);
     const id = this.pacienteId();
-    let pendientes = (this.puedeLeerHistoria() ? 1 : 0) + (this.puedeLeerRecetas() ? 1 : 0);
+    // Sin acceso clínico, las notas no se piden; las recetas son compartidas.
+    const pedirNotas = this.puedeLeerHistoria() && !this.sinAccesoClinico();
+    if (this.puedeLeerHistoria() && !pedirNotas) this.avisoClinico.set(MENSAJE_SIN_ACCESO_CLINICO);
+    let pendientes = (pedirNotas ? 1 : 0) + (this.puedeLeerRecetas() ? 1 : 0);
+    if (pendientes === 0) this.cargandoClinico.set(false);
     const terminar = () => {
       pendientes -= 1;
       if (pendientes <= 0) {
@@ -1057,7 +1099,7 @@ export class FichaPacienteComponent implements OnInit {
       );
       terminar();
     };
-    if (this.puedeLeerHistoria()) {
+    if (pedirNotas) {
       this.api.notas(id, false, this.especialidades.elegida()?.id ?? null).subscribe({
         next: (notas) => {
           this.notas.set(
@@ -1074,7 +1116,10 @@ export class FichaPacienteComponent implements OnInit {
           this.recetas.set(recetas);
           terminar();
         },
-        error: denegado,
+        error: (fallo: unknown) => {
+          this.recetasNoDisponibles.set(true);
+          denegado(fallo);
+        },
       });
     }
   }
