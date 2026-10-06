@@ -14,6 +14,7 @@ from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, Path, status
 
+from app.modulos.historia.especialidades import exige_modulo
 from app.modulos.odontologia.modelos import PlantillaPlan, PlanTratamiento, ProcedimientoPlan
 from app.modulos.odontologia.planes_esquemas import (
     AceptacionPlan,
@@ -30,11 +31,11 @@ from app.modulos.odontologia.planes_esquemas import (
 from app.modulos.odontologia.planes_servicios import ServicioPlanesTratamiento
 from app.nucleo.auditoria import AccionAuditada, EntradaAuditoria, construir_entrada
 from app.nucleo.autorizacion import NivelSensibilidad, Principal
-from app.nucleo.dependencias import Auditor, RelojActual, Sesion, exige_permiso
+from app.nucleo.dependencias import Auditor, RelojActual, Sesion
 
 enrutador_planes = APIRouter(prefix="/odontologia", tags=["planes de tratamiento"])
-PuedeLeer = Annotated[Principal, Depends(exige_permiso("plan_tratamiento.leer"))]
-PuedeEscribir = Annotated[Principal, Depends(exige_permiso("plan_tratamiento.escribir"))]
+PuedeLeer = Annotated[Principal, Depends(exige_modulo("planes", "plan_tratamiento.leer"))]
+PuedeEscribir = Annotated[Principal, Depends(exige_modulo("planes", "plan_tratamiento.escribir"))]
 
 
 def _salida(plan: PlanTratamiento, procedimientos: list[ProcedimientoPlan]) -> PlanSalida:

@@ -21,6 +21,7 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { BuscadorGlobalComponent } from './buscador-global.component';
 import { CONFIGURACION, CONFIGURACION_POR_DEFECTO, PERMISOS } from '../nucleo/servicios/configuracion';
 import { SesionService } from '../nucleo/servicios/sesion.service';
+import { ESPECIALIDAD_SINTETICA } from '../nucleo/pruebas/sesion-sintetica';
 
 const BASE = CONFIGURACION_POR_DEFECTO.urlApi;
 
@@ -70,6 +71,7 @@ describe('BuscadorGlobalComponent', () => {
         provideHttpClientTesting(),
         { provide: CONFIGURACION, useValue: CONFIGURACION_POR_DEFECTO },
         { provide: SesionService, useValue: sesion },
+        ESPECIALIDAD_SINTETICA,
       ],
     });
     fixture = TestBed.createComponent(BuscadorGlobalComponent);

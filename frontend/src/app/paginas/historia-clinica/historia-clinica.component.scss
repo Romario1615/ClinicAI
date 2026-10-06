@@ -319,3 +319,9 @@
   flex: 1 1 auto;
   min-width: 0;
 }
+
+// Barra «Revisando como»: separada de la cabecera y de las pestañas.
+.historia__especialidad {
+  display: block;
+  margin-bottom: var(--espacio-3);
+}

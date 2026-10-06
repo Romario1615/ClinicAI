@@ -55,7 +55,7 @@ function pagina(elementos: readonly Paciente[], extra: Record<string, unknown> =
   };
 }
 
-import { INDICADORES_VACIOS } from '../../nucleo/pruebas/sesion-sintetica';
+import { ESPECIALIDAD_SINTETICA, INDICADORES_VACIOS } from '../../nucleo/pruebas/sesion-sintetica';
 describe('PacientesComponent', () => {
   let fixture: ComponentFixture<PacientesComponent>;
   let http: HttpTestingController;
@@ -68,6 +68,7 @@ describe('PacientesComponent', () => {
         provideHttpClientTesting(),
         { provide: CONFIGURACION, useValue: CONFIGURACION_POR_DEFECTO },
         INDICADORES_VACIOS,
+        ESPECIALIDAD_SINTETICA,
       ],
     });
     fixture = TestBed.createComponent(PacientesComponent);

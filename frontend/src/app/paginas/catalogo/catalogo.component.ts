@@ -3,9 +3,11 @@ import { forkJoin } from 'rxjs';
 
 import { CatalogoService } from '../../nucleo/servicios/catalogo.service';
 import type { Sede, Servicio, Profesional } from '../../nucleo/modelos/dominio';
+import { SesionService } from '../../nucleo/servicios/sesion.service';
+import { ModulosEspecialidadComponent } from './modulos-especialidad.component';
 
 @Component({
-  selector: 'app-catalogo', standalone: true,
+  selector: 'app-catalogo', standalone: true, imports: [ModulosEspecialidadComponent],
   template: `
     <header class="modulo-cabecera"><div class="modulo-cabecera__texto"><p class="ceja">CONFIGURACIÓN</p><h1>Catálogo de la clínica</h1><p>Sedes, servicios y profesionales disponibles para su sesión.</p></div><img class="modulo-cabecera__imagen" src="/images/catalogo-clinica.png" alt="" aria-hidden="true" loading="lazy" /></header>
     @if (error()) { <p role="alert">{{ error() }}</p><button (click)="cargar()" class="boton">Reintentar</button> }
@@ -14,11 +16,13 @@ import type { Sede, Servicio, Profesional } from '../../nucleo/modelos/dominio';
     <h2>Servicios</h2><div class="tabla-envoltorio"><table class="tabla"><thead><tr><th>Servicio</th><th>Duración</th><th>Preparación</th><th>Precio</th></tr></thead><tbody>
     @for (s of servicios(); track s.id) { <tr><td>{{ s.nombre }}</td><td>{{ s.duracion_minutos }} min</td><td>{{ s.minutos_preparacion }} min</td><td>{{ s.precio === null ? 'Consultar' : '$' + s.precio }}</td></tr> }
     </tbody></table></div><h2>Profesionales</h2><div class="rejilla">@for (p of profesionales(); track p.id) { <article class="tarjeta"><h3>{{ p.nombre }} {{ p.apellido }}</h3><p>Registro {{ p.numero_registro_profesional }}</p></article> }</div>
+    @if (sesion.tienePermiso('especialidad.gestionar')) { <app-modulos-especialidad /> }
   `,
   styles: `h2 { margin-top: 24px; }`,
 })
 export class CatalogoComponent {
   private readonly catalogo = inject(CatalogoService);
+  protected readonly sesion = inject(SesionService);
   protected readonly sedes = signal<readonly Sede[]>([]);
   protected readonly servicios = signal<readonly Servicio[]>([]);
   protected readonly profesionales = signal<readonly Profesional[]>([]);

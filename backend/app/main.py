@@ -51,6 +51,7 @@ from app.modulos.conversaciones import demo_rutas
 from app.modulos.conversaciones import rutas as rutas_conversaciones
 from app.modulos.dashboard import indicadores as indicadores_dashboard
 from app.modulos.dashboard import rutas as rutas_dashboard
+from app.modulos.historia import especialidades as rutas_especialidades_historia
 from app.modulos.historia import resumen_clinico as rutas_resumen_clinico
 from app.modulos.historia import rutas as rutas_historia
 from app.modulos.imagenes import rutas as rutas_imagenes
@@ -260,6 +261,7 @@ def _registrar_rutas(aplicacion: FastAPI) -> None:
     aplicacion.include_router(rutas_resumen_clinico.enrutador, prefix=PREFIJO_API)
     aplicacion.include_router(rutas_postconsulta.enrutador, prefix=PREFIJO_API)
     aplicacion.include_router(rutas_fotos_usuario.enrutador, prefix=PREFIJO_API)
+    aplicacion.include_router(rutas_especialidades_historia.enrutador, prefix=PREFIJO_API)
     aplicacion.include_router(rutas_espera.enrutador, prefix=PREFIJO_API)
     aplicacion.include_router(demo_rutas.enrutador, prefix=PREFIJO_API)
     aplicacion.include_router(rutas_conversaciones.enrutador, prefix=PREFIJO_API)

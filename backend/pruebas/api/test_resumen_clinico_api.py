@@ -60,12 +60,11 @@ async def historia_sintetica(
         clinica_id=clinica.id,
         paciente_id=paciente.id,
         profesional_id=profesional.id,
-        estado="CONFIRMADA",
-        confirmada_en=ahora - timedelta(days=5),
-        confirmada_por=profesional.id,
+        estado="BORRADOR",
     )
     sesion.add(receta)
     await sesion.flush()
+    # Las líneas solo se agregan en borrador; después se firma, como en la clínica.
     medicamento = RecetaMedicamento(
         receta_id=receta.id,
         nombre="Medicamento sintético",
@@ -74,6 +73,10 @@ async def historia_sintetica(
         frecuencia_horas=12,
     )
     sesion.add(medicamento)
+    await sesion.flush()
+    receta.estado = "CONFIRMADA"
+    receta.confirmada_en = ahora - timedelta(days=5)
+    receta.confirmada_por = profesional.id
     await sesion.flush()
     sesion.add_all(
         [

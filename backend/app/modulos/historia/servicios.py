@@ -283,6 +283,7 @@ class ServicioHistoria:
         *,
         principal: Principal,
         incluir_historico: bool = False,
+        especialidades: frozenset[uuid.UUID] | None = None,
     ) -> tuple[list[NotaEvolucion], tuple[EntradaAuditoria, ...]]:
         """Lee la historia y **devuelve la auditoria de esa lectura**.
 
@@ -299,6 +300,7 @@ class ServicioHistoria:
             paciente_id=paciente_id,
             ahora=ahora,
             incluir_historico=incluir_historico,
+            especialidades=especialidades,
         )
         entrada = construir_entrada(
             accion=AccionAuditada.HISTORIA_CONSULTADA,
@@ -315,6 +317,7 @@ class ServicioHistoria:
             # se corrige renombrando -- a dejar pasar contenido clinico.
             versiones_devueltas=len(notas),
             incluye_historico=incluir_historico,
+            especialidades_revisadas=sorted(str(e) for e in especialidades or ()),
         )
         return notas, (entrada,)
 

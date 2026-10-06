@@ -44,6 +44,11 @@ import {
 } from '../nucleo/servicios/api.service';
 import { PERMISOS } from '../nucleo/servicios/configuracion';
 import { SesionService } from '../nucleo/servicios/sesion.service';
+import {
+  EspecialidadHistoriaService,
+  type ModuloHistoria,
+} from '../nucleo/servicios/especialidad-historia.service';
+import { SelectorEspecialidadComponent } from './selector-especialidad.component';
 import { OdontogramaComponent } from '../paginas/historia-clinica/odontograma.component';
 import { PlanesTratamientoComponent } from '../paginas/historia-clinica/planes-tratamiento.component';
 import { ResumenClinicoComponent } from '../paginas/historia-clinica/resumen-clinico.component';
@@ -119,6 +124,7 @@ const DETALLE_CLINICO: Partial<Record<Pestana, string>> = {
     PlanesTratamientoComponent,
     TipoDocumentoPipe,
     ResumenClinicoComponent,
+    SelectorEspecialidadComponent,
   ],
   template: `
     <div class="ficha" [class.ficha--embebida]="sinCabecera()" [attr.aria-label]="'Ficha de ' + nombre()">
@@ -191,6 +197,7 @@ const DETALLE_CLINICO: Partial<Record<Pestana, string>> = {
         } @else if (error()) {
           <p class="ficha__error" role="alert">{{ error()!.message }}</p>
         } @else {
+          <app-selector-especialidad class="ficha__especialidad" (cambio)="cambiarEspecialidad()" />
           <div class="ficha__pestanas" role="tablist" aria-label="Secciones de la ficha">
             @for (tab of pestanas(); track tab.clave) {
               <button
@@ -503,6 +510,7 @@ const DETALLE_CLINICO: Partial<Record<Pestana, string>> = {
       min-height: 0;
     }
 
+    .ficha__especialidad { display: block; margin-bottom: var(--espacio-3); }
     .ficha__pestanas {
       display: flex;
       flex-wrap: wrap;
@@ -776,6 +784,7 @@ const DETALLE_CLINICO: Partial<Record<Pestana, string>> = {
 export class FichaPacienteComponent implements OnInit {
   private readonly api = inject(ApiService);
   private readonly sesion = inject(SesionService);
+  protected readonly especialidades = inject(EspecialidadHistoriaService);
   private readonly router = inject(Router);
 
   readonly pacienteId = input.required<string>();
@@ -808,13 +817,15 @@ export class FichaPacienteComponent implements OnInit {
     if (this.puedeLeerHistoria() || this.puedeLeerRecetas()) {
       lista.push({ clave: 'historia', etiqueta: 'Historia y recetas' });
     }
-    if (this.sesion.tienePermiso(PERMISOS.odontogramaLeer)) {
+    // Además del permiso, el módulo debe estar activo en la especialidad elegida.
+    const modulo = (m: ModuloHistoria) => this.especialidades.tieneModulo(m);
+    if (this.sesion.tienePermiso(PERMISOS.odontogramaLeer) && modulo('odontograma')) {
       lista.push({ clave: 'odontograma', etiqueta: 'Odontograma' });
     }
-    if (this.sesion.tienePermiso(PERMISOS.planTratamientoLeer)) {
+    if (this.sesion.tienePermiso(PERMISOS.planTratamientoLeer) && modulo('planes')) {
       lista.push({ clave: 'planes', etiqueta: 'Plan de tratamiento' });
     }
-    if (this.sesion.tienePermiso(PERMISOS.imagenClinicaLeer)) {
+    if (this.sesion.tienePermiso(PERMISOS.imagenClinicaLeer) && modulo('imagenes')) {
       lista.push({ clave: 'imagenes', etiqueta: 'Imágenes' });
     }
     return lista;
@@ -962,7 +973,16 @@ export class FichaPacienteComponent implements OnInit {
    * destruye y se vuelve a crear al cambiar de paciente.
    */
   ngOnInit(): void {
+    this.especialidades.cargar();
     this.cargar();
+  }
+
+  /** Otra especialidad: las notas se vuelven a pedir y las pestañas cambian. */
+  protected cambiarEspecialidad(): void {
+    if (!this.pestanas().some((tab) => tab.clave === this.pestana())) {
+      this.pestana.set('resumen');
+    }
+    if (this.clinicoCargado) this.cargarClinico();
   }
 
   private cargar(): void {
@@ -1029,7 +1049,7 @@ export class FichaPacienteComponent implements OnInit {
       terminar();
     };
     if (this.puedeLeerHistoria()) {
-      this.api.notas(id).subscribe({
+      this.api.notas(id, false, this.especialidades.elegida()?.id ?? null).subscribe({
         next: (notas) => {
           this.notas.set(
             [...notas].sort((a, b) => Date.parse(b.creado_en) - Date.parse(a.creado_en)).slice(0, 8),

@@ -30,6 +30,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, Path, Query, status
 
+from app.modulos.historia.especialidades import especialidades_de_notas
 from app.modulos.historia.esquemas import (
     AlertaAdherenciaSalida,
     AtenderAlertaAdherencia,
@@ -159,6 +160,14 @@ async def leer_historia(
         bool,
         Query(description="Incluye las versiones anteriores de cada nota, no solo la vigente."),
     ] = False,
+    especialidad_id: Annotated[
+        uuid.UUID | None,
+        Query(
+            description=(
+                "Especialidad desde la que se revisa. Sin ella, la propia del profesional."
+            )
+        ),
+    ] = None,
 ) -> list[NotaSalida]:
     """Devuelve la historia y **deja constancia de quien la consulto**.
 
@@ -166,8 +175,12 @@ async def leer_historia(
     la respuesta fallara al serializarse, el acceso habria ocurrido sin
     registro.
     """
+    especialidades = await especialidades_de_notas(sesion, principal, especialidad_id)
     notas, auditoria = await servicio.leer_historia(
-        paciente_id, principal=principal, incluir_historico=incluir_historico
+        paciente_id,
+        principal=principal,
+        incluir_historico=incluir_historico,
+        especialidades=especialidades,
     )
     await auditor.registrar(auditoria)
     await sesion.commit()

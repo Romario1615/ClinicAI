@@ -32,12 +32,13 @@ from fastapi import APIRouter, Depends, Path, status
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 from sqlalchemy import select
 
+from app.modulos.historia.especialidades import exige_modulo
 from app.modulos.odontologia.modelos import CARAS_OLEARY, RegistroPlaca
 from app.modulos.odontologia.vocabulario import es_pieza_valida
 from app.modulos.pacientes.acceso_clinico import GuardiaClinica
 from app.nucleo.auditoria import AccionAuditada, construir_entrada
 from app.nucleo.autorizacion import NivelSensibilidad, Principal
-from app.nucleo.dependencias import Auditor, RelojActual, Sesion, exige_permiso
+from app.nucleo.dependencias import Auditor, RelojActual, Sesion
 from app.nucleo.errores import PermisoDenegado
 
 
@@ -108,8 +109,8 @@ def _salida(fila: RegistroPlaca) -> RegistroPlacaSalida:
 #  Rutas
 # ---------------------------------------------------------------------------
 enrutador_placa = APIRouter(prefix="/odontologia", tags=["periodoncia"])
-PuedeLeer = Annotated[Principal, Depends(exige_permiso("odontograma.leer"))]
-PuedeEscribir = Annotated[Principal, Depends(exige_permiso("odontograma.escribir"))]
+PuedeLeer = Annotated[Principal, Depends(exige_modulo("periodoncia", "odontograma.leer"))]
+PuedeEscribir = Annotated[Principal, Depends(exige_modulo("periodoncia", "odontograma.escribir"))]
 
 
 @enrutador_placa.get(

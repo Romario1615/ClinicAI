@@ -54,6 +54,11 @@ import type {
 } from '../../nucleo/servicios/api.service';
 import { PERMISOS } from '../../nucleo/servicios/configuracion';
 import { SesionService } from '../../nucleo/servicios/sesion.service';
+import {
+  EspecialidadHistoriaService,
+  type ModuloHistoria,
+} from '../../nucleo/servicios/especialidad-historia.service';
+import { SelectorEspecialidadComponent } from '../../compartido/selector-especialidad.component';
 import { FotoPerfilComponent } from '../../compartido/foto-perfil.component';
 import { GaleriaImagenesComponent } from '../../compartido/galeria-imagenes.component';
 import { IndicePlacaComponent } from './indice-placa.component';
@@ -131,6 +136,7 @@ import { IndicacionesPacienteComponent } from './indicaciones-paciente.component
     IndicePlacaComponent,
     NotaEditorComponent,
     RecetaEditorComponent,
+    SelectorEspecialidadComponent,
   ],
   templateUrl: './historia-clinica.component.html',
   styleUrl: './historia-clinica.component.scss',
@@ -138,6 +144,7 @@ import { IndicacionesPacienteComponent } from './indicaciones-paciente.component
 export class HistoriaClinicaComponent {
   private readonly api = inject(ApiService);
   protected readonly sesion = inject(SesionService);
+  protected readonly especialidades = inject(EspecialidadHistoriaService);
 
   // --- Seleccion de paciente ---
   protected termino = '';
@@ -192,14 +199,20 @@ export class HistoriaClinicaComponent {
     const lista: { clave: Pestana; texto: string }[] = [
       { clave: 'evolucion', texto: 'Evolución' },
     ];
-    if (this.puedeLeerOdontograma()) {
+    // Permiso del rol **y** módulo de la especialidad desde la que se revisa.
+    const modulo = (m: ModuloHistoria) => this.especialidades.tieneModulo(m);
+    if (this.puedeLeerOdontograma() && modulo('odontograma')) {
       lista.push({ clave: 'odontograma', texto: 'Odontograma' });
+    }
+    if (this.puedeLeerOdontograma() && modulo('periodoncia')) {
       lista.push({ clave: 'periodoncia', texto: 'Periodoncia · placa' });
     }
-    if (this.sesion.tienePermiso(PERMISOS.imagenClinicaLeer)) {
+    if (this.sesion.tienePermiso(PERMISOS.imagenClinicaLeer) && modulo('imagenes')) {
       lista.push({ clave: 'imagenes', texto: 'Imágenes y radiografías' });
     }
-    if (this.puedeLeerPlanes()) lista.push({ clave: 'planes', texto: 'Planes de tratamiento' });
+    if (this.puedeLeerPlanes() && modulo('planes')) {
+      lista.push({ clave: 'planes', texto: 'Planes de tratamiento' });
+    }
     lista.push({ clave: 'recetas', texto: 'Recetas' });
     if (this.puedeLeerNotas()) lista.push({ clave: 'indicaciones', texto: 'Indicaciones al paciente' });
     return lista;
@@ -286,6 +299,7 @@ export class HistoriaClinicaComponent {
 
   constructor() {
     this.cargarPacientes();
+    this.especialidades.cargar();
     // «Abrir historia completa» desde la ficha llega con ?paciente=<id>.
     const pacienteId = inject(ActivatedRoute).snapshot.queryParamMap.get('paciente');
     if (pacienteId) {
@@ -371,7 +385,7 @@ export class HistoriaClinicaComponent {
 
     forkJoin({
       notas: this.puedeLeerNotas()
-        ? this.api.notas(paciente.id, this.incluirHistorico()).pipe(
+        ? this.api.notas(paciente.id, this.incluirHistorico(), this.especialidades.elegida()?.id ?? null).pipe(
             catchError((fallo: FalloApi) => {
               if (fallo.estado === 403) {
                 this.notasDenegadas.set(true);
@@ -398,6 +412,14 @@ export class HistoriaClinicaComponent {
         this.cargandoHistoria.set(false);
       },
     });
+  }
+
+  /** Otra especialidad: otras notas y otros módulos. */
+  protected cambiarEspecialidad(): void {
+    if (!this.pestanas().some((opcion) => opcion.clave === this.pestana())) {
+      this.pestana.set('evolucion');
+    }
+    this.cargarHistoria();
   }
 
   protected alternarHistorico(): void {

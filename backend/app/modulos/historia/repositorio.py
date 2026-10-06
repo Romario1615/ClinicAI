@@ -41,6 +41,7 @@ from app.modulos.historia.modelos import (
     Toma,
 )
 from app.modulos.pacientes.modelos import RelacionAsistencial
+from app.modulos.profesionales.modelos import Profesional
 from app.nucleo.autorizacion import Principal
 
 _NINGUNO = uuid.UUID(int=0)
@@ -87,11 +88,24 @@ class RepositorioHistoria:
         paciente_id: uuid.UUID,
         ahora: datetime,
         incluir_historico: bool = False,
+        especialidades: frozenset[uuid.UUID] | None = None,
         limite: int = 50,
     ) -> list[NotaEvolucion]:
+        """Notas del paciente; con `especialidades`, solo las de sus autores.
+
+        La especialidad de una nota es la de quien la escribió. Un conjunto
+        vacío no devuelve nada: sin especialidad desde la que revisar no hay
+        notas que mostrar.
+        """
         consulta = select(NotaEvolucion).where(NotaEvolucion.paciente_id == paciente_id)
         if not incluir_historico:
             consulta = consulta.where(NotaEvolucion.vigente.is_(True))
+        if especialidades is not None:
+            consulta = consulta.where(
+                NotaEvolucion.profesional_id.in_(
+                    select(Profesional.id).where(Profesional.especialidad_id.in_(especialidades))
+                )
+            )
         consulta = self._acotar(consulta, principal, ahora)
 
         consulta = consulta.order_by(

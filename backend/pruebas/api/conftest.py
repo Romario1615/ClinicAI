@@ -339,7 +339,9 @@ async def otra_sede(sesion: AsyncSession, clinica: Clinica, sufijo: str) -> Sede
 
 @pytest_asyncio.fixture
 async def especialidad(sesion: AsyncSession, clinica: Clinica, sufijo: str) -> Especialidad:
-    registro = Especialidad(clinica_id=clinica.id, nombre=f"Especialidad {sufijo}")
+    # Odontologia: las pruebas de API recorren odontograma, placa y planes, que
+    # solo se activan en una especialidad que los tenga (ver historia.especialidades).
+    registro = Especialidad(clinica_id=clinica.id, nombre=f"Odontologia {sufijo}", codigo="ODO")
     sesion.add(registro)
     await sesion.flush()
     return registro

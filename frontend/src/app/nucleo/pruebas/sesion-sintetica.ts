@@ -14,6 +14,10 @@ import type { Identidad } from '../modelos/dominio';
 import { CONFIGURACION, CONFIGURACION_POR_DEFECTO } from '../servicios/configuracion';
 import { SesionService } from '../servicios/sesion.service';
 import { IndicadoresService } from '../servicios/indicadores.service';
+import {
+  EspecialidadHistoriaService,
+  type EspecialidadHistoria,
+} from '../servicios/especialidad-historia.service';
 import { of } from 'rxjs';
 
 export const BASE = CONFIGURACION_POR_DEFECTO.urlApi;
@@ -57,12 +61,36 @@ export const INDICADORES_VACIOS = {
   useValue: { obtener: () => of(null), refrescar: () => undefined },
 };
 
+export const ODONTOLOGIA_SINTETICA: EspecialidadHistoria = {
+  id: 'esp-odo',
+  nombre: 'Odontología',
+  modulos: ['odontograma', 'periodoncia', 'planes', 'imagenes'],
+  propia: true,
+};
+
+/**
+ * Revisa desde una especialidad dental con todos los módulos, sin pedirla al
+ * API: las pruebas de cada pantalla no prueban de dónde sale. El servicio
+ * real tiene su propia prueba.
+ */
+export const ESPECIALIDAD_SINTETICA = {
+  provide: EspecialidadHistoriaService,
+  useFactory: () => {
+    const servicio = new EspecialidadHistoriaService();
+    servicio.disponibles.set([ODONTOLOGIA_SINTETICA]);
+    servicio.cargada.set(true);
+    servicio.cargar = () => undefined;
+    return servicio;
+  },
+};
+
 export const PROVEEDORES_PRUEBA = [
   provideHttpClient(),
   provideHttpClientTesting(),
   provideRouter([]),
   { provide: CONFIGURACION, useValue: CONFIGURACION_POR_DEFECTO },
   INDICADORES_VACIOS,
+  ESPECIALIDAD_SINTETICA,
 ];
 
 /** Abre una sesión sintética con esos permisos. Llamar tras configurar TestBed. */

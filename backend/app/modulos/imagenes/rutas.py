@@ -8,6 +8,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, File, Form, Path, Query, Response, UploadFile, status
 
+from app.modulos.historia.especialidades import exige_modulo
 from app.modulos.imagenes.esquemas import AnulacionImagen, ImagenSalida
 from app.modulos.imagenes.modelos import ImagenPaciente, TipoImagen
 from app.modulos.imagenes.servicios import DatosSubida
@@ -23,8 +24,10 @@ from app.nucleo.errores import ArchivoDemasiadoGrande, DatosInvalidos
 
 enrutador = APIRouter(prefix="/pacientes", tags=["imágenes de pacientes"])
 enrutador_imagenes = APIRouter(prefix="/imagenes", tags=["imágenes de pacientes"])
-PuedeLeerClinica = Annotated[Principal, Depends(exige_permiso("imagen_clinica.leer"))]
-PuedeCargarClinica = Annotated[Principal, Depends(exige_permiso("imagen_clinica.cargar"))]
+PuedeLeerClinica = Annotated[Principal, Depends(exige_modulo("imagenes", "imagen_clinica.leer"))]
+PuedeCargarClinica = Annotated[
+    Principal, Depends(exige_modulo("imagenes", "imagen_clinica.cargar"))
+]
 PuedeLeerPerfil = Annotated[Principal, Depends(exige_permiso("paciente.leer_administrativo"))]
 PuedeEditarPaciente = Annotated[Principal, Depends(exige_permiso("paciente.editar"))]
 PuedeLeerImagen = Annotated[

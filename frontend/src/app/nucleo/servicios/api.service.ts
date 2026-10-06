@@ -1013,10 +1013,18 @@ export class ApiService {
     return this.post<RegistroPlaca>(`/odontologia/pacientes/${pacienteId}/indice-placa`, datos);
   }
 
-  notas(pacienteId: string, incluirHistorico = false): Observable<readonly Nota[]> {
+  /** Sin `especialidadId`, el backend usa la especialidad propia del profesional. */
+  notas(
+    pacienteId: string,
+    incluirHistorico = false,
+    especialidadId: string | null = null,
+  ): Observable<readonly Nota[]> {
+    const filtros: Record<string, string | boolean> = {};
+    if (incluirHistorico) filtros['incluir_historico'] = true;
+    if (especialidadId) filtros['especialidad_id'] = especialidadId;
     return this.get<readonly Nota[]>(
       `/historia/pacientes/${pacienteId}/notas`,
-      incluirHistorico ? { incluir_historico: true } : undefined,
+      Object.keys(filtros).length > 0 ? filtros : undefined,
     );
   }
 

@@ -7,6 +7,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, Path, Query, status
 
+from app.modulos.historia.especialidades import exige_modulo
 from app.modulos.odontologia.esquemas import (
     NuevaVersionOdontograma,
     OdontogramaInicial,
@@ -16,11 +17,11 @@ from app.modulos.odontologia.modelos import Odontograma
 from app.modulos.odontologia.servicios import ServicioOdontograma
 from app.nucleo.auditoria import AccionAuditada, construir_entrada
 from app.nucleo.autorizacion import NivelSensibilidad, Principal
-from app.nucleo.dependencias import Auditor, RelojActual, Sesion, exige_permiso
+from app.nucleo.dependencias import Auditor, RelojActual, Sesion
 
 enrutador = APIRouter(prefix="/odontologia", tags=["odontología"])
-PuedeLeer = Annotated[Principal, Depends(exige_permiso("odontograma.leer"))]
-PuedeEscribir = Annotated[Principal, Depends(exige_permiso("odontograma.escribir"))]
+PuedeLeer = Annotated[Principal, Depends(exige_modulo("odontograma", "odontograma.leer"))]
+PuedeEscribir = Annotated[Principal, Depends(exige_modulo("odontograma", "odontograma.escribir"))]
 
 
 def _salida(fila: Odontograma) -> OdontogramaSalida:

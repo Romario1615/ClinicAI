@@ -23,7 +23,13 @@ import { FichaPacienteComponent } from './ficha-paciente.component';
 import { CONFIGURACION, CONFIGURACION_POR_DEFECTO } from '../nucleo/servicios/configuracion';
 import type { Cita, EstadoCita } from '../nucleo/modelos/dominio';
 import { Router } from '@angular/router';
-import { PROVEEDORES_PRUEBA, iniciarSesionCon } from '../nucleo/pruebas/sesion-sintetica';
+import {
+  ESPECIALIDAD_SINTETICA,
+  ODONTOLOGIA_SINTETICA,
+  PROVEEDORES_PRUEBA,
+  iniciarSesionCon,
+} from '../nucleo/pruebas/sesion-sintetica';
+import { EspecialidadHistoriaService } from '../nucleo/servicios/especialidad-historia.service';
 
 const BASE = CONFIGURACION_POR_DEFECTO.urlApi;
 
@@ -81,6 +87,7 @@ describe('FichaPacienteComponent', () => {
         provideHttpClient(),
         provideHttpClientTesting(),
         { provide: CONFIGURACION, useValue: CONFIGURACION_POR_DEFECTO },
+        ESPECIALIDAD_SINTETICA,
       ],
     });
     fixture = TestBed.createComponent(FichaPacienteComponent);
@@ -296,7 +303,7 @@ describe('FichaPacienteComponent con permisos clínicos', () => {
     expect((fixture.nativeElement as HTMLElement).textContent).not.toContain('su rol no los alcanza');
 
     c.elegir('historia');
-    http.expectOne(`${BASE}/historia/pacientes/pac-1/notas`).flush([
+    http.expectOne((r) => r.url === `${BASE}/historia/pacientes/pac-1/notas` && r.params.get('especialidad_id') === 'esp-odo').flush([
       { id: 'n1', tipo: 'EVOLUCION', motivo_consulta: 'Control sintético', creado_en: '2026-10-01T10:00:00Z' },
       { id: 'n2', tipo: 'EVOLUCION', motivo_consulta: null, creado_en: '2026-10-03T10:00:00Z' },
     ]);
@@ -324,10 +331,37 @@ describe('FichaPacienteComponent con permisos clínicos', () => {
     expect(cerrado).toBeTrue();
   });
 
+  it('al revisar desde otra especialidad cambia sus módulos y vuelve a pedir las notas', () => {
+    const especialidades = TestBed.inject(EspecialidadHistoriaService);
+    especialidades.disponibles.set([
+      ODONTOLOGIA_SINTETICA,
+      { id: 'esp-derm', nombre: 'Dermatología', modulos: ['imagenes'], propia: false },
+    ]);
+    // Sin pintar: aquí no se prueba el odontograma, solo que su pestaña se cierra.
+    c.elegir('odontograma');
+
+    especialidades.elegir('esp-derm');
+    c.cambiarEspecialidad();
+    // Sin odontograma ni planes en dermatología; la pestaña abierta se cierra.
+    expect(c.pestanas().map((p: { clave: string }) => p.clave)).toEqual(['resumen', 'citas', 'contacto', 'historia']);
+    expect(c.pestana()).toBe('resumen');
+
+    c.elegir('historia');
+    http
+      .expectOne((r) => r.url.endsWith('/notas') && r.params.get('especialidad_id') === 'esp-derm')
+      .flush([]);
+    http.expectOne(`${BASE}/historia/pacientes/pac-1/recetas`).flush([]);
+    c.cambiarEspecialidad();
+    http
+      .expectOne((r) => r.url.endsWith('/notas') && r.params.get('especialidad_id') === 'esp-derm')
+      .flush([]);
+    http.expectOne(`${BASE}/historia/pacientes/pac-1/recetas`).flush([]);
+  });
+
   it('explica la falta de relación asistencial', () => {
     c.elegir('historia');
     http
-      .expectOne(`${BASE}/historia/pacientes/pac-1/notas`)
+      .expectOne((r) => r.url === `${BASE}/historia/pacientes/pac-1/notas`)
       .flush({ codigo: 'RELACION_ASISTENCIAL_REQUERIDA', mensaje: 'x' }, { status: 403, statusText: 'F' });
     http
       .expectOne(`${BASE}/historia/pacientes/pac-1/recetas`)

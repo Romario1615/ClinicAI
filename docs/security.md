@@ -94,6 +94,10 @@ Observaciones que importan:
   se cambia con `paciente.editar`. Radiografías y fotos clínicas son N2 y exigen
   `imagen_clinica.*`, relación asistencial (si el principal es profesional) y auditoría de
   cada descarga.
+* **La historia se revisa desde una especialidad.** Odontograma, placa, planes e imágenes clínicas
+  exigen, además del permiso, una especialidad permitida al principal que tenga ese módulo activo
+  (`exige_modulo`); si no, 403. Las notas se filtran por la especialidad del autor en el `WHERE`.
+  Alergias, medicamentos y recetas se comparten entre especialidades por seguridad clínica.
 * **La foto de una persona del equipo es N1.** La ve el personal de la misma clínica (nunca el
   agente) y la cambia la propia persona o quien tiene `usuario.editar`. Mismo saneado y cifrado
   que la foto del paciente; cambiarla deja la anterior como no vigente.
@@ -170,7 +174,9 @@ IDOR.
 | `GET /api/v1/pacientes/{id}` | `paciente.leer_administrativo` | **Se audita** (`paciente.consultado`). Fuera de ámbito → 404, indistinguible de inexistente. Solo ficha administrativa: nada clínico |
 | `GET /api/v1/conversaciones/pendientes/cuenta` · `/conversaciones` | `conversacion.leer` | Solo hilos reales de WhatsApp derivados a una persona; ámbito por clínica y pacientes asignados. El conteo y la bandeja quedan auditados |
 | `GET /api/v1/conversaciones/{id}` | `conversacion.leer` + alcance N2 | Devuelve mensajes entrantes sin la carga cruda del proveedor; cada lectura queda auditada como N2. Conversación ajena o fuera de ámbito → 404 |
-| `GET /api/v1/historia/pacientes/{id}/notas` | `historia_clinica.leer` | **Exige además relación asistencial vigente.** Se audita (`historia_clinica.consultada`, N2) antes de responder |
+| `GET /api/v1/historia/pacientes/{id}/notas` | `historia_clinica.leer` | **Exige además relación asistencial vigente.** Se audita (`historia_clinica.consultada`, N2) antes de responder. Solo devuelve notas de autores de la especialidad desde la que se revisa (`especialidad_id`; sin él, la propia del profesional). Pedir una especialidad no permitida → 403; la auditoría registra `especialidades_revisadas` |
+| `GET /api/v1/historia/especialidades` | `historia_clinica.leer`, `odontograma.leer`, `plan_tratamiento.leer` o `imagen_clinica.leer` | Especialidades desde las que revisa el principal: un profesional, la suya y las asignadas explícitamente (el comodín no abre las ajenas); el resto del personal, las de su ámbito. Nunca el agente |
+| `GET /api/v1/catalogo/especialidades/modulos-historia` · `PUT /api/v1/catalogo/especialidades/{id}/modulos-historia` | `especialidad.gestionar` | Módulos de historia por especialidad (odontograma, periodoncia, planes, imágenes). Solo la clínica del principal (otra → 404); cambiar exige motivo, versiona `configuracion_clinica.modulos_historia` y audita `especialidad.modulos_cambiados` |
 | `POST /api/v1/historia/notas` | `historia_clinica.escribir` | Exige relación asistencial. Los diagnósticos requieren además `diagnostico.registrar` |
 | `POST /api/v1/historia/notas/{raiz}/correccion` | `historia_clinica.escribir` | Crea una versión nueva; **no reescribe nada**. Motivo obligatorio, mínimo 5 caracteres |
 | `GET /api/v1/historia/pacientes/{id}/recetas` | `receta.leer` | Exige relación asistencial |

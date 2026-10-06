@@ -102,7 +102,7 @@ function receta(extra: Partial<Receta> = {}): Receta {
   };
 }
 
-import { INDICADORES_VACIOS } from '../../nucleo/pruebas/sesion-sintetica';
+import { ESPECIALIDAD_SINTETICA, INDICADORES_VACIOS } from '../../nucleo/pruebas/sesion-sintetica';
 describe('HistoriaClinicaComponent', () => {
   let fixture: ComponentFixture<HistoriaClinicaComponent>;
   let http: HttpTestingController;
@@ -116,6 +116,7 @@ describe('HistoriaClinicaComponent', () => {
         provideHttpClientTesting(),
         { provide: CONFIGURACION, useValue: CONFIGURACION_POR_DEFECTO },
         INDICADORES_VACIOS,
+        ESPECIALIDAD_SINTETICA,
         {
           provide: ActivatedRoute,
           useValue: { snapshot: { queryParamMap: { get: () => null } } },

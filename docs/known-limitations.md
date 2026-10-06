@@ -94,6 +94,8 @@ No son defectos. Se listan para que no se «arreglen» por error.
 | P‑7 | No se implementa borrado automático por retención sobre historia clínica | Un borrado mal configurado es irreversible; requiere validación jurídica |
 | P‑8 | La IA no tiene ninguna herramienta de escritura clínica | No es una instrucción al modelo: la capacidad no existe. El catálogo son siete herramientas y una prueba falla si aparece una octava |
 | P‑9 | El agente solo devuelve cinco horarios, y de la cita solo fecha, hora y estado | Un mensaje con cuarenta horas no lo lee nadie; y el nombre del servicio revela la especialidad, que revela la condición |
+| P‑10 | Un profesional revisa la historia solo desde su especialidad (y las asignadas explícitamente); el comodín «todas las especialidades» no le abre las ajenas | Lo de cosmetología no se activa cuando el odontólogo usa la historia. Alergias, medicamentos y recetas sí se comparten: ocultar una alergia es un riesgo clínico |
+| P‑11 | La especialidad de una nota es la de su autor; no hay columna propia | El autor no cambia. Consecuencia: si un profesional cambia de especialidad, sus notas anteriores pasan a verse desde la nueva. Las imágenes clínicas no se separan por especialidad: se activan o no como módulo completo |
 
 ---
 

@@ -104,6 +104,7 @@
       (reintentar)="cargarHistoria()"
     />
   } @else {
+    <app-selector-especialidad class="historia__especialidad" (cambio)="cambiarEspecialidad()" />
     @if (puedeLeerNotas() && !sinRelacion()) {
       <app-resumen-clinico class="historia__resumen" [pacienteId]="paciente()!.id" />
     }
