@@ -231,10 +231,27 @@ export class MedicamentosComponent {
     });
     if (this.sesion.tienePermiso(PERMISOS.adherenciaLeer)) {
       this.api.alertasAdherencia().subscribe({
-        next: (alertas) => this.alertas.set(alertas.filter((alerta) => alerta.paciente_id === paciente.id)),
+        next: (alertas) => {
+          const propias = alertas.filter((alerta) => alerta.paciente_id === paciente.id);
+          this.alertas.set(propias);
+          // Con varias alertas, cada una debe decir de qué receta es; si no,
+          // quien atiende no sabe cuál está revisando.
+          if (propias.length > 0 && this.sesion.tienePermiso(PERMISOS.recetaLeer)) {
+            this.api.recetas(paciente.id).subscribe({
+              next: (recetas) => this.recetas.set(recetas),
+              error: () => this.recetas.set([]),
+            });
+          }
+        },
         error: (fallo: FalloApi) => this.errorAlertas.set(fallo),
       });
     }
+  }
+
+  /** Medicamentos de la receta de la alerta, o vacío si no se pudo cargar. */
+  protected medicamentosDe(alerta: AlertaAdherencia): string {
+    const receta = this.recetas().find((r) => r.id === alerta.receta_id);
+    return receta ? receta.medicamentos.map((m) => m.nombre).join(', ') : '';
   }
 
   protected atender(alerta: AlertaAdherencia): void {

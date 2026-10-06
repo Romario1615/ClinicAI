@@ -23,6 +23,7 @@
  */
 import { Component, computed, inject, output, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import type { Subscription } from 'rxjs';
 
 import { IconoComponent } from './icono.component';
 import { ApiService, FalloApi, filtroBusquedaPaciente } from '../nucleo/servicios/api.service';
@@ -125,6 +126,8 @@ export class SelectorPacienteComponent {
   protected readonly total = signal(0);
   protected readonly cargando = signal(false);
   protected readonly error = signal('');
+  /** Búsqueda en curso: una nueva la cancela para que su respuesta no pise a la nueva. */
+  private consulta: Subscription | null = null;
 
   protected readonly soloDigitos = computed(() => /^\d+$/.test(this.termino.trim()));
   protected readonly recortado = computed(() => this.total() > this.pacientes().length);
@@ -140,7 +143,8 @@ export class SelectorPacienteComponent {
     this.seleccion.emit(null);
 
     const limpio = this.termino.trim();
-    this.api.pacientes({ ...filtroBusquedaPaciente(limpio), limite: 25 }).subscribe({
+    this.consulta?.unsubscribe();
+    this.consulta = this.api.pacientes({ ...filtroBusquedaPaciente(limpio), limite: 25 }).subscribe({
       next: (pagina) => {
         this.pacientes.set(pagina.elementos);
         this.total.set(pagina.total);

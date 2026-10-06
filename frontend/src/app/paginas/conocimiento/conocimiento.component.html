@@ -286,6 +286,15 @@
                       >
                         {{ documentoPermisos() === documento.id ? 'Cerrar accesos' : 'Accesos' }}
                       </button>
+                      @if (documento.requiere_revision) {
+                        <button
+                          type="button"
+                          class="boton boton--pequeno"
+                          (click)="documentoRiesgo.set(documento)"
+                        >
+                          Revisar riesgo
+                        </button>
+                      }
                     }
                   </div>
                 </td>
@@ -422,4 +431,12 @@
 
 @if (dialogo() !== undefined) {
   <app-cargar-documento [documento]="dialogo() ?? null" (cerrado)="cerrarCarga()" />
+}
+
+@if (documentoRiesgo(); as documento) {
+  <app-revision-riesgo
+    [documento]="documento"
+    (cerrar)="documentoRiesgo.set(null)"
+    (revisado)="riesgoRevisado($event)"
+  />
 }

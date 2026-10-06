@@ -30,6 +30,7 @@
  */
 import { Component, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import type { Subscription } from 'rxjs';
 
 import {
   CargandoComponent,
@@ -138,6 +139,8 @@ export class PacientesComponent {
   protected readonly pagina = signal(0);
   protected readonly cargando = signal(true);
   protected readonly error = signal<FalloApi | null>(null);
+  /** Consulta en curso: una nueva la cancela para que una respuesta vieja no pise a la nueva. */
+  private consulta: Subscription | null = null;
 
   // --- Ficha ---
   /** A quien se le esta viendo la ficha, si a alguien. */
@@ -163,7 +166,8 @@ export class PacientesComponent {
     this.error.set(null);
 
     const termino = this.termino.trim();
-    this.api
+    this.consulta?.unsubscribe();
+    this.consulta = this.api
       .pacientes({
         ...filtroBusquedaPaciente(termino),
         limite: POR_PAGINA,

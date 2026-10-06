@@ -49,6 +49,7 @@ from app.modulos.automatizaciones import rutas as rutas_automatizaciones
 from app.modulos.calendario import rutas as rutas_calendario
 from app.modulos.calendario.seleccion import construir_proveedores
 from app.modulos.configuracion import rutas as rutas_configuracion
+from app.modulos.conocimiento import revision_riesgo as rutas_revision_riesgo
 from app.modulos.conocimiento import rutas as rutas_conocimiento
 from app.modulos.conversaciones import demo_rutas
 from app.modulos.conversaciones import rutas as rutas_conversaciones
@@ -255,6 +256,7 @@ def _registrar_rutas_del_equipo(aplicacion: FastAPI) -> None:
     aplicacion.include_router(rutas_especialidades_historia.enrutador, prefix=PREFIJO_API)
     aplicacion.include_router(rutas_recorrido.enrutador, prefix=PREFIJO_API)
     aplicacion.include_router(rutas_asistente.enrutador, prefix=PREFIJO_API)
+    aplicacion.include_router(rutas_revision_riesgo.enrutador, prefix=PREFIJO_API)
 
 
 def _registrar_rutas(aplicacion: FastAPI) -> None:

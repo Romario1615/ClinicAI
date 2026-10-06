@@ -100,6 +100,22 @@ describe('PacientesComponent', () => {
     peticion.flush(pagina([paciente('1')]));
   });
 
+  it('una respuesta antigua no pisa la de una busqueda posterior', () => {
+    // Buscar mientras el listado inicial sigue cargando: si la respuesta
+    // inicial llega despues, no debe borrar el aviso de «no se buscó».
+    fixture.detectChanges();
+    const inicial = http.expectOne((p) => p.url === `${BASE}/pacientes/` && !p.params.has('termino'));
+    fixture.componentInstance['termino'] = 'a';
+    fixture.componentInstance['buscar']();
+    http
+      .expectOne((p) => p.url === `${BASE}/pacientes/` && p.params.get('termino') === 'a')
+      .flush(pagina([], { termino_ignorado: true }));
+    expect(inicial.cancelled).toBeTrue();
+    fixture.detectChanges();
+
+    expect(texto()).toContain('no llegó a hacerse');
+  });
+
   it('muestra el listado con el nivel de verificacion de cada fila', () => {
     responderCargaInicial(pagina([paciente('1', 'NO_VERIFICADO')]));
 

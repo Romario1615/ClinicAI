@@ -48,6 +48,7 @@ from sqlalchemy.sql.elements import ColumnElement
 from app.modulos.conocimiento.modelos import (
     ESTADOS_RECUPERABLES,
     KnowledgeChunk,
+    KnowledgeDocument,
     KnowledgeEmbedding,
     KnowledgePermission,
     PrincipalConocimiento,
@@ -459,6 +460,27 @@ class RepositorioConocimiento:
         )
 
 
+async def contenido_de_version_revisable(
+    sesion: AsyncSession, *, documento: KnowledgeDocument, version: int
+) -> list[str]:
+    """Fragmentos de una versión, en orden, para la revisión de riesgo.
+
+    **No aplica ámbito**: recibe el documento ya resuelto con el mismo filtro
+    que el listado (`revision_riesgo._documento_visible`). Por eso exige el
+    objeto y no un identificador suelto: no se puede llamar con un id ajeno.
+    """
+    resultado = await sesion.scalars(
+        select(KnowledgeChunk.contenido)
+        .where(
+            KnowledgeChunk.document_id == documento.id,
+            KnowledgeChunk.clinic_id == documento.clinic_id,
+            KnowledgeChunk.version == version,
+        )
+        .order_by(KnowledgeChunk.indice_fragmento)
+    )
+    return list(resultado.all())
+
+
 __all__ = [
     "K_RRF",
     "LIMITE_MAXIMO",
@@ -467,4 +489,5 @@ __all__ = [
     "FragmentoRecuperado",
     "RepositorioConocimiento",
     "condicion_acl_documento",
+    "contenido_de_version_revisable",
 ]

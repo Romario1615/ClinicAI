@@ -31,9 +31,10 @@
  * `conocimiento.aprobar`. Esconder botones **no es el control**: el backend
  * revalida cada permiso y cada transicion (CLAUDE.md, regla 7).
  *
- * Lo que todavia no hace: archivar, fijar vigencias ni resolver la revision de
- * riesgo de un documento marcado. Archivar es irreversible y resolver una
- * alerta de inyeccion exige leer el texto; ambas necesitan su propia pantalla.
+ * Lo que todavia no hace: archivar ni fijar vigencias. Archivar es
+ * irreversible y necesita su propia pantalla. La revision de riesgo de un
+ * documento marcado se hace en `RevisionRiesgoComponent`, que muestra el texto
+ * antes de dejar marcarlo como revisado.
  */
 import { Component, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
@@ -56,6 +57,7 @@ import { PERMISOS } from '../../nucleo/servicios/configuracion';
 import { OperacionesService } from '../../nucleo/servicios/operaciones.service';
 import { SesionService } from '../../nucleo/servicios/sesion.service';
 import { CargarDocumentoComponent } from './cargar-documento.component';
+import { RevisionRiesgoComponent } from './revision-riesgo.component';
 import type {
   Documento,
   EstadoDocumento,
@@ -168,6 +170,7 @@ import { ResumenModuloComponent } from '../../compartido/resumen-modulo.componen
     VacioComponent,
     IconoComponent,
     CargarDocumentoComponent,
+    RevisionRiesgoComponent,
   ],
   templateUrl: './conocimiento.component.html',
   styleUrl: './conocimiento.component.scss',
@@ -190,6 +193,8 @@ export class ConocimientoComponent {
   protected readonly cambiando = signal<string | null>(null);
   protected readonly errorAccion = signal<FalloApi | null>(null);
   protected readonly mensajeAccion = signal<string | null>(null);
+  /** Documento marcado cuya revisión de riesgo está abierta. */
+  protected readonly documentoRiesgo = signal<Documento | null>(null);
 
   // --- Acceso por documento ---
   protected readonly documentoPermisos = signal<string | null>(null);
@@ -543,5 +548,11 @@ export class ConocimientoComponent {
     const desde = documento.effective_from ? `Desde ${corta(documento.effective_from)}` : '';
     const hasta = documento.effective_until ? `hasta ${corta(documento.effective_until)}` : '';
     return [desde, hasta].filter(Boolean).join(' ');
+  }
+
+  protected riesgoRevisado(mensaje: string): void {
+    this.documentoRiesgo.set(null);
+    this.mensajeAccion.set(mensaje);
+    this.cargar();
   }
 }

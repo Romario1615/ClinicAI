@@ -159,9 +159,11 @@ test.describe('Medicacion', () => {
         respuesta.url().includes(`/historia/adherencia/alertas/${alertaId}/atencion`) &&
         respuesta.request().method() === 'POST',
     );
-    await alerta.getByRole('button', { name: 'Marcar atendida' }).click();
+    // Un paciente puede tener una alerta abierta por receta: se atiende la suya.
+    const propia = alerta.locator(`[data-alerta="${alertaId}"]`);
+    await propia.getByRole('button', { name: 'Marcar atendida' }).click();
     expect((await atencion).status()).toBe(204);
-    await expect(alerta).toHaveCount(0);
+    await expect(propia).toHaveCount(0);
   });
 });
 

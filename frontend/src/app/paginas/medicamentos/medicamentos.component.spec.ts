@@ -127,6 +127,27 @@ describe('MedicamentosComponent', () => {
     ).map((b) => b.textContent?.trim() ?? '');
   }
 
+  it('cada alerta dice de que receta es', () => {
+    listar();
+    fixture.componentInstance['abrir'](paciente());
+    http.expectOne(`${BASE}/pacientes/${PACIENTE_ID}`).flush({ ...paciente(), sexo: null, direccion: null, activo: true });
+    fixture.detectChanges();
+    http.expectOne((p) => p.url.includes('/tomas')).flush([toma()]);
+    http.expectOne(`${BASE}/historia/adherencia/alertas`).flush([
+      {
+        id: 'al-1', paciente_id: PACIENTE_ID, receta_id: 'rec-1', profesional_id: 'pr',
+        severidad: 'ATENCION', tomas_omitidas: 2, tomas_esperadas: 7,
+        periodo_desde: '2026-01-01T00:00:00Z', periodo_hasta: '2026-01-08T00:00:00Z', creado_en: '2026-01-08T00:00:00Z',
+      },
+    ]);
+    http.expectOne(`${BASE}/historia/pacientes/${PACIENTE_ID}/recetas`).flush([
+      { id: 'rec-1', medicamentos: [{ nombre: 'Medicamento de ejemplo A' }] },
+    ]);
+    fixture.detectChanges();
+
+    expect(texto()).toContain('Receta: Medicamento de ejemplo A');
+  });
+
   it('pide la ventana de tomas alrededor de hoy', () => {
     listar();
     fixture.componentInstance['abrir'](paciente());

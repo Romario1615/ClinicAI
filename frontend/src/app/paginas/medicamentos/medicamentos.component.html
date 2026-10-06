@@ -133,9 +133,10 @@
         <h3 id="alertas-adherencia-titulo">Alertas de adherencia abiertas</h3>
         <p>Recuento operativo de tomas pendientes u omitidas; requiere revisión del equipo clínico.</p>
         @for (alerta of alertas(); track alerta.id) {
-          <article class="alerta-adherencia">
+          <article class="alerta-adherencia" [attr.aria-label]="'Alerta de adherencia ' + ($index + 1)" [attr.data-alerta]="alerta.id">
             <div>
               <strong>{{ alerta.severidad === 'URGENTE' ? 'Prioridad urgente' : 'Requiere seguimiento' }}</strong>
+              @if (medicamentosDe(alerta); as nombres) { <p>Receta: {{ nombres }}</p> }
               <p>{{ alerta.tomas_omitidas }} de {{ alerta.tomas_esperadas }} tomas sin registrar en el periodo.</p>
             </div>
             @if (sesion.tienePermiso('alerta_adherencia.atender')) {
