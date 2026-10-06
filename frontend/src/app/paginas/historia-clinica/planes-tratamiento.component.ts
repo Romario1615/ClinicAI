@@ -119,7 +119,9 @@ export class PlanesTratamientoComponent {
     const importe = Number(this.precio);
     const piezaTexto = String(this.pieza ?? '').trim();
     const pieza = piezaTexto ? Number(piezaTexto) : null;
-    const caras = this.caras.trim().toUpperCase() || null;
+    // Se aceptan «O, V», «O V» u «OV»: el ejemplo del campo lleva comas.
+    const carasTexto = this.caras.toUpperCase().replace(/[\s,;]/g, '');
+    const caras = carasTexto ? [...new Set(carasTexto)].join('') : null;
     if (descripcion.length < 3) {
       this.error.set('Describe el procedimiento con al menos 3 caracteres.');
       return;
@@ -132,7 +134,7 @@ export class PlanesTratamientoComponent {
       this.error.set('La pieza dental debe usar notación FDI.');
       return;
     }
-    if (caras && !/^[OMDV L]+$/.test(caras.replaceAll(' ', ''))) {
+    if (caras && !/^[OMDVL]+$/.test(caras)) {
       this.error.set('Usa caras FDI: O, M, D, V o L.');
       return;
     }
@@ -143,7 +145,7 @@ export class PlanesTratamientoComponent {
         fase: this.fase,
         orden: nuevas.filter((item) => item.fase === this.fase).length + 1,
         pieza,
-        caras: caras?.replaceAll(' ', '') ?? null,
+        caras,
         descripcion,
         precio: importe.toFixed(2),
       },

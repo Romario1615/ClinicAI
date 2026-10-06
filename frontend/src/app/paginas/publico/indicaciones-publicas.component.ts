@@ -57,7 +57,7 @@ export interface IndicacionPublica {
             <section>
               <h2>Medicación indicada</h2>
               <ul class="medicamentos">
-                @for (m of i.medicamentos; track m.nombre + m.dosis) {
+                @for (m of i.medicamentos; track $index) {
                   <li>
                     <strong>{{ m.nombre }}@if (m.concentracion) { {{ m.concentracion }} }</strong>
                     <span>

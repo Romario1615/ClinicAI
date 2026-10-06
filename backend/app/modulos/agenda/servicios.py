@@ -33,6 +33,7 @@ from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.mensajeria.avisos_cita import avisar_cambio_de_cita
 from app.mensajeria.recordatorios import ServicioRecordatorios
 from app.modulos.agenda.disponibilidad import (
     ResultadoDisponibilidad,
@@ -47,6 +48,7 @@ from app.modulos.agenda.modelos import (
 )
 from app.modulos.agenda.repositorio import RepositorioAgenda, rango_de_dias
 from app.modulos.lista_espera.servicios import ServicioListaEspera
+from app.modulos.outbox.modelos import TipoMensajeOutbox
 from app.nucleo.auditoria import (
     AccionAuditada,
     EntradaAuditoria,
@@ -657,6 +659,9 @@ class ServicioAgenda:
         )
 
         await self._recordatorios().cancelar_cita(cita.id, motivo=motivo_limpio)
+        await avisar_cambio_de_cita(
+            self._sesion, self._reloj, cita, TipoMensajeOutbox.CITA_CANCELACION
+        )
 
         entrada = construir_entrada(
             accion=AccionAuditada.CITA_CANCELADA,
@@ -799,6 +804,9 @@ class ServicioAgenda:
             cita,
             horas_antes_1=self._horas_recordatorio_1,
             horas_antes_2=self._horas_recordatorio_2,
+        )
+        await avisar_cambio_de_cita(
+            self._sesion, self._reloj, cita, TipoMensajeOutbox.CITA_REPROGRAMACION
         )
 
         entrada = construir_entrada(

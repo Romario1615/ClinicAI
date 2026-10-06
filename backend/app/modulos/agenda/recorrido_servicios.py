@@ -29,29 +29,23 @@ import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from enum import StrEnum
-from zoneinfo import ZoneInfo
 
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.mensajeria.adaptadores import RegistroCanales
-from app.mensajeria.servicios import ServicioOutbox, SolicitudEnvio
 from app.modulos.agenda.modelos import Cita, CitaHistorial, EstadoCita
 from app.modulos.agenda.recorrido_repositorio import RepositorioRecorrido
 from app.modulos.agenda.servicios import ResultadoOperacion, ServicioAgenda, SolicitudReserva
-from app.modulos.outbox.modelos import CanalOutbox, TipoMensajeOutbox
 from app.modulos.pacientes.modelos import RelacionAsistencial
 from app.nucleo.auditoria import AccionAuditada, EntradaAuditoria, construir_entrada
 from app.nucleo.autorizacion import Principal
 from app.nucleo.errores import (
     ConflictoEstado,
-    ConsentimientoRequerido,
     PermisoDenegado,
     RecursoNoEncontrado,
     ReglaNegocioViolada,
 )
 from app.nucleo.errores_bd import traducir_o_propagar
-from app.nucleo.idempotencia import calcular_clave_deduplicacion
 from app.nucleo.registro import obtener_logger
 from app.nucleo.reloj import Reloj
 
@@ -669,8 +663,6 @@ class ServicioRecorrido:
         auditoria.append(
             self._auditoria(cita, principal, AccionAuditada.CITA_PROLONGADA, minutos=minutos)
         )
-        for movida in movidas:
-            await self._avisar_movida(movida)
         return ResultadoProlongacion(cita, True, minutos, (), tuple(auditoria))
 
     # ==================================================================
@@ -768,38 +760,6 @@ class ServicioRecorrido:
         cita.fin = cita.fin + timedelta(minutes=minutos)
         cita.actualizado_por = principal.actor_id
         await self._flush()
-
-    async def _avisar_movida(self, cita: Cita) -> None:
-        """WhatsApp genérico al paciente movido: hora, sede y profesional, nada clínico."""
-        datos = await self._repo.datos_aviso(cita)
-        if datos is None:
-            return
-        nombre, sede, zona, profesional = datos
-        local = cita.inicio.astimezone(ZoneInfo(zona))
-        try:
-            await ServicioOutbox(self._sesion, self._reloj, RegistroCanales()).encolar(
-                SolicitudEnvio(
-                    tipo=TipoMensajeOutbox.CITA_REPROGRAMACION,
-                    canal=CanalOutbox.WHATSAPP,
-                    destino_tipo="PACIENTE",
-                    destino_id=cita.paciente_id,
-                    clave_deduplicacion=calcular_clave_deduplicacion(
-                        "cita_movida", str(cita.id), cita.inicio.isoformat()
-                    ),
-                    variables={
-                        "nombre": nombre.split(" ")[0],
-                        "fecha": local.strftime("%d/%m/%Y"),
-                        "hora": local.strftime("%H:%M"),
-                        "sede": sede,
-                        "profesional": profesional,
-                    },
-                    clinica_id=cita.clinica_id,
-                    entidad_origen_tipo="cita",
-                    entidad_origen_id=cita.id,
-                )
-            )
-        except ConsentimientoRequerido:
-            logger.info("recorrido.aviso_sin_consentimiento", cita_id=str(cita.id))
 
     async def _cita_en_clinica(self, cita_id: uuid.UUID, principal: Principal) -> Cita:
         cita = await self._repo.obtener_cita_para_actualizar(cita_id, principal=principal)

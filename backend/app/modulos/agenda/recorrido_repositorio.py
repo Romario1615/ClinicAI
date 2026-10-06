@@ -174,34 +174,6 @@ class RepositorioRecorrido(RepositorioAgenda):
         ).scalar_one()
         return bool(cantidad)
 
-    async def datos_aviso(self, cita: Cita) -> tuple[str, str, str, str] | None:
-        """Nombre del paciente, sede, zona horaria y profesional para un aviso."""
-        fila = (
-            await self._sesion.execute(
-                select(
-                    Paciente.nombre,
-                    Sede.nombre,
-                    Sede.zona_horaria,
-                    Profesional.nombre,
-                    Profesional.apellido,
-                )
-                .select_from(Cita)
-                .join(Paciente, Paciente.id == Cita.paciente_id)
-                .join(Sede, Sede.id == Cita.sede_id)
-                .join(Profesional, Profesional.id == Cita.profesional_id)
-                .where(Cita.id == cita.id)
-            )
-        ).first()
-        if fila is None:
-            return None
-        nombre, sede, zona, prof_nombre, prof_apellido = fila
-        return (
-            nombre or "",
-            sede or "",
-            zona or "America/Guayaquil",
-            f"{prof_nombre} {prof_apellido}".strip(),
-        )
-
     async def eventos_de_cita(self, cita_id: uuid.UUID) -> list[CitaHistorial]:
         return list(
             (

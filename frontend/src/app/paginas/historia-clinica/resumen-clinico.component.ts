@@ -87,7 +87,7 @@ export interface ResumenClinico {
 
           <div class="bloque">
             <h4>Medicación activa</h4>
-            @for (m of d.medicacion_activa; track m.nombre + m.dosis) {
+            @for (m of d.medicacion_activa; track $index) {
               <p>
                 <strong>{{ m.nombre }}@if (m.concentracion) { {{ m.concentracion }} }</strong> · {{ m.dosis }} · {{ m.via | lowercase }}
                 · {{ m.cuando_sea_necesario ? 'cuando sea necesario' : m.frecuencia_horas ? 'cada ' + m.frecuencia_horas + ' h' : 'pauta sin frecuencia' }}
@@ -104,7 +104,7 @@ export interface ResumenClinico {
 
           <div class="bloque">
             <h4>Evolución reciente</h4>
-            @for (n of d.ultimas_notas; track n.fecha) {
+            @for (n of d.ultimas_notas; track $index) {
               <p>
                 <span class="numerico">{{ n.fecha | date: 'dd/MM/yy' }}</span> ·
                 <strong>{{ n.motivo_consulta || 'Sin motivo registrado' }}</strong>

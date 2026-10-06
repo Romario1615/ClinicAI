@@ -26,7 +26,7 @@ from decimal import Decimal
 
 from fastapi import APIRouter
 from pydantic import AwareDatetime, BaseModel
-from sqlalchemy import Select, func, or_, select
+from sqlalchemy import Select, false, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modulos.agenda.modelos import Cita
@@ -41,7 +41,7 @@ from app.modulos.pacientes.modelos import Paciente
 from app.modulos.pagos.modelos import Pago
 from app.modulos.promociones.modelos import CampanaPromocion
 from app.modulos.usuarios.modelos import Rol, Usuario
-from app.nucleo.autorizacion import Principal
+from app.nucleo.autorizacion import NivelSensibilidad, Principal
 from app.nucleo.dependencias import PrincipalActual, Sesion
 from app.nucleo.errores import DatosInvalidos, PermisoDenegado
 
@@ -294,7 +294,19 @@ async def calcular(
         )
 
     if principal.tiene_permiso("conversacion.leer") and clinica is not None:
-        conversaciones = select(Conversacion.id).where(Conversacion.clinica_id == clinica)
+        # Mismo criterio que la bandeja de atención: solo WhatsApp (el simulador
+        # no cuenta) y solo lo que el ámbito permite ver. Si no, la tarjeta
+        # anuncia conversaciones que la bandeja no muestra.
+        conversaciones = select(Conversacion.id).where(
+            Conversacion.clinica_id == clinica, Conversacion.canal == "WHATSAPP"
+        )
+        ambito = principal.ambito
+        if not ambito.cubre_nivel(NivelSensibilidad.CLINICO):
+            conversaciones = conversaciones.where(false())
+        elif not ambito.todos_los_pacientes:
+            conversaciones = conversaciones.where(
+                Conversacion.paciente_id.in_(ambito.pacientes) if ambito.pacientes else false()
+            )
         resultado.mensajes = IndicadoresMensajes(
             derivadas_a_persona=await _contar(
                 sesion, conversaciones.where(Conversacion.estado == "EN_HANDOFF")

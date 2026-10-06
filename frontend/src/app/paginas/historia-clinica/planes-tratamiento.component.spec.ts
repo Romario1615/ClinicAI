@@ -119,6 +119,13 @@ describe('PlanesTratamientoComponent', () => {
     c.agregarProcedimiento();
     expect(c.procedimientos().length).toBe(2);
     expect(c.procedimientos()[0].caras).toBe('OM');
+    // Como sugiere el campo: con comas y espacios, sin repetir caras.
+    c.descripcionProcedimiento = 'Resina';
+    c.caras = 'o, v, o';
+    c.precio = '10';
+    c.agregarProcedimiento();
+    expect(c.procedimientos()[2].caras).toBe('OV');
+    c.quitarProcedimiento(2);
     expect(c.procedimientos()[1].orden).toBe(2);
     expect(c.total()).toBe(100);
 
