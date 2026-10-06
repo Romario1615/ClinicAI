@@ -41,7 +41,9 @@ from app.ia.embeddings import construir_proveedor_embeddings
 from app.ia.imagenes_generativas import construir_generador
 from app.ia.seleccion_llm import construir_fabrica_conversacional
 from app.mensajeria import rutas as rutas_whatsapp
+from app.modulos.agenda import recorrido_rutas as rutas_recorrido
 from app.modulos.agenda import rutas as rutas_agenda
+from app.modulos.asistente import rutas as rutas_asistente
 from app.modulos.automatizaciones import rutas as rutas_automatizaciones
 from app.modulos.calendario import rutas as rutas_calendario
 from app.modulos.calendario.seleccion import construir_proveedores
@@ -245,7 +247,16 @@ def crear_aplicacion(
     return aplicacion
 
 
+def _registrar_rutas_del_equipo(aplicacion: FastAPI) -> None:
+    """Fotos del equipo, especialidad de la historia, recorrido y asistente interno."""
+    aplicacion.include_router(rutas_fotos_usuario.enrutador, prefix=PREFIJO_API)
+    aplicacion.include_router(rutas_especialidades_historia.enrutador, prefix=PREFIJO_API)
+    aplicacion.include_router(rutas_recorrido.enrutador, prefix=PREFIJO_API)
+    aplicacion.include_router(rutas_asistente.enrutador, prefix=PREFIJO_API)
+
+
 def _registrar_rutas(aplicacion: FastAPI) -> None:
+    _registrar_rutas_del_equipo(aplicacion)
     aplicacion.include_router(rutas_usuarios.enrutador, prefix=PREFIJO_API)
     aplicacion.include_router(rutas_usuarios.enrutador_usuarios, prefix=PREFIJO_API)
     aplicacion.include_router(rutas_configuracion.enrutador, prefix=PREFIJO_API)
@@ -260,8 +271,6 @@ def _registrar_rutas(aplicacion: FastAPI) -> None:
     aplicacion.include_router(rutas_automatizaciones.enrutador, prefix=PREFIJO_API)
     aplicacion.include_router(rutas_resumen_clinico.enrutador, prefix=PREFIJO_API)
     aplicacion.include_router(rutas_postconsulta.enrutador, prefix=PREFIJO_API)
-    aplicacion.include_router(rutas_fotos_usuario.enrutador, prefix=PREFIJO_API)
-    aplicacion.include_router(rutas_especialidades_historia.enrutador, prefix=PREFIJO_API)
     aplicacion.include_router(rutas_espera.enrutador, prefix=PREFIJO_API)
     aplicacion.include_router(demo_rutas.enrutador, prefix=PREFIJO_API)
     aplicacion.include_router(rutas_conversaciones.enrutador, prefix=PREFIJO_API)

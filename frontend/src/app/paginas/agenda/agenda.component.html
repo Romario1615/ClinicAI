@@ -135,6 +135,8 @@
     </div>
   </section>
 
+  <app-prolongaciones-pendientes #masTiempo [zona]="zona()" (resuelta)="cargarAgenda()" />
+
   @if (pacienteSugerido()) {
     <p class="aviso-sugerido" role="status">
       Agendando para <strong>{{ nombreSugerido() }}</strong>. Pulse un hueco libre: el paciente ya
@@ -647,6 +649,12 @@
                       Marcar como atendida
                     </button>
                   }
+                  <app-acciones-recorrido
+                    [cita]="cita"
+                    [consultorios]="consultorios()"
+                    [zona]="zona()"
+                    (cambio)="mensajeExito.set($event); cargarAgenda(); masTiempo.cargar()"
+                  />
                   <div class="fila">
                     @if (accionesDe(cita).reprogramar) {
                       <button type="button" class="boton" (click)="citaAReprogramar.set(cita)">

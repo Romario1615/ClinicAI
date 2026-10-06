@@ -96,6 +96,8 @@ No son defectos. Se listan para que no se «arreglen» por error.
 | P‑9 | El agente solo devuelve cinco horarios, y de la cita solo fecha, hora y estado | Un mensaje con cuarenta horas no lo lee nadie; y el nombre del servicio revela la especialidad, que revela la condición |
 | P‑10 | Un profesional revisa la historia solo desde su especialidad (y las asignadas explícitamente); el comodín «todas las especialidades» no le abre las ajenas | Lo de cosmetología no se activa cuando el odontólogo usa la historia. Alergias, medicamentos y recetas sí se comparten: ocultar una alergia es un riesgo clínico |
 | P‑11 | La especialidad de una nota es la de su autor; no hay columna propia | El autor no cambia. Consecuencia: si un profesional cambia de especialidad, sus notas anteriores pasan a verse desde la nueva. Las imágenes clínicas no se separan por especialidad: se activan o no como módulo completo |
+| P‑12 | Una prolongación que pisa a otro paciente nunca se resuelve sola | Recepción elige; mover a alguien sin que nadie lo decida rompe la confianza del paciente movido |
+| P‑13 | El asistente interno decide qué datos tocar por reglas, no con un modelo de lenguaje | Un modelo puede redactar a partir de lo ya recuperado, pero nunca elegir a qué datos acceder. Por eso entiende frases concretas («mi agenda», «quién sigue», «agrega al conocimiento: …») y no conversación libre |
 
 ---
 

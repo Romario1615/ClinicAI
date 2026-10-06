@@ -49,6 +49,7 @@ import {
   type ModuloHistoria,
 } from '../nucleo/servicios/especialidad-historia.service';
 import { SelectorEspecialidadComponent } from './selector-especialidad.component';
+import { RecorridoPacienteComponent } from './recorrido-paciente.component';
 import { OdontogramaComponent } from '../paginas/historia-clinica/odontograma.component';
 import { PlanesTratamientoComponent } from '../paginas/historia-clinica/planes-tratamiento.component';
 import { ResumenClinicoComponent } from '../paginas/historia-clinica/resumen-clinico.component';
@@ -91,6 +92,7 @@ type Pestana =
   | 'resumen'
   | 'citas'
   | 'contacto'
+  | 'recorrido'
   | 'historia'
   | 'odontograma'
   | 'planes'
@@ -125,6 +127,7 @@ const DETALLE_CLINICO: Partial<Record<Pestana, string>> = {
     TipoDocumentoPipe,
     ResumenClinicoComponent,
     SelectorEspecialidadComponent,
+    RecorridoPacienteComponent,
   ],
   template: `
     <div class="ficha" [class.ficha--embebida]="sinCabecera()" [attr.aria-label]="'Ficha de ' + nombre()">
@@ -395,6 +398,9 @@ const DETALLE_CLINICO: Partial<Record<Pestana, string>> = {
 
               @case ('imagenes') {
                 <app-galeria-imagenes [pacienteId]="pacienteId()" />
+              }
+              @case ('recorrido') {
+                <app-recorrido-paciente [pacienteId]="pacienteId()" [zona]="zona()" />
               }
             }
           </div>
@@ -814,6 +820,10 @@ export class FichaPacienteComponent implements OnInit {
       { clave: 'citas', etiqueta: 'Citas' },
       { clave: 'contacto', etiqueta: 'Contacto y consentimientos' },
     ];
+    // Por dónde pasó en la clínica: dato administrativo, lo ve quien ve la agenda.
+    if (this.sesion.tienePermiso('agenda.leer')) {
+      lista.push({ clave: 'recorrido', etiqueta: 'Recorrido' });
+    }
     if (this.puedeLeerHistoria() || this.puedeLeerRecetas()) {
       lista.push({ clave: 'historia', etiqueta: 'Historia y recetas' });
     }

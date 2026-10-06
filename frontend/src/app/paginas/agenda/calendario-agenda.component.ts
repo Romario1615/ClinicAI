@@ -322,7 +322,7 @@ interface Columna {
     .tiempo__columna { position: relative; border-left: 1px solid var(--borde); }
     .tiempo__columna--hoy { background: color-mix(in srgb, var(--acento) 4%, transparent); }
     .tiempo__linea { position: absolute; left: 0; right: 0; border-top: 1px solid var(--superficie-hundida); }
-    .tiempo__ahora { position: absolute; left: 0; right: 0; z-index: 1; border-top: 2px solid var(--peligro); }
+    .tiempo__ahora { position: absolute; left: 0; right: 0; z-index: 1; pointer-events: none; border-top: 2px solid var(--peligro); }
     .tiempo__ahora::before {
       content: '';
       position: absolute;

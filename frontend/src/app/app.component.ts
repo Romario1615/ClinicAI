@@ -134,6 +134,13 @@ const NAVEGACION: readonly EnlaceNavegacion[] = [
     demostracion: true,
   },
   {
+    ruta: '/asistente',
+    etiqueta: 'Asistente',
+    icono: 'agente',
+    permisos: ['agenda.leer', 'conocimiento.leer', 'historia_clinica.leer'],
+    demostracion: false,
+  },
+  {
     ruta: '/automatizaciones',
     etiqueta: 'Automatizaciones',
     icono: 'chispa',

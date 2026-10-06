@@ -173,6 +173,17 @@ export const routes: Routes = [
       import('./paginas/usuarios/usuarios.component').then((m) => m.UsuariosComponent),
   },
   {
+    path: 'asistente',
+    canActivate: [
+      guardiaAutenticacion,
+      guardiaSegundoFactor,
+      guardiaPermiso('agenda.leer', 'conocimiento.leer', 'historia_clinica.leer'),
+    ],
+    title: 'Asistente · ClinicAI',
+    loadComponent: () =>
+      import('./paginas/asistente/asistente.component').then((m) => m.AsistenteComponent),
+  },
+  {
     path: 'automatizaciones',
     canActivate: [
       guardiaAutenticacion,

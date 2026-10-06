@@ -39,6 +39,8 @@ import { SelectorPacienteComponent } from '../../compartido/selector-paciente.co
 import { InsigniaEstadoComponent } from '../../compartido/insignia-estado.component';
 import { VentanaFlotanteComponent } from '../../compartido/ventana-flotante.component';
 import { ReprogramarCitaComponent } from './reprogramar-cita.component';
+import { AccionesRecorridoComponent } from './acciones-recorrido.component';
+import { ProlongacionesPendientesComponent } from './prolongaciones-pendientes.component';
 import {
   CalendarioAgendaComponent,
   rangoVista,
@@ -173,6 +175,8 @@ function leerVista(): VistaCalendario | 'lista' {
     VentanaFlotanteComponent,
     CalendarioAgendaComponent,
     SelectorPacienteComponent,
+    AccionesRecorridoComponent,
+    ProlongacionesPendientesComponent,
   ],
   templateUrl: './agenda.component.html',
   styleUrl: './agenda.component.scss',
