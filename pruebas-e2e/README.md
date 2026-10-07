@@ -50,8 +50,14 @@ npx playwright test
 La auditoría usa axe-core y las reglas WCAG 2.2 A/AA dentro de Chromium. Incluye
 acceso, panel, agenda, historia clínica y configuración; además inicia sesión con
 cada uno de los seis roles, recorre las secciones que ese rol puede abrir y analiza
-cada pantalla. La unión de esos menús debe cubrir las 20 rutas para que la prueba
-no pase si se olvida una sección nueva. Son diez recorridos E2E:
+cada pantalla. La unión de esos menús debe cubrir las 22 rutas (incluidas Ayuda y
+Gastos y caja) para que la prueba no pase si se olvida una sección nueva. Son diez
+recorridos E2E.
+
+Antes de cada análisis se espera a que terminen las animaciones de entrada de
+Motion (los bucles infinitos de los gráficos decorativos no cuentan): se audita la
+pantalla asentada, no un fotograma a media opacidad. Por eso cada recorrido por
+rol tiene un límite de 120 s; administración audita más de veinte pantallas.
 
 ```powershell
 npm run test:a11y
@@ -139,7 +145,7 @@ de corridas anteriores ocupando una semana cercana.
 
 ## Estado
 
-La suite contiene **55 pruebas** en 14 archivos. Incluye acceso y autorización por roles, tareas clínicas y administrativas, los recorridos de Agenda, lista de espera, pagos, conocimiento, imágenes, seguridad y axe en las 20 rutas visibles de menú, con navegación por los seis roles. La verificación más reciente aprobó **55/55 en 4,1 minutos**, el 2026‑10‑06, con PostgreSQL local, frontend actual y una instancia API iniciada desde el código actual en el puerto 8002 con el límite E2E de 200. Se corrigieron la carrera inicial de carga en Equipo, dos selectores obsoletos y tres infracciones de accesibilidad: contraste en Conocimiento y Catálogo, y acceso por teclado a la tabla de cargos. El límite normal de desarrollo continúa en 10.
+La suite contiene **55 pruebas** en 14 archivos. Incluye acceso y autorización por roles, tareas clínicas y administrativas, los recorridos de Agenda, lista de espera, pagos, conocimiento, imágenes, seguridad y axe en las 22 rutas visibles de menú, con navegación por los seis roles. La verificación más reciente aprobó **55/55 en 5,8 minutos**, el 2026‑10‑07, con PostgreSQL local, frontend actual y la API iniciada desde el código actual en el puerto 8000 (`PROVEEDOR_EMBEDDINGS=mock`, límite E2E de 200). Al esperar a la pantalla asentada, axe detectó dos defectos previos que se corrigieron: contraste 4,37:1 en el detalle de los bloques de Agenda y un token de color inexistente en Equipo. La corrida anterior, del 2026‑10‑06, aprobó 55/55 en 4,1 minutos con la API en el puerto 8002. Se corrigieron la carrera inicial de carga en Equipo, dos selectores obsoletos y tres infracciones de accesibilidad: contraste en Conocimiento y Catálogo, y acceso por teclado a la tabla de cargos. El límite normal de desarrollo continúa en 10.
 
 | Archivo | Qué cubre |
 |---|---|
@@ -157,7 +163,7 @@ La suite contiene **55 pruebas** en 14 archivos. Incluye acceso y autorización 
 
 ## Lo que falta
 
-La corrida completa más reciente aprobó **55/55 pruebas** el 2026‑10‑06 con la API actual, Angular y PostgreSQL. La API aislada del puerto 8002 evitó alterar los procesos de desarrollo ya abiertos. La búsqueda de datos clínicos recorre todas las páginas autorizadas; si falta una historia versionada para el profesional local, la semilla incremental documentada arriba la agrega sin recargar pacientes ni citas. Aún faltan flujos que no corresponden a estos escenarios:
+La corrida completa más reciente aprobó **55/55 pruebas** el 2026‑10‑07 con la API actual, Angular y PostgreSQL. Gastos y caja y Ayuda solo se cubren por axe y navegación; el alta y anulación de gastos se verifican en pruebas API y de componente, no con un escenario E2E propio. La búsqueda de datos clínicos recorre todas las páginas autorizadas; si falta una historia versionada para el profesional local, la semilla incremental documentada arriba la agrega sin recargar pacientes ni citas. Aún faltan flujos que no corresponden a estos escenarios:
 
 * **Reserva por WhatsApp simulado**, que depende del agente conversacional
   (E‑23) y del webhook, hoy sin conectar a herramientas.

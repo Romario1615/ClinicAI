@@ -547,6 +547,19 @@ el ámbito y genera auditoría. PostgreSQL impide editar o borrar metadatos.
 > **No existe ninguna columna para número de tarjeta, CVV, clave, código OTP ni
 > credencial financiera.** El comprobante es un archivo y la validación es humana.
 
+**`gasto`** (migración `20261007_029`, [ADR‑0021](decisiones/0021-libro-de-gastos-y-flujo-de-caja.md)) —
+`id`, `clinica_id`, `sede_id` (nulo = gasto de toda la clínica), `fecha` (día local del
+comprobante, no instante), `categoria` (lista cerrada: `INSUMOS`, `LABORATORIO`, `NOMINA`,
+`HONORARIOS`, `ARRIENDO`, `SERVICIOS_BASICOS`, `MANTENIMIENTO`, `EQUIPAMIENTO`, `MARKETING`,
+`IMPUESTOS`, `OTROS`), `descripcion`, `proveedor`, `importe` (> 0), `moneda` (`USD`),
+`metodo` (`EFECTIVO` | `TRANSFERENCIA` | `TARJETA`), `referencia`, `estado`
+(`REGISTRADO` | `ANULADO`), `creado_por`, `creado_en`, `anulado_por`, `anulado_en`,
+`motivo_anulacion`. **De solo anulación:** el disparador `gasto_solo_anulacion` rechaza con
+`42501` todo `DELETE` y todo `UPDATE` que no sea pasar de `REGISTRADO` a `ANULADO` sin tocar
+otra columna; otro disparador rechaza `TRUNCATE`. Un `CHECK` exige que la anulación lleve
+quién, cuándo y un motivo no vacío. Índices por `(clinica_id, fecha)` y `(sede_id, fecha)`.
+El flujo de caja no es una tabla: se calcula de `pago` (`CONFIRMED`) y `gasto` (vigentes).
+
 ---
 
 ## 13. Outbox, métricas y predicciones

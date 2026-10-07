@@ -40,7 +40,8 @@ desde `/images/`.
 | `equipo-clinica-colaboracion.jpg` | Encabezado de Equipo clínico: profesionales y control de acceso, con el lado izquierdo despejado; 1536 × 1024, optimizado a 121 KB |
 | `sedes-red-clinicas.jpg` | Encabezado de sedes: tres clínicas conectadas, con fondo claro para títulos y contenido; 1600 × 800, optimizado a 105 KB |
 | `clinicai-simbolo.svg` | Símbolo vectorial del logo y favicon del sitio |
-| `ambiente-clinicai-red-v1.jpg` | Fondo ambiental del área de trabajo: red de vidrio en tonos menta y marfil, 1536 × 1024 px y 96 KB; movimiento de 32 s, con menor opacidad en móvil |
+| `ambiente-clinicai-red-v1.jpg` | Fondo ambiental del área de trabajo: red de vidrio en tonos menta y marfil, 1536 × 1024 px y 96 KB. Desde el 2026‑10‑07 es **estático** (ver «Vidrio líquido»): bajo superficies de vidrio, un fondo en movimiento obliga a recomponer cada panel en cada fotograma |
+| `flujo-clinico.svg` | Flujo explicativo que antes cerraba el panel de marca del acceso. Desde el 2026‑10‑07 lo sustituye el gráfico en movimiento de la red clínica; el archivo se conserva sin uso |
 | `lista-espera-vacia.svg` | Ilustración vectorial accesible para la cola vacía: calendario confirmado, libreta clínica y planta; transparencia real y trazos que escalan en móvil |
 
 ## Iconos de interfaz
@@ -107,6 +108,60 @@ por una ruta. Ambas mantienen el fondo marfil, las formas 3D suaves y el espacio
 izquierdo reservado al texto. Se exportaron a JPEG optimizado para limitar su
 peso conjunto a 227 KB.
 
+## Vidrio líquido y movimiento (2026‑10‑07)
+
+La interfaz usa un sistema de **vidrio líquido**: superficies translúcidas sobre un
+fondo de luz suave, con canto iluminado, sombra que las separa y un reflejo que sigue
+al puntero. Los tokens viven en `frontend/src/styles.scss` (`--aurora`,
+`--vidrio-cuerpo`, `--vidrio-canto`, `--vidrio-sombra`, `--vidrio-desenfoque`…).
+
+| Pieza | Cómo es | Por qué |
+| --- | --- | --- |
+| Aurora de fondo | Cuatro degradados radiales (menta, cielo, lila, melocotón) en una capa fija `body::before`, **estática** | El vidrio necesita algo que refractar; quieta, no obliga a recomponer los paneles en cada fotograma |
+| Tarjetas, tablas, cabeceras de módulo | Vidrio esmerilado (62–88 % de blanco) sin `backdrop-filter` | `backdrop-filter` crea un bloque contenedor: atraparía los visores `position: fixed` (galería, diálogos) que viven dentro de una tarjeta. Sobre una aurora ya difusa, el resultado visual es el mismo |
+| Cabecera, navegación, velo de ventanas, desplegables | Vidrio con desenfoque real (`blur(18–28px) saturate`) | Son lo que flota sobre contenido en movimiento. El desenfoque de la cabecera va en `::before` para que sus desplegables (avisos, buscador) desenfoquen la página y no solo la cabecera |
+| Barra lateral | Vidrio oscuro de marca al 92 %, placa flotante con radio 24 px | Mantiene el texto secundario por encima de 5:1 |
+| Botones | Vidrio claro con canto; el principal, vidrio teñido con brillo limitado al tercio superior | Blanco sobre `#0b6e6a` con el brillo conserva 5,3:1 |
+
+**Contraste.** Se calculó sobre el peor caso: el tinte más intenso de la aurora bajo el
+vidrio más transparente que lleva texto. El texto tenue pasó de `#5b7378` (4,4:1 en ese
+caso) a `#506a6f` (más de 5,2:1). La cabecera usa `--texto-suave` para los roles porque
+bajo ella puede pasar un banner oscuro.
+
+**Preferencias del sistema.** `prefers-reduced-transparency: reduce` vuelve opacas las
+superficies, quita la aurora y el desenfoque; `prefers-contrast: more` usa cuerpos
+opacos y bordes firmes; sin soporte de `backdrop-filter`, el velo se oscurece más.
+
+### Movimiento con Motion
+
+El movimiento lo pone [Motion](https://motion.dev) (el motor de Framer Motion,
+publicado también como API de JavaScript sin React). Angular no puede usar los
+componentes `<motion.div>`, pero sí el mismo motor: `animate` sobre WAAPI con resortes
+calculados por su generador `spring`. Vive en `frontend/src/app/nucleo/movimiento/`:
+
+* `movimiento.service.ts` — fachada del paquete inicial: decide si se anima
+  (`prefers-reduced-motion`, soporte de WAAPI) y carga el motor de forma diferida.
+* `motor.ts` — todo lo que importa Motion (`motion/mini` + `spring` + `stagger`). Se
+  carga después del arranque: Motion no cuenta en el paquete inicial (450 kB, antes
+  498 kB, con el buscador global diferido con `@defer`).
+* `coreografia.ts` — comportamientos por delegación para las 60+ pantallas sin tocar
+  cada una: entrada escalonada de cabeceras, tarjetas, tablas y filas (también lo que
+  llega tarde de la API y la pantalla entera al cambiar de ruta), presión de botones,
+  reflejo que sigue al puntero (solo con ratón o lápiz) y barras que crecen.
+
+Reglas: con movimiento reducido no se anima nada; al terminar se borran los estilos en
+línea (`opacity`, `translate`, `scale`, `filter`) para no dejar bloques contenedores; el
+interior de las ventanas flotantes no se anima aparte. Las ventanas flotantes entran con
+resorte y **salen animadas antes de cerrar** (equivalente a `AnimatePresence`).
+
+### Gráficos en movimiento (motion graphics)
+
+| Pieza | Dónde | Qué hace |
+| --- | --- | --- |
+| `app-grafico-red` | Panel de marca del acceso (tono oscuro) y cabecera de Ayuda (tono claro) | Red clínica en SVG: núcleo de vidrio con escudo, seis nodos (agenda, pacientes, mensajes, conocimiento, pagos, historia). Las conexiones se dibujan, los nodos se posan con resorte, un pulso de luz recorre cada conexión, los nodos respiran, el anillo gira y flotan partículas. Decorativo (`aria-hidden`); se pausa fuera de pantalla |
+| `[appContador]` | Fichas de indicadores (panel, módulos, Gastos y caja) | La cifra cuenta con un resorte desde el valor anterior. El texto final es exactamente el recibido; lo que no es una cifra inequívoca se pinta tal cual |
+| Barras que crecen | Tendencias del panel, reparto por estado, carga por profesional, Gastos y caja | Escala horizontal desde su origen al llegar; la anchura real no cambia |
+
 ## Fondo y movimiento del panel
 
 `panel-clinicai-dental-network-v1.jpg` es el fondo actual del panel. Usa un
@@ -120,8 +175,9 @@ se generó con imagegen y se exportó a JPEG de 1672 × 941 px y 176 KB.
 una composición 3D panorámica sitúa el equipo clínico y las áreas con permisos a la derecha;
 el título queda sobre una zona despejada. El desplazamiento y el halo ambiental se detienen
 cuando el sistema pide movimiento reducido. La imagen se exportó a JPEG de 1600 × 600 y 83 KB.
-El área de trabajo combina una imagen ambiental de 96 KB con halos verde azulado; el arte se desplaza muy lentamente y baja su opacidad en móvil. El movimiento se apaga
-cuando el sistema operativo indica `prefers-reduced-motion`. La cabecera de
+El área de trabajo combina una imagen ambiental de 96 KB con halos verde azulado y la
+aurora del vidrio líquido; desde el 2026‑10‑07 ambos son estáticos y la imagen baja su
+opacidad en móvil. La cabecera de
 Promociones tiene su ilustración panorámica y adapta su contraste en móvil.
 La pestaña Integraciones usa `integraciones-clinicai-banner.png`: deja el texto
 despejado a la izquierda y sitúa a la derecha la clínica y sus conexiones de

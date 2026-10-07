@@ -366,7 +366,10 @@ interface Columna {
     .bloque--corto { flex-direction: row; align-items: center; gap: 6px; padding-block: 1px; }
     .bloque--corto .bloque__detalle { display: none; }
     .bloque__titulo { font-weight: 650; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
-    .bloque__detalle { color: var(--texto-suave); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+    /* Texto principal y no el suave: sobre el fondo teñido de una cita
+       confirmada, #48646a quedaba en 4,37:1 (axe lo detectó). El título se
+       distingue por el peso, no por el color. */
+    .bloque__detalle { color: var(--texto); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
 
     .vacio { margin: var(--espacio-3) 0 0; color: var(--texto-suave); text-align: center; }
 

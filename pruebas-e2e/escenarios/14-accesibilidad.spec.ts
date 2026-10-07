@@ -80,6 +80,9 @@ test.describe('Accesibilidad WCAG 2.2 AA', () => {
     'superadministrador',
   ] as const) {
     test(`todas las secciones visibles para ${rol}`, async ({ page }) => {
+      // Administración recorre más de veinte pantallas y cada una se audita ya
+      // asentada (tras sus animaciones de entrada): 30 s no alcanzan.
+      test.setTimeout(120_000);
       await acceder(page, rol);
       const enlaces = page.getByRole('navigation', { name: 'Secciones' }).getByRole('link');
 
