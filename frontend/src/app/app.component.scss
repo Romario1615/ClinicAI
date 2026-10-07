@@ -439,9 +439,9 @@
 @media (max-width: 540px) {
   .cabecera {
     flex-wrap: nowrap;
-    /* A 390px reception phone has room for the five primary controls. Six px
-       keeps the logout control inside the viewport while preserving its 44px
-       hit target. */
+    /* En un teléfono de recepción de 390 px caben los cinco controles
+       principales. Con 6 px de separación, «Cerrar sesión» no se sale de la
+       pantalla y conserva su área táctil de 44 px. */
     gap: 6px;
     padding: var(--espacio-2) var(--espacio-3);
   }

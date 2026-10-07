@@ -89,6 +89,27 @@ describe('GaleriaImagenesComponent', () => {
         expect(http.match({ method: 'POST', url: LISTA })).toHaveLength(0);
     });
 
+    it('mientras sube no se puede cerrar y un fallo se ve dentro de la ventana', () => {
+        http.expectOne((p) => p.url === LISTA).flush([]);
+        c.abrirCarga();
+        fixture.detectChanges();
+        c.archivo = archivo('rx.png', 'x', 'image/png');
+        c.subir();
+        fixture.detectChanges();
+        const elemento = fixture.nativeElement as HTMLElement;
+        expect(elemento.querySelector<HTMLButtonElement>('dialog .ventana__cerrar')?.disabled).toBe(true);
+
+        http
+            .expectOne({ method: 'POST', url: LISTA })
+            .flush({ codigo: 'ARCHIVO_DEMASIADO_GRANDE', mensaje: 'Muy grande' }, { status: 413, statusText: 'T' });
+        fixture.detectChanges();
+
+        // Detrás de un modal el aviso quedaría inerte: tiene que estar dentro.
+        expect(elemento.querySelector('dialog[open] [role="alert"]')?.textContent).toContain('Muy grande');
+        expect(elemento.querySelectorAll('[role="alert"]')).toHaveLength(1);
+        expect(elemento.querySelector<HTMLButtonElement>('dialog .ventana__cerrar')?.disabled).toBe(false);
+    });
+
     it('filtra por tipo y pieza', () => {
         http.expectOne((p) => p.url === LISTA).flush([]);
         c.filtroTipo = 'FOTO_INTRAORAL';

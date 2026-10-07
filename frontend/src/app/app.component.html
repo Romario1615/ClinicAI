@@ -185,7 +185,7 @@
       </p>
     </nav>
 
-    <main id="contenido" class="contenido" tabindex="-1">
+    <main id="contenido" class="contenido" tabindex="-1" [attr.inert]="contenidoInerte() ? '' : null">
       <router-outlet />
     </main>
   </div>

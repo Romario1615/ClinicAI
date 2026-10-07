@@ -76,7 +76,17 @@ const MATRIZ_RUTAS: readonly (readonly [string, readonly string[]])[] = [
   ['/asistente', [PERMISOS.agendaLeer, PERMISOS.conocimientoLeer, PERMISOS.historiaLeer]],
   ['/automatizaciones', [PERMISOS.configuracionEscribir, PERMISOS.auditoriaLeer]],
   ['/configuracion', [PERMISOS.configuracionEscribir]],
+  ['/gastos', [PERMISOS.gastoLeer]],
 ];
+
+/**
+ * Rutas que a propósito no exigen un permiso de módulo: el acceso, las
+ * páginas de toda persona con sesión, la pública por token, las redirecciones
+ * y la consola de plataforma (que exige superadministración, probada aparte).
+ */
+const RUTAS_SIN_PERMISO_DE_MODULO = new Set([
+  'acceso', 'cambiar-contrasena', 'panel', 'ayuda', 'indicaciones/:token', 'sin-permiso', 'plataforma/clinicas', '', '**',
+]);
 
 const PERMISOS_POR_RUTA = MATRIZ_RUTAS.flatMap(([path, permisos]) =>
   permisos.map((permiso) => [path, permiso] as const),
@@ -138,6 +148,16 @@ describe('contrato de acceso de las rutas', () => {
 
     const router = TestBed.inject(Router);
     expect(router.serializeUrl(resultado as never)).toContain('/sin-permiso');
+  });
+
+  it('ninguna ruta nueva queda fuera de la matriz', () => {
+    // app.routes.ts no cuenta en la cobertura: esta prueba es la que obliga a
+    // que cada pantalla nueva declare su guardia de permiso aquí.
+    const enMatriz = new Set(MATRIZ_RUTAS.map(([path]) => path.replace(/^\//, '')));
+    const sinCubrir = routes
+      .map((candidata) => candidata.path ?? '')
+      .filter((path) => !enMatriz.has(path) && !RUTAS_SIN_PERMISO_DE_MODULO.has(path));
+    expect(sinCubrir).toEqual([]);
   });
 
   it('la consola de plataforma queda reservada al superadministrador', () => {

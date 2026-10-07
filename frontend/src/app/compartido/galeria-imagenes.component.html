@@ -18,6 +18,8 @@
         forma="centrada"
         [anchoMaximo]="760"
         [cierraAlPulsarFuera]="false"
+        [ocupada]="subiendo()"
+        [error]="error()"
         (cerrar)="cerrarCarga()"
       >
       <form id="formulario-imagen-clinica" class="galeria__carga" (ngSubmit)="subir()">
@@ -89,7 +91,9 @@
     <button class="boton" type="submit">Filtrar</button>
   </form>
 
-  @if (error()) { <p class="galeria__error" role="alert">{{ error() }}</p> }
+  <!-- Con la ventana de carga abierta, su error lo pinta la propia ventana:
+       aquí detrás quedaría inerte bajo el modal. -->
+  @if (error() && !cargaAbierta()) { <p class="galeria__error" role="alert">{{ error() }}</p> }
   @if (exito()) { <p class="galeria__exito" role="status">{{ exito() }}</p> }
   @if (cargando()) {
     <p class="galeria__vacio" role="status">Cargando imágenes…</p>

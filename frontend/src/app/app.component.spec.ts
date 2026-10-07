@@ -223,6 +223,65 @@ describe('AppComponent', () => {
         expect(fixture.nativeElement.querySelector('#panel-notificaciones')).toBeNull();
     });
 
+    it('al cerrar los avisos con Escape devuelve el foco a la campana', () => {
+        sesion.establecerTokens({
+            token_acceso: 't', token_refresco: 'r', tipo_token: 'Bearer',
+            expira_en: new Date().toISOString(), requiere_segundo_factor: false,
+        });
+        sesion.establecerIdentidad(identidadCon(['agenda.leer']));
+        fixture.detectChanges();
+
+        const campana = fixture.nativeElement.querySelector('.campana') as HTMLButtonElement;
+        campana.click();
+        fixture.detectChanges();
+        (fixture.nativeElement.querySelector('#panel-notificaciones a') as HTMLElement).focus();
+
+        document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+        fixture.detectChanges();
+
+        expect(fixture.nativeElement.querySelector('#panel-notificaciones')).toBeNull();
+        expect(document.activeElement).toBe(campana);
+    });
+
+    it('en pantalla estrecha el cajón deja inerte el contenido y Escape devuelve el foco al botón', () => {
+        const original = window.matchMedia;
+        window.matchMedia = ((consulta: string) => ({
+            matches: consulta === '(max-width: 820px)',
+            media: consulta,
+            addEventListener: () => undefined,
+            removeEventListener: () => undefined,
+        })) as unknown as typeof window.matchMedia;
+        try {
+            const estrecho = TestBed.createComponent(AppComponent);
+            sesion.establecerTokens({
+                token_acceso: 't', token_refresco: 'r', tipo_token: 'Bearer',
+                expira_en: new Date().toISOString(), requiere_segundo_factor: false,
+            });
+            sesion.establecerIdentidad(identidadCon(['agenda.leer']));
+            estrecho.detectChanges();
+            const raiz = estrecho.nativeElement as HTMLElement;
+            const main = raiz.querySelector('main#contenido')!;
+            expect(main.hasAttribute('inert')).toBe(false);
+
+            const botonMenu = raiz.querySelector('.cabecera__menu') as HTMLButtonElement;
+            // jsdom no evalúa las consultas de medios: el botón del cajón, oculto
+            // en escritorio, se muestra a mano como lo haría la hoja de estilos.
+            botonMenu.style.display = 'inline-flex';
+            botonMenu.click();
+            estrecho.detectChanges();
+            expect(main.hasAttribute('inert')).toBe(true);
+
+            (raiz.querySelector('#navegacion-principal a') as HTMLElement).focus();
+            document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+            estrecho.detectChanges();
+            expect(main.hasAttribute('inert')).toBe(false);
+            expect(document.activeElement).toBe(botonMenu);
+            estrecho.destroy();
+        } finally {
+            window.matchMedia = original;
+        }
+    });
+
     it('despliega la navegación móvil con estado accesible y se cierra desde el fondo', () => {
         sesion.establecerTokens({
             token_acceso: 't', token_refresco: 'r', tipo_token: 'Bearer',

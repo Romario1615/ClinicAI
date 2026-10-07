@@ -212,8 +212,30 @@ export class AppComponent {
   protected readonly menuAbierto = signal(false);
   protected readonly miFotoAbierta = signal(false);
   protected readonly notificacionesAbiertas = signal(false);
+  /** Pantalla estrecha: el menú es un cajón que tapa el contenido. */
+  private readonly pantallaEstrecha = signal(false);
+  /**
+   * Con el cajón abierto, el contenido de detrás no recibe foco: tabular más
+   * allá del último enlace llevaría a controles tapados (WCAG 2.4.11).
+   */
+  protected readonly contenidoInerte = computed(() => this.menuAbierto() && this.pantallaEstrecha());
 
   constructor() {
+    const destruccion = inject(DestroyRef);
+    const vista = inject(DOCUMENT).defaultView;
+    if (typeof vista?.matchMedia === 'function') {
+      const consulta = vista.matchMedia('(max-width: 820px)');
+      this.pantallaEstrecha.set(consulta.matches);
+      const alCambiar = (evento: MediaQueryListEvent) => {
+        this.pantallaEstrecha.set(evento.matches);
+        // Al ensanchar la ventana el menú vuelve a ser lateral: no queda
+        // ningún cajón abierto que cerrar después.
+        if (!evento.matches) this.cerrarMenu();
+      };
+      consulta.addEventListener('change', alCambiar);
+      destruccion.onDestroy(() => consulta.removeEventListener('change', alCambiar));
+    }
+
     // La cola se carga cuando hay sesion, y se vacia al cerrarla: dejar el
     // numero de la sesion anterior seria filtrar informacion de otra persona.
     effect(() => {
@@ -229,7 +251,7 @@ export class AppComponent {
     // observa el cuerpo entero porque al abrir o cerrar sesión cambia el
     // `<main>`. El motor se descarga después del arranque.
     this.movimiento.iniciar(inject(DOCUMENT).body);
-    inject(DestroyRef).onDestroy(() => this.movimiento.detener());
+    destruccion.onDestroy(() => this.movimiento.detener());
   }
 
   /** Roles del usuario, ya unidos. Cadena vacia si no hay ninguno. */
@@ -276,10 +298,25 @@ export class AppComponent {
     this.notificacionesAbiertas.set(false);
   }
 
-  /** Escape cierra cualquier panel flotante del armazón, esté abierto el menú o las notificaciones. */
+  /**
+   * Escape cierra cualquier panel flotante del armazón, esté abierto el menú o
+   * las notificaciones. Si el foco estaba dentro del panel, vuelve al botón que
+   * lo abrió: al destruirse el panel caería en `<body>` y quien navega con
+   * teclado tendría que empezar desde el principio de la página.
+   */
   protected cerrarCapasDesplegadas(): void {
+    const raiz = this.elemento.nativeElement;
+    const activo = raiz.ownerDocument.activeElement;
+    let devolverA: HTMLElement | null = null;
+    if (this.menuAbierto() && raiz.querySelector('#navegacion-principal')?.contains(activo)) {
+      devolverA = raiz.querySelector<HTMLElement>('.cabecera__menu');
+    }
+    if (this.notificacionesAbiertas() && raiz.querySelector('#panel-notificaciones')?.contains(activo)) {
+      devolverA = raiz.querySelector<HTMLElement>('.campana');
+    }
     this.cerrarMenu();
     this.cerrarNotificaciones();
+    devolverA?.focus();
   }
 
   /** Los paneles del encabezado se descartan al pulsar fuera y nunca quedan abiertos a la vez. */
