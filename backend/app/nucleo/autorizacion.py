@@ -292,6 +292,11 @@ CATALOGO_PERMISOS: Final[tuple[DefinicionPermiso, ...]] = (
     _p("pago.leer", "Ver pagos", "pagos"),
     _p("pago.registrar", "Registrar pagos y comprobantes", "pagos"),
     _p("pago.validar", "Validar o rechazar un comprobante", "pagos"),
+    # --- Gastos y caja ---
+    # Separado de pagos: quien cobra en el mostrador no es quien lleva el
+    # libro de egresos de la clinica (ADR-0021).
+    _p("gasto.leer", "Ver gastos y el flujo de caja", "pagos"),
+    _p("gasto.registrar", "Registrar y anular gastos", "pagos"),
     # --- Analitica ---
     _p("dashboard.leer", "Ver el panel de metricas", "analitica"),
     _p("prediccion.consultar", "Consultar predicciones operativas", "analitica"),
@@ -540,6 +545,8 @@ PERMISOS_POR_ROL: Final[dict[str, frozenset[str]]] = {
             "pago.leer",
             "pago.registrar",
             "pago.validar",
+            "gasto.leer",
+            "gasto.registrar",
             "dashboard.leer",
             "prediccion.consultar",
             "reporte.exportar",
@@ -593,6 +600,8 @@ PERMISOS_POR_ROL: Final[dict[str, frozenset[str]]] = {
             "pago.leer",
             "pago.registrar",
             "pago.validar",
+            "gasto.leer",
+            "gasto.registrar",
             "dashboard.leer",
             "prediccion.consultar",
             "reporte.exportar",
@@ -720,6 +729,7 @@ PERMISOS_POR_ROL: Final[dict[str, frozenset[str]]] = {
             "conversacion.leer",
             "conocimiento.leer",
             "pago.leer",
+            "gasto.leer",
             "dashboard.leer",
             "prediccion.consultar",
             "reporte.exportar",

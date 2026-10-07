@@ -56,6 +56,8 @@ export const PERMISOS = {
   clinicaEscribir: 'clinica.escribir',
   agendaLeer: 'agenda.leer',
   pagoLeer: 'pago.leer',
+  gastoLeer: 'gasto.leer',
+  gastoRegistrar: 'gasto.registrar',
   agendaConfigurar: 'agenda.configurar',
   sedeGestionar: 'sede.gestionar',
   bloqueoGestionar: 'bloqueo.gestionar',

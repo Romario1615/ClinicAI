@@ -898,6 +898,22 @@ _ADMINISTRADOR = ManualSistema(
             requiere=("promocion.gestionar", "promocion.aprobar"),
         ),
         _s(
+            "administracion.gastos",
+            "Libro de gastos y flujo de caja",
+            "/gastos",
+            "Registrar cada salida de dinero y ver el resultado de caja del periodo.",
+            (
+                "En Gastos y caja, registre el gasto con fecha, sede, categoría, importe y método.",
+                "Si un gasto se registró mal, anúlelo con el motivo y registre el correcto.",
+                "Elija el periodo para comparar pagos confirmados con gastos, por día y por categoría.",
+            ),
+            (
+                "Un gasto no se edita ni se borra: la base de datos solo admite su anulación.",
+                "El resultado es de caja, no contable: no incluye devengos ni impuestos.",
+            ),
+            requiere=("gasto.leer", "gasto.registrar", "pago.leer"),
+        ),
+        _s(
             "administracion.conciliar",
             "Conciliar cargos y vencimientos",
             "/pagos",
@@ -992,6 +1008,18 @@ _AUDITOR = ManualSistema(
             ),
             ("Cada descarga de comprobante queda auditada.",),
             requiere=("pago.leer", "reporte.exportar"),
+        ),
+        _s(
+            "auditoria.caja",
+            "Contrastar el flujo de caja",
+            "/gastos",
+            "Comprobar que los egresos registrados cuadran con los cobros del periodo.",
+            (
+                "En Gastos y caja, fije el periodo auditado y revise el resultado por día.",
+                "Incluya los gastos anulados para ver cada corrección con su motivo.",
+            ),
+            ("Usted consulta; registrar o anular gastos corresponde a la administración.",),
+            requiere=("gasto.leer", "pago.leer"),
         ),
         _s(
             "auditoria.automatizaciones",
@@ -1267,6 +1295,24 @@ CAPACIDADES: Final[tuple[Seccion, ...]] = (
         "Anotar pagos y adjuntar su comprobante.",
         ("Registre el abono con su método y suba el comprobante en un formato admitido.",),
         requiere=("pago.leer", "pago.registrar"),
+    ),
+    _s(
+        "capacidad.gastos",
+        "Egresos de la clínica",
+        "/gastos",
+        "Consultar el libro de gastos dentro de las sedes del rol.",
+        ("Filtre por periodo, sede o categoría; active los anulados para ver correcciones.",),
+        requiere=("gasto.leer",),
+    ),
+    _s(
+        "capacidad.gastos_registro",
+        "Registro de egresos",
+        "/gastos",
+        "Anotar salidas de dinero y anular las erróneas con motivo.",
+        (
+            "Registre el egreso con su comprobante a mano; si se equivoca, anúlelo y vuelva a anotarlo.",
+        ),
+        requiere=("gasto.leer", "gasto.registrar"),
     ),
     _s(
         "capacidad.equipo",

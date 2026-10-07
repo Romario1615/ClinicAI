@@ -128,6 +128,7 @@ const NAVEGACION: readonly EnlaceNavegacion[] = [
     demostracion: false,
   },
   { ruta: '/pagos', etiqueta: 'Pagos', icono: 'pagos', permisos: ['pago.leer'], demostracion: false },
+  { ruta: '/gastos', etiqueta: 'Gastos y caja', icono: 'gastos', permisos: [PERMISOS.gastoLeer], demostracion: false },
   {
     ruta: '/conversaciones',
     etiqueta: 'Atención de mensajes',

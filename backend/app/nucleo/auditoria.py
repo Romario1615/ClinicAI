@@ -235,6 +235,10 @@ class AccionAuditada(StrEnum):
     CARGO_PAGO_CONCILIADO = "cargo_pago.total_conciliado"
     CARGO_PAGO_VENCIMIENTO_FIJADO = "cargo_pago.vencimiento_fijado"
 
+    # --- Gastos y caja ---
+    GASTO_REGISTRADO = "gasto.registrado"
+    GASTO_ANULADO = "gasto.anulado"
+
     # --- Analitica ---
     PREDICCION_CONSULTADA = "prediccion.consultada"
     REPORTE_EXPORTADO = "reporte.exportado"

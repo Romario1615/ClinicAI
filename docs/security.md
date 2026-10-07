@@ -93,6 +93,8 @@ asistencial · **—** denegado.
 | `prediccion.consultar` | ✓ | ○ | — | ○ | — | ✓ |
 | `reporte.exportar` | ✓ | ○ | ○ (resumen agregado de agenda) | — | — | ✓ |
 | `pago.leer` | ✓ | ○ | ○ | — | — | ✓ |
+| `gasto.leer` (libro de gastos y flujo de caja) | ✓ | ○ | — | — | — | ✓ |
+| `gasto.registrar` (registrar y anular gastos) | ✓ | ○ | — | — | — | — |
 | `conocimiento.leer` | ✓ | ○ | ○ | ○ | ○ | ○ |
 | `conversacion.tomar` | ✓ | ○ | ○ | ○ | ○ | — |
 | `acceso_emergencia.solicitar` | — | — | — | ○ | — | — |
@@ -187,6 +189,10 @@ IDOR.
 | `GET/POST /api/v1/pagos/cargos/` | `pago.leer` / `pago.registrar` | Filtra y crea cargos dentro de las citas autorizadas. El filtro de vencidos usa saldo confirmado y fecha local efectiva de sede/clínica; excluye cargos sin total o sin saldo pendiente |
 | `PATCH /api/v1/pagos/cargos/{id}/total` · `/vencimiento` | `pago.validar` | Conciliación y vencimiento dentro del ámbito; ambas acciones se auditan. El total histórico y la fecha solo pueden fijarse una vez; PostgreSQL rechaza cambios posteriores |
 | `GET/POST /api/v1/pagos/{id}/comprobantes` | `pago.leer` / `pago.registrar` | Listado y carga auditados; PDF/JPEG/PNG/WebP con firma real y tamaño limitado. PDF rechaza JavaScript, acciones activas y adjuntos. Almacén cifrado, antivirus requerido en producción, transición atómica a `PROOF_RECEIVED`; metadatos append‑only |
+| `GET /api/v1/gastos` | `gasto.leer` | Libro de gastos de la clínica del principal; el `WHERE` limita a sedes del ámbito y solo muestra gastos sin sede (de toda la clínica) con ámbito de todas las sedes. El total del filtro suma solo los vigentes |
+| `POST /api/v1/gastos` | `gasto.registrar` | Exige `Idempotency-Key`; no acepta `clinica_id`; la sede debe estar en el ámbito (si no, 404) y un gasto sin sede exige ámbito de todas las sedes; fecha no futura en la zona de la sede; USD; auditado `gasto.registrado` |
+| `POST /api/v1/gastos/{id}/anulacion` | `gasto.registrar` | Motivo obligatorio; una sola vez (409 la segunda); fuera de ámbito 404; auditado `gasto.anulado`. Un disparador PostgreSQL impide cualquier otro `UPDATE`, todo `DELETE` y `TRUNCATE` (ADR-0021) |
+| `GET /api/v1/gastos/flujo` | `gasto.leer` + `pago.leer` | Base de caja: pagos `CONFIRMED` por fecha local de registro menos gastos vigentes, por día y categoría; periodo de 1 a 366 días, `hasta` exclusivo; sin datos de pacientes |
 | `GET /api/v1/pagos/comprobantes/{id}/contenido` | `pago.leer` | La consulta aplica el ámbito del pago en SQL; cada descarga se audita, no expone URL directa de almacenamiento y se entrega como adjunto privado con `nosniff` |
 | `GET /api/v1/agenda/citas/{id}` | `agenda.leer` | Cita fuera de ámbito → **404**, indistinguible de una inexistente |
 | `POST /api/v1/agenda/citas` | `cita.crear` | Acepta `Idempotency-Key`. El `origen` lo fija el servidor, no el cliente |

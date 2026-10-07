@@ -239,6 +239,12 @@ export const routes: Routes = [
       ),
   },
   {
+    path: 'gastos',
+    canActivate: [guardiaAutenticacion, guardiaSegundoFactor, guardiaPermiso(PERMISOS.gastoLeer)],
+    title: 'Gastos y caja · ClinicAI',
+    loadComponent: () => import('./paginas/gastos/gastos.component').then((m) => m.GastosComponent),
+  },
+  {
     // Manual de los roles de la sesión. Sin permiso propio: el servidor
     // filtra cada manual con los permisos vigentes de quien consulta.
     path: 'ayuda',

@@ -59,6 +59,7 @@ from app.modulos.conversaciones import demo_rutas
 from app.modulos.conversaciones import rutas as rutas_conversaciones
 from app.modulos.dashboard import indicadores as indicadores_dashboard
 from app.modulos.dashboard import rutas as rutas_dashboard
+from app.modulos.gastos import rutas as rutas_gastos
 from app.modulos.historia import acceso_emergencia as rutas_acceso_emergencia
 from app.modulos.historia import anamnesis_rutas as rutas_anamnesis
 from app.modulos.historia import especialidades as rutas_especialidades_historia
@@ -301,6 +302,7 @@ def _registrar_rutas_del_equipo(aplicacion: FastAPI) -> None:
     aplicacion.include_router(rutas_recorrido.enrutador, prefix=PREFIJO_API)
     aplicacion.include_router(rutas_asistente.enrutador, prefix=PREFIJO_API)
     aplicacion.include_router(rutas_ayuda.enrutador, prefix=PREFIJO_API)
+    aplicacion.include_router(rutas_gastos.enrutador, prefix=PREFIJO_API)
     aplicacion.include_router(rutas_revision_riesgo.enrutador, prefix=PREFIJO_API)
     aplicacion.include_router(rutas_acceso_clinico.enrutador, prefix=PREFIJO_API)
 

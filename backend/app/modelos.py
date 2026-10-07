@@ -49,6 +49,7 @@ from app.modulos.conversaciones.modelos import (
     IntencionEntrante,
     MensajeEntrante,
 )
+from app.modulos.gastos.modelos import Gasto
 from app.modulos.historia.modelos import (
     AlertaAdherencia,
     Diagnostico,
@@ -201,6 +202,7 @@ __all__ = [
     "Feriado",
     "Formulario033",
     "FotoUsuario",
+    "Gasto",
     "HistorialAcceso",
     "HorarioAtencion",
     "ImagenPaciente",

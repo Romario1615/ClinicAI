@@ -9,7 +9,7 @@ const ETIQUETAS_WCAG = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'];
 const RUTAS_MENU = [
   '/panel', '/plataforma/clinicas', '/usuarios', '/agenda', '/pacientes', '/lista-espera',
   '/historia-clinica', '/medicamentos', '/conocimiento', '/delegaciones', '/equipo',
-  '/promociones', '/catalogo', '/pagos', '/conversaciones', '/agente-demo', '/seguridad',
+  '/promociones', '/catalogo', '/pagos', '/gastos', '/conversaciones', '/agente-demo', '/seguridad',
   '/asistente', '/automatizaciones', '/configuracion', '/ayuda',
 ].sort();
 const rutasAuditadas = new Set<string>();
