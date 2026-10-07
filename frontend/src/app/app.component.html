@@ -35,8 +35,8 @@
           @if (pendientes.notificaciones() > 0) { <span class="campana__cuenta">{{ pendientes.notificaciones() }}</span> }
         </button>
         @if (notificacionesAbiertas()) {
-          <section class="notificaciones" aria-label="Notificaciones de seguimiento" data-aparecer>
-            <header><strong>Seguimiento de hoy</strong><span>{{ pendientes.notificaciones() }}</span></header>
+          <section id="panel-notificaciones" class="notificaciones" role="dialog" aria-modal="false" aria-labelledby="titulo-notificaciones" data-aparecer>
+            <header><strong id="titulo-notificaciones">Seguimiento de hoy</strong><span>{{ pendientes.notificaciones() }}</span></header>
             @if (pendientes.cargando()) { <p class="notificaciones__vacio">Actualizando avisos…</p> }
             @else if (pendientes.tareas().length) {
               @for (tarea of pendientes.tareas(); track tarea.clase) {

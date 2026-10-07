@@ -255,16 +255,20 @@ export class AppComponent {
   );
 
   protected alternarMenu(): void {
-    this.menuAbierto.update((abierto) => !abierto);
+    const abrir = !this.menuAbierto();
+    this.notificacionesAbiertas.set(false);
+    this.menuAbierto.set(abrir);
   }
 
   protected alternarNotificaciones(): void {
+    const abrir = !this.notificacionesAbiertas();
+    this.menuAbierto.set(false);
     this.notificacionesAbiertas.update((abiertas) => {
       if (!abiertas) {
         this.pendientes.refrescarCobrosVencidos();
         this.pendientes.refrescarOfertasSinAvisar();
       }
-      return !abiertas;
+      return abrir;
     });
   }
 

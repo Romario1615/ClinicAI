@@ -1,0 +1,41 @@
+# Repositorio e informacion local
+.git
+**/.git
+.env
+.env.*
+!.env.example
+
+# Entornos y dependencias instaladas; la imagen se instala desde uv.lock.
+.venv
+**/.venv
+venv
+**/venv
+frontend/node_modules
+**/node_modules
+
+# Builds, caches y reportes de pruebas
+frontend/dist
+frontend/.angular
+frontend/coverage
+frontend/cobertura
+backend/.pytest_cache
+backend/.mypy_cache
+backend/.ruff_cache
+backend/.hypothesis
+**/__pycache__
+**/*.py[cod]
+test-results
+playwright-report
+coverage.xml
+.coverage
+
+# Datos de desarrollo, respaldos y temporales
+datos-sinteticos
+credenciales
+tmp
+*.sqlite
+*.sqlite3
+*.db
+*.bak
+*.dump
+*.sql.gz

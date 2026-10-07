@@ -352,7 +352,7 @@ export class VentanaFlotanteComponent implements AfterViewInit, OnDestroy {
   /** Escape nativo del dialog: lo cierra quien abrió la ventana, no el navegador. */
   protected alCancelar(evento: Event): void {
     evento.preventDefault();
-    this.solicitarCierre();
+    if (this.cierraConEscape()) this.solicitarCierre();
   }
 
   /**
@@ -423,7 +423,7 @@ export class VentanaFlotanteComponent implements AfterViewInit, OnDestroy {
       // Sin preventDefault el navegador dispararía también `cancel`.
       evento.preventDefault();
       evento.stopPropagation();
-      this.solicitarCierre();
+      if (this.cierraConEscape()) this.solicitarCierre();
       return;
     }
     if (evento.key !== 'Tab') {

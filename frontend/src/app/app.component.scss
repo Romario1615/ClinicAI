@@ -143,6 +143,10 @@
   color: var(--texto-suave);
 }
 
+.navegacion__fondo {
+  display: none;
+}
+
 /* ----- Barra lateral ----- */
 .navegacion {
   grid-area: navegacion;
@@ -385,6 +389,19 @@
 
   .navegacion {
     display: none;
+  }
+
+  .navegacion__fondo {
+    display: block;
+    position: fixed;
+    z-index: 21;
+    inset: calc(72px + env(safe-area-inset-top)) 0 0;
+    width: 100%;
+    border: 0;
+    background: rgb(9 28 42 / 34%);
+    backdrop-filter: blur(5px);
+    -webkit-backdrop-filter: blur(5px);
+    animation: aparecer-fondo 160ms ease-out both;
   }
 
   .navegacion--abierta {
