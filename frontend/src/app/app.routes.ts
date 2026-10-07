@@ -239,6 +239,14 @@ export const routes: Routes = [
       ),
   },
   {
+    // Manual de los roles de la sesión. Sin permiso propio: el servidor
+    // filtra cada manual con los permisos vigentes de quien consulta.
+    path: 'ayuda',
+    canActivate: [guardiaAutenticacion, guardiaSegundoFactor],
+    title: 'Ayuda · ClinicAI',
+    loadComponent: () => import('./paginas/ayuda/ayuda.component').then((m) => m.AyudaComponent),
+  },
+  {
     path: 'plataforma/clinicas',
     canActivate: [guardiaAutenticacion, guardiaSegundoFactor, guardiaSuperadministrador],
     title: 'Clínicas · Administración de plataforma · ClinicAI',

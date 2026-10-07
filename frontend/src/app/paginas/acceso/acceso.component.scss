@@ -107,43 +107,101 @@
   box-shadow: 0 0 0 4px rgb(95 209 196 / 20%);
 }
 
-.acceso__flujo {
+
+.acceso__grafico {
   position: relative;
   z-index: 1;
-  display: block;
-  width: min(100%, 540px);
-  height: auto;
-  max-height: 112px;
-  object-fit: contain;
-  object-position: left center;
-  opacity: .94;
-  filter: drop-shadow(0 9px 24px rgb(0 26 29 / 18%));
-  animation: acceso-flotar 9s ease-in-out infinite;
+  width: min(100%, 460px);
+  margin: var(--espacio-4) 0;
+  filter: drop-shadow(0 18px 40px rgb(0 26 29 / 30%));
 }
 
-@keyframes acceso-flotar {
-  0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(-4px); }
-}
-
-/* ----- Formulario ----- */
+/* ----- Formulario -----
+ * Aurora viva bajo una única placa de vidrio. Aquí sí se anima el fondo: es
+ * la única pantalla con una sola superficie encima, así que recomponer el
+ * desenfoque cuesta poco, y es la primera impresión del sistema. */
 .acceso__formulario {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
   display: flex;
   align-items: center;
   justify-content: center;
   padding: clamp(1.5rem, 5vw, 4rem);
-  background:
-    radial-gradient(ellipse at 100% 0%, rgb(220 240 238 / 72%), transparent 48%),
-    var(--superficie);
+  background: linear-gradient(180deg, #eef6f6, var(--fondo-base));
 }
 
+.acceso__aurora {
+  position: absolute;
+  z-index: -1;
+  inset: 0;
+  pointer-events: none;
+}
+
+.acceso__gota {
+  position: absolute;
+  width: 46vmax;
+  height: 46vmax;
+  border-radius: 50%;
+  filter: blur(48px);
+  opacity: .72;
+  will-change: transform;
+}
+
+.acceso__gota--menta {
+  top: -18vmax;
+  right: -14vmax;
+  background: radial-gradient(circle, rgb(95 209 196 / 70%), transparent 66%);
+  animation: acceso-deriva-1 26s ease-in-out infinite alternate;
+}
+
+.acceso__gota--cielo {
+  bottom: -20vmax;
+  right: 6vmax;
+  background: radial-gradient(circle, rgb(127 182 230 / 60%), transparent 66%);
+  animation: acceso-deriva-2 32s ease-in-out infinite alternate;
+}
+
+.acceso__gota--lila {
+  bottom: -16vmax;
+  left: -18vmax;
+  background: radial-gradient(circle, rgb(180 165 235 / 50%), transparent 66%);
+  animation: acceso-deriva-3 29s ease-in-out infinite alternate;
+}
+
+@keyframes acceso-deriva-1 {
+  from { transform: translate3d(0, 0, 0) scale(1); }
+  to { transform: translate3d(-8vmax, 6vmax, 0) scale(1.12); }
+}
+
+@keyframes acceso-deriva-2 {
+  from { transform: translate3d(0, 0, 0) scale(1.05); }
+  to { transform: translate3d(-10vmax, -7vmax, 0) scale(.95); }
+}
+
+@keyframes acceso-deriva-3 {
+  from { transform: translate3d(0, 0, 0) scale(.95); }
+  to { transform: translate3d(9vmax, -5vmax, 0) scale(1.1); }
+}
+
+/* Vidrio líquido con desenfoque real: dentro no hay visores ni diálogos
+   `position: fixed` que el bloque contenedor pudiera atrapar. */
 .acceso__tarjeta {
   width: 100%;
   max-width: 440px;
   padding: clamp(1.5rem, 4vw, 2.75rem);
-  border: 1px solid rgb(211 224 224 / 80%);
-  border-radius: 20px;
-  box-shadow: 0 24px 64px rgb(16 42 46 / 10%);
+  border: 1px solid rgb(255 255 255 / 75%);
+  border-radius: 28px;
+  background:
+    var(--vidrio-reflejo),
+    radial-gradient(120% 70% at 0% 0%, rgb(255 255 255 / 60%), transparent 55%),
+    linear-gradient(160deg, rgb(255 255 255 / 74%), rgb(255 255 255 / 62%));
+  backdrop-filter: var(--vidrio-desenfoque-fuerte);
+  -webkit-backdrop-filter: var(--vidrio-desenfoque-fuerte);
+  box-shadow:
+    var(--vidrio-canto),
+    0 0 0 1px rgb(16 42 46 / 5%),
+    0 30px 70px -24px rgb(16 42 46 / 28%);
 }
 
 .acceso__ceja--formulario {
@@ -191,7 +249,7 @@
   }
 
   .acceso__puntos,
-  .acceso__flujo {
+  .acceso__grafico {
     display: none;
   }
 
@@ -301,17 +359,25 @@
   padding: 0.85rem 1rem;
   text-align: left;
   color: var(--texto);
-  background: rgb(255 255 255 / 82%);
-  border: 1px solid rgb(211 224 224 / 90%);
-  border-radius: 13px;
+  background:
+    var(--vidrio-reflejo),
+    linear-gradient(180deg, rgb(255 255 255 / 88%), rgb(255 255 255 / 72%));
+  border: 1px solid rgb(255 255 255 / 80%);
+  border-radius: 18px;
+  box-shadow:
+    inset 0 1px 0 #fff,
+    0 0 0 1px rgb(16 42 46 / 6%),
+    0 6px 16px -10px rgb(16 42 46 / 25%);
   cursor: pointer;
-  transition: border-color 160ms ease, box-shadow 160ms ease, transform 160ms ease;
+  transition: border-color 160ms ease, box-shadow 180ms ease;
 }
 
 .acceso__rol:hover:not(:disabled) {
-  transform: translateY(-1px);
-  border-color: var(--acento);
-  box-shadow: 0 8px 22px rgb(16 42 46 / 9%);
+  border-color: rgb(11 110 106 / 45%);
+  box-shadow:
+    inset 0 1px 0 #fff,
+    0 0 0 1px rgb(11 110 106 / 18%),
+    0 14px 30px -14px rgb(16 42 46 / 35%);
 }
 
 .acceso__rol:focus-visible {
@@ -378,5 +444,10 @@ code {
 
 @media (prefers-reduced-motion: reduce) {
   .acceso__marca::before,
-  .acceso__flujo { animation: none; }
+  .acceso__gota { animation: none; }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .acceso__aurora { display: none; }
+  .acceso__tarjeta { background: #fff; backdrop-filter: none; -webkit-backdrop-filter: none; }
 }

@@ -10,11 +10,19 @@ const RUTAS_MENU = [
   '/panel', '/plataforma/clinicas', '/usuarios', '/agenda', '/pacientes', '/lista-espera',
   '/historia-clinica', '/medicamentos', '/conocimiento', '/delegaciones', '/equipo',
   '/promociones', '/catalogo', '/pagos', '/conversaciones', '/agente-demo', '/seguridad',
-  '/asistente', '/automatizaciones', '/configuracion',
+  '/asistente', '/automatizaciones', '/configuracion', '/ayuda',
 ].sort();
 const rutasAuditadas = new Set<string>();
 
 async function exigirSinIncidencias(page: Page): Promise<void> {
+  // Las entradas con Motion duran menos de un segundo: se audita la pantalla
+  // asentada, no un fotograma a media opacidad. Los bucles infinitos de los
+  // gráficos decorativos no cuentan.
+  await page.waitForFunction(() =>
+    document
+      .getAnimations()
+      .every((animacion) => animacion.effect?.getTiming().iterations === Infinity || animacion.playState !== 'running'),
+  );
   const resultado = await new AxeBuilder({ page })
     .withTags(ETIQUETAS_WCAG)
     .analyze();

@@ -61,7 +61,7 @@ import type { Paciente } from '../nucleo/modelos/dominio';
       </form>
 
       @if (abierto()) {
-        <div class="buscador__resultados" role="region" aria-label="Resultados de la búsqueda">
+        <div class="buscador__resultados" role="region" aria-label="Resultados de la búsqueda" data-aparecer>
           @if (buscando()) {
             <p class="buscador__nota" role="status">Buscando…</p>
           } @else if (error()) {
@@ -169,15 +169,19 @@ import type { Paciente } from '../nucleo/modelos/dominio';
       gap: var(--espacio-2);
       min-height: 38px;
       padding: 0 var(--espacio-3);
-      border: 1px solid var(--borde);
+      border: 1px solid rgb(16 42 46 / 12%);
       border-radius: 999px;
-      background: var(--superficie);
+      /* Cápsula de vidrio hundida en la cabecera de vidrio. */
+      background: linear-gradient(180deg, rgb(234 243 243 / 80%), rgb(255 255 255 / 80%));
+      box-shadow: inset 0 1px 2px rgb(16 42 46 / 8%);
       color: var(--texto-tenue);
+      transition: border-color 160ms ease, box-shadow 160ms ease, background-color 160ms ease;
     }
 
     .buscador__campo:focus-within {
       border-color: var(--acento);
-      background: var(--superficie-elevada);
+      background: #fff;
+      box-shadow: inset 0 1px 2px rgb(16 42 46 / 6%), 0 0 0 4px rgb(95 209 196 / 26%);
     }
 
     .buscador__campo input {
@@ -199,10 +203,14 @@ import type { Paciente } from '../nucleo/modelos/dominio';
       z-index: 30;
       width: min(420px, calc(100vw - 32px));
       padding: var(--espacio-3);
-      border: 1px solid var(--borde);
-      border-radius: var(--radio);
-      background: var(--superficie-elevada);
-      box-shadow: var(--sombra-2);
+      border: 1px solid var(--vidrio-borde);
+      border-radius: var(--radio-vidrio);
+      /* Desplegable de vidrio: flota sobre la página con desenfoque real. Al
+         92 % porque debajo puede haber texto en movimiento. */
+      background: var(--vidrio-especular), linear-gradient(170deg, rgb(255 255 255 / 94%), rgb(255 255 255 / 88%));
+      backdrop-filter: var(--vidrio-desenfoque-fuerte);
+      -webkit-backdrop-filter: var(--vidrio-desenfoque-fuerte);
+      box-shadow: var(--vidrio-canto), 0 24px 48px -16px rgb(20 40 50 / 32%);
     }
 
     .buscador__lista {
@@ -222,14 +230,15 @@ import type { Paciente } from '../nucleo/modelos/dominio';
       min-height: var(--toque-minimo);
       padding: var(--espacio-2) var(--espacio-3);
       border: 0;
-      border-radius: var(--radio-pequeno);
+      border-radius: 10px;
       background: transparent;
       text-align: left;
       cursor: pointer;
+      transition: background-color 160ms ease;
     }
 
     .buscador__lista button:hover {
-      background: var(--acento-suave);
+      background: rgb(220 240 238 / 75%);
     }
 
     .buscador__nombre {

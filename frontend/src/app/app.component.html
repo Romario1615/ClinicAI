@@ -20,7 +20,14 @@
 
       <!-- Buscar un paciente desde cualquier pantalla, y verlo sin salir de
            ella: la ficha se abre en una ventana flotante. -->
-      <app-buscador-global />
+      <!-- Diferido hasta que el navegador queda libre: no hace falta para el
+           primer pintado y así no cuenta en el paquete inicial. La reserva
+           ocupa su sitio para que la cabecera no salte al llegar. -->
+      @defer (on idle) {
+        <app-buscador-global />
+      } @placeholder {
+        <span class="cabecera__buscador-reserva" aria-hidden="true"></span>
+      }
 
       <div class="cabecera__notificaciones">
         <button type="button" class="boton boton--plano campana" (click)="alternarNotificaciones()" [attr.aria-expanded]="notificacionesAbiertas()" aria-label="Notificaciones de seguimiento">
@@ -28,7 +35,7 @@
           @if (pendientes.notificaciones() > 0) { <span class="campana__cuenta">{{ pendientes.notificaciones() }}</span> }
         </button>
         @if (notificacionesAbiertas()) {
-          <section class="notificaciones" aria-label="Notificaciones de seguimiento">
+          <section class="notificaciones" aria-label="Notificaciones de seguimiento" data-aparecer>
             <header><strong>Seguimiento de hoy</strong><span>{{ pendientes.notificaciones() }}</span></header>
             @if (pendientes.cargando()) { <p class="notificaciones__vacio">Actualizando avisos…</p> }
             @else if (pendientes.tareas().length) {

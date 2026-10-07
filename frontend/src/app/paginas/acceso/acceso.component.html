@@ -14,10 +14,18 @@
       </ul>
     </div>
 
-    <img class="acceso__flujo" src="/images/flujo-clinico.svg" alt="" aria-hidden="true" />
+    <!-- Gráfico en movimiento: la clínica conectada (decorativo). Sustituye
+         al antiguo flujo estático. -->
+    <app-grafico-red class="acceso__grafico" tono="oscuro" />
   </aside>
 
   <div class="acceso__formulario">
+    <!-- Luz de fondo que se ve a través del vidrio. Decorativa. -->
+    <div class="acceso__aurora" aria-hidden="true">
+      <span class="acceso__gota acceso__gota--menta"></span>
+      <span class="acceso__gota acceso__gota--cielo"></span>
+      <span class="acceso__gota acceso__gota--lila"></span>
+    </div>
     <div class="tarjeta acceso__tarjeta">
       @if (modoAccesoLocal()) {
         <p class="acceso__ceja acceso__ceja--formulario">ACCESO LOCAL</p>
@@ -28,6 +36,7 @@
             <button
               type="button"
               class="acceso__rol"
+              data-aparecer
               [disabled]="enviando()"
               (click)="entrarComo(rol.codigo)"
             >

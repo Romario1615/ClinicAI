@@ -9,6 +9,8 @@ import { Component, input, ChangeDetectionStrategy } from '@angular/core';
 import { NgTemplateOutlet } from '@angular/common';
 import { RouterLink } from '@angular/router';
 
+import { ContadorDirective } from './contador.directive';
+
 export interface Indicador {
   readonly etiqueta: string;
   readonly valor: string | number;
@@ -21,7 +23,7 @@ export interface Indicador {
 @Component({
   selector: 'app-tarjetas-indicadores',
   standalone: true,
-  imports: [RouterLink, NgTemplateOutlet],
+  imports: [RouterLink, NgTemplateOutlet, ContadorDirective],
   template: `
     @if (indicadores().length) {
       <div class="indicadores" [attr.aria-label]="titulo() || 'Indicadores'" role="list">
@@ -29,6 +31,7 @@ export interface Indicador {
           @if (item.enlace) {
             <a
               role="listitem"
+              data-aparecer
               [class]="'indicador indicador--' + (item.tono ?? 'normal') + ' indicador--enlace'"
               [routerLink]="item.enlace"
               [queryParams]="item.consulta ?? null"
@@ -36,7 +39,7 @@ export interface Indicador {
               <ng-container *ngTemplateOutlet="cuerpo; context: { $implicit: item }" />
             </a>
           } @else {
-            <div role="listitem" [class]="'indicador indicador--' + (item.tono ?? 'normal')">
+            <div role="listitem" data-aparecer [class]="'indicador indicador--' + (item.tono ?? 'normal')">
               <ng-container *ngTemplateOutlet="cuerpo; context: { $implicit: item }" />
             </div>
           }
@@ -44,7 +47,8 @@ export interface Indicador {
       </div>
     }
     <ng-template #cuerpo let-item>
-      <span class="indicador__valor numerico">{{ item.valor }}</span>
+      <!-- La cifra cuenta hasta su valor (gráfico en movimiento). -->
+      <span class="indicador__valor numerico" [appContador]="item.valor"></span>
       <span class="indicador__etiqueta">{{ item.etiqueta }}</span>
       @if (item.detalle) {
         <span class="indicador__detalle">{{ item.detalle }}</span>
@@ -65,15 +69,16 @@ export interface Indicador {
       gap: 2px;
       min-height: 96px;
       padding: var(--espacio-3) var(--espacio-4);
-      border: 1px solid var(--borde);
-      border-radius: var(--radio);
-      background: var(--superficie-elevada);
+      border: 1px solid var(--vidrio-borde, var(--borde));
+      border-radius: var(--radio-vidrio, var(--radio));
+      /* Ficha de vidrio: canto iluminado y reflejo que sigue al puntero. */
+      background: var(--vidrio-reflejo, none), var(--vidrio-especular, none), var(--vidrio-cuerpo, var(--superficie-elevada));
       color: var(--texto);
       text-decoration: none;
-      box-shadow: var(--sombra-1);
-      transition: border-color 140ms ease, transform 140ms ease;
+      box-shadow: var(--vidrio-canto, 0 0 0 transparent), var(--vidrio-sombra, var(--sombra-1));
+      transition: border-color 160ms ease, box-shadow 200ms ease;
     }
-    .indicador--enlace:hover { border-color: var(--acento); transform: translateY(-1px); }
+    .indicador--enlace:hover { border-color: rgb(11 110 106 / 40%); box-shadow: var(--vidrio-canto, 0 0 0 transparent), 0 16px 32px -16px rgb(16 42 46 / 35%); }
     .indicador--enlace:focus-visible { outline: 3px solid var(--acento); outline-offset: 2px; }
     .indicador__valor { font-size: 1.75rem; font-weight: 750; line-height: 1.1; }
     .indicador__etiqueta { font-weight: 650; font-size: 0.88rem; }

@@ -8,6 +8,7 @@
 import { Component, signal, ChangeDetectionStrategy } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 
+import { MovimientoService } from '../nucleo/movimiento/movimiento.service';
 import { VentanaFlotanteComponent } from './ventana-flotante.component';
 
 @Component({
@@ -204,5 +205,82 @@ describe('VentanaFlotanteComponent', () => {
         expect(elemento().querySelector('.capa')?.classList.contains('capa--centrada')).toBe(true);
         fixture.componentInstance.abierta.set(false);
         fixture.detectChanges();
+    });
+});
+
+/**
+ * Con movimiento activo la ventana se retira antes de avisar, como
+ * `AnimatePresence`. Se usa un servicio de movimiento de mentira: aquí se
+ * comprueba el orden (primero la salida, después `cerrar`), no la animación.
+ */
+describe('VentanaFlotanteComponent con movimiento', () => {
+    let fixture: ComponentFixture<AnfitrionComponent>;
+    let salidaPendiente: (() => void) | null;
+    const movimiento = {
+        activo: () => true,
+        entrar: vi.fn(() => Promise.resolve()),
+        fundir: vi.fn(() => Promise.resolve()),
+        limpiar: vi.fn(),
+        salir: vi.fn(
+            () =>
+                new Promise<void>((resolver) => {
+                    salidaPendiente = resolver;
+                }),
+        ),
+    };
+
+    beforeEach(() => {
+        salidaPendiente = null;
+        vi.clearAllMocks();
+        TestBed.configureTestingModule({
+            imports: [AnfitrionComponent],
+            providers: [{ provide: MovimientoService, useValue: movimiento }],
+        });
+        fixture = TestBed.createComponent(AnfitrionComponent);
+        fixture.detectChanges();
+        fixture.componentInstance.abierta.set(true);
+        fixture.detectChanges();
+    });
+
+    it('entra con resorte y avisa del cierre solo cuando la salida ha terminado', async () => {
+        expect(movimiento.entrar).toHaveBeenCalledTimes(1);
+
+        const dialogo = (fixture.nativeElement as HTMLElement).querySelector('[role="dialog"]');
+        dialogo?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+        // Un segundo Escape durante la salida no la repite.
+        dialogo?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+        fixture.detectChanges();
+
+        expect(movimiento.salir).toHaveBeenCalledTimes(1);
+        expect(fixture.componentInstance.abierta()).toBe(true);
+
+        salidaPendiente?.();
+        await fixture.whenStable();
+        fixture.detectChanges();
+
+        expect(fixture.componentInstance.abierta()).toBe(false);
+    });
+
+    it('vuelve a mostrarse si quien la abrió decide no cerrarla', async () => {
+        vi.useFakeTimers();
+        try {
+            // El anfitrión ignora el aviso: la ventana sigue viva.
+            fixture.componentInstance.abierta.set(true);
+            const ventana = fixture.debugElement.children
+                .map((hijo) => hijo.componentInstance)
+                .find((instancia): instancia is VentanaFlotanteComponent => instancia instanceof VentanaFlotanteComponent);
+            ventana!.cerrar.subscribe(() => fixture.componentInstance.abierta.set(true));
+
+            ventana!.solicitarCierre();
+            salidaPendiente?.();
+            await vi.runAllTimersAsync();
+
+            expect(movimiento.limpiar).toHaveBeenCalledTimes(2);
+            expect(fixture.componentInstance.abierta()).toBe(true);
+        } finally {
+            vi.useRealTimers();
+            fixture.componentInstance.abierta.set(false);
+            fixture.detectChanges();
+        }
     });
 });

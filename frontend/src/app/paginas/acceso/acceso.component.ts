@@ -30,12 +30,13 @@ import { FalloApi } from '../../nucleo/servicios/api.service';
 import { AutenticacionService } from '../../nucleo/servicios/autenticacion.service';
 import { ModoLocalService } from '../../nucleo/servicios/modo-local.service';
 import { SesionService } from '../../nucleo/servicios/sesion.service';
+import { GraficoRedComponent } from '../../compartido/grafico-red.component';
 import { MarcaComponent } from '../../compartido/marca.component';
 
 @Component({
   selector: 'app-acceso',
   standalone: true,
-  imports: [FormsModule, MarcaComponent],
+  imports: [FormsModule, MarcaComponent, GraficoRedComponent],
   templateUrl: './acceso.component.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './acceso.component.scss',

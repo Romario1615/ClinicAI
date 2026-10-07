@@ -90,10 +90,14 @@ export type NombreIcono =
   | 'respuesta-documentada'
   | 'automatizaciones'
   | 'conexiones'
-  | 'roles';
+  | 'roles'
+  | 'ayuda'
+  | 'gastos';
 
 /** Trazos de cada icono sobre la rejilla de 24. */
 const TRAZOS: Record<NombreIcono, string> = {
+  ayuda: 'M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .9-1 1.6v.6M12 17h.01',
+  gastos: 'M6 3h12v18l-3-2-3 2-3-2-3 2zM9 8h6M9 12h6M9 16h3',
   panel: 'M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h6v6h-6z',
   agenda: 'M4 6h16v14H4zM4 10h16M8 4v4M16 4v4',
   espera: 'M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18M12 7.5V12l3 2',

@@ -46,6 +46,7 @@ import {
   ChangeDetectionStrategy
 } from '@angular/core';
 
+import { MovimientoService } from '../nucleo/movimiento/movimiento.service';
 import { IconoComponent } from './icono.component';
 
 @Component({
@@ -82,7 +83,7 @@ import { IconoComponent } from './icono.component';
           <button
             type="button"
             class="boton boton--plano ventana__cerrar"
-            (click)="cerrar.emit()"
+            (click)="solicitarCierre()"
             [attr.aria-label]="'Cerrar ' + titulo()"
           >
             <app-icono nombre="cerrar" [tamano]="18" />
@@ -122,7 +123,11 @@ import { IconoComponent } from './icono.component';
       align-items: flex-start;
       justify-content: flex-end;
       padding: var(--espacio-4);
-      background: rgb(22 32 46 / 38%);
+      /* Velo de vidrio: oscurece y desenfoca lo de detrás. El contexto sigue
+         reconocible, pero deja de competir con la ventana. */
+      background: var(--velo-fondo, rgb(22 32 46 / 38%));
+      backdrop-filter: var(--velo-desenfoque, none);
+      -webkit-backdrop-filter: var(--velo-desenfoque, none);
       /* Sin esto, la rueda del ratón desplaza la lista de detrás y al cerrar
          nada está donde se dejó. */
       overscroll-behavior: contain;
@@ -150,12 +155,24 @@ import { IconoComponent } from './icono.component';
       max-height: 100%;
       min-height: 0;
       min-height: 0;
-      border: 1px solid var(--borde);
-      border-radius: var(--radio);
-      background: var(--superficie-elevada);
-      box-shadow: var(--sombra-2), 0 24px 48px rgb(22 32 46 / 18%);
+      border: 1px solid var(--vidrio-borde, var(--borde));
+      border-radius: var(--radio-vidrio, var(--radio));
+      /* Vidrio denso: una ficha se lee durante minutos, así que el panel es
+         casi opaco. El desenfoque y el canto iluminado dicen «flota encima»
+         sin restar contraste al texto clínico. */
+      background: var(--vidrio-ventana, var(--superficie-elevada));
+      backdrop-filter: var(--vidrio-desenfoque-fuerte, none);
+      -webkit-backdrop-filter: var(--vidrio-desenfoque-fuerte, none);
+      box-shadow: var(--vidrio-canto, 0 0 0 transparent), var(--sombra-2), 0 24px 48px rgb(22 32 46 / 18%);
       overflow: hidden;
       animation: entrar-lateral 160ms cubic-bezier(0.2, 0.8, 0.3, 1);
+    }
+
+    /* Motion toma el relevo con resortes: la animación CSS queda solo como
+       respaldo para navegadores sin WAAPI. */
+    :host-context(.movimiento-activo) .capa,
+    :host-context(.movimiento-activo) .ventana {
+      animation: none;
     }
 
     /* Alto fijo: al cambiar de pestana la ventana no salta de tamano. */
@@ -172,8 +189,8 @@ import { IconoComponent } from './icono.component';
       align-items: flex-start;
       gap: var(--espacio-3);
       padding: var(--espacio-4);
-      border-bottom: 1px solid var(--borde);
-      background: var(--superficie-elevada);
+      border-bottom: 1px solid var(--vidrio-separador, var(--borde));
+      background: transparent;
     }
 
     .ventana__titulos {
@@ -213,8 +230,8 @@ import { IconoComponent } from './icono.component';
       display: flex;
       gap: var(--espacio-3);
       padding: var(--espacio-3) var(--espacio-4);
-      border-top: 1px solid var(--borde);
-      background: var(--superficie);
+      border-top: 1px solid var(--vidrio-separador, var(--borde));
+      background: var(--vidrio-pie, var(--superficie));
     }
 
     /* Sin nada proyectado no hay pie. Se resuelve por CSS y no con un bloque
@@ -262,6 +279,10 @@ import { IconoComponent } from './icono.component';
 })
 export class VentanaFlotanteComponent implements AfterViewInit, OnDestroy {
   private readonly anfitrion = inject<ElementRef<HTMLElement>>(ElementRef);
+  private readonly movimiento = inject(MovimientoService);
+  /** Hay una salida animada en curso: un segundo Escape no la repite. */
+  private cerrando = false;
+  private destruida = false;
 
   readonly titulo = input.required<string>();
   readonly ceja = input('');
@@ -297,9 +318,11 @@ export class VentanaFlotanteComponent implements AfterViewInit, OnDestroy {
     // quien navega con teclado tiene que aterrizar dentro.
     const enfocables = this.enfocables();
     (enfocables[0] ?? this.ventana()?.nativeElement)?.focus();
+    this.animarEntrada();
   }
 
   ngOnDestroy(): void {
+    this.destruida = true;
     const capa = this.capa()?.nativeElement;
     if (capa?.open && typeof capa.close === 'function') capa.close();
     document.body.style.overflow = '';
@@ -313,14 +336,77 @@ export class VentanaFlotanteComponent implements AfterViewInit, OnDestroy {
     // Solo el fondo. Un clic dentro burbujea hasta aquí y cerraría la ventana
     // al soltar el ratón sobre cualquier texto.
     if (evento.target === evento.currentTarget) {
-      this.cerrar.emit();
+      this.solicitarCierre();
     }
   }
 
   /** Escape nativo del dialog: lo cierra quien abrió la ventana, no el navegador. */
   protected alCancelar(evento: Event): void {
     evento.preventDefault();
-    this.cerrar.emit();
+    this.solicitarCierre();
+  }
+
+  /**
+   * Cierra con salida animada y después avisa a quien abrió la ventana.
+   *
+   * Es lo que en React hace `AnimatePresence`: Angular quita el componente en
+   * cuanto el padre cambia su condición, así que la ventana se retira antes de
+   * pedirlo. Sin movimiento (preferencia del sistema o navegador sin WAAPI)
+   * avisa en el acto, sin esperar a nada.
+   */
+  solicitarCierre(): void {
+    if (this.cerrando) {
+      return;
+    }
+    if (!this.movimiento.activo()) {
+      this.cerrar.emit();
+      return;
+    }
+    this.cerrando = true;
+    const capa = this.capa()?.nativeElement;
+    const ventana = this.ventana()?.nativeElement;
+    const salidas: Promise<void>[] = [];
+    if (ventana) {
+      salidas.push(this.movimiento.salir(ventana, this.forma() === 'centrada' ? 'escala' : 'derecha', 28));
+    }
+    if (capa) {
+      salidas.push(this.movimiento.fundir(capa, 0, 0.2));
+    }
+    void Promise.all(salidas).then(() => {
+      this.cerrar.emit();
+      // Quien abrió puede decidir no cerrar (un cambio sin guardar, por
+      // ejemplo). Si la ventana sigue viva, vuelve a mostrarse.
+      setTimeout(() => this.restaurarSiSigueAbierta(), 80);
+    });
+  }
+
+  private animarEntrada(): void {
+    if (!this.movimiento.activo()) {
+      return;
+    }
+    const capa = this.capa()?.nativeElement;
+    const ventana = this.ventana()?.nativeElement;
+    if (capa) {
+      void this.movimiento.fundir(capa, 1, 0.22);
+    }
+    if (ventana) {
+      void this.movimiento.entrar(ventana, {
+        desde: this.forma() === 'centrada' ? 'escala' : 'derecha',
+        distancia: 36,
+        desenfoque: false,
+      });
+    }
+  }
+
+  private restaurarSiSigueAbierta(): void {
+    if (this.destruida) {
+      return;
+    }
+    this.cerrando = false;
+    const capa = this.capa()?.nativeElement;
+    const ventana = this.ventana()?.nativeElement;
+    if (capa) this.movimiento.limpiar(capa);
+    if (ventana) this.movimiento.limpiar(ventana);
   }
 
   protected alTeclear(evento: KeyboardEvent): void {
@@ -328,7 +414,7 @@ export class VentanaFlotanteComponent implements AfterViewInit, OnDestroy {
       // Sin preventDefault el navegador dispararía también `cancel`.
       evento.preventDefault();
       evento.stopPropagation();
-      this.cerrar.emit();
+      this.solicitarCierre();
       return;
     }
     if (evento.key !== 'Tab') {

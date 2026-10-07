@@ -10,7 +10,8 @@
  * además el filtro de ámbito. Esconder un enlace solo evita que alguien pulse
  * algo que va a recibir un 403 (CLAUDE.md, regla 7).
  */
-import { Component, computed, effect, inject, signal, ChangeDetectionStrategy } from '@angular/core';
+import { DOCUMENT } from '@angular/common';
+import { Component, DestroyRef, computed, effect, inject, signal, ChangeDetectionStrategy } from '@angular/core';
 import { Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 
 import { BuscadorGlobalComponent } from './compartido/buscador-global.component';
@@ -18,6 +19,7 @@ import { FotoPersonaComponent } from './compartido/foto-persona.component';
 import { IconoComponent, type NombreIcono } from './compartido/icono.component';
 import { MarcaComponent } from './compartido/marca.component';
 import { VentanaFlotanteComponent } from './compartido/ventana-flotante.component';
+import { MovimientoService } from './nucleo/movimiento/movimiento.service';
 import { PERMISOS } from './nucleo/servicios/configuracion';
 import { AutenticacionService } from './nucleo/servicios/autenticacion.service';
 import { PendientesService } from './nucleo/servicios/pendientes.service';
@@ -172,6 +174,8 @@ const NAVEGACION: readonly EnlaceNavegacion[] = [
     permisos: [PERMISOS.configuracionEscribir],
     demostracion: false,
   },
+  // Para todos: cada persona ve el manual de sus propios roles.
+  { ruta: '/ayuda', etiqueta: 'Ayuda', icono: 'ayuda', permisos: [], demostracion: false },
 ];
 
 @Component({
@@ -197,6 +201,7 @@ export class AppComponent {
   protected readonly sesion = inject(SesionService);
   private readonly modoLocal = inject(ModoLocalService);
   protected readonly pendientes = inject(PendientesService);
+  private readonly movimiento = inject(MovimientoService);
 
   protected readonly menuAbierto = signal(false);
   protected readonly miFotoAbierta = signal(false);
@@ -212,6 +217,13 @@ export class AppComponent {
         this.pendientes.limpiar();
       }
     });
+
+    // Movimiento global: presión, reflejo y entrada escalonada de lo que
+    // llegue a la página (pantallas, tarjetas, filas, desplegables). Se
+    // observa el cuerpo entero porque al abrir o cerrar sesión cambia el
+    // `<main>`. El motor se descarga después del arranque.
+    this.movimiento.iniciar(inject(DOCUMENT).body);
+    inject(DestroyRef).onDestroy(() => this.movimiento.detener());
   }
 
   /** Roles del usuario, ya unidos. Cadena vacia si no hay ninguno. */

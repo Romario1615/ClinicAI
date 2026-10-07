@@ -18,6 +18,25 @@
  *  * **Áreas de pulsación de 44 px.** Se usa con prisa, y a veces en tableta.
  *  * **Respeta `prefers-reduced-motion`.** Nadie necesita animaciones para
  *    agendar una cita.
+ *
+ *  Vidrio líquido
+ *  --------------
+ *  Las superficies son de vidrio: translúcidas sobre un fondo de luz suave
+ *  («aurora»), con un canto iluminado y un reflejo que sigue al puntero. El
+ *  movimiento lo pone Motion (el motor de Framer Motion) con resortes; ver
+ *  `nucleo/movimiento/`. Tres límites que no se cruzan por estética:
+ *
+ *  * **El contraste se calcula sobre el peor caso.** Ningún vidrio que lleve
+ *    texto baja del 62 % de blanco, y el texto tenue mantiene más de 5:1
+ *    sobre la zona más teñida de la aurora.
+ *  * **El desenfoque real (`backdrop-filter`) solo en lo que flota**: cabecera,
+ *    navegación, velo de las ventanas y desplegables. En una tarjeta crearía
+ *    un bloque contenedor y atraparía los visores `position: fixed` que
+ *    viven dentro (galería, diálogos). Las tarjetas son vidrio esmerilado
+ *    sobre una aurora que ya es difusa: se ve igual y no rompe nada.
+ *  * **Quien pide menos transparencia o más contraste la tiene**
+ *    (`prefers-reduced-transparency`, `prefers-contrast: more`): superficies
+ *    opacas y bordes firmes.
  * ------------------------------------------------------------------------- */
 
 :root {
@@ -33,7 +52,9 @@
 
   --texto: #102a2e;
   --texto-suave: #48646a;
-  --texto-tenue: #5b7378;
+  /* Un punto más oscuro que en la versión opaca: sobre vidrio teñido por la
+   * aurora, #5b7378 quedaba en 4,4:1. Este mantiene más de 5:1. */
+  --texto-tenue: #506a6f;
 
   --acento: #0b6e6a;
   --acento-fuerte: #075552;
@@ -44,7 +65,9 @@
   --marca-fondo: #0b3a3d;
   --marca-fondo-2: #0e4a4c;
   --marca-texto: #d7ecea;
-  --marca-tenue: #8fb5b3;
+  /* Más claro que antes: la barra es ahora vidrio oscuro al 92 % y no un
+   * color sólido; así el texto secundario conserva más de 5:1. */
+  --marca-tenue: #9dc2bf;
   --marca-brillo: #5fd1c4;
 
   /* Semánticos. Cada uno se acompaña SIEMPRE de texto. */
@@ -74,6 +97,45 @@
   --sombra-1: 0 1px 2px rgb(16 42 46 / 6%), 0 1px 3px rgb(16 42 46 / 4%);
   --sombra-2: 0 8px 24px rgb(16 42 46 / 10%);
 
+  /* --- Vidrio líquido ---
+   * Un vidrio son cuatro capas: el cuerpo translúcido, un canto iluminado
+   * (bordes interiores claros arriba, tenues abajo), una sombra que lo separa
+   * del fondo y, al pasar el puntero, un reflejo que sigue a la luz. */
+  --fondo-base: #eaf3f3;
+  --aurora:
+    radial-gradient(60vw 48vh at 8% -6%, rgb(95 209 196 / 26%), transparent 70%),
+    radial-gradient(52vw 50vh at 104% 8%, rgb(127 182 230 / 22%), transparent 70%),
+    radial-gradient(58vw 54vh at 78% 108%, rgb(180 165 235 / 18%), transparent 70%),
+    radial-gradient(46vw 40vh at -6% 92%, rgb(255 210 168 / 20%), transparent 70%),
+    linear-gradient(180deg, #eef6f6, var(--fondo-base));
+
+  --radio-vidrio: 18px;
+  --vidrio-cuerpo: linear-gradient(150deg, rgb(255 255 255 / 80%) 0%, rgb(255 255 255 / 64%) 100%);
+  --vidrio-cuerpo-tenue: linear-gradient(150deg, rgb(255 255 255 / 70%), rgb(255 255 255 / 62%));
+  /* Brillo especular fijo: la luz entra por arriba a la izquierda. */
+  --vidrio-especular: radial-gradient(120% 60% at 0% 0%, rgb(255 255 255 / 55%), transparent 55%);
+  /* Reflejo móvil: solo existe mientras el puntero está encima. */
+  --vidrio-reflejo: linear-gradient(transparent, transparent);
+  --vidrio-borde: rgb(255 255 255 / 72%);
+  --vidrio-canto:
+    inset 0 1px 0 rgb(255 255 255 / 90%),
+    inset 0 0 0 1px rgb(255 255 255 / 28%),
+    inset 0 -12px 24px -20px rgb(255 255 255 / 70%);
+  --vidrio-sombra:
+    0 0 0 1px rgb(16 42 46 / 6%),
+    0 1px 2px rgb(16 42 46 / 5%),
+    0 14px 34px -14px rgb(16 42 46 / 20%);
+  --vidrio-desenfoque: blur(18px) saturate(165%);
+  --vidrio-desenfoque-fuerte: blur(28px) saturate(180%);
+  --vidrio-separador: rgb(16 42 46 / 9%);
+  --vidrio-ventana: linear-gradient(160deg, rgb(255 255 255 / 94%), rgb(248 252 252 / 90%));
+  --vidrio-pie: rgb(240 247 247 / 72%);
+  --vidrio-oscuro:
+    linear-gradient(180deg, rgb(10 52 55 / 92%), rgb(6 38 41 / 94%));
+  /* Velo de las ventanas flotantes: oscurece y desenfoca lo de detrás. */
+  --velo-fondo: rgb(14 30 36 / 28%);
+  --velo-desenfoque: blur(6px) saturate(120%);
+
   /* Fuente autoalojada (paquete npm): sin peticiones a terceros desde el
      equipo de la clínica. Si no carga, cae a la del sistema. */
   --fuente: 'Plus Jakarta Sans Variable', system-ui, -apple-system, 'Segoe UI', Roboto, Arial,
@@ -90,9 +152,14 @@
   gap: var(--espacio-4);
   padding: var(--espacio-4) var(--espacio-5);
   margin-bottom: var(--espacio-4);
-  border: 1px solid var(--borde);
-  border-radius: var(--radio);
-  background: linear-gradient(110deg, var(--superficie-elevada), var(--superficie));
+  border: 1px solid var(--vidrio-borde);
+  border-radius: var(--radio-vidrio);
+  background:
+    var(--vidrio-reflejo),
+    var(--vidrio-especular),
+    radial-gradient(80% 140% at 100% 50%, rgb(95 209 196 / 14%), transparent 60%),
+    var(--vidrio-cuerpo);
+  box-shadow: var(--vidrio-canto), var(--vidrio-sombra);
 }
 .modulo-cabecera__texto { flex: 1 1 auto; min-width: 0; }
 .modulo-cabecera__imagen { display: block; flex: 0 0 auto; width: 112px; height: 112px; object-fit: contain; }
@@ -133,12 +200,23 @@ body {
   font-size: 1rem;
   line-height: 1.55;
   color: var(--texto);
-  background: var(--superficie);
-  background-image: radial-gradient(1200px 500px at 100% -10%, rgb(95 209 196 / 10%), transparent 60%);
-  background-attachment: fixed;
+  background: var(--fondo-base);
   /* `optimizeLegibility` sobre texto denso: las tablas de agenda llevan
    * muchos números y nombres pegados. */
   text-rendering: optimizeLegibility;
+}
+
+/* La aurora vive en una capa fija propia y no en `background-attachment:
+ * fixed`, que obliga a repintar todo el fondo en cada desplazamiento. Es
+ * estática a propósito: bajo superficies de vidrio, un fondo que se mueve
+ * obliga a recomponer cada panel en cada fotograma. */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: -2;
+  pointer-events: none;
+  background: var(--aurora);
 }
 
 h1,
@@ -202,9 +280,13 @@ textarea {
   gap: var(--espacio-2);
   min-height: var(--toque-minimo);
   padding: 0 var(--espacio-4);
-  border: 1px solid var(--borde-fuerte);
+  border: 1px solid rgb(16 42 46 / 16%);
   border-radius: var(--radio);
-  background: var(--superficie-elevada);
+  /* Botón de vidrio: cuerpo claro, canto superior iluminado y reflejo móvil. */
+  background:
+    var(--vidrio-reflejo),
+    linear-gradient(180deg, rgb(255 255 255 / 92%), rgb(255 255 255 / 74%));
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 95%), 0 1px 2px rgb(16 42 46 / 8%);
   color: var(--texto);
   font-weight: 600;
   line-height: 1.2;
@@ -222,7 +304,11 @@ textarea {
 }
 
 .boton:hover:not(:disabled) {
-  background: var(--superficie-hundida);
+  background:
+    var(--vidrio-reflejo),
+    linear-gradient(180deg, rgb(255 255 255 / 96%), rgb(236 245 245 / 90%));
+  border-color: rgb(11 110 106 / 35%);
+  box-shadow: inset 0 1px 0 #fff, 0 6px 16px -8px rgb(16 42 46 / 30%);
 }
 
 .boton:disabled {
@@ -232,20 +318,36 @@ textarea {
   cursor: not-allowed;
 }
 
+/* Acción principal: vidrio teñido. El brillo superior se limita al tercio
+ * alto para no aclarar el fondo detrás del texto (blanco sobre #0b6e6a con
+ * un 6 % de brillo conserva 5,3:1). */
 .boton--principal {
-  background: var(--acento);
-  border-color: var(--acento);
+  background:
+    linear-gradient(180deg, rgb(255 255 255 / 16%) 0%, rgb(255 255 255 / 0%) 38%),
+    var(--vidrio-reflejo),
+    linear-gradient(180deg, var(--acento), var(--acento-fuerte));
+  border-color: var(--acento-fuerte);
   color: var(--acento-texto);
-  box-shadow: 0 1px 2px rgb(7 85 82 / 25%), 0 4px 12px rgb(11 110 106 / 18%);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 30%),
+    inset 0 -1px 0 rgb(0 0 0 / 12%),
+    0 1px 2px rgb(7 85 82 / 25%),
+    0 8px 20px -6px rgb(11 110 106 / 45%);
 }
 
 .boton--principal:hover:not(:disabled) {
-  background: var(--acento-fuerte);
+  background:
+    linear-gradient(180deg, rgb(255 255 255 / 16%) 0%, rgb(255 255 255 / 0%) 38%),
+    var(--vidrio-reflejo),
+    linear-gradient(180deg, var(--acento-fuerte), #064946);
   border-color: var(--acento-fuerte);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 30%),
+    0 1px 2px rgb(7 85 82 / 25%),
+    0 12px 26px -8px rgb(11 110 106 / 55%);
 }
 
 .boton--peligro {
-  background: var(--superficie-elevada);
   border-color: var(--peligro);
   color: var(--peligro);
 }
@@ -257,6 +359,13 @@ textarea {
 .boton--plano {
   border-color: transparent;
   background: transparent;
+  box-shadow: none;
+}
+
+.boton--plano:hover:not(:disabled) {
+  border-color: transparent;
+  background: rgb(255 255 255 / 55%);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 80%);
 }
 
 .boton--pequeno {
@@ -309,14 +418,17 @@ form.ng-submitted .campo__control.ng-invalid {
   font-weight: 600;
 }
 
+/* Campo de vidrio hundido: el canto oscuro arriba lo hace leer como un hueco
+ * donde se escribe, no como un botón. */
 .campo__control {
   width: 100%;
   min-height: var(--toque-minimo);
   padding: 0 var(--espacio-3);
   border: 1px solid var(--borde-fuerte);
   border-radius: var(--radio);
-  background: var(--superficie-elevada);
-  transition: border-color 140ms ease, box-shadow 140ms ease;
+  background: linear-gradient(180deg, rgb(255 255 255 / 82%), rgb(255 255 255 / 94%));
+  box-shadow: inset 0 1px 2px rgb(16 42 46 / 8%);
+  transition: border-color 140ms ease, box-shadow 160ms ease, background-color 160ms ease;
 }
 
 .campo__control:hover {
@@ -325,7 +437,8 @@ form.ng-submitted .campo__control.ng-invalid {
 
 .campo__control:focus-visible {
   border-color: var(--acento);
-  box-shadow: 0 0 0 6px var(--acento-suave);
+  background: #fff;
+  box-shadow: inset 0 1px 2px rgb(16 42 46 / 6%), 0 0 0 5px rgb(95 209 196 / 28%);
 }
 
 textarea.campo__control {
@@ -358,10 +471,17 @@ textarea.campo__control {
 /* --- Contenedores --- */
 .tarjeta {
   padding: var(--espacio-5);
-  border: 1px solid var(--borde);
-  border-radius: calc(var(--radio) + 4px);
-  background: var(--superficie-elevada);
-  box-shadow: var(--sombra-1);
+  border: 1px solid var(--vidrio-borde);
+  border-radius: var(--radio-vidrio);
+  background: var(--vidrio-reflejo), var(--vidrio-especular), var(--vidrio-cuerpo);
+  box-shadow: var(--vidrio-canto), var(--vidrio-sombra);
+}
+
+/* Vidrio anidado: una tarjeta dentro de otra no repite la sombra exterior,
+ * solo el canto. Dos sombras apiladas parecen una pila de papeles. */
+.tarjeta .tarjeta {
+  background: var(--vidrio-reflejo), var(--vidrio-cuerpo-tenue);
+  box-shadow: var(--vidrio-canto), 0 0 0 1px rgb(16 42 46 / 5%);
 }
 
 .pila {
@@ -388,10 +508,11 @@ textarea.campo__control {
   /* Las tablas de agenda son anchas; el desbordamiento se acota aquí para
    * que el cuerpo de la página nunca tenga barra horizontal. */
   overflow-x: auto;
-  border: 1px solid var(--borde);
-  border-radius: calc(var(--radio) + 4px);
-  background: var(--superficie-elevada);
-  box-shadow: var(--sombra-1);
+  border: 1px solid var(--vidrio-borde);
+  border-radius: var(--radio-vidrio);
+  /* Más opaco que una tarjeta: en una tabla se leen columnas de cifras. */
+  background: linear-gradient(160deg, rgb(255 255 255 / 88%), rgb(255 255 255 / 78%));
+  box-shadow: var(--vidrio-canto), var(--vidrio-sombra);
 }
 
 .tabla {
@@ -411,7 +532,8 @@ textarea.campo__control {
 .tabla th {
   position: sticky;
   top: 0;
-  background: #f5f9f9;
+  /* Opaco: al desplazar, las filas pasan por debajo de la cabecera. */
+  background: #f2f8f8;
   font-size: 0.76rem;
   font-weight: 700;
   text-transform: uppercase;
@@ -424,8 +546,12 @@ textarea.campo__control {
   border-bottom: none;
 }
 
+.tabla tbody tr {
+  transition: background-color 160ms ease;
+}
+
 .tabla tbody tr:hover {
-  background: var(--acento-suave);
+  background: rgb(220 240 238 / 72%);
 }
 
 .numerico {
@@ -470,6 +596,75 @@ textarea.campo__control {
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+ *  Vidrio líquido: reflejo, respaldos y preferencias de accesibilidad
+ * ------------------------------------------------------------------------- */
+
+/* Reflejo que sigue al puntero. `CoreografiaService` escribe la posición en
+ * `--luz-x`/`--luz-y` y marca la superficie con `data-luz`; sin puntero fino
+ * o con movimiento reducido no se marca nada y no hay reflejo. */
+[data-luz] {
+  --vidrio-reflejo: radial-gradient(
+    360px circle at var(--luz-x, 50%) var(--luz-y, 0%),
+    rgb(255 255 255 / 42%),
+    transparent 42%
+  );
+}
+
+.boton--principal[data-luz] {
+  --vidrio-reflejo: radial-gradient(
+    160px circle at var(--luz-x, 50%) var(--luz-y, 0%),
+    rgb(255 255 255 / 14%),
+    transparent 60%
+  );
+}
+
+/* Las barras de los gráficos crecen desde su inicio (`SELECTOR_BARRAS` de
+ * la coreografía): el movimiento es una escala horizontal, la anchura real
+ * no cambia nunca. */
+.tendencia__pista > span,
+.carga__barra,
+.estados__barra,
+[data-crecer] {
+  transform-origin: left center;
+}
+
+/* Quien pide menos transparencia: superficies opacas, sin aurora ni velo
+ * desenfocado. El diseño sigue reconociéndose por la forma y el canto. */
+@media (prefers-reduced-transparency: reduce) {
+  :root {
+    --vidrio-cuerpo: linear-gradient(#fff, #fff);
+    --vidrio-cuerpo-tenue: linear-gradient(#fbfdfd, #fbfdfd);
+    --vidrio-especular: linear-gradient(transparent, transparent);
+    --vidrio-ventana: linear-gradient(#fff, #fff);
+    --vidrio-desenfoque: none;
+    --vidrio-desenfoque-fuerte: none;
+    --velo-desenfoque: none;
+    --velo-fondo: rgb(14 30 36 / 45%);
+    --vidrio-oscuro: linear-gradient(var(--marca-fondo-2), var(--marca-fondo));
+    --aurora: linear-gradient(var(--fondo-base), var(--fondo-base));
+  }
+}
+
+/* Más contraste: bordes firmes y cuerpos opacos. */
+@media (prefers-contrast: more) {
+  :root {
+    --vidrio-cuerpo: linear-gradient(#fff, #fff);
+    --vidrio-cuerpo-tenue: linear-gradient(#fff, #fff);
+    --vidrio-borde: var(--borde-fuerte);
+    --vidrio-especular: linear-gradient(transparent, transparent);
+    --texto-tenue: var(--texto-suave);
+  }
+}
+
+/* Sin `backdrop-filter` (navegadores antiguos), lo que flota se vuelve casi
+ * opaco: un vidrio sin desenfoque sobre texto en movimiento no se lee. */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  :root {
+    --velo-fondo: rgb(14 30 36 / 45%);
   }
 }
 
@@ -686,7 +881,9 @@ td.acciones {
   display: flex;
   justify-content: flex-end;
   padding: var(--espacio-4);
-  background: rgb(22 32 46 / 32%);
+  background: var(--velo-fondo);
+  backdrop-filter: var(--velo-desenfoque);
+  -webkit-backdrop-filter: var(--velo-desenfoque);
 }
 
 .capa-lateral > * {
@@ -705,10 +902,17 @@ td.acciones {
   align-items: center;
   justify-content: center;
   padding: var(--espacio-4);
-  background: rgb(22 32 46 / 45%);
+  background: var(--velo-fondo);
+  backdrop-filter: var(--velo-desenfoque);
+  -webkit-backdrop-filter: var(--velo-desenfoque);
 }
 
 .dialogo__panel {
   width: 100%;
   max-width: 520px;
+}
+
+/* Un panel de diálogo se lee con atención: vidrio denso. */
+.dialogo__panel.tarjeta {
+  background: var(--vidrio-reflejo), var(--vidrio-ventana);
 }
