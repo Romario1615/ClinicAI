@@ -2,8 +2,12 @@
 
 from datetime import UTC, datetime
 
+import pytest
+
 from app.modulos.agenda.disponibilidad import Intervalo
 from app.modulos.dashboard.ocupacion import resumir_intervalos_ocupacion
+
+pytestmark = pytest.mark.unitaria
 
 
 def _intervalo(hora_inicio: int, minuto_inicio: int, hora_fin: int, minuto_fin: int) -> Intervalo:

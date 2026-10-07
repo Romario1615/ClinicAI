@@ -1,7 +1,11 @@
 """La máquina de estados y el esquema financiero permanecen acotados."""
 
+import pytest
+
 from app.modulos.pagos.modelos import Pago
 from app.modulos.pagos.servicios import TRANSICIONES
+
+pytestmark = pytest.mark.unitaria
 
 
 def test_transiciones_de_pago_coinciden_con_la_maquina_de_estados_completa() -> None:

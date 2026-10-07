@@ -1,6 +1,10 @@
+"""La tasa de retorno a 30 días se oculta para grupos de menos de cinco pacientes."""
+
 import pytest
 
 from app.modulos.dashboard.repositorio import _retorno_30_dias_protegido
+
+pytestmark = pytest.mark.unitaria
 
 
 @pytest.mark.parametrize(

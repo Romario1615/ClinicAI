@@ -3,8 +3,12 @@
 from datetime import UTC, datetime
 from decimal import Decimal
 
+import pytest
+
 from app.modulos.dashboard.analisis_local import generar_hallazgos
 from app.modulos.dashboard.esquemas import ResumenDashboard
+
+pytestmark = pytest.mark.unitaria
 
 
 def _resumen(

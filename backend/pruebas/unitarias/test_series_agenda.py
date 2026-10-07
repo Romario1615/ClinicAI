@@ -8,6 +8,8 @@ import pytest
 from app.modulos.agenda.servicios import generar_instantes_serie
 from app.nucleo.errores import ReglaNegocioViolada
 
+pytestmark = pytest.mark.unitaria
+
 
 def test_semanal_conserva_la_hora_local_al_cruzar_el_horario_de_verano() -> None:
     inicio = datetime(2026, 3, 1, 9, 0, tzinfo=ZoneInfo("America/New_York"))

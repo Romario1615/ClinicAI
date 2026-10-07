@@ -6,10 +6,15 @@ ruta sin efectos secundarios mediante el transporte ASGI de las pruebas.
 
 from __future__ import annotations
 
+import pytest
 import schemathesis
 from fastapi import FastAPI
 from httpx import AsyncClient
 from hypothesis import Phase, find, settings
+
+# Se ejecuta con la batería API de CI (`-m "integracion or api"`), no solo
+# en la corrida de cobertura.
+pytestmark = pytest.mark.api
 
 
 def test_esquema_openapi_completo_es_valido(aplicacion: FastAPI) -> None:

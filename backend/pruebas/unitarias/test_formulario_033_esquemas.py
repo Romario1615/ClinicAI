@@ -7,6 +7,8 @@ from pydantic import ValidationError
 
 from app.modulos.odontologia.formulario_033_esquemas import Formulario033Datos
 
+pytestmark = pytest.mark.unitaria
+
 REGIONES = (
     "LABIOS",
     "MEJILLAS",

@@ -11,6 +11,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.modulos.outbox.modelos import CanalOutbox, EstadoOutbox, OutboxMensaje, TipoMensajeOutbox
 from pruebas.conftest import INSTANTE_REFERENCIA
 
+pytestmark = pytest.mark.api
+
 
 @pytest.mark.asyncio
 async def test_metricas_exponen_outbox_y_rutas_sin_identificadores(
