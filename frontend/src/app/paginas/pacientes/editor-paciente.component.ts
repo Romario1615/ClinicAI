@@ -1,4 +1,4 @@
-import { Component, EventEmitter, Input, OnChanges, Output, ViewChild, inject, signal } from '@angular/core';
+import { Component, EventEmitter, Input, OnChanges, Output, ViewChild, inject, signal, ChangeDetectionStrategy } from '@angular/core';
 import { FormsModule, NgForm } from '@angular/forms';
 
 import { VentanaFlotanteComponent } from '../../compartido/ventana-flotante.component';
@@ -150,6 +150,7 @@ import { OperacionesService } from '../../nucleo/servicios/operaciones.service';
       </form>
     </app-ventana-flotante>
   `,
+  changeDetection: ChangeDetectionStrategy.Eager,
   styles: `
     .rejilla-campos {
       display: grid;

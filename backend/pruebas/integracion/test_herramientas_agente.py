@@ -19,6 +19,7 @@ Lo que se verifica
 from __future__ import annotations
 
 import uuid
+from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 
 import pytest
@@ -162,6 +163,102 @@ async def _contar_auditoria(
 #  El despachador
 # ===========================================================================
 class TestDespachador:
+    @pytest.mark.parametrize(
+        ("nombre", "argumentos"),
+        [
+            (
+                "find_availability",
+                {
+                    "profesional_id": str(uuid.uuid4()),
+                    "servicio_id": str(uuid.uuid4()),
+                    "sede_id": str(uuid.uuid4()),
+                    "desde": AHORA.isoformat(),
+                    "hasta": (AHORA + timedelta(days=1)).isoformat(),
+                },
+            ),
+            (
+                "hold_slot",
+                {
+                    "paciente_id": str(uuid.uuid4()),
+                    "profesional_id": str(uuid.uuid4()),
+                    "servicio_id": str(uuid.uuid4()),
+                    "sede_id": str(uuid.uuid4()),
+                    "inicio": (AHORA + timedelta(days=1)).isoformat(),
+                },
+            ),
+            ("confirm_appointment", {"cita_id": str(uuid.uuid4())}),
+            ("cancel_appointment", {"cita_id": str(uuid.uuid4()), "motivo": "Cambio de planes"}),
+            (
+                "reschedule_appointment",
+                {
+                    "cita_id": str(uuid.uuid4()),
+                    "nuevo_inicio": (AHORA + timedelta(days=1)).isoformat(),
+                    "motivo": "Cambio de planes",
+                },
+            ),
+            ("get_patient_appointments", {"paciente_id": str(uuid.uuid4())}),
+            ("get_patient_payments", {"paciente_id": str(uuid.uuid4())}),
+        ],
+    )
+    async def test_cada_herramienta_de_datos_exige_su_permiso(
+        self,
+        nombre: str,
+        argumentos: dict[str, str],
+        contexto: ContextoHerramienta,
+        principal_sin_permisos: Principal,
+        sesion: AsyncSession,
+    ) -> None:
+        antes = await _contar_auditoria(
+            sesion, AccionAuditada.HERRAMIENTA_DENEGADA, ResultadoAuditoria.DENEGADO
+        )
+        resultado = await despachar(
+            nombre,
+            argumentos,
+            replace(contexto, principal=principal_sin_permisos),
+        )
+
+        assert resultado.requiere_humano is True
+        assert resultado.codigo == "SIN_PERMISO"
+        assert (
+            await _contar_auditoria(
+                sesion, AccionAuditada.HERRAMIENTA_DENEGADA, ResultadoAuditoria.DENEGADO
+            )
+            == antes + 1
+        )
+
+    @pytest.mark.parametrize(
+        "nombre",
+        [
+            "find_availability",
+            "hold_slot",
+            "confirm_appointment",
+            "cancel_appointment",
+            "reschedule_appointment",
+            "get_patient_appointments",
+            "get_patient_payments",
+            "handoff_to_human",
+        ],
+    )
+    async def test_cada_herramienta_rechaza_argumentos_incompletos_y_deriva(
+        self,
+        nombre: str,
+        contexto: ContextoHerramienta,
+        sesion: AsyncSession,
+    ) -> None:
+        antes = await _contar_auditoria(
+            sesion, AccionAuditada.HERRAMIENTA_DENEGADA, ResultadoAuditoria.DENEGADO
+        )
+        resultado = await despachar(nombre, {}, contexto)
+
+        assert resultado.requiere_humano is True
+        assert resultado.codigo == "ARGUMENTOS_INVALIDOS"
+        assert (
+            await _contar_auditoria(
+                sesion, AccionAuditada.HERRAMIENTA_DENEGADA, ResultadoAuditoria.DENEGADO
+            )
+            == antes + 1
+        )
+
     async def test_una_herramienta_inventada_se_deniega_y_se_audita(
         self, contexto: ContextoHerramienta, sesion: AsyncSession
     ) -> None:

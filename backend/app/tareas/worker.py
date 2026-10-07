@@ -30,6 +30,7 @@ from arq.connections import RedisSettings
 from app.nucleo.configuracion import Configuracion
 from app.tareas.adherencia import evaluar_alertas_adherencia
 from app.tareas.agenda import expirar_bloqueos
+from app.tareas.al_ingestas_conocimiento import procesar_ingestas_conocimiento
 from app.tareas.calendario import reconciliar_calendarios, sincronizar_calendarios
 from app.tareas.contexto import al_arrancar, al_parar
 from app.tareas.lista_espera import expirar_ofertas
@@ -56,10 +57,18 @@ class ConfiguracionWorker:
         sincronizar_calendarios,
         reconciliar_calendarios,
         evaluar_alertas_adherencia,
+        procesar_ingestas_conocimiento,
     ]
 
     cron_jobs: list[Any] = [  # noqa: RUF012
         cron(expirar_ofertas, minute=set(range(60)), unique=True, timeout=120, max_tries=1),
+        cron(
+            procesar_ingestas_conocimiento,
+            minute=set(range(60)),
+            unique=True,
+            timeout=900,
+            max_tries=1,
+        ),
         # Diario a las 09:20 de Ecuador (14:20 UTC): las omisiones se cuentan
         # sobre siete dias y una alerta abierta bloquea repeticiones.
         cron(

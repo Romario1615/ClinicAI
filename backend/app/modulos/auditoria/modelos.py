@@ -1,10 +1,9 @@
-"""Modelo de la tabla de auditoria.
+"""Modelo de la tabla de auditoría.
 
-La inalterabilidad no se consigue con esta definicion, sino revocando los
-privilegios de `UPDATE` y `DELETE` al rol de la aplicacion.  Eso se hace en la
-migracion, no aqui: una convencion («no actualizamos auditoria») se rompe con
-un `merge` descuidado, mientras que un privilegio revocado hace fallar la
-sentencia.
+La migración instala disparadores PostgreSQL que rechazan `UPDATE`, `DELETE`
+y `TRUNCATE`, incluso cuando el rol local es propietario del esquema. En
+producción también se debe usar una cuenta de aplicación distinta del dueño
+del esquema para impedir que el proceso desactive o elimine los disparadores.
 """
 
 from __future__ import annotations

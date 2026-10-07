@@ -5,7 +5,7 @@
  * Si el rol no alcanza el módulo, o el panel no responde, no ocupa espacio:
  * un indicador ausente es mejor que un cero que no es verdad.
  */
-import { Component, DestroyRef, computed, inject, input, signal } from '@angular/core';
+import { Component, DestroyRef, computed, inject, input, signal, ChangeDetectionStrategy } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 
 import { IndicadoresService, type Indicadores } from '../nucleo/servicios/indicadores.service';
@@ -17,6 +17,7 @@ import { TarjetasIndicadoresComponent } from './tarjetas-indicadores.component';
   standalone: true,
   imports: [TarjetasIndicadoresComponent],
   template: `<app-tarjetas-indicadores [indicadores]="tarjetas()" [titulo]="'Resumen'" />`,
+  changeDetection: ChangeDetectionStrategy.Eager,
   styles: `:host { display: block; margin-bottom: var(--espacio-4); } :host:empty { display: none; }`,
 })
 export class ResumenModuloComponent {

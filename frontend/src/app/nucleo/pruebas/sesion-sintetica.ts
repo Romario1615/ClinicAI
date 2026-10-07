@@ -6,7 +6,7 @@
  * habilita cada botón, igual que el backend: sin permiso, no hay botón.
  */
 import { TestBed } from '@angular/core/testing';
-import { provideHttpClient } from '@angular/common/http';
+import { provideHttpClient, withXhr } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { provideRouter } from '@angular/router';
 
@@ -85,7 +85,7 @@ export const ESPECIALIDAD_SINTETICA = {
 };
 
 export const PROVEEDORES_PRUEBA = [
-  provideHttpClient(),
+  provideHttpClient(withXhr()),
   provideHttpClientTesting(),
   provideRouter([]),
   { provide: CONFIGURACION, useValue: CONFIGURACION_POR_DEFECTO },
@@ -108,5 +108,9 @@ export function iniciarSesionCon(permisos: readonly string[]): void {
 
 /** Archivo de texto sintético con la API `text()` que usa el navegador. */
 export function archivo(nombre: string, contenido: string | Uint8Array, tipo = 'text/plain'): File {
-  return new File([contenido], nombre, { type: tipo });
+  // TypeScript 5.9+ distingue vistas respaldadas por SharedArrayBuffer. Copiar
+  // los bytes a un ArrayBuffer propio mantiene el contrato de BlobPart del DOM.
+  const parte: BlobPart =
+    typeof contenido === 'string' ? contenido : Uint8Array.from(contenido).buffer;
+  return new File([parte], nombre, { type: tipo });
 }

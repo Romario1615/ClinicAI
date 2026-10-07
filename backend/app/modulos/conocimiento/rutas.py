@@ -30,7 +30,7 @@ from __future__ import annotations
 import uuid
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Path, Query, Request, status
+from fastapi import APIRouter, Depends, File, Form, Path, Query, Request, UploadFile, status
 from sqlalchemy import delete, func, literal, or_, select
 
 from app.ia.embeddings import ProveedorEmbeddings
@@ -39,6 +39,7 @@ from app.ia.recuperador import (
     Recuperador,
     contexto_desde_principal,
 )
+from app.modulos.conocimiento.archivos import extraer_documento
 from app.modulos.conocimiento.esquemas import (
     LONGITUD_EXTRACTO,
     OpcionesPermisosDocumento,
@@ -76,7 +77,12 @@ from app.nucleo.dependencias import (
     Sesion,
     exige_permiso,
 )
-from app.nucleo.errores import DatosInvalidos, PermisoDenegado, RecursoNoEncontrado
+from app.nucleo.errores import (
+    ArchivoDemasiadoGrande,
+    DatosInvalidos,
+    PermisoDenegado,
+    RecursoNoEncontrado,
+)
 from app.nucleo.registro import obtener_logger
 
 logger = obtener_logger(__name__)
@@ -286,14 +292,19 @@ async def ingerir_version(
     aprobar llegue al agente.
     """
     servicio = _servicio(peticion, sesion, reloj, configuracion)
-    resultado = await servicio.ingerir_texto(
+    trabajo = await servicio.preparar_ingesta(
         principal=principal,
         document_id=document_id,
         contenido=cuerpo.contenido,
         nombre_archivo=cuerpo.nombre_archivo,
         notas_cambio=cuerpo.notas_cambio,
     )
-
+    # El trabajo y su fuente sobreviven a una caida del proceso/proveedor.
+    # El indexado se confirma despues, de forma atomica con sus fragmentos.
+    await sesion.commit()
+    resultado = await servicio.procesar_ingesta(
+        principal=principal, document_id=document_id, version=trabajo.version
+    )
     await auditor.registrar(
         [
             construir_entrada(
@@ -316,6 +327,82 @@ async def ingerir_version(
         embeddings=resultado.embeddings,
         riesgo_inyeccion=resultado.riesgo_inyeccion.value,
         requiere_revision=resultado.requiere_revision,
+    )
+
+
+@enrutador.post(
+    "/documentos/{document_id}/versiones/archivo",
+    response_model=RespuestaIngesta,
+    status_code=status.HTTP_201_CREATED,
+    summary="Extraer y subir una versión PDF o Word (.docx)",
+    responses={404: {"description": "El documento no existe"}},
+)
+async def ingerir_archivo_pdf(
+    principal: PuedeCargar,
+    sesion: Sesion,
+    reloj: RelojActual,
+    configuracion: ConfiguracionActual,
+    auditor: Auditor,
+    peticion: Request,
+    document_id: IdDocumento,
+    archivo: Annotated[UploadFile, File()],
+    notas_cambio: Annotated[str | None, Form(max_length=1000)] = None,
+) -> RespuestaIngesta:
+    """Analiza un PDF o un .docx y lo ingiere como texto sin guardar el binario original.
+
+    El formato se decide por el contenido, no por la extensión del nombre.
+    """
+    try:
+        datos = await archivo.read(configuracion.max_tamano_archivo_bytes + 1)
+    finally:
+        await archivo.close()
+    if len(datos) > configuracion.max_tamano_archivo_bytes:
+        raise ArchivoDemasiadoGrande(
+            f"El archivo supera el límite de {configuracion.max_tamano_archivo_mb} MB."
+        )
+
+    contenido, tipo_archivo = await extraer_documento(datos, configuracion)
+    servicio = _servicio(peticion, sesion, reloj, configuracion)
+    nombre = (
+        (archivo.filename or f"documento.{tipo_archivo.lower()}")
+        .replace("\\", "/")
+        .rsplit("/", 1)[-1][:255]
+    )
+    trabajo = await servicio.preparar_ingesta(
+        principal=principal,
+        document_id=document_id,
+        contenido=contenido,
+        nombre_archivo=nombre,
+        notas_cambio=notas_cambio,
+    )
+    await sesion.commit()
+    resultado = await servicio.procesar_ingesta(
+        principal=principal, document_id=document_id, version=trabajo.version
+    )
+    await auditor.registrar(
+        [
+            construir_entrada(
+                accion=AccionAuditada.DOCUMENTO_CARGADO,
+                principal=principal,
+                ahora=reloj.ahora(),
+                entidad_tipo="knowledge_document",
+                entidad_id=document_id,
+                version=resultado.version,
+                fragmentos=resultado.fragmentos,
+                riesgo_inyeccion=resultado.riesgo_inyeccion.value,
+                tipo_archivo=tipo_archivo,
+            )
+        ]
+    )
+    await sesion.commit()
+    return RespuestaIngesta(
+        document_id=resultado.document_id,
+        version=resultado.version,
+        fragmentos=resultado.fragmentos,
+        embeddings=resultado.embeddings,
+        riesgo_inyeccion=resultado.riesgo_inyeccion.value,
+        requiere_revision=resultado.requiere_revision,
+        escaneo_antivirus=("LIMPIO" if configuracion.antivirus_habilitado else "NO_DISPONIBLE"),
     )
 
 

@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import type { APIRequestContext, Page } from '@playwright/test';
 import { expect, test } from '../apoyo/prueba';
 import { acceder, CODIGOS_ROL, irA } from '../apoyo/sesion';
+import { huecosVisiblesEnAgenda, seleccionarCitaEnAgenda } from '../apoyo/agenda';
 
 const API = process.env.URL_API ?? 'http://127.0.0.1:8000/api/v1';
 const fecha = (iso: string) => new Intl.DateTimeFormat('en-CA', {
@@ -46,6 +47,27 @@ async function preparar(request: APIRequestContext) {
   return { headers, sede, servicio, profesional, paciente, turno, cuerpo, leer };
 }
 
+/** La limpieza no debe reemplazar el fallo que Playwright ya está reportando. */
+async function limpiarCitaDePrueba(
+  request: APIRequestContext,
+  datos: Awaited<ReturnType<typeof preparar>>,
+  citaId: string,
+  huboFallo: boolean,
+) {
+  try {
+    const cita = await datos.leer(`/agenda/citas/${citaId}`);
+    if (cita.estado !== 'CANCELLED') {
+      const respuesta = await request.post(`${API}/agenda/citas/${citaId}/cancelacion`, {
+        headers: datos.headers,
+        data: { motivo: 'Cierre de prueba sintetica E2E' },
+      });
+      expect(respuesta.ok(), `limpieza de cita: ${respuesta.status()}`).toBeTruthy();
+    }
+  } catch (fallo) {
+    if (!huboFallo) throw fallo;
+  }
+}
+
 async function seleccionarPaciente(page: Page, paciente: { id: string; apellido: string }) {
   const selector = page.locator('app-selector-paciente');
   await selector.getByLabel('Buscar paciente', { exact: true }).fill(paciente.apellido);
@@ -53,6 +75,69 @@ async function seleccionarPaciente(page: Page, paciente: { id: string; apellido:
   const pacientes = selector.getByRole('combobox', { name: 'Paciente', exact: true });
   await pacientes.selectOption(paciente.id);
 }
+
+test('recepción exporta el resumen de agenda sin datos de pacientes', async ({ page }) => {
+  await acceder(page, 'recepcion');
+  await irA(page, 'Agenda');
+
+  const respuesta = page.waitForResponse(
+    (r) => new URL(r.url()).pathname.endsWith('/agenda/resumen.csv'),
+  );
+  const descarga = page.waitForEvent('download');
+  await page.getByRole('button', { name: 'Exportar resumen CSV' }).click();
+  const http = await respuesta;
+  const cuerpo = await http.text();
+  expect(http.status(), cuerpo).toBe(200);
+  const archivo = await descarga;
+  const csv = cuerpo.replace(/^\uFEFF/, '');
+
+  expect(archivo.suggestedFilename()).toMatch(/^resumen-agenda-\d{4}-\d{2}-\d{2}\.csv$/);
+  const filas = csv.trim().split(/\r?\n/);
+  expect(filas[0]).toBe('Fecha local;Estado;Citas');
+  for (const fila of filas.slice(1)) {
+    const [fecha, estado, cantidad, ...extra] = fila.split(';');
+    expect(fecha).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    expect(estado).toMatch(/^(PENDING|HELD|CONFIRMED|RESCHEDULED|CANCELLED|COMPLETED|NO_SHOW)$/);
+    expect(cantidad).toMatch(/^\d+$/);
+    expect(extra).toHaveLength(0);
+  }
+});
+
+test('recepción reserva desde un hueco de la agenda y la API conserva la cita', async ({ page, request }) => {
+  const datos = await preparar(request);
+  let citaId = '';
+  try {
+    await acceder(page, 'recepcion');
+    await irA(page, 'Agenda');
+    await page.getByRole('combobox', { name: 'Sede', exact: true }).selectOption(datos.sede.id);
+    await page.getByRole('combobox', { name: 'Especialidad', exact: true }).selectOption(datos.servicio.especialidad_id);
+    await page.getByRole('combobox', { name: 'Servicio', exact: true }).selectOption(datos.servicio.id);
+    await page.getByRole('combobox', { name: 'Profesional', exact: true }).selectOption(datos.profesional.id);
+    await page.getByLabel('Fecha', { exact: true }).fill(fecha(datos.turno.inicio));
+    await page.getByRole('button', { name: 'Lista', exact: true }).click();
+
+    const huecos = huecosVisiblesEnAgenda(page);
+    await expect(huecos.first()).toBeVisible();
+    await huecos.first().click();
+    const panel = page.locator('.panel');
+    await expect(panel.getByRole('heading', { name: 'Reservar' })).toBeVisible();
+    await seleccionarPaciente(page, datos.paciente);
+    const respuesta = page.waitForResponse(r =>
+      r.url().endsWith('/agenda/citas') && r.request().method() === 'POST',
+    );
+    await panel.getByRole('button', { name: 'Confirmar cita', exact: true }).click();
+    const creada = await respuesta;
+    expect(creada.status()).toBe(201);
+    const cuerpo = await creada.json();
+    citaId = cuerpo.id;
+    expect(cuerpo.paciente_id).toBe(datos.paciente.id);
+    expect(cuerpo.estado).toBe('CONFIRMED');
+    await expect(page.locator('.exito[role="status"]')).toContainText('Cita creada para');
+    expect((await datos.leer(`/agenda/citas/${citaId}`)).estado).toBe('CONFIRMED');
+  } finally {
+    if (citaId) await limpiarCitaDePrueba(request, datos, citaId, false);
+  }
+});
 
 test('el simulador reserva, confirma y muestra la cita real', async ({ page, request }, info) => {
   const datos = await preparar(request);
@@ -122,7 +207,7 @@ test('la agenda permite reprogramar y cancelar una cita', async ({ page, request
     // dia y las acciones aparecen en el panel de la derecha.
     const nombre = `${datos.paciente.nombre} ${datos.paciente.apellido}`;
     const panel = page.locator('.panel');
-    await page.locator('.fila-dia').filter({ hasText: nombre }).first().click();
+    await seleccionarCitaEnAgenda(page, nombre);
     await expect(panel).toContainText(nombre);
     await panel.getByRole('button', { name: 'Reprogramar' }).click();
     const dialogo = page.getByRole('dialog');
@@ -158,8 +243,7 @@ test('la agenda permite reprogramar y cancelar una cita', async ({ page, request
     // La cita se movió al día siguiente: actualizar el filtro antes de volver
     // a elegir la fila evita cancelar otra cita del mismo paciente.
     await page.getByLabel('Fecha', { exact: true }).fill(fecha(cambiada.inicio));
-    await expect(page.locator('.fila-dia').filter({ hasText: nombre }).first()).toBeVisible();
-    await page.locator('.fila-dia').filter({ hasText: nombre }).first().click();
+    await seleccionarCitaEnAgenda(page, nombre);
     await panel.getByRole('button', { name: 'Cancelar la cita' }).click();
     const confirmacion = page.getByRole('dialog');
     await confirmacion.getByLabel('Motivo de la cancelación').fill('Cierre de prueba sintetica E2E');
@@ -167,11 +251,7 @@ test('la agenda permite reprogramar y cancelar una cita', async ({ page, request
     await expect(page.getByRole('status').filter({ hasText: 'Cita cancelada' })).toBeVisible();
     expect((await datos.leer(`/agenda/citas/${cita.id}`)).estado).toBe('CANCELLED');
   } finally {
-    if ((await datos.leer(`/agenda/citas/${cita.id}`)).estado !== 'CANCELLED') {
-      await request.post(`${API}/agenda/citas/${cita.id}/cancelacion`, {
-        headers: datos.headers, data: { motivo: 'Cierre de prueba sintetica E2E' },
-      });
-    }
+    await limpiarCitaDePrueba(request, datos, cita.id, test.info().errors.length > 0);
   }
 });
 
@@ -193,7 +273,7 @@ test('recepción registra la llegada y asistencia clínica mide la espera y cier
     await page.getByRole('combobox', { name: 'Profesional', exact: true }).selectOption(datos.profesional.id);
     await page.getByLabel('Fecha', { exact: true }).fill(fecha(cita.inicio));
     const nombre = `${datos.paciente.nombre} ${datos.paciente.apellido}`;
-    await page.locator('.fila-dia').filter({ hasText: nombre }).first().click();
+    await seleccionarCitaEnAgenda(page, nombre);
     const panel = page.locator('.panel');
     await panel.getByRole('button', { name: 'Registrar llegada' }).click();
     await expect(page.getByRole('status').filter({ hasText: 'Llegada registrada' })).toBeVisible();
@@ -219,7 +299,7 @@ test('recepción registra la llegada y asistencia clínica mide la espera y cier
     await page.getByRole('combobox', { name: 'Servicio', exact: true }).selectOption(datos.servicio.id);
     await page.getByRole('combobox', { name: 'Profesional', exact: true }).selectOption(datos.profesional.id);
     await page.getByLabel('Fecha', { exact: true }).fill(fecha(cita.inicio));
-    await page.locator('.fila-dia').filter({ hasText: nombre }).first().click();
+    await seleccionarCitaEnAgenda(page, nombre);
     await expect(page.locator('.panel')).toContainText('Espera registrada');
     await page.locator('.panel').getByRole('button', { name: 'Iniciar atención' }).click();
     await expect(page.getByRole('status').filter({ hasText: 'Atención iniciada' })).toBeVisible();
@@ -227,7 +307,7 @@ test('recepción registra la llegada y asistencia clínica mide la espera y cier
     expect(iniciada.atencion_iniciada_en).toBeTruthy();
 
     // La agenda cierra el panel al recargar después de guardar una transición.
-    await page.locator('.fila-dia').filter({ hasText: nombre }).first().click();
+    await seleccionarCitaEnAgenda(page, nombre);
     await page.locator('.panel').getByRole('button', { name: 'Marcar como atendida' }).click();
     await expect(page.getByRole('status').filter({ hasText: 'Cita marcada como atendida' })).toBeVisible();
     const completada = await datos.leer(`/agenda/citas/${cita.id}`);
@@ -235,10 +315,7 @@ test('recepción registra la llegada y asistencia clínica mide la espera y cier
     estadoFinal = completada.estado;
   } finally {
     if (estadoFinal !== 'COMPLETED' && estadoFinal !== 'CANCELLED') {
-      await request.post(`${API}/agenda/citas/${cita.id}/cancelacion`, {
-        headers: datos.headers,
-        data: { motivo: 'Cierre de prueba sintetica E2E' },
-      });
+      await limpiarCitaDePrueba(request, datos, cita.id, test.info().errors.length > 0);
     }
   }
 });
@@ -253,12 +330,13 @@ test('un pago registrado en la pantalla aparece en la API', async ({ page, reque
   await irA(page, 'Pagos');
   await seleccionarPaciente(page, datos.paciente);
   await page.getByRole('combobox', { name: 'Cita', exact: true }).selectOption(cita.id);
+  await page.getByLabel('Total pactado (USD)').fill('100');
   await page.getByLabel('Importe (USD)').fill('25.50');
   const referencia = `Prueba sintetica ${randomUUID().slice(0, 8)}`;
   await page.getByLabel('Referencia del comprobante (opcional)').fill(referencia);
-  await page.getByRole('button', { name: 'Registrar pago pendiente' }).click();
-  await expect(page.getByRole('status').filter({ hasText: 'Pago guardado' })).toBeVisible();
-  await expect(page.getByRole('article').filter({ hasText: referencia })).toBeVisible();
+  await page.getByRole('button', { name: 'Registrar abono pendiente' }).click();
+  await expect(page.getByRole('status').filter({ hasText: 'Abono registrado como pendiente de confirmación.' })).toBeVisible();
+  await expect(page.getByRole('row').filter({ hasText: referencia })).toBeVisible();
   const pagos = await datos.leer('/pagos/?limite=100');
   const pago = pagos.elementos.find((p: { cita_id: string }) => p.cita_id === cita.id);
   expect(pago.importe).toBe('25.50');

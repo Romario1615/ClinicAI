@@ -23,7 +23,7 @@
  *
  * Esas reglas se mantienen cuando llegue el backend; los datos no.
  */
-import { Component, computed, inject } from '@angular/core';
+import { Component, computed, inject, ChangeDetectionStrategy } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 
 import {
@@ -101,6 +101,7 @@ function soloFecha(instanteIso: string): string {
       </p>
     </div>
   `,
+  changeDetection: ChangeDetectionStrategy.Eager,
   styles: `
     .indicador__valor {
       font-size: 2rem;
@@ -212,6 +213,7 @@ export class PanelComponent {
       </div>
     }
   `,
+  changeDetection: ChangeDetectionStrategy.Eager,
   styles: `
     .verificacion {
       font-size: 0.8rem;
@@ -298,6 +300,7 @@ export class PacientesDemoComponent {
       </div>
     }
   `,
+  changeDetection: ChangeDetectionStrategy.Eager,
   styles: `
     .nota-diseno {
       margin-bottom: var(--espacio-4);
@@ -378,6 +381,7 @@ export class ListaEsperaComponent {
       </article>
     }
   `,
+  changeDetection: ChangeDetectionStrategy.Eager,
   styles: `
     .nota-diseno {
       margin-bottom: var(--espacio-4);
@@ -516,6 +520,7 @@ export class HistoriaClinicaComponent {
       </table>
     </div>
   `,
+  changeDetection: ChangeDetectionStrategy.Eager,
   styles: `
     .receta {
       margin-bottom: var(--espacio-4);
@@ -662,6 +667,7 @@ export class MedicamentosComponent {
       </table>
     </div>
   `,
+  changeDetection: ChangeDetectionStrategy.Eager,
   styles: `
     .nota-diseno {
       margin-bottom: var(--espacio-4);
@@ -767,6 +773,7 @@ export class ConocimientoComponent {
       }
     </div>
   `,
+  changeDetection: ChangeDetectionStrategy.Eager,
   styles: `
     h2 {
       margin-top: var(--espacio-6);
@@ -809,6 +816,7 @@ export class CatalogoDemoComponent {
       </p>
     </div>
   `,
+  changeDetection: ChangeDetectionStrategy.Eager,
   styles: `
     .sin-permiso {
       max-width: 60ch;

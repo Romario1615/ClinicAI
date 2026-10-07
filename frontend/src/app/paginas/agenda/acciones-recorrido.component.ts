@@ -6,7 +6,7 @@
  * el momento adecuado (el paciente llegó, la atención empezó). El backend lo
  * vuelve a comprobar todo.
  */
-import { Component, computed, inject, input, output, signal } from '@angular/core';
+import { Component, computed, inject, input, output, signal, ChangeDetectionStrategy } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 
@@ -114,6 +114,7 @@ interface GrupoDerivacion {
       </app-ventana-flotante>
     }
   `,
+  changeDetection: ChangeDetectionStrategy.Eager,
   styles: `
     .recorrido { display: grid; gap: var(--espacio-2); margin-top: var(--espacio-3); padding-top: var(--espacio-3);
       border-top: 1px dashed var(--borde); }

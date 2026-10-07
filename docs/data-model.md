@@ -28,6 +28,7 @@ erDiagram
     CLINICA ||--o{ ESPECIALIDAD : ofrece
     CLINICA ||--o{ USUARIO : emplea
     CLINICA ||--o{ CONFIGURACION_CLINICA : configura
+    CLINICA ||--o{ PLANTILLA_ANAMNESIS : define
     SEDE ||--o{ CONSULTORIO : contiene
     SEDE ||--o{ HORARIO_ATENCION : define
     SEDE ||--o{ FERIADO : observa
@@ -43,6 +44,7 @@ erDiagram
     PROFESIONAL ||--o{ PROFESIONAL_SEDE : atiende_en
     PROFESIONAL ||--o{ PROFESIONAL_SERVICIO : presta
     PROFESIONAL ||--o{ AGENDA_PLANTILLA : trabaja
+    PROFESIONAL ||--o{ RESPUESTA_ANAMNESIS : captura
     PROFESIONAL ||--o{ BLOQUEO_AGENDA : bloquea
     PROFESIONAL ||--o| CALENDARIO_CONEXION : conecta
 
@@ -53,6 +55,7 @@ erDiagram
     PACIENTE ||--o{ CONSENTIMIENTO : otorga
     PACIENTE ||--o{ CITA : agenda
     PACIENTE ||--o{ HISTORIA_CLINICA : posee
+    PACIENTE ||--o{ RESPUESTA_ANAMNESIS : registra
     PACIENTE ||--o{ RECETA : recibe
     PACIENTE ||--o{ LISTA_ESPERA : espera
     PACIENTE ||--o{ CONVERSACION : conversa
@@ -68,6 +71,7 @@ erDiagram
     CITA ||--o{ RECORDATORIO : programa
 
     HISTORIA_CLINICA ||--o{ NOTA_EVOLUCION : contiene
+    PLANTILLA_ANAMNESIS ||--o{ RESPUESTA_ANAMNESIS : versiona
     NOTA_EVOLUCION ||--o{ NOTA_EVOLUCION_VERSION : versiona
     NOTA_EVOLUCION }o--o| CITA : documenta
 
@@ -332,6 +336,17 @@ UNIQUE (nota_evolucion_id, numero_version)
 
 Ver [ADR‑0011](decisiones/0011-historia-clinica-append-only.md).
 
+**`plantilla_anamnesis`** — una definición versionada por clínica con preguntas JSONB
+validadas, estado (`BORRADOR` | `PUBLICADA` | `RETIRADA`), sensibilidad (`N2` | `N3`) y
+fecha de publicación. Solo puede existir una versión publicada por nombre y clínica; al
+publicar se congela el contenido en PostgreSQL. Las ediciones parten de una nueva versión.
+
+**`respuesta_anamnesis`** — captura inmutable enlazada a clínica, paciente, profesional,
+plantilla y `version_plantilla`; almacena respuestas JSONB y el instante de registro. Un
+trigger valida que la versión estuviera publicada y que la clínica coincida. No se permite
+actualizar o borrar una respuesta. El acceso exige relación asistencial; N3 agrega el permiso
+`historia_clinica.leer_sensible` y auditoría sensible. Migraciones 018 y 019.
+
 **`examen`** — `id`, `paciente_id`, `nota_evolucion_id`, `tipo`, `solicitado_por`,
 `solicitado_en`, `resultado_documento_id`, `estado`.
 
@@ -341,7 +356,7 @@ Ver [ADR‑0011](decisiones/0011-historia-clinica-append-only.md).
 ### Odontología: odontograma y planes
 
 **`odontograma`** — `id`, `clinica_id`, `paciente_id`, `profesional_id`, `version`,
-`vigente`, `denticion` (`PERMANENTE` | `TEMPORAL` | `MIXTA`), `piezas` (`jsonb` con
+`vigente`, `nivel_sensibilidad` (`N2` | `N3`), `denticion` (`PERMANENTE` | `TEMPORAL` | `MIXTA`), `piezas` (`jsonb` con
 hallazgos FDI validados), `motivo_modificacion`, `procedimiento_id`. Cada fila contiene
 el estado completo de la boca. La versión vigente es única por paciente; las versiones
 anteriores se conservan y no se editan ni eliminan. Desde la segunda versión se exige un
@@ -351,10 +366,11 @@ procedimiento dentro de la misma transacción.
 **`plan_tratamiento`** — `id`, `clinica_id`, `paciente_id`, `profesional_id`, `titulo`,
 `estado` (`BORRADOR` | `PROPUESTO` | `ACEPTADO` | `COMPLETADO` | `CANCELADO`), `moneda`,
 `observaciones`, `propuesto_en`, `aceptado_en`, `aceptacion_medio`,
-`aceptacion_referencia`, `aceptacion_imagen_id`, `aceptacion_registrada_por`,
+`nivel_sensibilidad` (`N2` | `N3`), `aceptacion_referencia`, `aceptacion_imagen_id`, `aceptacion_registrada_por`,
 `completado_en`, `cancelado_en`, `motivo_cancelacion`. `ACEPTADO` y `COMPLETADO`
 requieren fecha y constancia referenciada del documento firmado en la clínica. Esta
-constancia no equivale a firma electrónica.
+constancia no equivale a firma electrónica. Crear y leer un plan N3 requiere
+`historia_clinica.leer_sensible`; los procedimientos heredan el nivel del plan.
 
 **`procedimiento_plan`** — `id`, `plan_id`, `fase`, `orden`, `pieza`, `caras`, `servicio_id`,
 `descripcion`, `precio`, `estado` (`PENDIENTE` | `COMPLETADO` | `CANCELADO`),
@@ -452,14 +468,17 @@ Nombres en inglés por ser normativos ([ADR‑0015](decisiones/0015-convencion-i
 `branch_id`, `specialty_id`, `service_id`, `archivado_en`.
 
 **`knowledge_versions`** — `id`, `document_id`, `version`, `nombre_archivo`,
-`hash_sha256`, `ruta_almacenamiento`, `autor_id`, `creado_en`, `notas_cambio`,
+`hash_sha256`, `ruta_almacenamiento`, `contenido_texto` (temporal: presente mientras el
+trabajo de ingesta está pendiente o fallido; se elimina al completar), `autor_id`,
+`creado_en`, `notas_cambio`,
 `resultado_analisis_inyeccion` (`jsonb`).
 
 **`knowledge_chunks`** — `id`, `document_id`, `version`, `indice_fragmento`,
 `contenido`, `contenido_tsv` (`tsvector` generado con configuración `spanish`),
 `tokens`, y los metadatos desnormalizados que permiten el pre‑filtro en SQL:
 `clinic_id`, `branch_id`, `specialty_id`, `service_id`, `professional_id`, `status`,
-`effective_from`, `effective_until`, `sensitivity_level`.
+`effective_from`, `effective_until`, `sensitivity_level`, `vigente`. El pre‑filtro
+excluye versiones históricas incluso cuando el documento vuelve a aprobarse.
 
 > La desnormalización es deliberada: permite que todo el filtro de autorización viva en
 > un único `WHERE` sobre una tabla, sin uniones que se puedan omitir por error.
@@ -472,6 +491,7 @@ CREATE INDEX ON knowledge_embeddings
   USING hnsw (embedding vector_cosine_ops);
 CREATE INDEX ON knowledge_chunks USING gin (contenido_tsv);
 CREATE INDEX ON knowledge_chunks (clinic_id, status, effective_from, effective_until);
+CREATE INDEX ON knowledge_chunks (document_id, vigente, status);
 ```
 
 **`knowledge_permissions`** — `id`, `document_id`, `principal_tipo`
@@ -492,13 +512,37 @@ roles se comparan por su ID vigente, no por código.
 
 ## 12. Pagos
 
-**`pago`** — `id`, `cita_id`, `paciente_id`, `clinica_id`, `monto`, `moneda`, `metodo`,
-`estado` (`PENDING` | `PROOF_RECEIVED` | `UNDER_REVIEW` | `CONFIRMED` | `REJECTED` |
-`REFUND_PENDING`), `enlace_pago`, `comprobante_documento_id`, `validado_por`,
-`validado_en`, `comentarios`, `motivo_rechazo`, `creado_en`.
+**`cargo_pago`** — `id`, `clinica_id`, `cita_id`, `total_acordado`, `fecha_vencimiento`,
+`moneda`, `origen`, `creado_por`, `creado_en`. Hay un cargo por cita. La fecha es opcional y
+se compara con la fecha local efectiva de su sede (o la zona de la clínica). Una vez fijada,
+es inmutable; los cargos históricos pueden establecerla junto con la conciliación o en una
+acción auditada separada. Los cargos nuevos guardan el total
+pactado (`origen = PACTADO`); los creados durante la migración histórica mantienen el total
+desconocido (`HISTORICO_SIN_TOTAL`) hasta que alguien con permiso de validación lo concilie
+una única vez. PostgreSQL hace inmutable el total después de conciliarlo y la fecha después
+de fijarla; los cargos no se pueden borrar.
 
-**`pago_historial`** — append‑only: `pago_id`, `estado_anterior`, `estado_nuevo`,
-`actor_id`, `motivo`, `ocurrido_en`.
+**`pago`** — `id`, `cita_id`, `clinica_id`, `cargo_id`, `importe`, `moneda`, `metodo`, `estado`
+(`PENDING` | `PROOF_RECEIVED` | `UNDER_REVIEW` | `CONFIRMED` | `REJECTED` |
+`REFUND_PENDING`), `referencia`, `comentario` vigente, `validado_por`, `validado_en`,
+`creado_en`, `creado_por`, `actualizado_en`, `actualizado_por`. Un cargo puede tener varios
+pagos. Los estados confirmados cuentan como pagados; los pagos abiertos reservan parte del
+total pactado y no pueden exceder el saldo disponible. La API expone totales confirmados,
+comprometidos y saldos; un total histórico desconocido se devuelve como `null`, no se infiere.
+
+**`pago_historial`** — append‑only: `pago_id`, `secuencia`, `estado_anterior`,
+`estado_nuevo`, `comentario`, `actor_id`, `ocurrido_en`. PostgreSQL rechaza `UPDATE` y
+`DELETE`; la clave única `(pago_id, secuencia)` mantiene el orden incluso con reloj fijo.
+La migración inicializa cada pago existente con su estado conocido al iniciar el historial;
+no inventa actores ni transiciones anteriores que el sistema no conservaba.
+
+**`pago_comprobante`** — metadatos append‑only: `pago_id`, `tipo_mime`, `tamano_bytes`,
+`sha256`, `clave_objeto`, `antivirus`, `cargado_por`, `cargado_en`. El binario PDF/imagen se
+guarda cifrado en el almacén de objetos; la clave no depende del nombre original. La API
+valida firma y tamaño, inspecciona PDF para rechazar acciones ejecutables y adjuntos, y
+analiza con ClamAV. En producción, ClamAV es obligatorio; en desarrollo el estado
+`NO_DISPONIBLE` queda visible. La descarga siempre pasa por `pago.leer`, vuelve a comprobar
+el ámbito y genera auditoría. PostgreSQL impide editar o borrar metadatos.
 
 > **No existe ninguna columna para número de tarjeta, CVV, clave, código OTP ni
 > credencial financiera.** El comprobante es un archivo y la validación es humana.

@@ -261,6 +261,49 @@ class RepositorioAgenda:
         consulta = self._filtrar_por_ambito(consulta, principal)
         return int((await self._sesion.execute(consulta)).scalar_one())
 
+    async def resumen_diario_estados(
+        self,
+        *,
+        principal: Principal,
+        desde: datetime,
+        hasta: datetime,
+        sede_id: uuid.UUID | None = None,
+        profesional_id: uuid.UUID | None = None,
+        servicio_id: uuid.UUID | None = None,
+    ) -> list[tuple[date, str, int]]:
+        """Agrega citas por fecha local y estado, aplicando el ámbito en SQL.
+
+        El informe no incluye paciente, cita ni texto libre. La zona se toma
+        de cada sede, con la de clínica como respaldo.
+        """
+        fecha_local = func.date(
+            func.timezone(
+                func.coalesce(Sede.zona_horaria, Clinica.zona_horaria),
+                Cita.inicio,
+            )
+        )
+        consulta = (
+            select(fecha_local.label("fecha"), Cita.estado, func.count().label("cantidad"))
+            .select_from(Cita)
+            .join(Sede, Sede.id == Cita.sede_id)
+            .join(Clinica, Clinica.id == Cita.clinica_id)
+            .where(Cita.inicio >= desde, Cita.inicio < hasta)
+        )
+        if sede_id is not None:
+            consulta = consulta.where(Cita.sede_id == sede_id)
+        if profesional_id is not None:
+            consulta = consulta.where(Cita.profesional_id == profesional_id)
+        if servicio_id is not None:
+            consulta = consulta.where(Cita.servicio_id == servicio_id)
+
+        consulta = (
+            self._filtrar_por_ambito(consulta, principal)
+            .group_by(fecha_local, Cita.estado)
+            .order_by(fecha_local, Cita.estado)
+        )
+        filas = (await self._sesion.execute(consulta)).all()
+        return [(fila.fecha, fila.estado, int(fila.cantidad)) for fila in filas]
+
     # ------------------------------------------------------------------
     #  Datos para el calculo de disponibilidad
     # ------------------------------------------------------------------

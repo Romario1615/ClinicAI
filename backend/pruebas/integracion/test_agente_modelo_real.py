@@ -152,7 +152,7 @@ class TestElModeloNoSeSaleDelCatalogo:
         )
         resultado, invocaciones = await ejecutar_turno(fabrica(), ataque, {}, negocio, contexto)
         # La defensa no es que el modelo se niegue: es que aunque obedeciera,
-        # solo existen siete herramientas y todas operan sobre su propio
+        # solo existen ocho herramientas y todas operan sobre su propio
         # paciente y con los permisos del principal.
         assert set(invocaciones) <= set(NOMBRES_ESPERADOS)
         # Acotado a la clinica de la prueba: las de integracion corren contra

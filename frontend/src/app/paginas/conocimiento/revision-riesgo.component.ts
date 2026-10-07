@@ -7,7 +7,7 @@
  * exigir el permiso de aprobación en la lectura y en la escritura.
  */
 import { HttpClient } from '@angular/common/http';
-import { Component, computed, inject, input, output, signal, type OnInit } from '@angular/core';
+import { Component, computed, inject, input, output, signal, type OnInit, ChangeDetectionStrategy } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 
 import { VentanaFlotanteComponent } from '../../compartido/ventana-flotante.component';
@@ -85,6 +85,7 @@ export interface RevisionRiesgo {
       @if (error()) { <p class="campo__error" role="alert">{{ error() }}</p> }
     </app-ventana-flotante>
   `,
+  changeDetection: ChangeDetectionStrategy.Eager,
   styles: `
     .riesgo__intro { margin: 0 0 var(--espacio-3); }
     .riesgo__subtitulo { margin: var(--espacio-3) 0 var(--espacio-2); font-size: 0.8rem; letter-spacing: 0.05em;

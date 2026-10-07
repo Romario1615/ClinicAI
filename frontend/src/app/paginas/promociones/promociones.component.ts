@@ -14,7 +14,7 @@
  * **Sin datos clínicos.** El segmento solo filtra por sede y por la antigüedad
  * de la última visita. No hay filtro por tratamiento ni por diagnóstico.
  */
-import { Component, DestroyRef, computed, inject, signal } from '@angular/core';
+import { Component, DestroyRef, computed, inject, signal, ChangeDetectionStrategy } from '@angular/core';
 import { DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 
@@ -41,6 +41,7 @@ import { ResumenModuloComponent } from '../../compartido/resumen-modulo.componen
   standalone: true,
   imports: [ResumenModuloComponent, DatePipe, FormsModule, IconoComponent],
   templateUrl: './promociones.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './promociones.component.scss',
 })
 export class PromocionesComponent {

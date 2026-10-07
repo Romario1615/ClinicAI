@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import uuid
+from datetime import datetime
 
 import pytest
 import sqlalchemy as sa
@@ -10,7 +11,11 @@ from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modulos.auditoria.modelos import Auditoria
-from app.modulos.conversaciones.modelos import Conversacion, MensajeEntrante
+from app.modulos.conversaciones.modelos import (
+    AvisoRevisionTratamiento,
+    Conversacion,
+    MensajeEntrante,
+)
 from app.modulos.organizacion.modelos import Clinica
 from app.modulos.usuarios.modelos import AmbitoAsignacion, Usuario, UsuarioRol
 from app.nucleo.auditoria import AccionAuditada
@@ -155,3 +160,73 @@ async def test_no_expone_conversaciones_de_otra_clinica(
     detalle = await cliente.get(f"{api}/conversaciones/{ajena.id}", headers=cabeceras)
     assert detalle.status_code == 404
     assert (await cliente.get(f"{api}/conversaciones", headers=cabeceras)).json()["elementos"] == []
+
+
+async def test_aviso_persistente_se_lista_y_solo_personal_clinico_puede_confirmar_revision(
+    cliente: AsyncClient,
+    api: str,
+    sesion: AsyncSession,
+    usuario: Usuario,
+    clinica: Clinica,
+    reloj: RelojFijo,
+) -> None:
+    await _conceder_lectura_clinica(sesion, usuario, clinica)
+    cabeceras = await cabecera_bearer(cliente, usuario, clinica)
+    conversacion = await _sembrar(sesion, clinica, reloj)
+    mensaje = await sesion.scalar(
+        sa.select(MensajeEntrante).where(MensajeEntrante.conversacion_id == conversacion.id)
+    )
+    assert mensaje is not None
+    aviso = AvisoRevisionTratamiento(
+        clinica_id=clinica.id,
+        conversacion_id=conversacion.id,
+        mensaje_entrante_id=mensaje.id,
+    )
+    sesion.add(aviso)
+    await sesion.flush()
+
+    cuenta = await cliente.get(f"{api}/conversaciones/avisos-tratamiento/cuenta", headers=cabeceras)
+    listado = await cliente.get(f"{api}/conversaciones/avisos-tratamiento", headers=cabeceras)
+    assert cuenta.json() == {"cantidad": 1}
+    assert listado.status_code == 200
+    elemento = listado.json()[0]
+    assert elemento["id"] == str(aviso.id)
+    assert elemento["conversacion_id"] == str(conversacion.id)
+    assert datetime.fromisoformat(elemento["creado_en"].replace("Z", "+00:00")) == aviso.creado_en
+    denegado = await cliente.post(
+        f"{api}/conversaciones/avisos-tratamiento/{aviso.id}/revision", headers=cabeceras
+    )
+    assert denegado.status_code == 403
+
+    await conceder_permisos(sesion, usuario, clinica, "alerta_adherencia.atender")
+    cabeceras = await cabecera_bearer(cliente, usuario, clinica)
+    revisado = await cliente.post(
+        f"{api}/conversaciones/avisos-tratamiento/{aviso.id}/revision", headers=cabeceras
+    )
+    assert revisado.status_code == 204
+    assert aviso.revisada_en == reloj.ahora()
+    assert aviso.revisada_por == usuario.id
+    assert (
+        await cliente.get(f"{api}/conversaciones/avisos-tratamiento/cuenta", headers=cabeceras)
+    ).json() == {"cantidad": 0}
+    repetido = await cliente.post(
+        f"{api}/conversaciones/avisos-tratamiento/{aviso.id}/revision", headers=cabeceras
+    )
+    assert repetido.status_code == 409
+
+    acciones = set(
+        await sesion.scalars(
+            sa.select(Auditoria.accion).where(
+                Auditoria.accion.in_(
+                    [
+                        AccionAuditada.AVISO_TRATAMIENTO_LEIDO.value,
+                        AccionAuditada.AVISO_TRATAMIENTO_REVISADO.value,
+                    ]
+                )
+            )
+        )
+    )
+    assert acciones == {
+        AccionAuditada.AVISO_TRATAMIENTO_LEIDO.value,
+        AccionAuditada.AVISO_TRATAMIENTO_REVISADO.value,
+    }

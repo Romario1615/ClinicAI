@@ -20,7 +20,7 @@
  * apellido (`filtroBusquedaPaciente`). Eso importa porque el backend ignora un
  * término que no encaja y devolvería cero resultados sin decir por qué.
  */
-import { Component, computed, inject, signal } from '@angular/core';
+import { Component, computed, inject, signal, ChangeDetectionStrategy } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 
 import { FichaPacienteComponent } from './ficha-paciente.component';
@@ -107,19 +107,33 @@ import type { Paciente } from '../nucleo/modelos/dominio';
 
       <!-- La ficha flota: la pantalla de detrás no se mueve ni pierde el sitio. -->
       @if (pacienteElegido(); as elegido) {
-        <app-ventana-flotante
-          ceja="Ficha del paciente"
-          [titulo]="elegido.apellido + ', ' + elegido.nombre"
-          forma="centrada"
-          [anchoMaximo]="1180"
-          [altoCompleto]="true"
-          (cerrar)="pacienteElegido.set(null)"
-        >
-          <app-ficha-paciente [pacienteId]="elegido.id" [sinCabecera]="true" />
-        </app-ventana-flotante>
+        @defer (when pacienteElegido()) {
+          <app-ventana-flotante
+            ceja="Ficha del paciente"
+            [titulo]="elegido.apellido + ', ' + elegido.nombre"
+            forma="centrada"
+            [anchoMaximo]="1180"
+            [altoCompleto]="true"
+            (cerrar)="pacienteElegido.set(null)"
+          >
+            <app-ficha-paciente [pacienteId]="elegido.id" [sinCabecera]="true" />
+          </app-ventana-flotante>
+        } @placeholder {
+          <app-ventana-flotante
+            ceja="Ficha del paciente"
+            [titulo]="elegido.apellido + ', ' + elegido.nombre"
+            forma="centrada"
+            [anchoMaximo]="1180"
+            [altoCompleto]="true"
+            (cerrar)="pacienteElegido.set(null)"
+          >
+            <p class="buscador__cargando-ficha" role="status">Preparando la ficha segura…</p>
+          </app-ventana-flotante>
+        }
       }
     }
   `,
+  changeDetection: ChangeDetectionStrategy.Eager,
   styles: `
     :host {
       display: contents;
@@ -246,6 +260,14 @@ import type { Paciente } from '../nucleo/modelos/dominio';
 
     .buscador__nota--error {
       color: var(--peligro);
+    }
+
+    .buscador__cargando-ficha {
+      display: grid;
+      min-height: 12rem;
+      place-items: center;
+      margin: 0;
+      color: var(--texto-suave);
     }
 
     @media (max-width: 980px) {

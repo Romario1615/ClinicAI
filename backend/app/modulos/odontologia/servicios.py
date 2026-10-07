@@ -44,6 +44,8 @@ class ServicioOdontograma:
             Odontograma.paciente_id == paciente_id,
             Odontograma.clinica_id == principal.clinica_id,
         )
+        if not principal.tiene_permiso("historia_clinica.leer_sensible"):
+            consulta = consulta.where(Odontograma.nivel_sensibilidad != "N3")
         if version is None:
             consulta = consulta.where(Odontograma.vigente.is_(True))
         else:
@@ -64,6 +66,8 @@ class ServicioOdontograma:
             )
             .order_by(Odontograma.version.desc())
         )
+        if not principal.tiene_permiso("historia_clinica.leer_sensible"):
+            consulta = consulta.where(Odontograma.nivel_sensibilidad != "N3")
         return list((await self._sesion.execute(consulta)).scalars().all())
 
     async def crear(
@@ -72,6 +76,7 @@ class ServicioOdontograma:
         contenido: ContenidoOdontograma,
         *,
         principal: Principal,
+        nivel_sensibilidad: str = "N2",
     ) -> Odontograma:
         paciente = await self._bloquear_paciente(paciente_id, principal, "odontograma.escribir")
         actual = await self._vigente(paciente_id, principal.clinica_id)
@@ -80,6 +85,7 @@ class ServicioOdontograma:
                 "El paciente ya tiene un odontograma. Registre una versión nueva."
             )
         profesional_id = self._profesional(principal)
+        nivel = self._validar_sensibilidad(nivel_sensibilidad, principal)
         fila = Odontograma(
             clinica_id=paciente.clinica_id,
             paciente_id=paciente.id,
@@ -88,6 +94,7 @@ class ServicioOdontograma:
             vigente=True,
             denticion=contenido.denticion.value,
             piezas=contenido.model_dump(mode="json")["piezas"],
+            nivel_sensibilidad=nivel,
             creado_por=principal.actor_id,
         )
         self._sesion.add(fila)
@@ -102,6 +109,7 @@ class ServicioOdontograma:
         version_base: int,
         motivo: str,
         principal: Principal,
+        nivel_sensibilidad: str = "N2",
     ) -> Odontograma:
         paciente = await self._bloquear_paciente(paciente_id, principal, "odontograma.escribir")
         actual = await self._vigente(paciente_id, paciente.clinica_id, bloquear=True)
@@ -112,8 +120,15 @@ class ServicioOdontograma:
                 "El odontograma cambió desde que se abrió. Recargue la versión vigente.",
                 detalles={"version_vigente": actual.version},
             )
+        if actual.nivel_sensibilidad == "N3" and not principal.tiene_permiso(
+            "historia_clinica.leer_sensible"
+        ):
+            raise PermisoDenegado("Se requiere permiso de lectura clínica sensible para editar N3.")
 
         profesional_id = self._profesional(principal)
+        nivel = self._validar_sensibilidad(nivel_sensibilidad, principal)
+        if actual.nivel_sensibilidad == "N3":
+            nivel = "N3"
         actual.vigente = False
         siguiente = Odontograma(
             clinica_id=paciente.clinica_id,
@@ -124,6 +139,7 @@ class ServicioOdontograma:
             denticion=contenido.denticion.value,
             piezas=contenido.model_dump(mode="json")["piezas"],
             motivo_modificacion=motivo.strip(),
+            nivel_sensibilidad=nivel,
             creado_por=principal.actor_id,
         )
         self._sesion.add(siguiente)
@@ -150,6 +166,12 @@ class ServicioOdontograma:
         """
         paciente = await self._bloquear_paciente(paciente_id, principal, "odontograma.escribir")
         actual = await self._vigente(paciente_id, paciente.clinica_id, bloquear=True)
+        if (
+            actual is not None
+            and actual.nivel_sensibilidad == "N3"
+            and not principal.tiene_permiso("historia_clinica.leer_sensible")
+        ):
+            raise PermisoDenegado("Se requiere permiso de lectura clínica sensible para editar N3.")
         profesional_id = self._profesional(principal)
 
         if actual is None:
@@ -198,6 +220,7 @@ class ServicioOdontograma:
             denticion=contenido.denticion.value,
             piezas=contenido.model_dump(mode="json")["piezas"],
             motivo_modificacion=motivo if actual else None,
+            nivel_sensibilidad=actual.nivel_sensibilidad if actual else "N2",
             procedimiento_id=procedimiento_id,
             creado_por=principal.actor_id,
         )
@@ -244,6 +267,14 @@ class ServicioOdontograma:
         if principal.profesional_id is None:
             raise PermisoDenegado("Se requiere una cuenta profesional para registrar hallazgos.")
         return principal.profesional_id
+
+    @staticmethod
+    def _validar_sensibilidad(nivel: str, principal: Principal) -> str:
+        if nivel not in {"N2", "N3"}:
+            raise PermisoDenegado("El nivel de sensibilidad clínica no es válido.")
+        if nivel == "N3" and not principal.tiene_permiso("historia_clinica.leer_sensible"):
+            raise PermisoDenegado("Se requiere permiso de lectura clínica sensible para usar N3.")
+        return nivel
 
 
 __all__ = ["ServicioOdontograma"]

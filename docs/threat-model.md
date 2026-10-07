@@ -91,7 +91,7 @@ graph LR
 | Tampering | Texto oculto en el PDF | Detección de texto invisible y fuera del área visible; marca para revisión humana | Prueba de ingesta |
 | Information disclosure | Documento de una sede recuperado por otra | Pre‑filtro en el `WHERE` de SQL | Prueba de fuga entre sedes |
 | Information disclosure | Documento archivado o vencido usado | Filtro de estado y vigencia en SQL | Prueba de documentos caducados |
-| Tampering | Archivo malicioso (ejecutable disfrazado, zip bomb) | Tipo real por contenido, límite de tamaño, antivirus | Prueba de subida maliciosa |
+| Tampering | Archivo malicioso (ejecutable disfrazado, PDF activo, malware) | Firma PDF, límites de bytes/páginas/texto; acciones PDF activas rechazadas; ClamAV obligatorio en producción. En desarrollo se registra que no hubo escaneo | Pruebas de PDF falsificado/activo y antivirus simulado; escaneo real con ClamAV pendiente |
 | Elevation | Publicar sin aprobación | Máquina de estados; `conocimiento.aprobar` separado de `conocimiento.cargar` | Prueba de API |
 | SSRF | Ingesta desde URL apuntando a red interna | Lista blanca; bloqueo de rangos privados y de endpoints de metadatos de nube | Prueba de SSRF |
 

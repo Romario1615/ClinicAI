@@ -83,6 +83,78 @@ def _datos(sufijo: str) -> dict[str, str]:
 
 
 class TestAdministracionPlataforma:
+    async def test_crea_y_lista_sede_solo_dentro_de_la_clinica_objetivo(
+        self,
+        cliente: AsyncClient,
+        api: str,
+        sesion: AsyncSession,
+        usuario: Usuario,
+        clinica: Clinica,
+        sufijo: str,
+        configuracion,
+    ) -> None:
+        configuracion.roles_con_2fa_obligatorio = ""
+        await _preparar_superadmin(sesion, usuario)
+        cabeceras = await cabecera_bearer(cliente, usuario, None)
+        ruta = f"{api}/plataforma/clinicas/{clinica.id}/sedes"
+
+        creada = await cliente.post(
+            ruta,
+            headers=cabeceras,
+            json={
+                "nombre": f"Sucursal {sufijo}",
+                "direccion": "Av. Principal 123",
+                "telefono": "+593 2 555 0101",
+                "zona_horaria": "America/Guayaquil",
+            },
+        )
+
+        assert creada.status_code == 201, creada.text
+        salida = creada.json()
+        assert salida["clinica_id"] == str(clinica.id)
+        assert salida["nombre"] == f"Sucursal {sufijo}"
+        assert salida["zona_horaria"] == "America/Guayaquil"
+        duplicada = await cliente.post(
+            ruta,
+            headers=cabeceras,
+            json={
+                "nombre": f"Sucursal {sufijo}",
+                "direccion": "Av. Principal 123",
+                "telefono": "+593 2 555 0101",
+                "zona_horaria": "America/Guayaquil",
+            },
+        )
+        assert duplicada.status_code == 409
+        listado = await cliente.get(ruta, headers=cabeceras)
+        assert listado.status_code == 200, listado.text
+        assert [sede["nombre"] for sede in listado.json()] == [f"Sucursal {sufijo}"]
+        assert await sesion.scalar(
+            sa.select(Auditoria.id).where(
+                Auditoria.accion == "sede.creada", Auditoria.entidad_id == salida["id"]
+            )
+        )
+
+    async def test_sede_rechaza_zona_horaria_invalida(
+        self,
+        cliente: AsyncClient,
+        api: str,
+        sesion: AsyncSession,
+        usuario: Usuario,
+        clinica: Clinica,
+        configuracion,
+    ) -> None:
+        configuracion.roles_con_2fa_obligatorio = ""
+        await _preparar_superadmin(sesion, usuario)
+        cabeceras = await cabecera_bearer(cliente, usuario, None)
+
+        respuesta = await cliente.post(
+            f"{api}/plataforma/clinicas/{clinica.id}/sedes",
+            headers=cabeceras,
+            json={"nombre": "Sucursal inválida", "zona_horaria": "No/EsUnaZona"},
+        )
+
+        assert respuesta.status_code == 422
+
     async def test_crea_clinica_sede_y_administrador_en_una_operacion(
         self,
         cliente: AsyncClient,
@@ -139,6 +211,12 @@ class TestAdministracionPlataforma:
         respuesta = await cliente.get(f"{api}/plataforma/clinicas", headers=cabeceras)
 
         assert respuesta.status_code == 403
+        alta_sede = await cliente.post(
+            f"{api}/plataforma/clinicas/{clinica.id}/sedes",
+            headers=cabeceras,
+            json={"nombre": "Sucursal no autorizada"},
+        )
+        assert alta_sede.status_code == 403
 
     async def test_crea_cuenta_y_asigna_modulos_dentro_de_la_clinica_elegida(
         self,
@@ -147,6 +225,8 @@ class TestAdministracionPlataforma:
         sesion: AsyncSession,
         usuario: Usuario,
         clinica: Clinica,
+        sede: Sede,
+        otra_sede: Sede,
         sufijo: str,
         configuracion,
     ) -> None:
@@ -181,6 +261,7 @@ class TestAdministracionPlataforma:
                 "contrasena_inicial": "Temporal!Seguro1234",
                 "roles": [str(rol.id)],
                 "profesional_id": None,
+                "sedes_ids": [str(sede.id)],
             },
         )
 
@@ -188,6 +269,8 @@ class TestAdministracionPlataforma:
         salida = respuesta.json()
         assert salida["clinica_id"] == str(clinica.id)
         assert salida["roles"] == ["Recepcion"]
+        assert salida["todas_las_sedes"] is False
+        assert salida["sedes_ids"] == [str(sede.id)]
         creada = await sesion.scalar(
             sa.select(Usuario).where(Usuario.correo == f"persona-{sufijo}@example.invalid")
         )
@@ -207,6 +290,71 @@ class TestAdministracionPlataforma:
             "PROFESIONAL",
             "PACIENTE",
         }
+        assert {scope.valor_id for scope in scopes if scope.tipo == "SEDE" and scope.incluir} == {
+            sede.id
+        }
+        assert not any(scope.tipo == "SEDE" and scope.valor_id is None for scope in scopes)
+        assert otra_sede.id != sede.id
+        creada.debe_cambiar_contrasena = False
+        await sesion.flush()
+        inicio_sesion_restringido = await cliente.post(
+            f"{api}/autenticacion/sesion",
+            json={"correo": creada.correo, "contrasena": "Temporal!Seguro1234"},
+        )
+        assert inicio_sesion_restringido.status_code == 200, inicio_sesion_restringido.text
+        cabeceras_restringidas = {
+            "Authorization": f"Bearer {inicio_sesion_restringido.json()['token_acceso']}"
+        }
+        sedes_alcanzables = await cliente.get(
+            f"{api}/catalogo/sedes", headers=cabeceras_restringidas
+        )
+        assert sedes_alcanzables.status_code == 200, sedes_alcanzables.text
+        assert [item["id"] for item in sedes_alcanzables.json()] == [str(sede.id)]
+        listado = await cliente.get(f"{api}/plataforma/clinicas/usuarios", headers=cabeceras)
+        assert listado.status_code == 200, listado.text
+        en_listado = next(item for item in listado.json() if item["id"] == str(creada.id))
+        assert en_listado["todas_las_sedes"] is False
+        assert en_listado["sedes_ids"] == [str(sede.id)]
+
+        clinica_ajena = Clinica(
+            nombre=f"Clínica ajena {sufijo}", identificacion_fiscal=f"AJENA-{sufijo}"
+        )
+        sesion.add(clinica_ajena)
+        await sesion.flush()
+        sede_ajena = Sede(clinica_id=clinica_ajena.id, nombre="Sede no compartida")
+        sesion.add(sede_ajena)
+        await sesion.flush()
+        fuera_de_clinica = await cliente.post(
+            f"{api}/plataforma/clinicas/usuarios",
+            headers=cabeceras,
+            json={
+                "clinica_id": str(clinica.id),
+                "correo": f"fuera-{sufijo}@example.invalid",
+                "nombre": "Fuera",
+                "apellido": "Clínica",
+                "contrasena_inicial": "Temporal!Seguro1234",
+                "roles": [str(rol.id)],
+                "profesional_id": None,
+                "sedes_ids": [str(sede_ajena.id)],
+            },
+        )
+        assert fuera_de_clinica.status_code == 422
+        acceso_total = await cliente.post(
+            f"{api}/plataforma/clinicas/usuarios",
+            headers=cabeceras,
+            json={
+                "clinica_id": str(clinica.id),
+                "correo": f"todas-sedes-{sufijo}@example.invalid",
+                "nombre": "Acceso",
+                "apellido": "Completo",
+                "contrasena_inicial": "Temporal!Seguro1234",
+                "roles": [str(rol.id)],
+                "profesional_id": None,
+            },
+        )
+        assert acceso_total.status_code == 201, acceso_total.text
+        assert acceso_total.json()["todas_las_sedes"] is True
+        assert acceso_total.json()["sedes_ids"] == []
 
     async def test_cambiar_clinica_reemplaza_roles_y_corta_tokens_ya_emitidos(
         self,
@@ -255,6 +403,9 @@ class TestAdministracionPlataforma:
         )
         sesion.add(destino)
         await sesion.flush()
+        destino_sede = Sede(clinica_id=destino.id, nombre=f"Sede destino {sufijo}")
+        sesion.add(destino_sede)
+        await sesion.flush()
         respuesta = await cliente.put(
             f"{api}/plataforma/clinicas/usuarios/{usuario.id}/asignacion",
             headers=cabeceras_actor,
@@ -262,12 +413,15 @@ class TestAdministracionPlataforma:
                 "clinica_id": str(destino.id),
                 "roles": [str(rol_nuevo.id)],
                 "profesional_id": None,
+                "sedes_ids": [str(destino_sede.id)],
             },
         )
 
         assert respuesta.status_code == 200, respuesta.text
         assert respuesta.json()["clinica_id"] == str(destino.id)
         assert respuesta.json()["roles"] == ["Recepcion"]
+        assert respuesta.json()["todas_las_sedes"] is False
+        assert respuesta.json()["sedes_ids"] == [str(destino_sede.id)]
         assert await sesion.scalar(
             sa.select(Usuario.id).where(Usuario.clinica_id == destino.id, Usuario.id == usuario.id)
         )

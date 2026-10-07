@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime
-from typing import Self
+from typing import Literal, Self
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -152,6 +152,7 @@ class RespuestaIngesta(BaseModel):
     embeddings: int
     riesgo_inyeccion: str
     requiere_revision: bool
+    escaneo_antivirus: Literal["LIMPIO", "NO_DISPONIBLE", "NO_APLICA"] = "NO_APLICA"
 
 
 class SolicitudBusqueda(BaseModel):

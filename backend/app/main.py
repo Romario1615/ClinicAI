@@ -25,14 +25,16 @@ este sistema: sin la segunda no existe la garantia contra la doble reserva.
 
 from __future__ import annotations
 
+import hmac
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from typing import Any
 
 import redis.asyncio as redis_async
-from fastapi import FastAPI, status
+from fastapi import FastAPI, HTTPException, Request, status
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
+from prometheus_client import CONTENT_TYPE_LATEST
 
 from app.api.manejadores import registrar_manejadores
 from app.api.middleware import MiddlewareCorrelacion
@@ -42,6 +44,7 @@ from app.ia.imagenes_generativas import construir_generador
 from app.ia.proveedores_clinica import cerrar_proveedores_clinica
 from app.ia.seleccion_llm import construir_fabrica_conversacional
 from app.mensajeria import rutas as rutas_whatsapp
+from app.modulos.agenda import bloqueos_rutas as rutas_bloqueos_agenda
 from app.modulos.agenda import recorrido_rutas as rutas_recorrido
 from app.modulos.agenda import rutas as rutas_agenda
 from app.modulos.asistente import rutas as rutas_asistente
@@ -55,14 +58,18 @@ from app.modulos.conversaciones import demo_rutas
 from app.modulos.conversaciones import rutas as rutas_conversaciones
 from app.modulos.dashboard import indicadores as indicadores_dashboard
 from app.modulos.dashboard import rutas as rutas_dashboard
+from app.modulos.historia import acceso_emergencia as rutas_acceso_emergencia
+from app.modulos.historia import anamnesis_rutas as rutas_anamnesis
 from app.modulos.historia import especialidades as rutas_especialidades_historia
 from app.modulos.historia import resumen_clinico as rutas_resumen_clinico
 from app.modulos.historia import rutas as rutas_historia
 from app.modulos.imagenes import rutas as rutas_imagenes
 from app.modulos.lista_espera import rutas as rutas_espera
+from app.modulos.odontologia import formulario_033 as rutas_formulario_033
 from app.modulos.odontologia import placa as rutas_placa
 from app.modulos.odontologia import planes_rutas
 from app.modulos.odontologia import rutas as rutas_odontologia
+from app.modulos.organizacion import agenda_rutas as rutas_configuracion_agenda
 from app.modulos.organizacion import plataforma as rutas_plataforma
 from app.modulos.organizacion import rutas as rutas_catalogo
 from app.modulos.pacientes import acceso_clinico_rutas as rutas_acceso_clinico
@@ -70,7 +77,9 @@ from app.modulos.pacientes import consentimientos as rutas_consentimientos
 from app.modulos.pacientes import rutas as rutas_pacientes
 from app.modulos.pagos import rutas as rutas_pagos
 from app.modulos.postconsulta import rutas as rutas_postconsulta
+from app.modulos.profesionales import agenda_rutas as rutas_agenda_profesionales
 from app.modulos.profesionales import delegaciones as rutas_delegaciones
+from app.modulos.profesionales import gestion_rutas as rutas_gestion_profesionales
 from app.modulos.promociones import rutas as rutas_promociones
 from app.modulos.usuarios import fotos as rutas_fotos_usuario
 from app.modulos.usuarios import rutas as rutas_usuarios
@@ -78,6 +87,7 @@ from app.nucleo.almacen import AlmacenS3, ErrorAlmacen, construir_almacen
 from app.nucleo.bd import GestorBaseDatos
 from app.nucleo.configuracion import Configuracion
 from app.nucleo.limite_tasa import ClienteRedis, LimitadorTasa
+from app.nucleo.metricas import MetricasAplicacion, actualizar_metricas_outbox
 from app.nucleo.registro import configurar_registro, obtener_logger
 from app.nucleo.reloj import Reloj, RelojSistema
 from app.nucleo.seguridad import CifradorDatos
@@ -226,6 +236,7 @@ def crear_aplicacion(
     # Modelo de decision tipada (Jev o reglas). Decide; nunca ejecuta.
     aplicacion.state.clasificador = construir_clasificador(configuracion)
     aplicacion.state.generador_imagenes = construir_generador(configuracion)
+    aplicacion.state.metricas = MetricasAplicacion()
 
     # --- Middleware ---
     #
@@ -248,6 +259,37 @@ def crear_aplicacion(
 
     registrar_manejadores(aplicacion)
     _registrar_rutas(aplicacion)
+
+    # Todos los manejadores HTTP devuelven el mismo sobre de error. Las rutas
+    # declaran sus respuestas de éxito, pero sin una respuesta `default` los
+    # clientes OpenAPI y Schemathesis consideran inesperado un 401/403/404.
+    documento = aplicacion.openapi()
+    respuesta_error = {
+        "description": "Error de autenticación, permisos, validación o negocio.",
+        "content": {
+            "application/json": {
+                "schema": {
+                    "type": "object",
+                    "required": ["codigo", "mensaje"],
+                    "properties": {
+                        "codigo": {"type": "string"},
+                        "mensaje": {"type": "string"},
+                        "detalles": {"type": "object", "additionalProperties": True},
+                        "correlacion_id": {"type": "string"},
+                    },
+                }
+            }
+        },
+    }
+    for ruta in documento.get("paths", {}).values():
+        for operacion in ruta.values():
+            if isinstance(operacion, dict) and "responses" in operacion:
+                operacion["responses"].setdefault("default", respuesta_error)
+    aplicacion.openapi_schema = documento
+    if configuracion.metricas_habilitadas:
+        rutas_metricas = list(aplicacion.openapi()["paths"])
+        rutas_metricas.append(configuracion.ruta_metricas)
+        aplicacion.state.metricas.configurar_rutas(rutas_metricas)
     return aplicacion
 
 
@@ -267,7 +309,9 @@ def _registrar_rutas(aplicacion: FastAPI) -> None:
     aplicacion.include_router(rutas_usuarios.enrutador_usuarios, prefix=PREFIJO_API)
     aplicacion.include_router(rutas_configuracion.enrutador, prefix=PREFIJO_API)
     aplicacion.include_router(rutas_agenda.enrutador, prefix=PREFIJO_API)
+    aplicacion.include_router(rutas_bloqueos_agenda.enrutador, prefix=PREFIJO_API)
     aplicacion.include_router(rutas_catalogo.enrutador, prefix=PREFIJO_API)
+    aplicacion.include_router(rutas_configuracion_agenda.enrutador, prefix=PREFIJO_API)
     aplicacion.include_router(rutas_plataforma.enrutador, prefix=PREFIJO_API)
     aplicacion.include_router(rutas_consentimientos.enrutador, prefix=PREFIJO_API)
     aplicacion.include_router(rutas_pacientes.enrutador, prefix=PREFIJO_API)
@@ -281,6 +325,8 @@ def _registrar_rutas(aplicacion: FastAPI) -> None:
     aplicacion.include_router(demo_rutas.enrutador, prefix=PREFIJO_API)
     aplicacion.include_router(rutas_conversaciones.enrutador, prefix=PREFIJO_API)
     aplicacion.include_router(rutas_historia.enrutador, prefix=PREFIJO_API)
+    aplicacion.include_router(rutas_anamnesis.enrutador, prefix=PREFIJO_API)
+    aplicacion.include_router(rutas_acceso_emergencia.enrutador, prefix=PREFIJO_API)
     aplicacion.include_router(rutas_imagenes.enrutador, prefix=PREFIJO_API)
     aplicacion.include_router(rutas_imagenes.enrutador_imagenes, prefix=PREFIJO_API)
     # El webhook no lleva autenticacion: lo protege la firma HMAC, no un
@@ -290,9 +336,39 @@ def _registrar_rutas(aplicacion: FastAPI) -> None:
     aplicacion.include_router(rutas_conocimiento.enrutador, prefix=PREFIJO_API)
     aplicacion.include_router(rutas_promociones.enrutador, prefix=PREFIJO_API)
     aplicacion.include_router(rutas_placa.enrutador_placa, prefix=PREFIJO_API)
+    aplicacion.include_router(rutas_formulario_033.enrutador_formulario_033, prefix=PREFIJO_API)
     aplicacion.include_router(rutas_delegaciones.enrutador, prefix=PREFIJO_API)
+    aplicacion.include_router(rutas_agenda_profesionales.enrutador, prefix=PREFIJO_API)
+    aplicacion.include_router(rutas_gestion_profesionales.enrutador, prefix=PREFIJO_API)
     aplicacion.include_router(rutas_odontologia.enrutador, prefix=PREFIJO_API)
     aplicacion.include_router(planes_rutas.enrutador_planes, prefix=PREFIJO_API)
+
+    if aplicacion.state.configuracion.metricas_habilitadas:
+
+        @aplicacion.get(
+            aplicacion.state.configuracion.ruta_metricas,
+            include_in_schema=False,
+            tags=["salud"],
+        )
+        async def metricas(request: Request) -> Response:
+            token = aplicacion.state.configuracion.metricas_token.get_secret_value()
+            if token and not hmac.compare_digest(
+                request.headers.get("Authorization", ""), f"Bearer {token}"
+            ):
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="Credencial de métricas inválida.",
+                    headers={"WWW-Authenticate": "Bearer"},
+                )
+            await actualizar_metricas_outbox(
+                aplicacion.state.metricas,
+                aplicacion.state.gestor_bd,
+                aplicacion.state.reloj,
+            )
+            return Response(
+                content=aplicacion.state.metricas.exportar(),
+                media_type=CONTENT_TYPE_LATEST,
+            )
 
     @aplicacion.get("/salud/vivo", tags=["salud"], summary="El proceso responde")
     async def vivo() -> dict[str, str]:

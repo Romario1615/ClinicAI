@@ -14,7 +14,8 @@ from typing import Annotated, Any
 from fastapi import APIRouter, Depends, File, Path, Request, Response, UploadFile, status
 
 from app.ia.imagenes_generativas import GeneradorImagenes
-from app.mensajeria.adaptadores import RegistroCanales
+from app.mensajeria.adaptadores import AdaptadorWhatsAppCloud, RegistroCanales
+from app.mensajeria.canales_clinica import credenciales_whatsapp
 from app.mensajeria.servicios import ServicioOutbox
 from app.modulos.outbox.modelos import CanalOutbox
 from app.modulos.promociones.esquemas import (
@@ -269,9 +270,19 @@ async def enviar(
     configuracion: ConfiguracionActual,
     campana_id: Annotated[uuid.UUID, Path()],
     datos: EnviarCampana,
+    peticion: Request,
 ) -> CampanaSalida:
-    canales = construir_canales(configuracion)
-    adaptador = canales.obtener(CanalOutbox.WHATSAPP.value)
+    # La imagen de cabecera se sube con la cuenta de WhatsApp de la clínica si
+    # la tiene: un medio subido con otra cuenta no sirve para su número.
+    adaptador: object | None = None
+    if principal.clinica_id is not None:
+        propias = await credenciales_whatsapp(
+            peticion.app.state.gestor_bd, peticion.app.state.cifrador, principal.clinica_id
+        )
+        if propias is not None:
+            adaptador = AdaptadorWhatsAppCloud(propias)
+    if adaptador is None:
+        adaptador = construir_canales(configuracion).obtener(CanalOutbox.WHATSAPP.value)
     campana = await servicio.enviar(
         campana_id,
         principal,

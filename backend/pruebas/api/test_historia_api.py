@@ -23,13 +23,15 @@ from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modulos.auditoria.modelos import Auditoria
-from app.modulos.historia.modelos import NotaEvolucion
+from app.modulos.historia.modelos import EstadoToma, NotaEvolucion, Receta, RecetaMedicamento, Toma
 from app.modulos.organizacion.modelos import Clinica, Especialidad, Sede
-from app.modulos.pacientes.modelos import Paciente, RelacionAsistencial
+from app.modulos.outbox.modelos import Recordatorio
+from app.modulos.pacientes.modelos import AvisoAccesoEmergencia, Paciente, RelacionAsistencial
 from app.modulos.profesionales.modelos import Profesional
 from app.modulos.usuarios.modelos import Usuario
 from app.nucleo.auditoria import AccionAuditada
-from pruebas.api.conftest import cabecera_bearer, conceder_permisos
+from app.nucleo.seguridad import hashear_contrasena
+from pruebas.api.conftest import CONTRASENA, cabecera_bearer, conceder_permisos
 
 pytestmark = [pytest.mark.api, pytest.mark.seguridad, pytest.mark.asyncio]
 
@@ -98,6 +100,82 @@ def _cuerpo_nota(
 #  Permisos y relacion asistencial
 # ===========================================================================
 class TestAcceso:
+    async def test_acceso_emergencia_es_temporal_auditado_y_notifica_sin_datos_del_paciente(
+        self,
+        cliente: AsyncClient,
+        api: str,
+        sesion: AsyncSession,
+        usuario: Usuario,
+        clinica: Clinica,
+        sede: Sede,
+        profesional: Profesional,
+        paciente: Paciente,
+    ) -> None:
+        await conceder_permisos(
+            sesion,
+            usuario,
+            clinica,
+            "acceso_emergencia.solicitar",
+            "auditoria.leer",
+            "historia_clinica.leer",
+            sedes=(sede.id,),
+        )
+        headers = await cabecera_bearer(cliente, usuario, clinica)
+        ruta = _ruta(api, f"/pacientes/{paciente.id}/acceso-emergencia")
+        respuesta = await cliente.post(
+            ruta,
+            headers=headers,
+            json={"motivo": "Cobertura clínica urgente durante ausencia del profesional asignado."},
+        )
+        assert respuesta.status_code == 201, respuesta.text
+        creado = respuesta.json()
+        relacion = await sesion.get(RelacionAsistencial, creado["relacion_id"])
+        assert relacion is not None
+        assert relacion.origen == "EMERGENCIA"
+        assert (
+            relacion.motivo
+            == "Cobertura clínica urgente durante ausencia del profesional asignado."
+        )
+        assert (relacion.vigente_hasta - relacion.creado_en).total_seconds() == 30 * 60
+
+        # El vínculo concede la lectura que antes se denegaba, pero la
+        # notificación administrativa no incluye paciente ni motivo.
+        historia = await cliente.get(_ruta(api, f"/pacientes/{paciente.id}/notas"), headers=headers)
+        assert historia.status_code == 200, historia.text
+        cuenta = await cliente.get(_ruta(api, "/avisos-acceso-emergencia/cuenta"), headers=headers)
+        avisos = await cliente.get(_ruta(api, "/avisos-acceso-emergencia"), headers=headers)
+        assert cuenta.json() == {"cantidad": 1}
+        assert avisos.status_code == 200
+        assert paciente.id.hex not in avisos.text.replace("-", "")
+        assert relacion.motivo not in avisos.text
+        aviso_id = avisos.json()[0]["id"]
+        aviso = await sesion.get(AvisoAccesoEmergencia, uuid.UUID(aviso_id))
+        assert aviso is not None
+        assert aviso.profesional_id == profesional.id
+
+        repetido = await cliente.post(
+            ruta,
+            headers=headers,
+            json={"motivo": "Cobertura clínica urgente durante ausencia del profesional asignado."},
+        )
+        assert repetido.status_code == 409
+
+        revisado = await cliente.post(
+            _ruta(api, f"/avisos-acceso-emergencia/{aviso_id}/revision"), headers=headers
+        )
+        assert revisado.status_code == 204
+        assert (
+            await cliente.get(_ruta(api, "/avisos-acceso-emergencia/cuenta"), headers=headers)
+        ).json() == {"cantidad": 0}
+        assert (
+            await sesion.scalar(
+                sa.select(sa.func.count())
+                .select_from(Auditoria)
+                .where(Auditoria.accion == AccionAuditada.ACCESO_EMERGENCIA.value)
+            )
+            == 1
+        )
+
     async def test_sin_permiso_clinico_se_deniega(
         self,
         cliente: AsyncClient,
@@ -107,6 +185,7 @@ class TestAcceso:
         clinica: Clinica,
         sede: Sede,
         paciente: Paciente,
+        paciente_ajeno: Paciente,
     ) -> None:
         """Recepcion no ve la historia clinica."""
         await conceder_permisos(
@@ -123,7 +202,21 @@ class TestAcceso:
             _ruta(api, f"/pacientes/{paciente.id}/notas"), headers=cabeceras
         )
 
-        assert respuesta.status_code == 403
+        assert respuesta.status_code == 404
+        inexistente = await cliente.get(
+            _ruta(api, f"/pacientes/{uuid.uuid4()}/notas"), headers=cabeceras
+        )
+        assert inexistente.status_code == 404
+        assert {k: v for k, v in inexistente.json().items() if k != "correlacion_id"} == {
+            k: v for k, v in respuesta.json().items() if k != "correlacion_id"
+        }
+        fuera_de_clinica = await cliente.get(
+            _ruta(api, f"/pacientes/{paciente_ajeno.id}/notas"), headers=cabeceras
+        )
+        assert fuera_de_clinica.status_code == 404
+        assert {k: v for k, v in fuera_de_clinica.json().items() if k != "correlacion_id"} == {
+            k: v for k, v in respuesta.json().items() if k != "correlacion_id"
+        }
 
     async def test_sin_relacion_asistencial_se_deniega(
         self,
@@ -131,6 +224,7 @@ class TestAcceso:
         api: str,
         cabeceras_medico: dict[str, str],
         paciente: Paciente,
+        paciente_ajeno: Paciente,
         profesional: Profesional,
     ) -> None:
         """El permiso no basta: hace falta vinculo con ESE paciente.
@@ -146,8 +240,22 @@ class TestAcceso:
             json=_cuerpo_nota(paciente, profesional),
         )
 
-        assert respuesta.status_code == 403
-        assert respuesta.json()["codigo"] == "RELACION_ASISTENCIAL_REQUERIDA"
+        assert respuesta.status_code == 404
+        assert respuesta.json()["codigo"] == "RECURSO_NO_ENCONTRADO"
+        inexistente = await cliente.get(
+            _ruta(api, f"/pacientes/{uuid.uuid4()}/notas"), headers=cabeceras_medico
+        )
+        assert inexistente.status_code == 404
+        assert {k: v for k, v in inexistente.json().items() if k != "correlacion_id"} == {
+            k: v for k, v in respuesta.json().items() if k != "correlacion_id"
+        }
+        fuera_de_clinica = await cliente.get(
+            _ruta(api, f"/pacientes/{paciente_ajeno.id}/notas"), headers=cabeceras_medico
+        )
+        assert fuera_de_clinica.status_code == 404
+        assert {k: v for k, v in fuera_de_clinica.json().items() if k != "correlacion_id"} == {
+            k: v for k, v in respuesta.json().items() if k != "correlacion_id"
+        }
 
     async def test_con_relacion_si_se_escribe(
         self,
@@ -169,6 +277,99 @@ class TestAcceso:
         assert cuerpo["version"] == 1
         assert cuerpo["vigente"] is True
         assert cuerpo["raiz_id"] == cuerpo["id"]
+        assert cuerpo["nivel_sensibilidad"] == "N2"
+
+    async def test_nota_n3_requiere_permiso_se_filtra_y_audita_nivel(
+        self,
+        cliente: AsyncClient,
+        api: str,
+        sesion: AsyncSession,
+        usuario: Usuario,
+        clinica: Clinica,
+        sede: Sede,
+        profesional: Profesional,
+        paciente: Paciente,
+        relacion: RelacionAsistencial,
+        cabeceras_medico: dict[str, str],
+    ) -> None:
+        cuerpo_n3 = _cuerpo_nota(
+            paciente,
+            profesional,
+            nivel_sensibilidad="N3",
+            subjetivo="Contenido sensible sintético.",
+        )
+        denegada = await cliente.post(
+            _ruta(api, "/notas"), headers=cabeceras_medico, json=cuerpo_n3
+        )
+        assert denegada.status_code == 403
+        assert (
+            await sesion.scalar(
+                sa.select(sa.func.count())
+                .select_from(NotaEvolucion)
+                .where(NotaEvolucion.paciente_id == paciente.id)
+            )
+            == 0
+        )
+
+        await conceder_permisos(
+            sesion,
+            usuario,
+            clinica,
+            "historia_clinica.leer_sensible",
+            sedes=(sede.id,),
+        )
+        creada = await cliente.post(_ruta(api, "/notas"), headers=cabeceras_medico, json=cuerpo_n3)
+        assert creada.status_code == 201, creada.text
+        nota_id = uuid.UUID(creada.json()["id"])
+        assert creada.json()["nivel_sensibilidad"] == "N3"
+
+        registro = await sesion.get(NotaEvolucion, nota_id)
+        assert registro is not None and registro.nivel_sensibilidad == "N3"
+        auditoria_alta = await sesion.scalar(
+            sa.select(Auditoria)
+            .where(Auditoria.accion == AccionAuditada.NOTA_CREADA.value)
+            .where(Auditoria.entidad_id == nota_id)
+        )
+        assert auditoria_alta is not None
+        assert auditoria_alta.nivel_sensibilidad == "N3"
+
+        lector = Usuario(
+            clinica_id=clinica.id,
+            correo=f"lector-{uuid.uuid4().hex[:8]}@example.invalid",
+            hash_contrasena=usuario.hash_contrasena,
+            nombre="Lector",
+            apellido="De Prueba",
+        )
+        sesion.add(lector)
+        await sesion.flush()
+        await conceder_permisos(
+            sesion,
+            lector,
+            clinica,
+            "historia_clinica.leer",
+            sedes=(sede.id,),
+        )
+        cabeceras_lector = await cabecera_bearer(cliente, lector, clinica)
+
+        lectura = await cliente.get(
+            _ruta(api, f"/pacientes/{paciente.id}/notas"), headers=cabeceras_lector
+        )
+        assert lectura.status_code == 200, lectura.text
+        assert lectura.json() == []
+        historico = await cliente.get(
+            _ruta(api, f"/pacientes/{paciente.id}/notas?incluir_historico=true"),
+            headers=cabeceras_lector,
+        )
+        assert historico.status_code == 200, historico.text
+        assert historico.json() == []
+
+        auditoria_lectura = await sesion.scalar(
+            sa.select(Auditoria)
+            .where(Auditoria.accion == AccionAuditada.HISTORIA_CONSULTADA.value)
+            .where(Auditoria.actor_id == lector.id)
+        )
+        assert auditoria_lectura is not None
+        assert auditoria_lectura.nivel_sensibilidad == "N2"
 
     async def test_no_se_firma_una_nota_a_nombre_de_otro_profesional(
         self,
@@ -337,6 +538,53 @@ class TestCorreccion:
         assert respuesta.status_code == 422
         assert respuesta.json()["codigo"] == "DATOS_INVALIDOS"
 
+    async def test_corregir_no_reduce_una_nota_n3(
+        self,
+        cliente: AsyncClient,
+        api: str,
+        sesion: AsyncSession,
+        usuario: Usuario,
+        clinica: Clinica,
+        sede: Sede,
+        cabeceras_medico: dict[str, str],
+        relacion: RelacionAsistencial,
+        paciente: Paciente,
+        profesional: Profesional,
+    ) -> None:
+        await conceder_permisos(
+            sesion,
+            usuario,
+            clinica,
+            "historia_clinica.leer_sensible",
+            sedes=(sede.id,),
+        )
+        creada = await cliente.post(
+            _ruta(api, "/notas"),
+            headers=cabeceras_medico,
+            json=_cuerpo_nota(paciente, profesional, nivel_sensibilidad="N3"),
+        )
+        assert creada.status_code == 201, creada.text
+        cuerpo = _cuerpo_nota(paciente, profesional)
+        cuerpo["motivo"] = "Corrección de prueba"
+        corregida = await cliente.post(
+            _ruta(api, f"/notas/{creada.json()['raiz_id']}/correccion"),
+            headers=cabeceras_medico,
+            json=cuerpo,
+        )
+        assert corregida.status_code == 200, corregida.text
+        assert corregida.json()["nivel_sensibilidad"] == "N3"
+
+        versiones = list(
+            (
+                await sesion.execute(
+                    sa.select(NotaEvolucion)
+                    .where(NotaEvolucion.raiz_id == uuid.UUID(creada.json()["raiz_id"]))
+                    .order_by(NotaEvolucion.version)
+                )
+            ).scalars()
+        )
+        assert [nota.nivel_sensibilidad for nota in versiones] == ["N3", "N3"]
+
     async def test_un_motivo_demasiado_corto_se_rechaza(
         self,
         cliente: AsyncClient,
@@ -432,6 +680,99 @@ class TestRecetas:
             "medicamentos": [base],
         }
 
+    async def test_n3_exige_permiso_y_se_devuelve_a_quien_tiene_permiso(
+        self,
+        cliente: AsyncClient,
+        api: str,
+        sesion: AsyncSession,
+        usuario: Usuario,
+        clinica: Clinica,
+        sede: Sede,
+        cabeceras_medico: dict[str, str],
+        relacion: RelacionAsistencial,
+        paciente: Paciente,
+        profesional: Profesional,
+    ) -> None:
+        cuerpo = self._cuerpo_receta(paciente, profesional)
+        cuerpo["nivel_sensibilidad"] = "N3"
+        denegada = await cliente.post(_ruta(api, "/recetas"), headers=cabeceras_medico, json=cuerpo)
+        assert denegada.status_code == 403
+
+        await conceder_permisos(
+            sesion,
+            usuario,
+            clinica,
+            "historia_clinica.leer_sensible",
+            sedes=(sede.id,),
+        )
+        creada = await cliente.post(_ruta(api, "/recetas"), headers=cabeceras_medico, json=cuerpo)
+        assert creada.status_code == 201, creada.text
+        receta_id = uuid.UUID(creada.json()["id"])
+        assert creada.json()["nivel_sensibilidad"] == "N3"
+
+        lectura = await cliente.get(
+            _ruta(api, f"/pacientes/{paciente.id}/recetas"), headers=cabeceras_medico
+        )
+        assert lectura.status_code == 200, lectura.text
+        assert [item["id"] for item in lectura.json()] == [str(receta_id)]
+        auditoria_lectura = await sesion.scalar(
+            sa.select(Auditoria)
+            .where(Auditoria.accion == AccionAuditada.RECETA_LEIDA.value)
+            .where(Auditoria.entidad_id == receta_id)
+        )
+        assert auditoria_lectura is not None
+        assert auditoria_lectura.nivel_sensibilidad == "N3"
+
+        confirmada = await cliente.post(
+            _ruta(api, f"/recetas/{receta_id}/confirmacion"),
+            headers=cabeceras_medico,
+            json={"profesional_id": str(profesional.id)},
+        )
+        assert confirmada.status_code == 200, confirmada.text
+        versionada = await cliente.post(
+            _ruta(api, f"/recetas/{receta_id}/versiones"),
+            headers=cabeceras_medico,
+            json={
+                "profesional_id": str(profesional.id),
+                "motivo": "Actualización revisada en consulta",
+                "indicaciones_generales": "Pauta revisada.",
+                "medicamentos": [
+                    {
+                        "nombre": "Medicamento de ejemplo",
+                        "dosis": "1 comprimido",
+                        "via": "ORAL",
+                        "frecuencia_horas": 12,
+                        "duracion_dias": 3,
+                    }
+                ],
+            },
+        )
+        assert versionada.status_code == 201, versionada.text
+        assert versionada.json()["receta"]["nivel_sensibilidad"] == "N3"
+
+        usuario_sin_permiso_sensible = Usuario(
+            clinica_id=clinica.id,
+            correo=f"solo-n2-{uuid.uuid4().hex}@example.invalid",
+            hash_contrasena=hashear_contrasena(CONTRASENA),
+            nombre="Usuario",
+            apellido="N2",
+        )
+        sesion.add(usuario_sin_permiso_sensible)
+        await sesion.flush()
+        await conceder_permisos(
+            sesion,
+            usuario_sin_permiso_sensible,
+            clinica,
+            "receta.leer",
+            sedes=(sede.id,),
+        )
+        cabeceras_solo_n2 = await cabecera_bearer(cliente, usuario_sin_permiso_sensible, clinica)
+        filtrada = await cliente.get(
+            _ruta(api, f"/pacientes/{paciente.id}/recetas"), headers=cabeceras_solo_n2
+        )
+        assert filtrada.status_code == 200, filtrada.text
+        assert filtrada.json() == []
+
     async def test_un_prn_con_frecuencia_se_rechaza_con_mensaje_util(
         self,
         cliente: AsyncClient,
@@ -492,6 +833,7 @@ class TestRecetas:
         assert respuesta.status_code == 201, respuesta.text
         assert respuesta.json()["estado"] == "BORRADOR"
         assert respuesta.json()["confirmada_en"] is None
+        assert respuesta.json()["nivel_sensibilidad"] == "N2"
 
     async def test_confirmar_genera_las_tomas(
         self,
@@ -519,6 +861,159 @@ class TestRecetas:
         assert respuesta.status_code == 200, respuesta.text
         assert respuesta.json()["tomas_generadas"] == 6
         assert respuesta.json()["receta"]["estado"] == "CONFIRMADA"
+
+    async def test_versionar_conserva_historial_y_reemplaza_solo_tomas_futuras(
+        self,
+        cliente: AsyncClient,
+        api: str,
+        sesion: AsyncSession,
+        reloj,
+        cabeceras_medico: dict[str, str],
+        relacion: RelacionAsistencial,
+        paciente: Paciente,
+        profesional: Profesional,
+        usuario: Usuario,
+        clinica: Clinica,
+    ) -> None:
+        creada = await cliente.post(
+            _ruta(api, "/recetas"),
+            headers=cabeceras_medico,
+            json=self._cuerpo_receta(paciente, profesional),
+        )
+        assert creada.status_code == 201, creada.text
+        receta_anterior_id = creada.json()["id"]
+        confirmada = await cliente.post(
+            _ruta(api, f"/recetas/{receta_anterior_id}/confirmacion"),
+            headers=cabeceras_medico,
+            json={"profesional_id": str(profesional.id)},
+        )
+        assert confirmada.status_code == 200, confirmada.text
+
+        # Dos tomas ya vencieron; las demas siguen siendo futuras. Renovar la
+        # sesión permite probar el flujo sin depender del TTL del token.
+        reloj.avanzar(hours=24)
+        cabeceras_medico = await cabecera_bearer(cliente, usuario, clinica)
+        versionada = await cliente.post(
+            _ruta(api, f"/recetas/{receta_anterior_id}/versiones"),
+            headers=cabeceras_medico,
+            json={
+                "profesional_id": str(profesional.id),
+                "motivo": "Ajuste indicado en la consulta de seguimiento",
+                "indicaciones_generales": "Nueva pauta revisada.",
+                "medicamentos": [
+                    {
+                        "nombre": "Medicamento de ejemplo",
+                        "dosis": "1 comprimido",
+                        "via": "ORAL",
+                        "frecuencia_horas": 12,
+                        "duracion_dias": 3,
+                    }
+                ],
+            },
+        )
+
+        assert versionada.status_code == 201, versionada.text
+        cuerpo = versionada.json()
+        receta_nueva_id = cuerpo["receta"]["id"]
+        assert receta_nueva_id != receta_anterior_id
+        assert cuerpo["receta"]["estado"] == "CONFIRMADA"
+        assert cuerpo["receta"]["receta_anterior_id"] == receta_anterior_id
+        assert cuerpo["tomas_canceladas"] == 4
+        assert cuerpo["tomas_generadas"] == 6
+
+        anterior = await sesion.get(Receta, uuid.UUID(receta_anterior_id))
+        nueva = await sesion.get(Receta, uuid.UUID(receta_nueva_id))
+        assert anterior is not None and anterior.estado == "SUSPENDIDA"
+        assert anterior.motivo_suspension == "Ajuste indicado en la consulta de seguimiento"
+        assert nueva is not None and nueva.receta_anterior_id == anterior.id
+
+        estados_anteriores = (
+            (
+                await sesion.execute(
+                    sa.select(Toma.estado)
+                    .join(RecetaMedicamento, RecetaMedicamento.id == Toma.receta_medicamento_id)
+                    .where(RecetaMedicamento.receta_id == anterior.id)
+                )
+            )
+            .scalars()
+            .all()
+        )
+        assert estados_anteriores.count(EstadoToma.PENDIENTE.value) == 2
+        assert estados_anteriores.count(EstadoToma.CANCELADA.value) == 4
+
+        total_nuevo = await sesion.scalar(
+            sa.select(sa.func.count())
+            .select_from(Toma)
+            .join(RecetaMedicamento, RecetaMedicamento.id == Toma.receta_medicamento_id)
+            .where(RecetaMedicamento.receta_id == nueva.id)
+        )
+        assert total_nuevo == 6
+
+        recordatorios_anteriores = (
+            (
+                await sesion.execute(
+                    sa.select(Recordatorio.estado).where(
+                        Recordatorio.entidad_tipo == "TOMA",
+                        Recordatorio.entidad_id.in_(
+                            sa.select(Toma.id)
+                            .join(
+                                RecetaMedicamento,
+                                RecetaMedicamento.id == Toma.receta_medicamento_id,
+                            )
+                            .where(RecetaMedicamento.receta_id == anterior.id)
+                        ),
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+        assert len(recordatorios_anteriores) == 6
+        assert set(recordatorios_anteriores) == {"CANCELADO"}
+
+        recordatorios_nuevos = await sesion.scalar(
+            sa.select(sa.func.count())
+            .select_from(Recordatorio)
+            .join(
+                Toma,
+                sa.and_(
+                    Recordatorio.entidad_tipo == "TOMA",
+                    Recordatorio.entidad_id == Toma.id,
+                ),
+            )
+            .join(RecetaMedicamento, RecetaMedicamento.id == Toma.receta_medicamento_id)
+            .where(
+                RecetaMedicamento.receta_id == nueva.id,
+                Recordatorio.estado == "PROGRAMADO",
+            )
+        )
+        assert recordatorios_nuevos == 6
+
+        acciones = (
+            (
+                await sesion.execute(
+                    sa.select(Auditoria.accion).where(
+                        Auditoria.entidad_id.in_([anterior.id, nueva.id]),
+                        Auditoria.accion.in_(
+                            [
+                                AccionAuditada.RECETA_MODIFICADA.value,
+                                AccionAuditada.RECETA_CONFIRMADA.value,
+                                AccionAuditada.TOMAS_CANCELADAS.value,
+                                AccionAuditada.TOMAS_GENERADAS.value,
+                            ]
+                        ),
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+        assert set(acciones) == {
+            AccionAuditada.RECETA_MODIFICADA.value,
+            AccionAuditada.RECETA_CONFIRMADA.value,
+            AccionAuditada.TOMAS_CANCELADAS.value,
+            AccionAuditada.TOMAS_GENERADAS.value,
+        }
 
     async def test_un_prn_genera_cero_tomas_y_eso_esta_bien(
         self,

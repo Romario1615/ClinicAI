@@ -1,13 +1,15 @@
-<header class="modulo-cabecera">
+<header class="modulo-cabecera modulo-cabecera--historia">
   <div class="modulo-cabecera__texto">
-    <p class="ceja">REGISTRO ASISTENCIAL</p>
+    <p class="ceja ceja--icono"><app-icono nombre="formulario-clinico" [tamano]="16" /> REGISTRO ASISTENCIAL</p>
     <h1>Historia clínica</h1>
     <p>Notas y recetas asociadas al paciente seleccionado.</p>
   </div>
-  <img class="modulo-cabecera__imagen" src="/images/historia-segura.png" alt="" aria-hidden="true" loading="lazy" />
 </header>
 
 <app-resumen-modulo modulo="clinico" />
+@if (avisoAccesoEmergencia()) {
+  <p class="exito" role="status">{{ avisoAccesoEmergencia() }}</p>
+}
 
 @if (!hayPaciente()) {
   <section class="tarjeta buscador" aria-label="Buscar paciente">
@@ -105,7 +107,7 @@
     />
   } @else {
     <app-selector-especialidad class="historia__especialidad" (cambio)="cambiarEspecialidad()" />
-    @if (puedeLeerNotas() && !sinRelacion()) {
+    @if (puedeLeerNotas() && !accesoNoDisponible()) {
       <app-resumen-clinico class="historia__resumen" [pacienteId]="paciente()!.id" />
     }
     <nav class="pestanas" role="tablist" aria-label="Secciones de la historia clínica">
@@ -126,6 +128,12 @@
       @case ('odontograma') {
         <app-odontograma [pacienteId]="paciente()!.id" />
       }
+      @case ('formulario033') {
+        <app-formulario-033
+          [pacienteId]="paciente()!.id"
+          [puedeEditar]="puedeEditarFormulario033()"
+        />
+      }
       @case ('periodoncia') {
         <app-indice-placa [pacienteId]="paciente()!.id" />
       }
@@ -135,6 +143,7 @@
       @case ('planes') {
         <app-planes-tratamiento
           [pacienteId]="paciente()!.id"
+          [nombrePaciente]="paciente()!.nombre + ' ' + paciente()!.apellido"
           [puedeEditar]="puedeEditarPlanes()"
         />
       }
@@ -172,12 +181,23 @@
       @if (!puedeLeerNotas() || notasDenegadas()) {
         <div class="tarjeta sin-acceso">
           <h3>Las notas de evolución no están a su alcance</h3>
-          @if (sinRelacion()) {
+          @if (accesoNoDisponible()) {
             <p>
-              No tiene una relación asistencial vigente con este paciente. Se crea al agendarle
-              una cita con usted, por asignación o por derivación. Sin ella no se leen ni se
-              escriben sus notas.
+              No fue posible confirmar el acceso a esta historia. Si la atención es una emergencia,
+              puede solicitar acceso temporal con motivo; la solicitud quedará auditada y se notificará
+              al equipo administrativo.
             </p>
+            @if (puedeSolicitarAccesoEmergencia()) {
+              <label class="campo">
+                <span class="campo__etiqueta">Motivo del acceso de emergencia</span>
+                <textarea class="campo__control" rows="3" minlength="12" maxlength="500" [ngModel]="motivoAccesoEmergencia()" (ngModelChange)="motivoAccesoEmergencia.set($event)" name="motivoAccesoEmergencia"></textarea>
+                <span class="campo__ayuda">Obligatorio. El acceso caduca en 30 minutos y el motivo queda en el registro restringido de la relación asistencial.</span>
+              </label>
+              <button class="boton boton--peligro" type="button" [disabled]="solicitandoAccesoEmergencia() || motivoAccesoEmergencia().trim().length < 12" (click)="solicitarAccesoEmergencia()">
+                {{ solicitandoAccesoEmergencia() ? 'Solicitando…' : 'Solicitar acceso temporal' }}
+              </button>
+              @if (errorAccesoEmergencia()) { <p class="aviso-error" role="alert">{{ errorAccesoEmergencia() }}</p> }
+            }
           } @else {
             <p>
               Su rol no incluye <code>historia_clinica.leer</code>. Puede seguir la medicación
@@ -288,7 +308,7 @@
       <div class="seccion__cabecera">
         <h2>Recetas</h2>
         @if (puedeCrearRecetas() && !creandoReceta()) {
-          <button class="boton boton--principal boton--pequeno" type="button" (click)="creandoReceta.set(true)">
+          <button class="boton boton--principal boton--pequeno" type="button" (click)="versionandoReceta.set(null); creandoReceta.set(true)">
             Nueva receta
           </button>
         }
@@ -297,8 +317,9 @@
       @if (creandoReceta()) {
         <app-receta-editor
           [pacienteId]="paciente()!.id"
+          [versionDe]="versionandoReceta()"
           (guardada)="alGuardarReceta()"
-          (cancelado)="creandoReceta.set(false)"
+          (cancelado)="cerrarEditorReceta()"
         />
       }
       @if (avisoReceta()) {
@@ -351,6 +372,9 @@
                 {{ receta.motivo_suspension }}
               </p>
             }
+            @if (receta.receta_anterior_id) {
+              <p class="receta__nota">Nueva versión de la receta {{ receta.receta_anterior_id.slice(0, 8) }}.</p>
+            }
             @if (receta.indicaciones_generales) {
               <p class="receta__indicaciones">{{ receta.indicaciones_generales }}</p>
             }
@@ -380,6 +404,12 @@
                 </li>
               }
             </ul>
+            @if (receta.estado === 'CONFIRMADA' && puedeCrearRecetas() && puedeConfirmarRecetas()) {
+              <button class="boton boton--pequeno" type="button" [disabled]="creandoReceta()"
+                      (click)="versionandoReceta.set(receta); creandoReceta.set(true)">
+                Crear nueva versión
+              </button>
+            }
           </article>
         }
       }

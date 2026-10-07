@@ -39,6 +39,26 @@ FRASES: dict[IntencionEntrante, frozenset[str]] = {
         {"si", "si acepto", "acepto", "lo tomo", "quiero ese turno"}
     ),
     IntencionEntrante.REGISTRAR_TOMA: frozenset({"tomada", "tomado", "ya tome", "listo"}),
+    IntencionEntrante.RECORDAR_TOMA_DESPUES: frozenset(
+        {"recordarme despues", "avisarme despues", "mas tarde", "recordatorio en 30 minutos"}
+    ),
+    IntencionEntrante.NO_PUDO_TOMAR: frozenset(
+        {"no pude tomarla", "no pude hacer la toma", "no pude tomar mi medicamento"}
+    ),
+    # Solo frases completas y explicitas. Se identifican para priorizar la
+    # revision humana; no se valora urgencia ni se interpreta el contenido.
+    IntencionEntrante.PROBLEMA_TRATAMIENTO: frozenset(
+        {
+            "tengo un problema con mi medicamento",
+            "problema con mi medicamento",
+            "tengo un problema con mi tratamiento",
+            "no puedo tomar mi medicamento",
+            "no puedo tomar la pastilla",
+            "me sienta mal el medicamento",
+            "me sienta mal la medicina",
+            "tengo problemas con mi tratamiento",
+        }
+    ),
     # Retirada del consentimiento. Se aceptan las formas que las guias de
     # WhatsApp consideran estandar, incluida la inglesa: el paciente puede
     # haberla aprendido de otra aplicacion, y no reconocerla equivaldria a
@@ -50,7 +70,17 @@ FRASES: dict[IntencionEntrante, frozenset[str]] = {
         {"baja promociones", "no quiero promociones", "sin promociones", "stop promociones"}
     ),
     IntencionEntrante.ALTA: frozenset({"alta", "start", "si acepto recibir mensajes"}),
-    IntencionEntrante.AYUDA: frozenset({"ayuda", "help", "menu", "opciones"}),
+    IntencionEntrante.AYUDA: frozenset(
+        {
+            "ayuda",
+            "help",
+            "menu",
+            "opciones",
+            "hablar con la clinica",
+            "quiero hablar con la clinica",
+            "hablar con una persona",
+        }
+    ),
 }
 
 # Indice inverso, construido una vez. Dos intenciones no pueden compartir

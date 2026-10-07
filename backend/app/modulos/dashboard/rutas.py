@@ -6,7 +6,14 @@ from fastapi import APIRouter, Depends
 from pydantic import AwareDatetime, ValidationError
 from sqlalchemy import select
 
-from app.modulos.dashboard.esquemas import AnalisisInteligente, FiltroDashboard, ResumenDashboard
+from app.modulos.agenda.modelos import EstadoCita
+from app.modulos.dashboard.analisis_local import generar_hallazgos
+from app.modulos.dashboard.esquemas import (
+    AnalisisInteligente,
+    FiltroDashboard,
+    ResumenDashboard,
+    ResumenOperativoLocal,
+)
 from app.modulos.dashboard.repositorio import resumir
 from app.modulos.organizacion.modelos import ConfiguracionClinica
 from app.nucleo.auditoria import AccionAuditada, construir_entrada
@@ -43,11 +50,52 @@ def filtro_dashboard(desde: AwareDatetime, hasta: AwareDatetime) -> FiltroDashbo
 async def resumen(
     principal: PuedeLeer,
     sesion: Sesion,
+    reloj: RelojActual,
     filtro: Annotated[FiltroDashboard, Depends(filtro_dashboard)],
     sede_id: uuid.UUID | None = None,
     profesional_id: uuid.UUID | None = None,
+    especialidad_id: uuid.UUID | None = None,
+    servicio_id: uuid.UUID | None = None,
+    estado: EstadoCita | None = None,
 ) -> ResumenDashboard:
-    return await resumir(sesion, principal, filtro, sede_id, profesional_id)
+    return await resumir(
+        sesion,
+        principal,
+        filtro,
+        sede_id,
+        profesional_id,
+        especialidad_id,
+        servicio_id,
+        estado,
+        ahora=reloj.ahora(),
+    )
+
+
+@enrutador.post("/analisis-local", response_model=ResumenOperativoLocal)
+async def analizar_local(
+    principal: PuedeLeer,
+    sesion: Sesion,
+    reloj: RelojActual,
+    filtro: Annotated[FiltroDashboard, Depends(filtro_dashboard)],
+    sede_id: uuid.UUID | None = None,
+    profesional_id: uuid.UUID | None = None,
+    especialidad_id: uuid.UUID | None = None,
+    servicio_id: uuid.UUID | None = None,
+    estado: EstadoCita | None = None,
+) -> ResumenOperativoLocal:
+    """Explica métricas del ámbito sin enviar datos a un proveedor externo."""
+    datos = await resumir(
+        sesion,
+        principal,
+        filtro,
+        sede_id,
+        profesional_id,
+        especialidad_id,
+        servicio_id,
+        estado,
+        ahora=reloj.ahora(),
+    )
+    return ResumenOperativoLocal(hallazgos=generar_hallazgos(datos))
 
 
 @enrutador.post("/analisis-ia", response_model=AnalisisInteligente)
@@ -58,6 +106,11 @@ async def analizar_con_ia(
     auditor: Auditor,
     reloj: RelojActual,
     filtro: Annotated[FiltroDashboard, Depends(filtro_dashboard)],
+    sede_id: uuid.UUID | None = None,
+    profesional_id: uuid.UUID | None = None,
+    especialidad_id: uuid.UUID | None = None,
+    servicio_id: uuid.UUID | None = None,
+    estado: EstadoCita | None = None,
 ) -> AnalisisInteligente:
     """Analiza métricas agregadas con el proveedor que habilitó la clínica."""
     if principal.clinica_id is None:
@@ -92,13 +145,24 @@ async def analizar_con_ia(
             "No se pudo leer la credencial de IA configurada."
         ) from exc
 
-    datos = await resumir(sesion, principal, filtro)
+    datos = await resumir(
+        sesion,
+        principal,
+        filtro,
+        sede_id,
+        profesional_id,
+        especialidad_id,
+        servicio_id,
+        estado,
+        ahora=reloj.ahora(),
+    )
     agregado = {
         "periodo": {"desde": filtro.desde.isoformat(), "hasta": filtro.hasta.isoformat()},
         "total_citas": datos.total_citas,
         "pacientes_distintos": datos.pacientes,
         "estados_de_cita": datos.citas,
         "espera": datos.espera.model_dump(),
+        "recuperacion_turnos": datos.recuperacion_turnos.model_dump(),
         "totales_de_pago_por_estado": (
             {estado: str(importe) for estado, importe in datos.pagos.items()}
             if datos.pagos is not None

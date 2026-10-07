@@ -211,6 +211,15 @@ jobs:
           uv run alembic downgrade -1
           uv run alembic upgrade head
 
+      - name: Comprobar reconstruccion completa del esquema
+        working-directory: backend
+        # Usa la base efimera del servicio PostgreSQL. Comprueba que la cadena
+        # completa se puede retirar y volver a aplicar antes de cargar catalogos.
+        run: |
+          uv run alembic downgrade base
+          uv run alembic upgrade head
+          uv run alembic check
+
       - name: Cargar catalogos
         working-directory: backend
         # Los permisos y roles son parte del funcionamiento, no datos de
@@ -403,9 +412,7 @@ jobs:
       - name: Pruebas
         if: steps.existe.outputs.presente == 'true'
         working-directory: frontend
-        env:
-          CHROME_BIN: /usr/bin/chromium-browser
-        run: npm test -- --watch=false --browsers=ChromeHeadlessCI
+        run: npm run test:ci
 
       - name: Build
         if: steps.existe.outputs.presente == 'true'

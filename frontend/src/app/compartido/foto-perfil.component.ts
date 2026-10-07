@@ -12,7 +12,7 @@
  * objeto local, que se revoca al destruir el componente para no dejar la foto
  * en memoria del navegador más tiempo del necesario.
  */
-import { Component, DestroyRef, effect, inject, input, signal, untracked } from '@angular/core';
+import { Component, DestroyRef, effect, inject, input, signal, untracked, ChangeDetectionStrategy } from '@angular/core';
 
 import { ApiService, FalloApi } from '../nucleo/servicios/api.service';
 import { IconoComponent } from './icono.component';
@@ -74,6 +74,7 @@ import { IconoComponent } from './icono.component';
       <span class="foto__error" role="alert">{{ error() }}</span>
     }
   `,
+  changeDetection: ChangeDetectionStrategy.Eager,
   styles: `
     :host {
       display: inline-flex;

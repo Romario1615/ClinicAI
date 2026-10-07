@@ -1,16 +1,62 @@
 .portada {
+  position: relative;
+  isolation: isolate;
+  min-height: 190px;
   display: flex;
   align-items: flex-end;
   justify-content: space-between;
   gap: var(--espacio-5);
   flex-wrap: wrap;
   margin-bottom: var(--espacio-5);
+  padding: var(--espacio-5);
+  overflow: hidden;
+  border: 1px solid rgb(57 119 116 / 10%);
+  border-radius: calc(var(--radio) * 1.35);
+  background: linear-gradient(100deg, #f8faf5 0%, #f5f7ef 58%, #eaf1e9 100%);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 90%);
+}
+
+.portada__contenido,
+.portada > .boton {
+  position: relative;
+  z-index: 1;
+}
+
+.portada__contenido {
+  max-width: 52rem;
+}
+
+.portada__ilustracion {
+  position: absolute;
+  z-index: 0;
+  inset: 0 0 0 auto;
+  width: min(68%, 900px);
+  height: 100%;
+  object-fit: cover;
+  object-position: right center;
+  opacity: .92;
+  pointer-events: none;
 }
 
 .portada__sub {
   max-width: 44rem;
   margin: 0;
   color: var(--texto-suave);
+}
+
+@media (max-width: 720px) {
+  .portada {
+    min-height: 210px;
+    padding: var(--espacio-4);
+    align-items: flex-start;
+    background: linear-gradient(110deg, #f8faf5 0%, rgb(248 250 245 / 96%) 55%, rgb(248 250 245 / 60%) 100%);
+  }
+
+  .portada__ilustracion {
+    width: 100%;
+    opacity: .34;
+    object-position: 70% center;
+  }
 }
 
 .nueva {

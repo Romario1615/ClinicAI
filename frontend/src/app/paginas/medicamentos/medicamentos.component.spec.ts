@@ -1,3 +1,4 @@
+import type { Mock } from "vitest";
 /**
  * Pruebas de la pantalla de medicacion.
  *
@@ -15,7 +16,7 @@
  * **El registro recarga desde el servidor.** Mutar la fila en memoria mostraria
  * un estado que el backend puede no tener.
  */
-import { provideHttpClient } from '@angular/common/http';
+import { provideHttpClient, withXhr } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 
@@ -32,227 +33,222 @@ const PACIENTE_ID = 'pac-1';
 const AHORA = new Date('2026-04-15T14:00:00Z').getTime();
 
 function paciente(): Paciente {
-  return {
-    id: PACIENTE_ID,
-    tipo_documento: 'CEDULA',
-    numero_documento: '9900000001',
-    nombre: 'Nombre',
-    apellido: 'Apellido',
-    telefono_whatsapp: null,
-    correo: null,
-    fecha_nacimiento: null,
-    nivel_verificacion: 'DOCUMENTO',
-  };
+    return {
+        id: PACIENTE_ID,
+        tipo_documento: 'CEDULA',
+        numero_documento: '9900000001',
+        nombre: 'Nombre',
+        apellido: 'Apellido',
+        telefono_whatsapp: null,
+        correo: null,
+        fecha_nacimiento: null,
+        nivel_verificacion: 'DOCUMENTO',
+    };
 }
 
 function toma(extra: Partial<Toma> = {}): Toma {
-  return {
-    id: 'toma-1',
-    receta_medicamento_id: 'med-1',
-    medicamento: 'Medicamento de ejemplo A',
-    programada_en: '2026-04-15T10:00:00Z',
-    estado: 'PENDIENTE',
-    registrada_en: null,
-    ...extra,
-  };
+    return {
+        id: 'toma-1',
+        receta_medicamento_id: 'med-1',
+        medicamento: 'Medicamento de ejemplo A',
+        programada_en: '2026-04-15T10:00:00Z',
+        estado: 'PENDIENTE',
+        registrada_en: null,
+        ...extra,
+    };
 }
 
 import { INDICADORES_VACIOS } from '../../nucleo/pruebas/sesion-sintetica';
 describe('MedicamentosComponent', () => {
-  let fixture: ComponentFixture<MedicamentosComponent>;
-  let http: HttpTestingController;
-  let sesion: SesionService;
+    let fixture: ComponentFixture<MedicamentosComponent>;
+    let http: HttpTestingController;
+    let sesion: SesionService;
 
-  beforeEach(() => {
-    jasmine.clock().install();
-    jasmine.clock().mockDate(new Date(AHORA));
+    beforeEach(() => {
+        vi.useFakeTimers();
+        vi.setSystemTime(new Date(AHORA));
 
-    TestBed.configureTestingModule({
-      imports: [MedicamentosComponent],
-      providers: [
-        provideHttpClient(),
-        provideHttpClientTesting(),
-        { provide: CONFIGURACION, useValue: CONFIGURACION_POR_DEFECTO },
-        INDICADORES_VACIOS,
-      ],
+        TestBed.configureTestingModule({
+            imports: [MedicamentosComponent],
+            providers: [
+                provideHttpClient(withXhr()),
+                provideHttpClientTesting(),
+                { provide: CONFIGURACION, useValue: CONFIGURACION_POR_DEFECTO },
+                INDICADORES_VACIOS,
+            ],
+        });
+        fixture = TestBed.createComponent(MedicamentosComponent);
+        http = TestBed.inject(HttpTestingController);
+        sesion = TestBed.inject(SesionService);
+        vi.spyOn(sesion, 'tienePermiso').mockReturnValue(true);
     });
-    fixture = TestBed.createComponent(MedicamentosComponent);
-    http = TestBed.inject(HttpTestingController);
-    sesion = TestBed.inject(SesionService);
-    spyOn(sesion, 'tienePermiso').and.returnValue(true);
-  });
 
-  afterEach(() => {
-    http.verify();
-    jasmine.clock().uninstall();
-  });
-
-  function listar(): void {
-    fixture.detectChanges();
-    http
-      .expectOne((p) => p.url === `${BASE}/pacientes/`)
-      .flush({
-        elementos: [paciente()],
-        total: 1,
-        limite: 50,
-        desplazamiento: 0,
-        termino_ignorado: false,
-      });
-    fixture.detectChanges();
-  }
-
-  function abrir(tomas: readonly Toma[]): void {
-    fixture.componentInstance['abrir'](paciente());
-    http.expectOne(`${BASE}/pacientes/${PACIENTE_ID}`).flush({
-      ...paciente(),
-      sexo: null,
-      direccion: null,
-      activo: true,
+    afterEach(() => {
+        http.verify();
+        vi.useRealTimers();
     });
-    fixture.detectChanges();
-    http.expectOne((p) => p.url.includes('/tomas')).flush(tomas);
-    if ((sesion.tienePermiso as jasmine.Spy)('adherencia.leer')) {
-      http.expectOne(`${BASE}/historia/adherencia/alertas`).flush([]);
+
+    function listar(): void {
+        fixture.detectChanges();
+        http
+            .expectOne((p) => p.url === `${BASE}/pacientes/`)
+            .flush({
+            elementos: [paciente()],
+            total: 1,
+            limite: 50,
+            desplazamiento: 0,
+            termino_ignorado: false,
+        });
+        fixture.detectChanges();
     }
-    fixture.detectChanges();
-  }
 
-  function texto(): string {
-    return (fixture.nativeElement as HTMLElement).textContent ?? '';
-  }
+    function abrir(tomas: readonly Toma[]): void {
+        fixture.componentInstance['abrir'](paciente());
+        http.expectOne(`${BASE}/pacientes/${PACIENTE_ID}`).flush({
+            ...paciente(),
+            sexo: null,
+            direccion: null,
+            activo: true,
+        });
+        fixture.detectChanges();
+        http.expectOne((p) => p.url.includes('/tomas')).flush(tomas);
+        if ((sesion.tienePermiso as Mock)('adherencia.leer')) {
+            http.expectOne(`${BASE}/historia/adherencia/alertas`).flush([]);
+        }
+        fixture.detectChanges();
+    }
 
-  function botones(): readonly string[] {
-    return Array.from(
-      (fixture.nativeElement as HTMLElement).querySelectorAll('tbody button'),
-    ).map((b) => b.textContent?.trim() ?? '');
-  }
+    function texto(): string {
+        return (fixture.nativeElement as HTMLElement).textContent ?? '';
+    }
 
-  it('cada alerta dice de que receta es', () => {
-    listar();
-    fixture.componentInstance['abrir'](paciente());
-    http.expectOne(`${BASE}/pacientes/${PACIENTE_ID}`).flush({ ...paciente(), sexo: null, direccion: null, activo: true });
-    fixture.detectChanges();
-    http.expectOne((p) => p.url.includes('/tomas')).flush([toma()]);
-    http.expectOne(`${BASE}/historia/adherencia/alertas`).flush([
-      {
-        id: 'al-1', paciente_id: PACIENTE_ID, receta_id: 'rec-1', profesional_id: 'pr',
-        severidad: 'ATENCION', tomas_omitidas: 2, tomas_esperadas: 7,
-        periodo_desde: '2026-01-01T00:00:00Z', periodo_hasta: '2026-01-08T00:00:00Z', creado_en: '2026-01-08T00:00:00Z',
-      },
-    ]);
-    http.expectOne(`${BASE}/historia/pacientes/${PACIENTE_ID}/recetas`).flush([
-      { id: 'rec-1', medicamentos: [{ nombre: 'Medicamento de ejemplo A' }] },
-    ]);
-    fixture.detectChanges();
+    function botones(): readonly string[] {
+        return Array.from((fixture.nativeElement as HTMLElement).querySelectorAll('tbody button')).map((b) => b.textContent?.trim() ?? '');
+    }
 
-    expect(texto()).toContain('Receta: Medicamento de ejemplo A');
-  });
+    it('cada alerta dice de que receta es', () => {
+        listar();
+        fixture.componentInstance['abrir'](paciente());
+        http.expectOne(`${BASE}/pacientes/${PACIENTE_ID}`).flush({ ...paciente(), sexo: null, direccion: null, activo: true });
+        fixture.detectChanges();
+        http.expectOne((p) => p.url.includes('/tomas')).flush([toma()]);
+        http.expectOne(`${BASE}/historia/adherencia/alertas`).flush([
+            {
+                id: 'al-1', paciente_id: PACIENTE_ID, receta_id: 'rec-1', profesional_id: 'pr',
+                severidad: 'ATENCION', tomas_omitidas: 2, tomas_esperadas: 7,
+                periodo_desde: '2026-01-01T00:00:00Z', periodo_hasta: '2026-01-08T00:00:00Z', creado_en: '2026-01-08T00:00:00Z',
+            },
+        ]);
+        http.expectOne(`${BASE}/historia/pacientes/${PACIENTE_ID}/recetas`).flush([
+            { id: 'rec-1', medicamentos: [{ nombre: 'Medicamento de ejemplo A' }] },
+        ]);
+        fixture.detectChanges();
 
-  it('pide la ventana de tomas alrededor de hoy', () => {
-    listar();
-    fixture.componentInstance['abrir'](paciente());
-    http.expectOne(`${BASE}/pacientes/${PACIENTE_ID}`).flush({
-      ...paciente(),
-      sexo: null,
-      direccion: null,
-      activo: true,
-    });
-    fixture.detectChanges();
-    const peticion = http.expectOne((p) => p.url.includes('/tomas'));
-    expect(peticion.request.params.get('dias')).toBe('7');
-    peticion.flush([]);
-    http.expectOne(`${BASE}/historia/adherencia/alertas`).flush([]);
-  });
-
-  describe('una toma futura', () => {
-    it('no ofrece el boton de registrar', () => {
-      listar();
-      abrir([toma({ programada_en: '2026-04-16T10:00:00Z' })]);
-
-      expect(texto()).toContain('aún no toca');
-      expect(botones()).not.toContain('Tomada');
-      expect(botones()).not.toContain('Omitida');
+        expect(texto()).toContain('Receta: Medicamento de ejemplo A');
     });
 
-    it('no se cuenta como sin registrar', () => {
-      listar();
-      abrir([toma({ programada_en: '2026-04-16T10:00:00Z' })]);
-
-      expect(texto()).not.toContain('toma(s) sin registrar');
-    });
-  });
-
-  describe('una toma vencida', () => {
-    it('se destaca y si ofrece registrar', () => {
-      listar();
-      abrir([toma({ programada_en: '2026-04-15T10:00:00Z' })]);
-
-      expect(texto()).toContain('1 toma(s) sin registrar');
-      expect(texto()).toContain('sin registrar');
-      expect(botones()).toContain('Tomada');
-      expect(botones()).toContain('Omitida');
+    it('pide la ventana de tomas alrededor de hoy', () => {
+        listar();
+        fixture.componentInstance['abrir'](paciente());
+        http.expectOne(`${BASE}/pacientes/${PACIENTE_ID}`).flush({
+            ...paciente(),
+            sexo: null,
+            direccion: null,
+            activo: true,
+        });
+        fixture.detectChanges();
+        const peticion = http.expectOne((p) => p.url.includes('/tomas'));
+        expect(peticion.request.params.get('dias')).toBe('7');
+        peticion.flush([]);
+        http.expectOne(`${BASE}/historia/adherencia/alertas`).flush([]);
     });
 
-    it('registrar recarga desde el servidor en lugar de mutar la fila', () => {
-      listar();
-      const vencida = toma({ programada_en: '2026-04-15T10:00:00Z' });
-      abrir([vencida]);
+    describe('una toma futura', () => {
+        it('no ofrece el boton de registrar', () => {
+            listar();
+            abrir([toma({ programada_en: '2026-04-16T10:00:00Z' })]);
 
-      fixture.componentInstance['registrar'](vencida, true);
-      const registro = http.expectOne(`${BASE}/historia/tomas/${vencida.id}/registro`);
-      expect(registro.request.body.tomada).toBeTrue();
-      registro.flush(null, { status: 204, statusText: 'No Content' });
+            expect(texto()).toContain('aún no toca');
+            expect(botones()).not.toContain('Tomada');
+            expect(botones()).not.toContain('Omitida');
+        });
 
-      // El backend puede haber rechazado por una razon que la interfaz no
-      // conoce; mostrar un estado que el servidor no tiene es peor que
-      // esperar medio segundo.
-      http
-        .expectOne((p) => p.url.includes('/tomas'))
-        .flush([{ ...vencida, estado: 'TOMADA', registrada_en: '2026-04-15T14:00:00Z' }]);
-      http.expectOne(`${BASE}/historia/adherencia/alertas`).flush([]);
-      fixture.detectChanges();
+        it('no se cuenta como sin registrar', () => {
+            listar();
+            abrir([toma({ programada_en: '2026-04-16T10:00:00Z' })]);
 
-      expect(texto()).toContain('Tomada');
-      expect(botones()).toEqual([]);
+            expect(texto()).not.toContain('toma(s) sin registrar');
+        });
     });
-  });
 
-  it('sin permiso no ofrece registrar, y lo dice', () => {
-    (sesion.tienePermiso as jasmine.Spy).and.returnValue(false);
-    listar();
-    abrir([toma({ programada_en: '2026-04-15T10:00:00Z' })]);
+    describe('una toma vencida', () => {
+        it('se destaca y si ofrece registrar', () => {
+            listar();
+            abrir([toma({ programada_en: '2026-04-15T10:00:00Z' })]);
 
-    expect(texto()).toContain('sin permiso');
-    expect(botones()).toEqual([]);
-  });
+            expect(texto()).toContain('1 toma(s) sin registrar');
+            expect(texto()).toContain('sin registrar');
+            expect(botones()).toContain('Tomada');
+            expect(botones()).toContain('Omitida');
+        });
 
-  it('sin tomas explica que solo una receta confirmada las genera', () => {
-    listar();
-    abrir([]);
+        it('registrar recarga desde el servidor en lugar de mutar la fila', () => {
+            listar();
+            const vencida = toma({ programada_en: '2026-04-15T10:00:00Z' });
+            abrir([vencida]);
 
-    // Es la duda que tiene quien mira la pantalla vacia: si falta algo o si
-    // el paciente no tiene pauta.
-    expect(texto()).toContain('Sin tomas programadas');
-    expect(texto()).toContain('receta confirmada');
-    expect(texto()).toContain('cuando sea necesario');
-  });
+            fixture.componentInstance['registrar'](vencida, true);
+            const registro = http.expectOne(`${BASE}/historia/tomas/${vencida.id}/registro`);
+            expect(registro.request.body.tomada).toBe(true);
+            registro.flush(null, { status: 204, statusText: 'No Content' });
 
-  it('un error al registrar se muestra sin perder el listado', () => {
-    listar();
-    const vencida = toma({ programada_en: '2026-04-15T10:00:00Z' });
-    abrir([vencida]);
+            // El backend puede haber rechazado por una razon que la interfaz no
+            // conoce; mostrar un estado que el servidor no tiene es peor que
+            // esperar medio segundo.
+            http
+                .expectOne((p) => p.url.includes('/tomas'))
+                .flush([{ ...vencida, estado: 'TOMADA', registrada_en: '2026-04-15T14:00:00Z' }]);
+            http.expectOne(`${BASE}/historia/adherencia/alertas`).flush([]);
+            fixture.detectChanges();
 
-    fixture.componentInstance['registrar'](vencida, true);
-    http
-      .expectOne(`${BASE}/historia/tomas/${vencida.id}/registro`)
-      .flush(
-        { codigo: 'CONFLICTO_ESTADO', mensaje: 'La toma ya se registro.' },
-        { status: 409, statusText: 'Conflict' },
-      );
-    fixture.detectChanges();
+            expect(texto()).toContain('Tomada');
+            expect(botones()).toEqual([]);
+        });
+    });
 
-    expect(texto()).toContain('No se pudo registrar la toma');
-    expect(texto()).toContain('CONFLICTO_ESTADO');
-    expect(texto()).toContain('Medicamento de ejemplo A');
-  });
+    it('sin permiso no ofrece registrar, y lo dice', () => {
+        (sesion.tienePermiso as Mock).mockReturnValue(false);
+        listar();
+        abrir([toma({ programada_en: '2026-04-15T10:00:00Z' })]);
+
+        expect(texto()).toContain('sin permiso');
+        expect(botones()).toEqual([]);
+    });
+
+    it('sin tomas explica que solo una receta confirmada las genera', () => {
+        listar();
+        abrir([]);
+
+        // Es la duda que tiene quien mira la pantalla vacia: si falta algo o si
+        // el paciente no tiene pauta.
+        expect(texto()).toContain('Sin tomas programadas');
+        expect(texto()).toContain('receta confirmada');
+        expect(texto()).toContain('cuando sea necesario');
+    });
+
+    it('un error al registrar se muestra sin perder el listado', () => {
+        listar();
+        const vencida = toma({ programada_en: '2026-04-15T10:00:00Z' });
+        abrir([vencida]);
+
+        fixture.componentInstance['registrar'](vencida, true);
+        http
+            .expectOne(`${BASE}/historia/tomas/${vencida.id}/registro`)
+            .flush({ codigo: 'CONFLICTO_ESTADO', mensaje: 'La toma ya se registro.' }, { status: 409, statusText: 'Conflict' });
+        fixture.detectChanges();
+
+        expect(texto()).toContain('No se pudo registrar la toma');
+        expect(texto()).toContain('CONFLICTO_ESTADO');
+        expect(texto()).toContain('Medicamento de ejemplo A');
+    });
 });

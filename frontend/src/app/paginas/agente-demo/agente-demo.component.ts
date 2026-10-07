@@ -1,4 +1,4 @@
-import { Component, computed, inject, signal } from '@angular/core';
+import { Component, computed, inject, signal, ChangeDetectionStrategy } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { forkJoin } from 'rxjs';
 
@@ -25,7 +25,8 @@ interface Mensaje { autor: 'Usted' | 'Asistente'; texto: string; respuesta?: Res
 @Component({
   selector: 'app-agente-demo', standalone: true,
   imports: [FormsModule, SelectorPacienteComponent, InsigniaEstadoComponent, CargandoComponent],
-  templateUrl: './agente-demo.component.html', styleUrl: './agente-demo.component.scss',
+  templateUrl: './agente-demo.component.html', changeDetection: ChangeDetectionStrategy.Eager,
+ styleUrl: './agente-demo.component.scss',
 })
 export class AgenteDemoComponent {
   private readonly catalogo = inject(CatalogoService);

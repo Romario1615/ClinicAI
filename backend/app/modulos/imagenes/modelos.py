@@ -11,8 +11,10 @@ Dos niveles de sensibilidad en la misma tabla
 ---------------------------------------------
 * `PERFIL` es identificacion: recepcion la usa para reconocer al paciente en
   el mostrador. Nivel **N1**, permisos administrativos del paciente.
-* Todo lo demas (radiografias, fotos intraorales) es **N2 · Clinico**:
-  permiso propio, relacion asistencial y auditoria de cada visualizacion.
+* Todo lo demas (radiografias, fotos intraorales) es **N2 · Clinico** por
+  defecto; el personal autorizado puede marcar una imagen N3. Ambos niveles
+  exigen permiso propio, relacion asistencial y auditoria de visualizacion;
+  N3 requiere ademas `historia_clinica.leer_sensible`.
 
 Una restriccion `CHECK` ata el tipo al nivel: una radiografia no puede quedar
 marcada como N1 por un descuido en un camino de escritura nuevo.
@@ -38,6 +40,7 @@ from sqlalchemy import (
     String,
     Text,
     UniqueConstraint,
+    text,
 )
 from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.orm import Mapped, mapped_column
@@ -110,6 +113,11 @@ class ImagenPaciente(Base, MezclaIdentificador, MezclaAuditoria, MezclaAnulacion
             "descripcion IS NULL OR char_length(descripcion) <= 500", name="descripcion_corta"
         ),
         Index("ix_imagen_paciente_paciente_tipo", "paciente_id", "tipo", "creado_en"),
+        Index(
+            "ix_imagen_paciente_procedimiento",
+            "procedimiento_id",
+            postgresql_where=text("procedimiento_id IS NOT NULL"),
+        ),
     )
 
 

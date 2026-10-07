@@ -25,7 +25,7 @@
  * distinguiría el ámbar del gris, y esta es la pantalla donde se decide a quién
  * se llama antes.
  */
-import { Component, computed, input, output } from '@angular/core';
+import { Component, computed, input, output, ChangeDetectionStrategy } from '@angular/core';
 
 import type { TareaPendiente } from '../nucleo/utilidades/pendientes';
 import { IconoComponent } from './icono.component';
@@ -82,6 +82,7 @@ import { IconoComponent } from './icono.component';
       </ul>
     }
   `,
+  changeDetection: ChangeDetectionStrategy.Eager,
   styles: `
     .cola {
       list-style: none;

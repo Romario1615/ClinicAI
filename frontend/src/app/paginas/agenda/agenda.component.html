@@ -19,9 +19,18 @@
       <p class="ceja">AGENDA</p>
       <h1>{{ fechaLegible() }}</h1>
     </div>
-    <p class="cabecera-agenda__zona">
-      Horario de <strong>{{ zona() }}</strong>
-    </p>
+    <div class="cabecera-agenda__meta">
+      <p class="cabecera-agenda__zona">Horario de <strong>{{ zona() }}</strong></p>
+      @if (puedeExportarReportes()) {
+        <button type="button" class="boton boton--pequeno" [disabled]="exportando()" (click)="exportarResumen()">
+          <app-icono nombre="descargar" [tamano]="16" />
+          {{ exportando() ? 'Preparando…' : 'Exportar resumen CSV' }}
+        </button>
+      }
+      @if (errorExportacion()) {
+        <p class="cabecera-agenda__error" role="alert">{{ errorExportacion() }}</p>
+      }
+    </div>
     <img class="modulo-cabecera__imagen" src="/images/agenda-turnos.png" alt="" aria-hidden="true" loading="lazy" />
   </div>
 

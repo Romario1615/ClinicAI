@@ -14,26 +14,16 @@
       </ul>
     </div>
 
-    <!-- Electrocardiograma estilizado: identifica el ámbito sin fotografías. -->
-    <svg class="acceso__pulso" viewBox="0 0 600 120" preserveAspectRatio="none" focusable="false">
-      <path
-        d="M0 70h170l18-40 22 80 20-62 14 22h96l16-30 18 52 14-22h212"
-        fill="none"
-        stroke="currentColor"
-        stroke-width="3"
-        stroke-linecap="round"
-        stroke-linejoin="round"
-      />
-    </svg>
+    <img class="acceso__flujo" src="/images/flujo-clinico.svg" alt="" aria-hidden="true" />
   </aside>
 
-  <main class="acceso__formulario">
+  <div class="acceso__formulario">
     <div class="tarjeta acceso__tarjeta">
       @if (modoAccesoLocal()) {
         <p class="acceso__ceja acceso__ceja--formulario">ACCESO LOCAL</p>
         <h1>Elige un rol</h1>
         <p class="acceso__intro">Entra directamente a las vistas disponibles para revisar el sistema.</p>
-        <div class="acceso__roles" aria-label="Ingresar como un rol">
+        <div class="acceso__roles" role="group" aria-label="Ingresar como un rol">
           @for (rol of rolesLocales(); track rol.codigo) {
             <button
               type="button"
@@ -41,10 +31,26 @@
               [disabled]="enviando()"
               (click)="entrarComo(rol.codigo)"
             >
-              <span class="acceso__rol-icono" aria-hidden="true">
+              <span class="acceso__rol-icono" [class]="'acceso__rol-icono acceso__rol-icono--' + rol.codigo" aria-hidden="true">
                 <svg viewBox="0 0 24 24" fill="none">
-                  <path d="M12 3.25 19 6v5.2c0 4.4-2.9 7.4-7 9.55-4.1-2.15-7-5.15-7-9.55V6l7-2.75Z" />
-                  <path d="m9 12 2 2 4-4" />
+                  @switch (rol.codigo) {
+                    @case ('recepcion') {
+                      <path d="M4 8h16v11H4zM4 11h16M8 8V5h8v3" /><path d="M9 15h6" />
+                    }
+                    @case ('profesional') {
+                      <path d="M12 21s-7.5-4.1-7.5-10.4A4.3 4.3 0 0 1 12 7.9a4.3 4.3 0 0 1 7.5 2.7C19.5 16.9 12 21 12 21Z" /><path d="M12 10v6M9 13h6" />
+                    }
+                    @case ('asistente') {
+                      <path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8ZM4 21a8 8 0 0 1 16 0" /><path d="m15.5 15 1.5 2 2-3" />
+                    }
+                    @case ('auditor') {
+                      <path d="M6 3h8l4 4v14H6zM14 3v4h4M9 12h6M9 16h3" /><path d="m14 16 1.5 1.5L19 14" />
+                    }
+                    @default {
+                      <path d="M12 3.25 19 6v5.2c0 4.4-2.9 7.4-7 9.55-4.1-2.15-7-5.15-7-9.55V6l7-2.75Z" />
+                      <path d="m9 12 2 2 4-4" />
+                    }
+                  }
                 </svg>
               </span>
               <span class="acceso__rol-texto">
@@ -143,5 +149,5 @@
       el almacenamiento del navegador (ADR‑0016).
     </p>
     </div>
-  </main>
+  </div>
 </div>

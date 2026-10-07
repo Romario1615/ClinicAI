@@ -95,6 +95,67 @@ export interface FiltroPacientes {
   readonly desplazamiento?: number;
 }
 
+export interface Formulario033AntecedenteApi {
+  codigo: string;
+  presente: boolean | null;
+  detalle: string | null;
+}
+
+export interface Formulario033DatosApi {
+  embarazada: boolean | null;
+  motivo_consulta: string;
+  enfermedad_actual: string | null;
+  antecedentes_personales: Formulario033AntecedenteApi[];
+  antecedentes_familiares: Formulario033AntecedenteApi[];
+  constantes_vitales: {
+    temperatura_c: number | null;
+    pulso_minuto: number | null;
+    frecuencia_respiratoria_minuto: number | null;
+    presion_sistolica_mmhg: number | null;
+    presion_diastolica_mmhg: number | null;
+  };
+  examen_estomatognatico: { region: string; hallazgo: string; detalle: string | null; grado: number | null }[];
+  indicadores_salud_bucal: {
+    sitios: { pieza: number; placa: number | null; calculo: number | null; gingivitis: boolean | null }[];
+    enfermedad_periodontal: string | null;
+    oclusion: string | null;
+    fluorosis: string | null;
+  };
+  indices_cpo_ceo: Record<string, number | null>;
+  examenes_complementarios: { tipo: string; descripcion: string; resultado: string | null }[];
+  diagnosticos: { codigo_cie: string | null; descripcion: string; tipo: string }[];
+  sesiones_tratamiento: {
+    numero: number;
+    fecha: string;
+    diagnostico_complicaciones: string | null;
+    procedimiento: string | null;
+    prescripciones: string | null;
+    proxima_cita: string | null;
+    alta: boolean;
+  }[];
+}
+
+export interface Formulario033EntradaApi {
+  sede_id: string;
+  cita_id?: string | null;
+  nota_id?: string | null;
+  odontograma_id?: string | null;
+  registro_placa_id?: string | null;
+  datos: Formulario033DatosApi;
+}
+
+export interface Formulario033Api extends Formulario033EntradaApi {
+  id: string;
+  raiz_id: string;
+  version: number;
+  vigente: boolean;
+  motivo_modificacion: string | null;
+  paciente_id: string;
+  profesional_id: string;
+  contexto_identidad: Readonly<Record<string, unknown>>;
+  creado_en: string;
+}
+
 export interface ClinicaPlataforma {
   readonly id: string;
   readonly nombre: string;
@@ -115,6 +176,8 @@ export interface UsuarioPlataforma {
   readonly activo: boolean;
   readonly roles: readonly string[];
   readonly profesional_id: string | null;
+  readonly sedes_ids: readonly string[];
+  readonly todas_las_sedes: boolean;
 }
 
 export interface RolPlataforma {
@@ -139,12 +202,14 @@ export interface AltaUsuarioPlataforma {
   readonly contrasena_inicial: string;
   readonly roles: readonly string[];
   readonly profesional_id: string | null;
+  readonly sedes_ids: readonly string[] | null;
 }
 
 export interface AsignacionUsuarioPlataforma {
   readonly clinica_id: string;
   readonly roles: readonly string[];
   readonly profesional_id: string | null;
+  readonly sedes_ids: readonly string[] | null;
 }
 
 export interface AltaClinicaPlataforma {
@@ -319,6 +384,7 @@ export interface RespuestaIngesta {
   readonly riesgo_inyeccion: string;
   /** Cierto si la ingesta detecto texto que parece una instruccion. */
   readonly requiere_revision: boolean;
+  readonly escaneo_antivirus: 'LIMPIO' | 'NO_DISPONIBLE' | 'NO_APLICA';
 }
 
 // ---------------------------------------------------------------------------
@@ -425,6 +491,7 @@ export interface Nota {
   readonly profesional_id: string;
   readonly cita_id: string | null;
   readonly tipo: string;
+  readonly nivel_sensibilidad: 'N2' | 'N3';
   readonly motivo_consulta: string | null;
   readonly subjetivo: string | null;
   readonly objetivo: string | null;
@@ -438,6 +505,7 @@ export interface Nota {
 export interface NotaNueva {
   readonly paciente_id: string;
   readonly tipo: 'EVOLUCION' | 'ENFERMERIA' | 'INTERCONSULTA' | 'PROCEDIMIENTO';
+  readonly nivel_sensibilidad: 'N2' | 'N3';
   readonly motivo_consulta: string | null;
   readonly subjetivo: string | null;
   readonly objetivo: string | null;
@@ -464,6 +532,7 @@ export interface ImagenPacienteApi {
   readonly id: string;
   readonly paciente_id: string;
   readonly tipo: string;
+  readonly nivel_sensibilidad: 'N1' | 'N2' | 'N3';
   readonly piezas: readonly number[];
   readonly tomada_en: string | null;
   readonly descripcion: string | null;
@@ -477,6 +546,7 @@ export interface ImagenPacienteApi {
 
 export interface DatosImagenClinica {
   readonly tipo: Exclude<ImagenPacienteApi['tipo'], 'PERFIL'>;
+  readonly nivel_sensibilidad?: 'N2' | 'N3';
   readonly piezas?: readonly number[];
   readonly tomada_en?: string | null;
   readonly descripcion?: string | null;
@@ -516,6 +586,7 @@ export interface Odontograma {
   readonly motivo_modificacion: string | null;
   readonly procedimiento_id: string | null;
   readonly creado_en: string;
+  readonly nivel_sensibilidad: 'N2' | 'N3';
   readonly denticion: Denticion;
   readonly piezas: Readonly<Record<string, EstadoPiezaOdontograma>>;
 }
@@ -571,6 +642,7 @@ export interface PlanTratamiento {
   readonly estado: EstadoPlanTratamiento;
   readonly moneda: string;
   readonly observaciones: string | null;
+  readonly nivel_sensibilidad: 'N2' | 'N3';
   readonly propuesto_en: string | null;
   readonly aceptado_en: string | null;
   readonly aceptacion_medio?: string | null;
@@ -604,6 +676,7 @@ export interface PlanTratamientoNuevo {
   readonly titulo: string;
   readonly moneda: string;
   readonly observaciones: string | null;
+  readonly nivel_sensibilidad: 'N2' | 'N3';
   readonly procedimientos: readonly ProcedimientoPlanNuevo[];
 }
 
@@ -622,6 +695,7 @@ export interface Medicamento {
   readonly cuando_sea_necesario: boolean;
   readonly frecuencia_horas: number | null;
   readonly duracion_dias: number | null;
+  readonly hora_primera_toma: string | null;
   readonly instrucciones: string | null;
 }
 
@@ -633,7 +707,9 @@ export interface Receta {
   readonly confirmada_en: string | null;
   readonly suspendida_en: string | null;
   readonly motivo_suspension: string | null;
+  readonly receta_anterior_id: string | null;
   readonly indicaciones_generales: string | null;
+  readonly nivel_sensibilidad: 'N2' | 'N3';
   readonly creado_en: string;
   readonly medicamentos: readonly Medicamento[];
 }
@@ -643,9 +719,11 @@ export interface MedicamentoNuevo {
   dosis: string;
   via: string;
   concentracion: string | null;
+  forma: string | null;
   cuando_sea_necesario: boolean;
   frecuencia_horas: number | null;
   duracion_dias: number | null;
+  hora_primera_toma: string | null;
   instrucciones: string | null;
 }
 
@@ -714,6 +792,19 @@ export interface DetalleConversacionEntrante extends ConversacionEntrante {
     readonly intencion: string;
     readonly recibido_en: string;
   }[];
+}
+
+export interface AvisoRevisionTratamiento {
+  readonly id: string;
+  readonly conversacion_id: string;
+  readonly creado_en: string;
+}
+
+export interface AvisoAccesoEmergencia {
+  readonly id: string;
+  readonly profesional: string;
+  readonly creado_en: string;
+  readonly vence_en: string;
 }
 
 /**
@@ -823,6 +914,39 @@ export class ApiService {
     return this.get<{ readonly cantidad: number }>('/conversaciones/pendientes/cuenta');
   }
 
+  avisosTratamientoPendientes(): Observable<readonly AvisoRevisionTratamiento[]> {
+    return this.get<readonly AvisoRevisionTratamiento[]>('/conversaciones/avisos-tratamiento');
+  }
+
+  cuentaAvisosTratamientoPendientes(): Observable<{ readonly cantidad: number }> {
+    return this.get<{ readonly cantidad: number }>(
+      '/conversaciones/avisos-tratamiento/cuenta',
+    );
+  }
+
+  confirmarRevisionAvisoTratamiento(id: string): Observable<void> {
+    return this.post<void>(`/conversaciones/avisos-tratamiento/${id}/revision`, null);
+  }
+
+  solicitarAccesoEmergencia(pacienteId: string, motivo: string): Observable<{ readonly vence_en: string }> {
+    return this.post<{ readonly vence_en: string }>(
+      `/historia/pacientes/${pacienteId}/acceso-emergencia`,
+      { motivo },
+    );
+  }
+
+  avisosAccesoEmergencia(): Observable<readonly AvisoAccesoEmergencia[]> {
+    return this.get<readonly AvisoAccesoEmergencia[]>('/historia/avisos-acceso-emergencia');
+  }
+
+  cuentaAvisosAccesoEmergencia(): Observable<{ readonly cantidad: number }> {
+    return this.get<{ readonly cantidad: number }>('/historia/avisos-acceso-emergencia/cuenta');
+  }
+
+  revisarAvisoAccesoEmergencia(id: string): Observable<void> {
+    return this.post<void>(`/historia/avisos-acceso-emergencia/${id}/revision`, null);
+  }
+
   conversacion(id: string): Observable<DetalleConversacionEntrante> {
     return this.get<DetalleConversacionEntrante>(`/conversaciones/${id}`);
   }
@@ -834,6 +958,21 @@ export class ApiService {
 
   citas(filtro: FiltroCitas = {}): Observable<PaginaCitas> {
     return this.get<PaginaCitas>('/agenda/citas', aConsulta(filtro));
+  }
+
+  exportarResumenAgenda(filtro: {
+    readonly desde: string;
+    readonly hasta: string;
+    readonly sede_id?: string;
+    readonly profesional_id?: string;
+    readonly servicio_id?: string;
+  }): Observable<Blob> {
+    return this.http
+      .get(this.url('/agenda/resumen.csv'), {
+        params: aParametros(aConsulta(filtro)),
+        responseType: 'blob',
+      })
+      .pipe(catchError(traducirFallo));
   }
 
   cita(id: string): Observable<CitaDetalle> {
@@ -915,6 +1054,7 @@ export class ApiService {
     const formulario = new FormData();
     formulario.append('archivo', archivo, archivo.name);
     formulario.append('tipo', datos.tipo);
+    formulario.append('nivel_sensibilidad', datos.nivel_sensibilidad ?? 'N2');
     for (const pieza of datos.piezas ?? []) formulario.append('piezas', String(pieza));
     if (datos.tomada_en) formulario.append('tomada_en', datos.tomada_en);
     if (datos.descripcion) formulario.append('descripcion', datos.descripcion);
@@ -955,9 +1095,26 @@ export class ApiService {
     paciente_id: string;
     profesional_id: string;
     indicaciones_generales: string | null;
+    nivel_sensibilidad: 'N2' | 'N3';
     medicamentos: readonly MedicamentoNuevo[];
   }): Observable<Receta> {
     return this.post<Receta>('/historia/recetas', datos);
+  }
+
+  /** Sustituye una receta confirmada y su calendario en una operación firmada. */
+  versionarReceta(
+    recetaId: string,
+    datos: {
+      profesional_id: string;
+      motivo: string;
+      indicaciones_generales: string | null;
+      medicamentos: readonly MedicamentoNuevo[];
+    },
+  ): Observable<{ receta: Receta; tomas_canceladas: number; tomas_generadas: number }> {
+    return this.post<{ receta: Receta; tomas_canceladas: number; tomas_generadas: number }>(
+      `/historia/recetas/${recetaId}/versiones`,
+      datos,
+    );
   }
 
   /** Confirma la receta y genera las tomas. `firmante`: propio o por delegación. */
@@ -1013,6 +1170,50 @@ export class ApiService {
     return this.post<RegistroPlaca>(`/odontologia/pacientes/${pacienteId}/indice-placa`, datos);
   }
 
+  formularios033(pacienteId: string): Observable<readonly Formulario033Api[]> {
+    return this.get<readonly Formulario033Api[]>(
+      `/odontologia/pacientes/${pacienteId}/formularios-033`,
+    );
+  }
+
+  versionesFormulario033(
+    pacienteId: string,
+    raizId: string,
+  ): Observable<readonly Formulario033Api[]> {
+    return this.get<readonly Formulario033Api[]>(
+      `/odontologia/pacientes/${pacienteId}/formularios-033/${raizId}/versiones`,
+    );
+  }
+
+  auditarExportacionFormulario033(
+    pacienteId: string,
+    raizId: string,
+    version: number,
+  ): Observable<void> {
+    return this.post<void>(
+      `/odontologia/pacientes/${pacienteId}/formularios-033/${raizId}/exportacion?version=${version}`,
+      {},
+    );
+  }
+
+  crearFormulario033(pacienteId: string, datos: Formulario033EntradaApi): Observable<Formulario033Api> {
+    return this.post<Formulario033Api>(
+      `/odontologia/pacientes/${pacienteId}/formularios-033`,
+      datos,
+    );
+  }
+
+  versionarFormulario033(
+    pacienteId: string,
+    raizId: string,
+    datos: Formulario033EntradaApi & { version_base: number; motivo: string },
+  ): Observable<Formulario033Api> {
+    return this.post<Formulario033Api>(
+      `/odontologia/pacientes/${pacienteId}/formularios-033/${raizId}/versiones`,
+      datos,
+    );
+  }
+
   /** Sin `especialidadId`, el backend usa la especialidad propia del profesional. */
   notas(
     pacienteId: string,
@@ -1045,8 +1246,15 @@ export class ApiService {
     );
   }
 
-  crearOdontograma(pacienteId: string, contenido: ContenidoOdontograma): Observable<Odontograma> {
-    return this.post<Odontograma>(`/odontologia/pacientes/${pacienteId}/odontograma`, contenido);
+  crearOdontograma(
+    pacienteId: string,
+    contenido: ContenidoOdontograma,
+    nivelSensibilidad: 'N2' | 'N3' = 'N2',
+  ): Observable<Odontograma> {
+    return this.post<Odontograma>(`/odontologia/pacientes/${pacienteId}/odontograma`, {
+      ...contenido,
+      nivel_sensibilidad: nivelSensibilidad,
+    });
   }
 
   versionarOdontograma(
@@ -1054,11 +1262,13 @@ export class ApiService {
     contenido: ContenidoOdontograma,
     versionBase: number,
     motivo: string,
+    nivelSensibilidad: 'N2' | 'N3' = 'N2',
   ): Observable<Odontograma> {
     return this.post<Odontograma>(`/odontologia/pacientes/${pacienteId}/odontograma/versiones`, {
       ...contenido,
       version_base: versionBase,
       motivo,
+      nivel_sensibilidad: nivelSensibilidad,
     });
   }
 
@@ -1231,6 +1441,22 @@ export class ApiService {
    */
   ingerirVersion(documentoId: string, datos: DatosIngesta): Observable<RespuestaIngesta> {
     return this.post<RespuestaIngesta>(`/conocimiento/documentos/${documentoId}/versiones`, datos);
+  }
+
+  /** Sube un PDF para que el servidor lo analice, extraiga e ingiera. */
+  ingerirArchivoPdf(
+    documentoId: string,
+    archivo: File,
+    notasCambio?: string | null,
+  ): Observable<RespuestaIngesta> {
+    const formulario = new FormData();
+    formulario.append('archivo', archivo, archivo.name);
+    if (notasCambio?.trim()) {
+      formulario.append('notas_cambio', notasCambio.trim());
+    }
+    return this.http
+      .post<RespuestaIngesta>(this.url(`/conocimiento/documentos/${documentoId}/versiones/archivo`), formulario)
+      .pipe(catchError(traducirFallo));
   }
 
   /**

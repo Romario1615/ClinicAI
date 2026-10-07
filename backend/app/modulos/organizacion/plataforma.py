@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import uuid
+from collections.abc import Iterable
 from dataclasses import replace
 from typing import Annotated
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
@@ -116,6 +117,8 @@ class UsuarioPlataforma(BaseModel):
     activo: bool
     roles: list[str]
     profesional_id: uuid.UUID | None
+    sedes_ids: list[uuid.UUID]
+    todas_las_sedes: bool
 
 
 class RolPlataforma(BaseModel):
@@ -142,6 +145,7 @@ class AltaUsuarioPlataforma(BaseModel):
     contrasena_inicial: str = Field(min_length=12, max_length=128)
     roles: list[uuid.UUID] = Field(min_length=1, max_length=10)
     profesional_id: uuid.UUID | None = None
+    sedes_ids: list[uuid.UUID] | None = Field(default=None, min_length=1, max_length=50)
 
 
 class ActualizarAsignacionPlataforma(BaseModel):
@@ -150,6 +154,7 @@ class ActualizarAsignacionPlataforma(BaseModel):
     clinica_id: uuid.UUID
     roles: list[uuid.UUID] = Field(min_length=1, max_length=10)
     profesional_id: uuid.UUID | None = None
+    sedes_ids: list[uuid.UUID] | None = Field(default=None, min_length=1, max_length=50)
 
 
 @enrutador.get("", response_model=list[ClinicaPlataforma], summary="Clínicas de la plataforma")
@@ -299,6 +304,17 @@ async def listar_usuarios_plataforma(
     )
     for usuario_id, nombre_rol in asignaciones:
         roles_por_usuario.setdefault(usuario_id, []).append(nombre_rol)
+    reglas_sedes = await sesion.execute(
+        select(UsuarioRol.usuario_id, AmbitoAsignacion.valor_id, AmbitoAsignacion.incluir)
+        .join(AmbitoAsignacion, AmbitoAsignacion.usuario_rol_id == UsuarioRol.id)
+        .where(
+            UsuarioRol.usuario_id.in_(ids),
+            AmbitoAsignacion.tipo == TipoAmbito.SEDE.value,
+        )
+    )
+    sedes_por_usuario: dict[uuid.UUID, list[tuple[uuid.UUID | None, bool]]] = {}
+    for usuario_id, sede_id, incluir in reglas_sedes:
+        sedes_por_usuario.setdefault(usuario_id, []).append((sede_id, incluir))
     return [
         UsuarioPlataforma(
             id=usuario.id,
@@ -310,6 +326,8 @@ async def listar_usuarios_plataforma(
             activo=usuario.activo,
             roles=roles_por_usuario.get(usuario.id, []),
             profesional_id=profesional_id,
+            sedes_ids=_resumen_sedes(sedes_por_usuario.get(usuario.id, []))[0],
+            todas_las_sedes=_resumen_sedes(sedes_por_usuario.get(usuario.id, []))[1],
         )
         for usuario, clinica_nombre, profesional_id in usuarios
     ]
@@ -392,6 +410,7 @@ async def crear_usuario_plataforma(
     problemas = validar_politica_contrasena(datos.contrasena_inicial)
     if problemas:
         raise DatosInvalidos(" ".join(problemas))
+    await _validar_sedes_plataforma(sesion, clinica.id, datos.sedes_ids)
     roles, permisos = await _roles_globales(sesion, clinica.id, datos.roles, datos.profesional_id)
     profesional = await _profesional_global(sesion, clinica.id, datos.profesional_id, roles)
     usuario = Usuario(
@@ -407,7 +426,15 @@ async def crear_usuario_plataforma(
     await sesion.flush()
     if profesional:
         profesional.usuario_id = usuario.id
-    await _asignar_ambitos(sesion, principal, usuario, roles, permisos, datos.profesional_id)
+    await _asignar_ambitos(
+        sesion,
+        principal,
+        usuario,
+        roles,
+        permisos,
+        datos.profesional_id,
+        datos.sedes_ids,
+    )
     await sesion.flush()
     await auditor.registrar(
         [
@@ -418,6 +445,10 @@ async def crear_usuario_plataforma(
                 entidad_tipo="usuario",
                 entidad_id=usuario.id,
                 roles=[rol.nombre for rol in roles],
+                sedes_ids=[str(sede_id) for sede_id in datos.sedes_ids]
+                if datos.sedes_ids is not None
+                else None,
+                todas_las_sedes=datos.sedes_ids is None,
                 plataforma_global=True,
             )
         ]
@@ -448,6 +479,7 @@ async def actualizar_asignacion_plataforma(
             "La asignación de cuentas de plataforma requiere un procedimiento independiente."
         )
     clinica = await _clinica_activa(sesion, datos.clinica_id)
+    await _validar_sedes_plataforma(sesion, clinica.id, datos.sedes_ids)
     roles, permisos = await _roles_globales(sesion, clinica.id, datos.roles, datos.profesional_id)
     profesional = await _profesional_global(sesion, clinica.id, datos.profesional_id, roles)
     if profesional:
@@ -489,7 +521,9 @@ async def actualizar_asignacion_plataforma(
         )
         sesion.add(asignacion)
         await sesion.flush()
-        await _anadir_ambitos(sesion, asignacion, rol, permisos, datos.profesional_id)
+        await _anadir_ambitos(
+            sesion, asignacion, rol, permisos, datos.profesional_id, datos.sedes_ids
+        )
     await sesion.flush()
     await auditor.registrar(
         [
@@ -501,6 +535,10 @@ async def actualizar_asignacion_plataforma(
                 entidad_id=usuario.id,
                 clinica_anterior_id=str(clinica_anterior_id),
                 roles=[rol.nombre for rol in roles],
+                sedes_ids=[str(sede_id) for sede_id in datos.sedes_ids]
+                if datos.sedes_ids is not None
+                else None,
+                todas_las_sedes=datos.sedes_ids is None,
                 sesiones_revocadas=True,
                 plataforma_global=True,
             )
@@ -599,6 +637,7 @@ async def _asignar_ambitos(
     roles: list[Rol],
     permisos: dict[uuid.UUID, frozenset[str]],
     profesional_id: uuid.UUID | None,
+    sedes_ids: list[uuid.UUID] | None,
 ) -> None:
     for rol in roles:
         asignacion = UsuarioRol(
@@ -608,7 +647,7 @@ async def _asignar_ambitos(
         )
         sesion.add(asignacion)
         await sesion.flush()
-        await _anadir_ambitos(sesion, asignacion, rol, permisos, profesional_id)
+        await _anadir_ambitos(sesion, asignacion, rol, permisos, profesional_id, sedes_ids)
 
 
 async def _anadir_ambitos(
@@ -617,26 +656,32 @@ async def _anadir_ambitos(
     rol: Rol,
     permisos: dict[uuid.UUID, frozenset[str]],
     profesional_id: uuid.UUID | None,
+    sedes_ids: list[uuid.UUID] | None,
 ) -> None:
-    dimensiones = (
+    for tipo in (
         TipoAmbito.SEDE.value,
         TipoAmbito.ESPECIALIDAD.value,
         TipoAmbito.PROFESIONAL.value,
         TipoAmbito.PACIENTE.value,
-    )
-    for tipo in dimensiones:
-        sesion.add(
-            AmbitoAsignacion(
-                usuario_rol_id=asignacion.id,
-                tipo=tipo,
-                valor_id=(
-                    profesional_id
-                    if rol.codigo == "profesional" and tipo == TipoAmbito.PROFESIONAL.value
-                    else None
-                ),
-                incluir=True,
-            )
+    ):
+        valores = (
+            [(sede_id, True) for sede_id in sedes_ids]
+            if tipo == TipoAmbito.SEDE.value and sedes_ids is not None
+            else [(None, True)]
         )
+        for valor_id, incluir in valores:
+            sesion.add(
+                AmbitoAsignacion(
+                    usuario_rol_id=asignacion.id,
+                    tipo=tipo,
+                    valor_id=(
+                        profesional_id
+                        if rol.codigo == "profesional" and tipo == TipoAmbito.PROFESIONAL.value
+                        else valor_id
+                    ),
+                    incluir=incluir,
+                )
+            )
     if (
         rol.codigo == "profesional"
         and permisos.get(rol.id, frozenset()) & PERMISOS_SOLO_ASISTENCIALES
@@ -670,6 +715,15 @@ async def _usuario_respuesta(sesion: Sesion, usuario_id: uuid.UUID) -> UsuarioPl
             )
         ).all()
     )
+    reglas_sede = await sesion.execute(
+        select(AmbitoAsignacion.valor_id, AmbitoAsignacion.incluir)
+        .join(UsuarioRol, UsuarioRol.id == AmbitoAsignacion.usuario_rol_id)
+        .where(
+            UsuarioRol.usuario_id == usuario.id,
+            AmbitoAsignacion.tipo == TipoAmbito.SEDE.value,
+        )
+    )
+    sedes_ids, todas_las_sedes = _resumen_sedes(reglas_sede.tuples().all())
     return UsuarioPlataforma(
         id=usuario.id,
         clinica_id=usuario.clinica_id,
@@ -680,7 +734,53 @@ async def _usuario_respuesta(sesion: Sesion, usuario_id: uuid.UUID) -> UsuarioPl
         activo=usuario.activo,
         roles=nombres_roles,
         profesional_id=profesional_id,
+        sedes_ids=sedes_ids,
+        todas_las_sedes=todas_las_sedes,
     )
+
+
+def _resumen_sedes(
+    reglas: Iterable[tuple[uuid.UUID | None, bool]],
+) -> tuple[list[uuid.UUID], bool]:
+    todas_las_sedes = False
+    sedes_ids: set[uuid.UUID] = set()
+    sedes_excluidas: set[uuid.UUID] = set()
+    for sede_id, incluir in reglas:
+        if sede_id is None:
+            todas_las_sedes = todas_las_sedes or incluir
+        elif incluir:
+            sedes_ids.add(sede_id)
+        else:
+            sedes_excluidas.add(sede_id)
+    if sedes_excluidas:
+        todas_las_sedes = False
+        sedes_ids.difference_update(sedes_excluidas)
+    return sorted(sedes_ids), todas_las_sedes
+
+
+async def _validar_sedes_plataforma(
+    sesion: Sesion,
+    clinica_id: uuid.UUID,
+    sedes_ids: list[uuid.UUID] | None,
+) -> None:
+    if sedes_ids is None:
+        return
+    if len(sedes_ids) != len(set(sedes_ids)):
+        raise DatosInvalidos("No repita sedes en una misma asignación.")
+    encontradas = set(
+        (
+            await sesion.scalars(
+                select(Sede.id).where(
+                    Sede.id.in_(sedes_ids),
+                    Sede.clinica_id == clinica_id,
+                    Sede.activa.is_(True),
+                    Sede.anulado_en.is_(None),
+                )
+            )
+        ).all()
+    )
+    if encontradas != set(sedes_ids):
+        raise DatosInvalidos("Seleccione sedes activas que pertenezcan a la clínica elegida.")
 
 
 @enrutador.post("", response_model=ClinicaPlataforma, status_code=status.HTTP_201_CREATED)

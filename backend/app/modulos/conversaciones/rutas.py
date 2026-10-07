@@ -11,14 +11,23 @@ from pydantic import BaseModel, ConfigDict
 from sqlalchemy import false, func, select
 from sqlalchemy.sql.elements import ColumnElement
 
-from app.modulos.conversaciones.modelos import Conversacion, EstadoConversacion, MensajeEntrante
+from app.modulos.conversaciones.modelos import (
+    AvisoRevisionTratamiento,
+    Conversacion,
+    EstadoConversacion,
+    MensajeEntrante,
+)
 from app.nucleo.auditoria import AccionAuditada, construir_entrada
 from app.nucleo.autorizacion import NivelSensibilidad, Principal
 from app.nucleo.dependencias import Auditor, RelojActual, Sesion, exige_permiso
-from app.nucleo.errores import RecursoNoEncontrado
+from app.nucleo.errores import ConflictoEstado, RecursoNoEncontrado
 
 enrutador = APIRouter(prefix="/conversaciones", tags=["conversaciones"])
 PuedeLeer = Annotated[Principal, Depends(exige_permiso("conversacion.leer"))]
+PuedeRevisarAvisos = Annotated[
+    Principal,
+    Depends(exige_permiso("alerta_adherencia.atender", "conversacion.leer", exigir_todos=True)),
+]
 
 
 @enrutador.get("/pendientes/cuenta", summary="Contar derivaciones pendientes")
@@ -91,6 +100,14 @@ class PaginaConversaciones(BaseModel):
     desplazamiento: int
 
 
+class AvisoRevisionTratamientoSalida(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    conversacion_id: uuid.UUID
+    creado_en: datetime
+
+
 def _filtro_ambito(principal: Principal) -> list[ColumnElement[bool]]:
     condiciones = [Conversacion.clinica_id == principal.clinica_id]
     ambito = principal.ambito
@@ -104,6 +121,155 @@ def _filtro_ambito(principal: Principal) -> list[ColumnElement[bool]]:
         else:
             condiciones.append(Conversacion.paciente_id.in_(ambito.pacientes))
     return condiciones
+
+
+@enrutador.get(
+    "/avisos-tratamiento/cuenta",
+    summary="Contar reportes de tratamiento sin confirmar revisión",
+)
+async def contar_avisos_tratamiento(
+    peticion: Request,
+    principal: PuedeLeer,
+    sesion: Sesion,
+    auditor: Auditor,
+    reloj: RelojActual,
+) -> dict[str, int]:
+    if principal.clinica_id is None:
+        return {"cantidad": 0}
+    cantidad = (
+        await sesion.scalar(
+            select(func.count())
+            .select_from(AvisoRevisionTratamiento)
+            .join(Conversacion, Conversacion.id == AvisoRevisionTratamiento.conversacion_id)
+            .where(
+                AvisoRevisionTratamiento.revisada_en.is_(None),
+                *_filtro_ambito(principal),
+                Conversacion.canal == "WHATSAPP",
+            )
+        )
+        or 0
+    )
+    await auditor.registrar(
+        [
+            construir_entrada(
+                accion=AccionAuditada.AVISO_TRATAMIENTO_LEIDO,
+                principal=principal,
+                ahora=reloj.ahora(),
+                entidad_tipo="aviso_revision_tratamiento",
+                nivel_sensibilidad=NivelSensibilidad.CLINICO,
+                ip=peticion.client.host if peticion.client else None,
+                correlacion_id=getattr(peticion.state, "correlacion_id", None),
+                cantidad=cantidad,
+                solo_conteo=True,
+            )
+        ]
+    )
+    await sesion.commit()
+    return {"cantidad": cantidad}
+
+
+@enrutador.get(
+    "/avisos-tratamiento",
+    response_model=list[AvisoRevisionTratamientoSalida],
+    summary="Listar reportes de tratamiento pendientes de revisión humana",
+)
+async def listar_avisos_tratamiento(
+    peticion: Request,
+    principal: PuedeLeer,
+    sesion: Sesion,
+    auditor: Auditor,
+    reloj: RelojActual,
+    limite: Annotated[int, Query(ge=1, le=200)] = 100,
+) -> list[AvisoRevisionTratamientoSalida]:
+    if principal.clinica_id is None:
+        return []
+    avisos = list(
+        (
+            await sesion.scalars(
+                select(AvisoRevisionTratamiento)
+                .join(Conversacion, Conversacion.id == AvisoRevisionTratamiento.conversacion_id)
+                .where(
+                    AvisoRevisionTratamiento.revisada_en.is_(None),
+                    *_filtro_ambito(principal),
+                    Conversacion.canal == "WHATSAPP",
+                )
+                .order_by(AvisoRevisionTratamiento.creado_en.asc())
+                .limit(limite)
+            )
+        ).all()
+    )
+    if avisos:
+        await auditor.registrar(
+            [
+                construir_entrada(
+                    accion=AccionAuditada.AVISO_TRATAMIENTO_LEIDO,
+                    principal=principal,
+                    ahora=reloj.ahora(),
+                    entidad_tipo="aviso_revision_tratamiento",
+                    entidad_id=aviso.id,
+                    nivel_sensibilidad=NivelSensibilidad.CLINICO,
+                    ip=peticion.client.host if peticion.client else None,
+                    correlacion_id=getattr(peticion.state, "correlacion_id", None),
+                )
+                for aviso in avisos
+            ]
+        )
+        await sesion.commit()
+    return [AvisoRevisionTratamientoSalida.model_validate(aviso) for aviso in avisos]
+
+
+@enrutador.post(
+    "/avisos-tratamiento/{aviso_id}/revision",
+    status_code=204,
+    summary="Confirmar que un reporte de tratamiento fue revisado por personal clínico",
+    responses={
+        404: {"description": "No existe o está fuera del ámbito"},
+        409: {"description": "Ya revisado"},
+    },
+)
+async def revisar_aviso_tratamiento(
+    peticion: Request,
+    aviso_id: uuid.UUID,
+    principal: PuedeRevisarAvisos,
+    sesion: Sesion,
+    auditor: Auditor,
+    reloj: RelojActual,
+) -> None:
+    aviso = await sesion.scalar(
+        select(AvisoRevisionTratamiento)
+        .join(Conversacion, Conversacion.id == AvisoRevisionTratamiento.conversacion_id)
+        .where(
+            AvisoRevisionTratamiento.id == aviso_id,
+            AvisoRevisionTratamiento.clinica_id == principal.clinica_id,
+            *_filtro_ambito(principal),
+            Conversacion.canal == "WHATSAPP",
+        )
+        .with_for_update(of=AvisoRevisionTratamiento)
+    )
+    if aviso is None:
+        raise RecursoNoEncontrado("El reporte solicitado no existe.")
+    if aviso.revisada_en is not None:
+        raise ConflictoEstado("Este reporte ya tiene revisión registrada.")
+
+    ahora = reloj.ahora()
+    aviso.revisada_en = ahora
+    aviso.revisada_por = principal.actor_id
+    aviso.actualizado_por = principal.actor_id
+    await auditor.registrar(
+        [
+            construir_entrada(
+                accion=AccionAuditada.AVISO_TRATAMIENTO_REVISADO,
+                principal=principal,
+                ahora=ahora,
+                entidad_tipo="aviso_revision_tratamiento",
+                entidad_id=aviso.id,
+                nivel_sensibilidad=NivelSensibilidad.CLINICO,
+                ip=peticion.client.host if peticion.client else None,
+                correlacion_id=getattr(peticion.state, "correlacion_id", None),
+            )
+        ]
+    )
+    await sesion.commit()
 
 
 @enrutador.get(

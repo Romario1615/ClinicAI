@@ -18,6 +18,7 @@ import {
   guardiaInvitado,
   guardiaPermiso,
   guardiaSuperadministrador,
+  guardiaSoloLocal,
   guardiaSegundoFactor,
 } from './nucleo/guardias/autenticacion.guard';
 import { PERMISOS } from './nucleo/servicios/configuracion';
@@ -144,6 +145,16 @@ export const routes: Routes = [
       ),
   },
   {
+    path: 'equipo',
+    canActivate: [
+      guardiaAutenticacion,
+      guardiaSegundoFactor,
+      guardiaPermiso(PERMISOS.profesionalGestionar),
+    ],
+    title: 'Equipo clínico · ClinicAI',
+    loadComponent: () => import('./paginas/equipo/equipo.component').then((m) => m.EquipoComponent),
+  },
+  {
     path: 'pagos',
     canActivate: [guardiaAutenticacion, guardiaSegundoFactor, guardiaPermiso('pago.leer')],
     title: 'Pagos · ClinicAI',
@@ -157,7 +168,12 @@ export const routes: Routes = [
   },
   {
     path: 'agente-demo',
-    canActivate: [guardiaAutenticacion, guardiaSegundoFactor, guardiaPermiso(PERMISOS.configuracionEscribir)],
+    canActivate: [
+      guardiaAutenticacion,
+      guardiaSegundoFactor,
+      guardiaPermiso(PERMISOS.conversacionResponder),
+      guardiaSoloLocal,
+    ],
     title: 'Agente demo · ClinicAI',
     loadComponent: () => import('./paginas/agente-demo/agente-demo.component').then(m => m.AgenteDemoComponent),
   },
@@ -171,6 +187,19 @@ export const routes: Routes = [
     title: 'Usuarios y roles · ClinicAI',
     loadComponent: () =>
       import('./paginas/usuarios/usuarios.component').then((m) => m.UsuariosComponent),
+  },
+  {
+    path: 'seguridad',
+    canActivate: [
+      guardiaAutenticacion,
+      guardiaSegundoFactor,
+      guardiaPermiso(PERMISOS.auditoriaLeer),
+    ],
+    title: 'Seguridad clínica · ClinicAI',
+    loadComponent: () =>
+      import('./paginas/seguridad/accesos-emergencia.component').then(
+        (m) => m.AccesosEmergenciaComponent,
+      ),
   },
   {
     path: 'asistente',

@@ -25,7 +25,7 @@ El texto del paciente es dato citado
 Va delimitado y saneado (ADR-0014).  Esto no «filtra instrucciones» -- eso no
 se puede hacer de forma fiable --; lo que hace es impedir que el mensaje cierre
 el bloque y se lea como sistema.  La defensa real es estructural: aunque el
-modelo obedeciera una inyeccion, solo puede pedir una de siete herramientas,
+modelo obedeciera una inyeccion, solo puede pedir una de ocho herramientas,
 sobre el paciente que el canal ya resolvio, con los permisos del principal.
 
 Que sale hacia la API de Anthropic

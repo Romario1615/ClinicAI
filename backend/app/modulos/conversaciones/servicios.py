@@ -3,11 +3,12 @@
 Que hace este servicio y que no
 -------------------------------
 Hace: deduplicar, abrir o continuar el hilo, guardar el mensaje, reconocer la
-intencion y **ejecutar la baja de consentimiento**.
+intencion, ejecutar la baja de consentimiento y aplicar respuestas exactas de
+seguimiento de tomas cuando el hilo identifica a un paciente sin ambiguedad.
 
-No hace: cancelar citas, confirmarlas, aceptar ofertas de lista de espera ni
-registrar tomas de medicacion.  Esas intenciones se reconocen y se registran,
-pero el mensaje se deriva a una persona.
+No hace: cancelar citas, confirmarlas ni aceptar ofertas de lista de espera.
+Esas intenciones se reconocen y se derivan a una persona. Los mensajes libres,
+ambiguos o sobre cambios de tratamiento tambien se derivan.
 
 Por que esa linea, y no mas automatizacion
 ------------------------------------------
@@ -52,7 +53,7 @@ normalizado.  Hay un indice funcional que sostiene esa consulta
 from __future__ import annotations
 
 import uuid
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime, timedelta
 
 from sqlalchemy import func, select, update
@@ -62,7 +63,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.ia.decisiones import ClasificadorIntencion, Intencion
 from app.mensajeria.carga_whatsapp import CargaWebhook, MensajeEntranteCrudo
 from app.mensajeria.destinatarios import normalizar_telefono
+from app.mensajeria.recordatorios import ENTIDAD_TOMA, ESTADO_CANCELADO, ESTADO_PROGRAMADO
 from app.modulos.agenda.modelos import Cita
+from app.modulos.auditoria.repositorio import RepositorioAuditoria
 from app.modulos.conversaciones.identificacion import (
     Opciones,
     identificar,
@@ -71,12 +74,14 @@ from app.modulos.conversaciones.identificacion import (
 )
 from app.modulos.conversaciones.intenciones import reconocer
 from app.modulos.conversaciones.modelos import (
+    AvisoRevisionTratamiento,
     Conversacion,
     EstadoConversacion,
     IntencionEntrante,
     MensajeEntrante,
 )
-from app.modulos.historia.modelos import EstadoToma, Toma
+from app.modulos.historia.modelos import EstadoReceta, EstadoToma, Receta, RecetaMedicamento, Toma
+from app.modulos.outbox.modelos import EstadoOutbox, OutboxMensaje, Recordatorio, TipoMensajeOutbox
 from app.modulos.pacientes.modelos import (
     Consentimiento,
     Paciente,
@@ -84,7 +89,8 @@ from app.modulos.pacientes.modelos import (
     telefono_normalizado,
 )
 from app.modulos.pagos.modelos import Pago
-from app.nucleo.autorizacion import Principal, TipoActor
+from app.nucleo.auditoria import AccionAuditada, construir_entrada
+from app.nucleo.autorizacion import NivelSensibilidad, Principal, TipoActor, principal_sistema
 from app.nucleo.bd import ejecutar_escritura
 from app.nucleo.registro import obtener_logger
 from app.nucleo.reloj import Reloj
@@ -103,6 +109,8 @@ INTENCIONES_QUE_EXIGEN_PERSONA: frozenset[IntencionEntrante] = frozenset(
         IntencionEntrante.CANCELAR,
         IntencionEntrante.ACEPTAR_OFERTA,
         IntencionEntrante.REGISTRAR_TOMA,
+        IntencionEntrante.RECORDAR_TOMA_DESPUES,
+        IntencionEntrante.NO_PUDO_TOMAR,
         # El alta tambien: reactivar el consentimiento exige registrar que
         # texto acepto el paciente y su version, y un «ALTA» suelto no
         # contiene esa evidencia. La revocacion no necesita evidencia; el
@@ -118,8 +126,17 @@ MOTIVOS_HANDOFF: dict[IntencionEntrante, str] = {
     IntencionEntrante.CANCELAR: "El paciente pide cancelar su cita por WhatsApp.",
     IntencionEntrante.ACEPTAR_OFERTA: "El paciente acepta un turno ofrecido.",
     IntencionEntrante.REGISTRAR_TOMA: "El paciente informa de una toma.",
+    IntencionEntrante.RECORDAR_TOMA_DESPUES: "El paciente pidio posponer el recordatorio de una toma.",
+    IntencionEntrante.NO_PUDO_TOMAR: (
+        "El paciente informa que no pudo realizar una toma; requiere seguimiento del equipo."
+    ),
+    IntencionEntrante.PROBLEMA_TRATAMIENTO: (
+        "REVISIÓN CLÍNICA · El paciente reporta un problema relacionado con su tratamiento. "
+        "Leer el mensaje y responder desde el equipo clínico. El sistema no valora gravedad "
+        "ni modifica la pauta."
+    ),
     IntencionEntrante.ALTA: "El paciente pide volver a recibir mensajes.",
-    IntencionEntrante.AYUDA: "El paciente pide ayuda.",
+    IntencionEntrante.AYUDA: "El paciente pide hablar con la clinica o recibir ayuda.",
     IntencionEntrante.DESCONOCIDA: "Mensaje que el sistema no interpreta.",
 }
 
@@ -153,6 +170,10 @@ class ResumenEntrada:
     identidades_resueltas: int = 0
     #: Tomas que el paciente confirmó respondiendo al recordatorio.
     tomas_registradas: int = 0
+    #: Tomas que el paciente informó no haber podido realizar.
+    tomas_omitidas: int = 0
+    #: Recordatorios pospuestos por solicitud explícita del paciente.
+    recordatorios_reprogramados: int = 0
     #: Imágenes asociadas como comprobante a un pago pendiente.
     comprobantes: int = 0
 
@@ -219,6 +240,28 @@ class ServicioConversaciones:
         )
         resumen = _con(resumen, recibidos=resumen.recibidos + 1)
 
+        if intencion is IntencionEntrante.PROBLEMA_TRATAMIENTO:
+            aviso = AvisoRevisionTratamiento(
+                clinica_id=clinica_id,
+                conversacion_id=conversacion.id,
+                mensaje_entrante_id=creado,
+            )
+            self._sesion.add(aviso)
+            await self._sesion.flush()
+            await RepositorioAuditoria(self._sesion).registrar(
+                [
+                    construir_entrada(
+                        accion=AccionAuditada.AVISO_TRATAMIENTO_CREADO,
+                        principal=principal_sistema(clinica_id),
+                        ahora=crudo.recibido_en,
+                        entidad_tipo="aviso_revision_tratamiento",
+                        entidad_id=aviso.id,
+                        paciente_id=conversacion.paciente_id,
+                        nivel_sensibilidad=NivelSensibilidad.CLINICO,
+                    )
+                ]
+            )
+
         if intencion is IntencionEntrante.BAJA_PROMOCIONES:
             # Solo publicidad: los recordatorios de cita siguen llegando. Se
             # aplica con la frase exacta, nunca por probabilidad.
@@ -256,14 +299,17 @@ class ServicioConversaciones:
         # Si no hay identidad y el numero corresponde a varios pacientes, se
         # pregunta y se espera: sin eleccion no hay paciente y no se ejecuta
         # nada.
-        resuelto = self._resolver_seleccion(conversacion, crudo.texto)
-        if resuelto:
-            return _con(resumen, identidades_resueltas=resumen.identidades_resueltas + 1)
+        if intencion is not IntencionEntrante.PROBLEMA_TRATAMIENTO:
+            resuelto = self._resolver_seleccion(conversacion, crudo.texto)
+            if resuelto:
+                return _con(resumen, identidades_resueltas=resumen.identidades_resueltas + 1)
 
-        if conversacion.paciente_id is None and conversacion.seleccion_pendiente is None:
-            preguntado = await self._preguntar_identidad(conversacion, clinica_id, crudo.telefono)
-            if preguntado:
-                return _con(resumen, preguntas_identidad=resumen.preguntas_identidad + 1)
+            if conversacion.paciente_id is None and conversacion.seleccion_pendiente is None:
+                preguntado = await self._preguntar_identidad(
+                    conversacion, clinica_id, crudo.telefono
+                )
+                if preguntado:
+                    return _con(resumen, preguntas_identidad=resumen.preguntas_identidad + 1)
 
         aplicado = await self._aplicar_sin_persona(
             conversacion, intencion, crudo, clinica_id, resumen
@@ -301,10 +347,11 @@ class ServicioConversaciones:
         """
         if conversacion.paciente_id is None:
             return None
-        if intencion is IntencionEntrante.REGISTRAR_TOMA and await self._registrar_toma(
-            conversacion.paciente_id, crudo.recibido_en
-        ):
-            return _con(resumen, tomas_registradas=resumen.tomas_registradas + 1)
+        respuesta_toma = await self._aplicar_respuesta_toma(
+            conversacion, intencion, crudo, clinica_id, resumen
+        )
+        if respuesta_toma is not None:
+            return respuesta_toma
         if crudo.tipo != "image":
             return None
         asociado = await self._asociar_comprobante(
@@ -319,34 +366,201 @@ class ServicioConversaciones:
         )
         return _con(resumen, derivados=resumen.derivados + 1)
 
-    async def _registrar_toma(self, paciente_id: uuid.UUID, recibido_en: datetime) -> bool:
-        """Marca TOMADA la toma pendiente más cercana al mensaje.
+    async def _aplicar_respuesta_toma(
+        self,
+        conversacion: Conversacion,
+        intencion: IntencionEntrante,
+        crudo: MensajeEntranteCrudo,
+        clinica_id: uuid.UUID,
+        resumen: ResumenEntrada,
+    ) -> ResumenEntrada | None:
+        paciente_id = conversacion.paciente_id
+        if paciente_id is None:
+            return None
+        if intencion is IntencionEntrante.REGISTRAR_TOMA and await self._registrar_toma(
+            paciente_id, clinica_id, crudo.recibido_en, tomada=True
+        ):
+            return _con(resumen, tomas_registradas=resumen.tomas_registradas + 1)
+        if intencion is IntencionEntrante.NO_PUDO_TOMAR and await self._registrar_toma(
+            paciente_id, clinica_id, crudo.recibido_en, tomada=False
+        ):
+            conversacion.estado = EstadoConversacion.EN_HANDOFF.value
+            conversacion.motivo_handoff = MOTIVOS_HANDOFF[intencion]
+            return _con(
+                resumen,
+                tomas_omitidas=resumen.tomas_omitidas + 1,
+                derivados=resumen.derivados + 1,
+            )
+        if intencion is IntencionEntrante.RECORDAR_TOMA_DESPUES and await self._diferir_toma(
+            paciente_id, clinica_id, crudo.recibido_en
+        ):
+            return _con(
+                resumen,
+                recordatorios_reprogramados=resumen.recordatorios_reprogramados + 1,
+            )
+        return None
 
-        Ventana: desde tres horas antes hasta media hora después de la hora
-        programada. Es lo que dura un recordatorio útil; una respuesta fuera
-        de esa ventana no se sabe a qué toma se refiere y va a una persona.
-        """
-        toma = (
+    async def _toma_cercana(self, paciente_id: uuid.UUID, recibido_en: datetime) -> Toma | None:
+        """Busca una toma pendiente cerca de su hora o del aviso pospuesto."""
+        instante_recordatorio = func.coalesce(Toma.recordatorio_diferido_en, Toma.programada_en)
+        return (
             await self._sesion.execute(
                 select(Toma)
                 .where(
                     Toma.paciente_id == paciente_id,
                     Toma.estado == EstadoToma.PENDIENTE.value,
-                    Toma.programada_en >= recibido_en - timedelta(hours=3),
-                    Toma.programada_en <= recibido_en + timedelta(minutes=30),
+                    instante_recordatorio >= recibido_en - timedelta(hours=3),
+                    instante_recordatorio <= recibido_en + timedelta(minutes=30),
                 )
-                .order_by(func.abs(func.extract("epoch", Toma.programada_en - recibido_en)))
+                .order_by(func.abs(func.extract("epoch", instante_recordatorio - recibido_en)))
                 .limit(1)
+                .with_for_update()
             )
         ).scalar_one_or_none()
+
+    async def _registrar_toma(
+        self,
+        paciente_id: uuid.UUID,
+        clinica_id: uuid.UUID,
+        recibido_en: datetime,
+        *,
+        tomada: bool,
+    ) -> bool:
+        """Registra TOMADA u OMITIDA sin cambiar la pauta prescrita.
+
+        Ventana: tres horas antes hasta media hora después del aviso vigente.
+        Una respuesta fuera de esa ventana no se asigna a una dosis por
+        aproximacion; se deriva al equipo.
+        """
+        toma = await self._toma_cercana(paciente_id, recibido_en)
         if toma is None:
             return False
-        toma.estado = EstadoToma.TOMADA.value
+        toma.estado = EstadoToma.TOMADA.value if tomada else EstadoToma.OMITIDA.value
         toma.registrada_en = recibido_en
         toma.registrada_por_tipo = TipoActor.PACIENTE.value
         toma.registrada_por_id = paciente_id
+        toma.nota_paciente = None if tomada else "El paciente informó que no pudo realizar la toma."
+        # La toma se registra, pero jamás se mueve su hora prescrita. Cualquier
+        # aviso diferido pendiente deja de aplicar al quedar TOMADA u OMITIDA.
+        motivo = "Toma registrada por el paciente" if tomada else "Toma marcada como omitida"
+        ahora = self._reloj.ahora()
+        await self._sesion.execute(
+            update(Recordatorio)
+            .where(
+                Recordatorio.entidad_tipo == ENTIDAD_TOMA,
+                Recordatorio.entidad_id == toma.id,
+                Recordatorio.estado == ESTADO_PROGRAMADO,
+            )
+            .values(
+                estado=ESTADO_CANCELADO,
+                cancelado_en=ahora,
+                motivo_cancelacion=motivo,
+            )
+        )
+        await self._sesion.execute(
+            update(OutboxMensaje)
+            .where(
+                OutboxMensaje.entidad_origen_tipo == ENTIDAD_TOMA,
+                OutboxMensaje.entidad_origen_id == toma.id,
+                OutboxMensaje.estado == EstadoOutbox.PENDIENTE.value,
+            )
+            .values(
+                estado=EstadoOutbox.DESCARTADO.value,
+                ultimo_error=motivo,
+                actualizado_en=ahora,
+            )
+        )
         await self._sesion.flush()
-        logger.info("whatsapp.toma_registrada", toma_id=str(toma.id))
+        await RepositorioAuditoria(self._sesion).registrar(
+            [
+                construir_entrada(
+                    accion=AccionAuditada.TOMA_REGISTRADA,
+                    principal=replace(principal_sistema(clinica_id), origen="WHATSAPP"),
+                    ahora=recibido_en,
+                    entidad_tipo="toma",
+                    entidad_id=toma.id,
+                    paciente_id=paciente_id,
+                    nivel_sensibilidad=NivelSensibilidad.CLINICO,
+                    tomada=tomada,
+                    canal="WHATSAPP",
+                )
+            ]
+        )
+        logger.info(
+            "whatsapp.toma_registrada" if tomada else "whatsapp.toma_omitida",
+            toma_id=str(toma.id),
+        )
+        return True
+
+    async def _diferir_toma(
+        self, paciente_id: uuid.UUID, clinica_id: uuid.UUID, recibido_en: datetime
+    ) -> bool:
+        """Pospone 30 minutos el aviso, nunca la hora de la dosis."""
+        toma = await self._toma_cercana(paciente_id, recibido_en)
+        if toma is None:
+            return False
+        receta = (
+            await self._sesion.execute(
+                select(Receta)
+                .join(RecetaMedicamento, RecetaMedicamento.receta_id == Receta.id)
+                .where(
+                    RecetaMedicamento.id == toma.receta_medicamento_id,
+                    Receta.clinica_id == clinica_id,
+                    Receta.paciente_id == paciente_id,
+                    Receta.estado == EstadoReceta.CONFIRMADA.value,
+                )
+            )
+        ).scalar_one_or_none()
+        if receta is None:
+            return False
+
+        ahora = self._reloj.ahora()
+        programado = max(ahora, recibido_en) + timedelta(minutes=30)
+        # Una segunda posposición sustituye el aviso pendiente para evitar
+        # dos mensajes para la misma toma.
+        await self._sesion.execute(
+            update(Recordatorio)
+            .where(
+                Recordatorio.entidad_tipo == ENTIDAD_TOMA,
+                Recordatorio.entidad_id == toma.id,
+                Recordatorio.tipo == TipoMensajeOutbox.TOMA_RECORDATORIO.value,
+                Recordatorio.estado == ESTADO_PROGRAMADO,
+            )
+            .values(
+                estado=ESTADO_CANCELADO,
+                cancelado_en=ahora,
+                motivo_cancelacion="El paciente pospuso el recordatorio.",
+            )
+        )
+        await self._sesion.execute(
+            update(OutboxMensaje)
+            .where(
+                OutboxMensaje.entidad_origen_tipo == ENTIDAD_TOMA,
+                OutboxMensaje.entidad_origen_id == toma.id,
+                OutboxMensaje.tipo == TipoMensajeOutbox.TOMA_RECORDATORIO.value,
+                OutboxMensaje.estado == EstadoOutbox.PENDIENTE.value,
+            )
+            .values(
+                estado=EstadoOutbox.DESCARTADO.value,
+                ultimo_error="El paciente pospuso el recordatorio.",
+                actualizado_en=ahora,
+            )
+        )
+        toma.recordatorio_diferido_en = programado
+        self._sesion.add(
+            Recordatorio(
+                tipo=TipoMensajeOutbox.TOMA_RECORDATORIO.value,
+                clinica_id=receta.clinica_id,
+                entidad_tipo=ENTIDAD_TOMA,
+                entidad_id=toma.id,
+                destinatario_tipo="PACIENTE",
+                destinatario_id=paciente_id,
+                programado_para=programado,
+                estado=ESTADO_PROGRAMADO,
+            )
+        )
+        await self._sesion.flush()
+        logger.info("whatsapp.recordatorio_toma_pospuesto", toma_id=str(toma.id))
         return True
 
     async def _asociar_comprobante(

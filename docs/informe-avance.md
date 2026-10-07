@@ -1,6 +1,6 @@
 # Informe de avance
 
-> **Fecha:** 2026‑09‑12 · 29 commits · Fases 0, 0b, 3 y **4 (WhatsApp)** cerradas;
+> **Corte histórico:** 2026‑09‑12 · 29 commits · Fases 0, 0b, 3 y **4 (WhatsApp)** cerradas;
 > **Fase 6 (conocimiento y RAG) cerrada.** 1, 2, 5 y 7 en curso. Del calendario externo
 > queda pendiente el adaptador real de Google y la renovación automática del token; del
 > RAG, el agente que lo use.
@@ -8,6 +8,15 @@
 Este informe cubre los 18 puntos exigidos. Está escrito para ser contrastado: cada cifra
 procede de una ejecución real cuyo comando se indica, y lo que no se ha verificado se dice
 que no se ha verificado.
+
+> **Actualización verificada 2026‑10‑06:** el README documenta la entrega vigente, incluida la
+> administración de consultorios, especialidades y servicios; horarios, pausas, feriados y
+> bloqueos, horarios individuales, perfiles de equipo y edición de sedes; la última suite backend completa aprobó 1640 pruebas
+> (3 pruebas LLM omitidas porque requieren una API de Anthropic configurada; 9 pruebas nuevas de análisis y pagos pasaron dirigidas), 377
+> pruebas frontend y 39 escenarios E2E aprobados en una corrida.
+> La integración local ahora protege recetas firmadas y reemplaza sus versiones sin reescribirlas.
+> Este informe conserva debajo el corte histórico de septiembre;
+> no usar sus cifras de pantallas, rutas ni módulos como estado actual.
 
 ---
 
@@ -541,3 +550,22 @@ donde el diseño usa 401 a propósito, y una medía la caducidad del token creye
 la del bloqueo. Cada una se corrigió y se explicó en el mensaje del commit correspondiente.
 Se listan aquí porque una suite verde cuyas pruebas nadie revisa no vale más que no tener
 suite.
+
+---
+
+## 19. Continuación (2026-10-06): recolector Prometheus local
+
+Se agregó el perfil opcional `observabilidad` con Prometheus y retención local de 15 días,
+más cuatro reglas para API inaccesible, mensajes fallidos del outbox, cola atrasada y fallo
+al consultar PostgreSQL. La interfaz escucha solo en `127.0.0.1:9090`.
+
+La primera prueba en vivo detectó que el alias Docker `host.docker.internal` apuntaba al
+puente `172.17.0.1`, no al anfitrión Windows que ejecuta la API. Se corrigió con
+`infra/wsl/observabilidad.sh`, que descubre la puerta de enlace de Windows en cada inicio
+de la distribución y la inyecta en Compose. Verificación ejecutada: `clinicai-api` quedó
+`UP`, Prometheus contestó `/-/healthy` con HTTP 200 y su API de reglas cargó cuatro reglas.
+Las dos pruebas de contrato de configuración pasaron; Ruff y el formato también.
+
+Esto habilita observación local, no avisos operativos: falta Alertmanager con destinatario,
+guardia y señales para eventos de auditoría y degradación de Redis. Por tanto, 10.9 sigue en
+curso y el sistema continúa sin preparación para producción.

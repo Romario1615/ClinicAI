@@ -22,7 +22,7 @@
  * exclusión, y el mensaje correcto es «ese turno acaba de ocuparse», no
  * «error inesperado».
  */
-import { Component, computed, inject, signal } from '@angular/core';
+import { Component, computed, inject, signal, ChangeDetectionStrategy } from '@angular/core';
 import { ActivatedRoute } from '@angular/router';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormsModule } from '@angular/forms';
@@ -37,6 +37,7 @@ import { ColaTrabajoComponent } from '../../compartido/cola-trabajo.component';
 import { FichaPacienteComponent } from '../../compartido/ficha-paciente.component';
 import { SelectorPacienteComponent } from '../../compartido/selector-paciente.component';
 import { InsigniaEstadoComponent } from '../../compartido/insignia-estado.component';
+import { IconoComponent } from '../../compartido/icono.component';
 import { VentanaFlotanteComponent } from '../../compartido/ventana-flotante.component';
 import { ReprogramarCitaComponent } from './reprogramar-cita.component';
 import { AccionesRecorridoComponent } from './acciones-recorrido.component';
@@ -171,6 +172,7 @@ function leerVista(): VistaCalendario | 'lista' {
     ColaTrabajoComponent,
     FichaPacienteComponent,
     InsigniaEstadoComponent,
+    IconoComponent,
     ReprogramarCitaComponent,
     VentanaFlotanteComponent,
     CalendarioAgendaComponent,
@@ -179,6 +181,7 @@ function leerVista(): VistaCalendario | 'lista' {
     ProlongacionesPendientesComponent,
   ],
   templateUrl: './agenda.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './agenda.component.scss',
 })
 export class AgendaComponent {
@@ -231,6 +234,8 @@ export class AgendaComponent {
   protected readonly cargandoAgenda = signal(false);
   protected readonly errorCatalogo = signal<FalloApi | null>(null);
   protected readonly errorAgenda = signal<FalloApi | null>(null);
+  protected readonly exportando = signal(false);
+  protected readonly errorExportacion = signal('');
 
   // --- Datos ---
   protected readonly citas = signal<readonly Cita[]>([]);
@@ -347,6 +352,9 @@ export class AgendaComponent {
   );
   protected readonly puedeInasistencia = computed(() =>
     this.sesion.tienePermiso(PERMISOS.citaInasistencia),
+  );
+  protected readonly puedeExportarReportes = computed(() =>
+    this.sesion.tienePermiso(PERMISOS.reporteExportar),
   );
 
   protected readonly fechaLegible = computed(() => {
@@ -786,6 +794,41 @@ export class AgendaComponent {
   // ======================================================================
   //  Navegación
   // ======================================================================
+  protected exportarResumen(): void {
+    if (this.exportando() || !this.sedeId() || !this.fecha()) return;
+    const vistaActual = this.vista();
+    const vista: VistaCalendario = vistaActual === 'lista' ? 'dia' : vistaActual;
+    const { desde, hasta } = rangoVista(vista, this.fecha());
+    const desdeIso = instanteLocal(desde, '00:00', this.zona());
+    const hastaIso = instanteLocal(hasta, '00:00', this.zona());
+    this.exportando.set(true);
+    this.errorExportacion.set('');
+    this.api
+      .exportarResumenAgenda({
+        desde: desdeIso,
+        hasta: hastaIso,
+        sede_id: this.sedeId(),
+        profesional_id: this.profesionalId() || undefined,
+        servicio_id: this.servicioId() || undefined,
+      })
+      .subscribe({
+        next: (archivo) => {
+          const url = URL.createObjectURL(archivo);
+          const enlace = document.createElement('a');
+          enlace.href = url;
+          enlace.download = `resumen-agenda-${desde}.csv`;
+          enlace.click();
+          enlace.remove();
+          window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+          this.exportando.set(false);
+        },
+        error: (fallo: unknown) => {
+          this.errorExportacion.set(this.aFallo(fallo).message);
+          this.exportando.set(false);
+        },
+      });
+  }
+
   /** Flechas: un día, una semana o un mes según la vista. */
   protected cambiarDia(pasos: number): void {
     const vista = this.vista();

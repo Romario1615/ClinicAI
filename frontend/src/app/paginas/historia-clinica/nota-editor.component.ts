@@ -9,11 +9,13 @@
  * Signos vitales opcionales, solo números. Nada de lo escrito aquí sale en
  * mensajes al paciente (regla 10).
  */
-import { Component, OnInit, inject, input, output, signal } from '@angular/core';
+import { Component, OnInit, inject, input, output, signal, ChangeDetectionStrategy } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 
 import { ApiService, FalloApi } from '../../nucleo/servicios/api.service';
 import type { Nota, NotaNueva } from '../../nucleo/servicios/api.service';
+import { PERMISOS } from '../../nucleo/servicios/configuracion';
+import { SesionService } from '../../nucleo/servicios/sesion.service';
 
 const TIPOS = [
   { valor: 'EVOLUCION', texto: 'Evolución' },
@@ -50,6 +52,14 @@ const SIGNOS = [
           <input class="campo__control" name="motivoConsulta" maxlength="500" [(ngModel)]="motivoConsulta" />
         </label>
       </div>
+      <label class="campo">
+        <span class="campo__etiqueta">Sensibilidad de la nota</span>
+        <select class="campo__control" name="nivelSensibilidad" [(ngModel)]="nivelSensibilidad">
+          <option value="N2">Clínica · N2</option>
+          @if (puedeLeerSensible()) { <option value="N3">Clínica sensible · N3</option> }
+        </select>
+        <span class="campo__ayuda">Las notas N3 solo son visibles con permiso clínico sensible. Una corrección nunca reduce la sensibilidad de la versión anterior.</span>
+      </label>
       @for (campo of soap; track campo.clave) {
         <label class="campo">
           <span class="campo__etiqueta">{{ campo.texto }}</span>
@@ -83,6 +93,7 @@ const SIGNOS = [
       </div>
     </form>
   `,
+  changeDetection: ChangeDetectionStrategy.Eager,
   styles: `
     .editor-nota { display: grid; gap: var(--espacio-2); margin-bottom: var(--espacio-4); }
     .editor-nota h3 { margin: 0 0 var(--espacio-2); }
@@ -93,6 +104,7 @@ const SIGNOS = [
 })
 export class NotaEditorComponent implements OnInit {
   private readonly api = inject(ApiService);
+  private readonly sesion = inject(SesionService);
 
   readonly pacienteId = input.required<string>();
   /** Nota a corregir. Sin ella, el editor crea una nota nueva. */
@@ -111,6 +123,7 @@ export class NotaEditorComponent implements OnInit {
 
   protected tipo: NotaNueva['tipo'] = 'EVOLUCION';
   protected motivoConsulta = '';
+  protected nivelSensibilidad: NotaNueva['nivel_sensibilidad'] = 'N2';
   protected valores: Record<string, string> = { subjetivo: '', objetivo: '', analisis: '', plan: '' };
   protected vitales: Record<string, number | null> = {};
   protected motivo = '';
@@ -121,6 +134,7 @@ export class NotaEditorComponent implements OnInit {
     const nota = this.base();
     if (!nota) return;
     this.tipo = (nota.tipo as NotaNueva['tipo']) ?? 'EVOLUCION';
+    this.nivelSensibilidad = nota.nivel_sensibilidad;
     this.motivoConsulta = nota.motivo_consulta ?? '';
     this.valores = {
       subjetivo: nota.subjetivo ?? '',
@@ -144,6 +158,7 @@ export class NotaEditorComponent implements OnInit {
     const datos: NotaNueva = {
       paciente_id: this.pacienteId(),
       tipo: this.tipo,
+      nivel_sensibilidad: this.nivelSensibilidad,
       motivo_consulta: texto(this.motivoConsulta),
       subjetivo: texto(this.valores['subjetivo']),
       objetivo: texto(this.valores['objetivo']),
@@ -175,5 +190,9 @@ export class NotaEditorComponent implements OnInit {
         this.error.set(fallo instanceof FalloApi ? fallo.message : 'No se pudo guardar la nota.');
       },
     });
+  }
+
+  protected puedeLeerSensible(): boolean {
+    return this.sesion.tienePermiso(PERMISOS.historiaLeerSensible);
   }
 }

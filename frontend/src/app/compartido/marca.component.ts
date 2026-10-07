@@ -1,4 +1,4 @@
-import { Component, input } from '@angular/core';
+import { Component, input, ChangeDetectionStrategy } from '@angular/core';
 
 @Component({
   selector: 'app-marca',
@@ -18,6 +18,7 @@ import { Component, input } from '@angular/core';
       </span>
     </span>
   `,
+  changeDetection: ChangeDetectionStrategy.Eager,
   styles: `
     :host { display: inline-flex; min-width: 0; }
     .marca { display: inline-flex; align-items: center; gap: 11px; color: #fff; }

@@ -61,6 +61,144 @@ class TestCatalogo:
         assert clinica.identificacion_fiscal not in respuesta.text
         assert "identificacion_fiscal" not in respuesta.text
 
+    async def test_lector_de_plan_puede_obtener_datos_publicos_de_su_clinica(
+        self,
+        cliente: AsyncClient,
+        api: str,
+        sesion: AsyncSession,
+        usuario: Usuario,
+        clinica: Clinica,
+        sede: Sede,
+    ) -> None:
+        await conceder_permisos(sesion, usuario, clinica, "plan_tratamiento.leer", sedes=(sede.id,))
+        cabeceras = await cabecera_bearer(cliente, usuario, clinica)
+
+        respuesta = await cliente.get(_ruta(api, "/catalogo/clinica"), headers=cabeceras)
+
+        assert respuesta.status_code == 200
+        assert respuesta.json()["id"] == str(clinica.id)
+        assert respuesta.json()["nombre"] == clinica.nombre
+        assert "identificacion_fiscal" not in respuesta.json()
+
+    async def test_gestionar_sedes_filtra_ambito_y_edita_con_auditoria(
+        self,
+        cliente: AsyncClient,
+        api: str,
+        sesion: AsyncSession,
+        usuario: Usuario,
+        clinica: Clinica,
+        sede: Sede,
+        otra_sede: Sede,
+    ) -> None:
+        await conceder_permisos(sesion, usuario, clinica, "sede.gestionar", sedes=(sede.id,))
+        cabeceras = await cabecera_bearer(cliente, usuario, clinica)
+
+        lista = await cliente.get(_ruta(api, "/catalogo/sedes/gestion"), headers=cabeceras)
+        assert lista.status_code == 200
+        assert [item["id"] for item in lista.json()] == [str(sede.id)]
+        assert str(otra_sede.id) not in lista.text
+
+        respuesta = await cliente.put(
+            _ruta(api, f"/catalogo/sedes/{sede.id}"),
+            headers=cabeceras,
+            json={
+                "nombre": "Sede Norte",
+                "direccion": "Av. Salud 456",
+                "telefono": "+593 2 555 0101",
+                "zona_horaria": "America/Guayaquil",
+                "minutos_antelacion_minima": 90,
+            },
+        )
+        assert respuesta.status_code == 200
+        assert respuesta.json() == {
+            "id": str(sede.id),
+            "nombre": "Sede Norte",
+            "direccion": "Av. Salud 456",
+            "telefono": "+593 2 555 0101",
+            "zona_horaria": "America/Guayaquil",
+            "minutos_antelacion_minima": 90,
+        }
+        await sesion.refresh(sede)
+        assert sede.nombre == "Sede Norte"
+        assert sede.minutos_antelacion_minima == 90
+        acciones = list(
+            (
+                await sesion.execute(
+                    sa.select(Auditoria.accion).where(Auditoria.entidad_id == sede.id)
+                )
+            ).scalars()
+        )
+        assert acciones.count(AccionAuditada.SEDE_MODIFICADA.value) == 1
+
+    async def test_gestionar_sede_de_otra_sede_devuelve_404(
+        self,
+        cliente: AsyncClient,
+        api: str,
+        sesion: AsyncSession,
+        usuario: Usuario,
+        clinica: Clinica,
+        sede: Sede,
+        otra_sede: Sede,
+    ) -> None:
+        await conceder_permisos(sesion, usuario, clinica, "sede.gestionar", sedes=(sede.id,))
+        cabeceras = await cabecera_bearer(cliente, usuario, clinica)
+
+        respuesta = await cliente.put(
+            _ruta(api, f"/catalogo/sedes/{otra_sede.id}"),
+            headers=cabeceras,
+            json={
+                "nombre": "Intento de edición",
+                "direccion": None,
+                "telefono": None,
+                "zona_horaria": "America/Guayaquil",
+                "minutos_antelacion_minima": 60,
+            },
+        )
+
+        assert respuesta.status_code == 404
+        await sesion.refresh(otra_sede)
+        assert otra_sede.nombre.startswith("Sede Ajena")
+
+    async def test_sede_rechaza_zona_horaria_invalida_y_nombre_duplicado(
+        self,
+        cliente: AsyncClient,
+        api: str,
+        sesion: AsyncSession,
+        usuario: Usuario,
+        clinica: Clinica,
+        sede: Sede,
+        otra_sede: Sede,
+    ) -> None:
+        await conceder_permisos(
+            sesion,
+            usuario,
+            clinica,
+            "sede.gestionar",
+            sedes=(sede.id, otra_sede.id),
+        )
+        cabeceras = await cabecera_bearer(cliente, usuario, clinica)
+        datos = {
+            "nombre": "Sede nueva",
+            "direccion": None,
+            "telefono": None,
+            "zona_horaria": "America/Guayaquil",
+            "minutos_antelacion_minima": 60,
+        }
+
+        zona_invalida = await cliente.put(
+            _ruta(api, f"/catalogo/sedes/{sede.id}"),
+            headers=cabeceras,
+            json={**datos, "zona_horaria": "Zona/Ficticia"},
+        )
+        assert zona_invalida.status_code == 422
+
+        duplicada = await cliente.put(
+            _ruta(api, f"/catalogo/sedes/{sede.id}"),
+            headers=cabeceras,
+            json={**datos, "nombre": otra_sede.nombre},
+        )
+        assert duplicada.status_code == 409
+
     async def test_sin_permiso_el_catalogo_se_deniega(
         self,
         cliente: AsyncClient,
@@ -304,6 +442,256 @@ class TestCatalogo:
         assert identificadores == [str(propio.id)]
         assert "Consultorio ajeno" not in respuesta.text
 
+    async def test_gestion_de_consultorios_crea_edita_y_desactiva_con_auditoria(
+        self,
+        cliente: AsyncClient,
+        api: str,
+        sesion: AsyncSession,
+        usuario: Usuario,
+        clinica: Clinica,
+        sede: Sede,
+    ) -> None:
+        await conceder_permisos(sesion, usuario, clinica, "sede.gestionar", sedes=(sede.id,))
+        cabeceras = await cabecera_bearer(cliente, usuario, clinica)
+
+        creada = await cliente.post(
+            _ruta(api, "/catalogo/consultorios"),
+            headers=cabeceras,
+            json={
+                "sede_id": str(sede.id),
+                "nombre": "Sala nueva",
+                "tipo": "IMAGEN",
+                "capacidad": 2,
+            },
+        )
+        assert creada.status_code == 201
+        consultorio_id = creada.json()["id"]
+        assert creada.json()["activo"] is True
+
+        editada = await cliente.put(
+            _ruta(api, f"/catalogo/consultorios/{consultorio_id}"),
+            headers=cabeceras,
+            json={"nombre": "Sala radiología", "tipo": "IMAGEN", "capacidad": 3},
+        )
+        assert editada.status_code == 200
+        assert editada.json()["nombre"] == "Sala radiología"
+        assert editada.json()["capacidad"] == 3
+
+        inactiva = await cliente.patch(
+            _ruta(api, f"/catalogo/consultorios/{consultorio_id}/estado"),
+            headers=cabeceras,
+            json={"activo": False},
+        )
+        assert inactiva.status_code == 200
+        assert inactiva.json()["activo"] is False
+        gestion = await cliente.get(
+            _ruta(api, "/catalogo/consultorios/gestion"),
+            headers=cabeceras,
+            params={"sede_id": str(sede.id)},
+        )
+        assert {c["id"] for c in gestion.json()} == {consultorio_id}
+        assert gestion.json()[0]["activo"] is False
+        acciones = list(
+            (
+                await sesion.execute(
+                    sa.select(Auditoria.accion).where(
+                        Auditoria.entidad_id == uuid.UUID(consultorio_id)
+                    )
+                )
+            ).scalars()
+        )
+        assert acciones.count(AccionAuditada.CONSULTORIO_CREADO.value) == 1
+        assert acciones.count(AccionAuditada.CONSULTORIO_MODIFICADO.value) == 2
+
+    async def test_gestion_consultorios_no_admite_sede_fuera_del_ambito(
+        self,
+        cliente: AsyncClient,
+        api: str,
+        sesion: AsyncSession,
+        usuario: Usuario,
+        clinica: Clinica,
+        sede: Sede,
+        otra_sede: Sede,
+    ) -> None:
+        await conceder_permisos(sesion, usuario, clinica, "sede.gestionar", sedes=(sede.id,))
+        cabeceras = await cabecera_bearer(cliente, usuario, clinica)
+
+        respuesta = await cliente.post(
+            _ruta(api, "/catalogo/consultorios"),
+            headers=cabeceras,
+            json={
+                "sede_id": str(otra_sede.id),
+                "nombre": "No autorizado",
+                "tipo": "CONSULTA",
+                "capacidad": 1,
+            },
+        )
+
+        assert respuesta.status_code == 404
+        assert respuesta.json()["codigo"] == "RECURSO_NO_ENCONTRADO"
+
+    async def test_consultorio_rechaza_capacidad_invalida(
+        self,
+        cliente: AsyncClient,
+        api: str,
+        sesion: AsyncSession,
+        usuario: Usuario,
+        clinica: Clinica,
+        sede: Sede,
+    ) -> None:
+        await conceder_permisos(sesion, usuario, clinica, "sede.gestionar", sedes=(sede.id,))
+        cabeceras = await cabecera_bearer(cliente, usuario, clinica)
+
+        respuesta = await cliente.post(
+            _ruta(api, "/catalogo/consultorios"),
+            headers=cabeceras,
+            json={
+                "sede_id": str(sede.id),
+                "nombre": "Sala inválida",
+                "tipo": "CONSULTA",
+                "capacidad": 0,
+            },
+        )
+
+        assert respuesta.status_code == 422
+
+    async def test_gestion_catalogo_crea_edita_y_archiva_especialidad_y_servicio(
+        self,
+        cliente: AsyncClient,
+        api: str,
+        sesion: AsyncSession,
+        usuario: Usuario,
+        clinica: Clinica,
+    ) -> None:
+        await conceder_permisos(
+            sesion,
+            usuario,
+            clinica,
+            "especialidad.gestionar",
+            "servicio.gestionar",
+            todas_las_sedes=True,
+        )
+        cabeceras = await cabecera_bearer(cliente, usuario, clinica)
+
+        especialidad = await cliente.post(
+            _ruta(api, "/catalogo/especialidades"),
+            headers=cabeceras,
+            json={
+                "nombre": "Ortodoncia avanzada",
+                "codigo": "ORT-AV",
+                "descripcion": "Tratamientos de prueba",
+            },
+        )
+        assert especialidad.status_code == 201
+        especialidad_id = especialidad.json()["id"]
+        assert especialidad.json()["codigo"] == "ORT-AV"
+
+        servicio = await cliente.post(
+            _ruta(api, "/catalogo/servicios"),
+            headers=cabeceras,
+            json={
+                "especialidad_id": especialidad_id,
+                "nombre": "Alineadores transparentes",
+                "descripcion": "Servicio sintético de prueba",
+                "duracion_minutos": 45,
+                "minutos_preparacion": 10,
+                "precio": "125.50",
+                "moneda": "usd",
+                "requiere_pago_previo": True,
+                "instrucciones_preparacion": "Llegar diez minutos antes",
+                "tipo_consultorio_requerido": "CONSULTA",
+            },
+        )
+        assert servicio.status_code == 201
+        servicio_id = servicio.json()["id"]
+        assert servicio.json()["moneda"] == "USD"
+        assert servicio.json()["precio"] == "125.50"
+
+        especialidad_actualizada = await cliente.put(
+            _ruta(api, f"/catalogo/especialidades/{especialidad_id}"),
+            headers=cabeceras,
+            json={
+                "nombre": "Ortodoncia",
+                "codigo": "ORT",
+                "descripcion": "Especialidad actualizada",
+            },
+        )
+        assert especialidad_actualizada.status_code == 200
+        assert especialidad_actualizada.json()["nombre"] == "Ortodoncia"
+
+        servicio_actualizado = await cliente.put(
+            _ruta(api, f"/catalogo/servicios/{servicio_id}"),
+            headers=cabeceras,
+            json={
+                "especialidad_id": especialidad_id,
+                "nombre": "Alineadores",
+                "descripcion": "Descripción actualizada",
+                "duracion_minutos": 60,
+                "minutos_preparacion": 5,
+                "precio": "130.00",
+                "moneda": "USD",
+                "requiere_pago_previo": False,
+                "instrucciones_preparacion": None,
+                "tipo_consultorio_requerido": "PROCEDIMIENTOS",
+            },
+        )
+        assert servicio_actualizado.status_code == 200
+        assert servicio_actualizado.json()["duracion_minutos"] == 60
+
+        conflicto = await cliente.patch(
+            _ruta(api, f"/catalogo/especialidades/{especialidad_id}/estado"),
+            headers=cabeceras,
+            json={"activo": False},
+        )
+        assert conflicto.status_code == 409
+
+        estado_servicio = await cliente.patch(
+            _ruta(api, f"/catalogo/servicios/{servicio_id}/estado"),
+            headers=cabeceras,
+            json={"activo": False},
+        )
+        assert estado_servicio.status_code == 200
+        estado_especialidad = await cliente.patch(
+            _ruta(api, f"/catalogo/especialidades/{especialidad_id}/estado"),
+            headers=cabeceras,
+            json={"activo": False},
+        )
+        assert estado_especialidad.status_code == 200
+
+        inventario_especialidades = await cliente.get(
+            _ruta(api, "/catalogo/especialidades/gestion"), headers=cabeceras
+        )
+        inventario_servicios = await cliente.get(
+            _ruta(api, "/catalogo/servicios/gestion"), headers=cabeceras
+        )
+        assert (
+            next(e for e in inventario_especialidades.json() if e["id"] == especialidad_id)[
+                "activa"
+            ]
+            is False
+        )
+        assert (
+            next(s for s in inventario_servicios.json() if s["id"] == servicio_id)["activo"]
+            is False
+        )
+
+        auditorias = list(
+            (
+                await sesion.execute(
+                    sa.select(Auditoria.accion, Auditoria.entidad_id).where(
+                        Auditoria.entidad_id.in_(
+                            [uuid.UUID(especialidad_id), uuid.UUID(servicio_id)]
+                        )
+                    )
+                )
+            ).all()
+        )
+        acciones = [accion for accion, _ in auditorias]
+        assert acciones.count(AccionAuditada.ESPECIALIDAD_CREADA.value) == 1
+        assert acciones.count(AccionAuditada.ESPECIALIDAD_MODIFICADA.value) == 2
+        assert acciones.count(AccionAuditada.SERVICIO_CREADO.value) == 1
+        assert acciones.count(AccionAuditada.SERVICIO_MODIFICADO.value) == 2
+
     async def test_un_profesional_fuera_de_ambito_responde_404(
         self,
         cliente: AsyncClient,
@@ -478,7 +866,7 @@ class TestPacientes:
         assert identificadores == [str(paciente.id)]
         assert respuesta.json()["total"] == 1
 
-    async def test_un_paciente_fuera_de_ambito_responde_igual_que_uno_inexistente(
+    async def test_ficha_respeta_el_paciente_asignado_y_oculta_otros_ids(
         self,
         cliente: AsyncClient,
         api: str,
@@ -486,23 +874,71 @@ class TestPacientes:
         usuario: Usuario,
         clinica: Clinica,
         paciente: Paciente,
+        sufijo: str,
     ) -> None:
-        """Si se distinguieran, el 404 dejaria de proteger nada."""
-        await conceder_permisos(
+        """IDOR: el alcance permite un paciente, no los demás identificadores.
+
+        Incluye el caso más sensible de otra clínica y exige que su respuesta
+        sea indistinguible de un UUID que no existe.
+        """
+        rol = await conceder_permisos(
             sesion,
             usuario,
             clinica,
             "paciente.leer_administrativo",
             todos_los_pacientes=False,
         )
+
+        otro_local = Paciente(
+            clinica_id=clinica.id,
+            tipo_documento="CEDULA",
+            numero_documento=f"7{sufijo[:9]}",
+            nombre="Paciente",
+            apellido="Fuera de ámbito",
+        )
+        otra_clinica = Clinica(
+            nombre=f"Clínica ajena {sufijo}",
+            identificacion_fiscal=f"AJENA-{sufijo}",
+            zona_horaria="America/Guayaquil",
+        )
+        sesion.add_all([otro_local, otra_clinica])
+        await sesion.flush()
+        otro_externo = Paciente(
+            clinica_id=otra_clinica.id,
+            tipo_documento="CEDULA",
+            numero_documento=f"6{sufijo[:9]}",
+            nombre="Paciente",
+            apellido="Otra clínica",
+        )
+        sesion.add(otro_externo)
+
+        asignacion = (
+            await sesion.execute(sa.select(UsuarioRol).where(UsuarioRol.rol_id == rol.id))
+        ).scalar_one()
+        sesion.add(
+            AmbitoAsignacion(
+                usuario_rol_id=asignacion.id,
+                tipo=TipoAmbito.PACIENTE.value,
+                valor_id=paciente.id,
+            )
+        )
+        await sesion.flush()
         cabeceras = await cabecera_bearer(cliente, usuario, clinica)
 
-        ajeno = await cliente.get(_ruta(api, f"/pacientes/{paciente.id}"), headers=cabeceras)
+        propio = await cliente.get(_ruta(api, f"/pacientes/{paciente.id}"), headers=cabeceras)
+        ajeno_local = await cliente.get(
+            _ruta(api, f"/pacientes/{otro_local.id}"), headers=cabeceras
+        )
+        ajeno_externo = await cliente.get(
+            _ruta(api, f"/pacientes/{otro_externo.id}"), headers=cabeceras
+        )
         inexistente = await cliente.get(_ruta(api, f"/pacientes/{uuid.uuid4()}"), headers=cabeceras)
 
-        assert ajeno.status_code == inexistente.status_code == 404
-        assert ajeno.json()["codigo"] == inexistente.json()["codigo"]
-        assert ajeno.json()["mensaje"] == inexistente.json()["mensaje"]
+        assert propio.status_code == 200
+        for respuesta in (ajeno_local, ajeno_externo):
+            assert respuesta.status_code == 404
+            assert respuesta.json()["codigo"] == inexistente.json()["codigo"]
+            assert respuesta.json()["mensaje"] == inexistente.json()["mensaje"]
 
     async def test_abrir_una_ficha_deja_auditoria(
         self,

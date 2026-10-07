@@ -18,9 +18,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.mensajeria.carga_whatsapp import CargaWebhook, MensajeEntranteCrudo
 from app.modulos.agenda.modelos import Cita
+from app.modulos.auditoria.modelos import Auditoria
 from app.modulos.conversaciones.modelos import Conversacion
 from app.modulos.conversaciones.servicios import ServicioConversaciones
 from app.modulos.historia.modelos import Receta, RecetaMedicamento, Toma
+from app.modulos.outbox.modelos import Recordatorio, TipoMensajeOutbox
 from app.modulos.pacientes.modelos import Paciente
 from app.modulos.pagos.modelos import Pago
 from app.nucleo.reloj import RelojFijo
@@ -32,7 +34,11 @@ TELEFONO_PANEL = "+593 99 900 8888"
 TELEFONO_WEBHOOK = "593999008888"
 
 
-def _mensaje(texto: str | None, tipo: str = "text") -> CargaWebhook:
+def _mensaje(
+    texto: str | None,
+    tipo: str = "text",
+    recibido_en: datetime = AHORA,
+) -> CargaWebhook:
     return CargaWebhook(
         mensajes=(
             MensajeEntranteCrudo(
@@ -40,7 +46,7 @@ def _mensaje(texto: str | None, tipo: str = "text") -> CargaWebhook:
                 telefono=TELEFONO_WEBHOOK,
                 tipo=tipo,
                 texto=texto,
-                recibido_en=AHORA,
+                recibido_en=recibido_en,
                 crudo={},
             ),
         ),
@@ -65,9 +71,7 @@ async def _toma(
         clinica_id=clinica.id,
         paciente_id=paciente.id,
         profesional_id=profesional.id,
-        estado="CONFIRMADA",
-        confirmada_en=AHORA - timedelta(days=1),
-        confirmada_por=profesional.id,
+        estado="BORRADOR",
     )
     sesion.add(receta)
     await sesion.flush()
@@ -79,6 +83,10 @@ async def _toma(
         frecuencia_horas=8,
     )
     sesion.add(medicamento)
+    await sesion.flush()
+    receta.estado = "CONFIRMADA"
+    receta.confirmada_en = AHORA - timedelta(days=1)
+    receta.confirmada_por = profesional.id
     await sesion.flush()
     toma = Toma(
         receta_medicamento_id=medicamento.id, paciente_id=paciente.id, programada_en=programada
@@ -121,6 +129,76 @@ async def test_tomada_sin_toma_en_la_ventana_se_deriva(
     assert resumen.derivados == 1
     await sesion.refresh(lejana)
     assert lejana.estado == "PENDIENTE"
+
+
+async def test_recordarme_despues_mueve_solo_el_aviso_y_tomada_cierra_el_aviso(
+    sesion: AsyncSession, clinica, paciente: Paciente, profesional
+) -> None:
+    paciente.telefono_whatsapp = TELEFONO_PANEL
+    await sesion.flush()
+    toma = await _toma(sesion, clinica, paciente, profesional, AHORA - timedelta(minutes=20))
+    servicio = ServicioConversaciones(sesion, RelojFijo(AHORA))
+
+    resumen = await servicio.procesar(_mensaje("recordarme después"), clinica_id=clinica.id)
+    await sesion.flush()
+
+    assert resumen.recordatorios_reprogramados == 1
+    await sesion.refresh(toma)
+    assert toma.estado == "PENDIENTE"
+    assert toma.programada_en == AHORA - timedelta(minutes=20)
+    assert toma.recordatorio_diferido_en == AHORA + timedelta(minutes=30)
+    aviso = (
+        await sesion.execute(
+            sa.select(Recordatorio).where(
+                Recordatorio.entidad_id == toma.id,
+                Recordatorio.estado == "PROGRAMADO",
+                Recordatorio.tipo == TipoMensajeOutbox.TOMA_RECORDATORIO.value,
+            )
+        )
+    ).scalar_one()
+    assert aviso.programado_para == AHORA + timedelta(minutes=30)
+
+    posterior = await servicio.procesar(
+        _mensaje("tomada", recibido_en=AHORA + timedelta(minutes=35)), clinica_id=clinica.id
+    )
+    await sesion.flush()
+    assert posterior.tomas_registradas == 1
+    await sesion.refresh(toma)
+    await sesion.refresh(aviso)
+    assert toma.estado == "TOMADA"
+    assert aviso.estado == "CANCELADO"
+
+
+async def test_no_pude_registra_omision_y_deriva_al_equipo(
+    sesion: AsyncSession, clinica, paciente: Paciente, profesional
+) -> None:
+    paciente.telefono_whatsapp = TELEFONO_PANEL
+    await sesion.flush()
+    toma = await _toma(sesion, clinica, paciente, profesional, AHORA - timedelta(minutes=20))
+    servicio = ServicioConversaciones(sesion, RelojFijo(AHORA))
+
+    resumen = await servicio.procesar(_mensaje("no pude tomarla"), clinica_id=clinica.id)
+    await sesion.flush()
+
+    assert resumen.tomas_omitidas == 1
+    assert resumen.derivados == 1
+    await sesion.refresh(toma)
+    assert toma.estado == "OMITIDA"
+    assert toma.registrada_por_tipo == "PACIENTE"
+    conversacion = await _conversacion(sesion, clinica)
+    assert conversacion.estado == "EN_HANDOFF"
+    assert "seguimiento del equipo" in (conversacion.motivo_handoff or "")
+    registro = (
+        await sesion.execute(
+            sa.select(Auditoria).where(
+                Auditoria.accion == "toma.registrada",
+                Auditoria.entidad_id == toma.id,
+            )
+        )
+    ).scalar_one()
+    assert registro.origen == "WHATSAPP"
+    assert registro.paciente_id == paciente.id
+    assert registro.metadatos == {"tomada": False, "canal": "WHATSAPP"}
 
 
 async def test_imagen_con_un_pago_pendiente_pasa_a_comprobante_recibido(

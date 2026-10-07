@@ -1,13 +1,12 @@
 <header class="portada">
   <div class="portada__texto">
-    <p class="ceja">CONOCIMIENTO CLÍNICO</p>
+    <p class="ceja"><app-icono nombre="documento-verificado" [tamano]="16" /> CONOCIMIENTO CLÍNICO</p>
     <h1>Base de conocimiento</h1>
     <p class="portada__sub">
       Protocolos, instructivos y políticas de la clínica. Es la única fuente de la que el agente
       puede responder, y solo cuando el documento está aprobado.
     </p>
   </div>
-  <img class="portada__ilustracion" src="/images/conocimiento-aprobado.png" alt="" aria-hidden="true" loading="lazy" />
   @if (puedeCargar()) {
     <button type="button" class="boton boton--principal portada__accion" (click)="abrirCarga()">
       <app-icono nombre="subir" [tamano]="18" />
@@ -19,11 +18,11 @@
 <app-resumen-modulo modulo="conocimiento" />
 
 <ol class="flujo" aria-label="Cómo llega un documento al agente">
-  <li class="flujo__paso"><span class="flujo__num">1</span> Cargar <small>borrador</small></li>
-  <li class="flujo__paso"><span class="flujo__num">2</span> Revisar <small>en revisión</small></li>
-  <li class="flujo__paso"><span class="flujo__num">3</span> Aprobar <small>quien no lo cargó</small></li>
+  <li class="flujo__paso"><span class="flujo__num">1</span><app-icono nombre="subir" [tamano]="17" /> Cargar <small>borrador</small></li>
+  <li class="flujo__paso"><span class="flujo__num">2</span><app-icono nombre="revision-documental" [tamano]="17" /> Revisar <small>en revisión</small></li>
+  <li class="flujo__paso"><span class="flujo__num">3</span><app-icono nombre="escudo" [tamano]="17" /> Aprobar <small>quien no lo cargó</small></li>
   <li class="flujo__paso flujo__paso--fin">
-    <span class="flujo__num">4</span> Responde consultas <small>aprobado o publicado</small>
+    <span class="flujo__num">4</span><app-icono nombre="respuesta-documentada" [tamano]="17" /> Responde consultas <small>aprobado o publicado</small>
   </li>
 </ol>
 
@@ -264,7 +263,7 @@
                           {{ accion.texto }}
                         </button>
                       }
-                      @if (documento.status !== 'ARCHIVED') {
+                      @if (documento.status !== 'ARCHIVED' && documento.status !== 'APPROVED' && documento.status !== 'PUBLISHED') {
                         <button
                           type="button"
                           class="boton boton--pequeno boton--plano"
@@ -274,6 +273,8 @@
                           <app-icono nombre="subir" [tamano]="16" />
                           Versión nueva
                         </button>
+                      } @else if (documento.status === 'APPROVED' || documento.status === 'PUBLISHED') {
+                        <small class="tenue">Retírelo a borrador antes de cargar otra versión; deberá revisarse y aprobarse de nuevo.</small>
                       }
                     }
                     @if (puedeAprobar()) {

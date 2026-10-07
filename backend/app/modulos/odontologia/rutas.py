@@ -6,6 +6,7 @@ import uuid
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Path, Query, status
+from sqlalchemy import exists, select
 
 from app.modulos.historia.especialidades import exige_modulo
 from app.modulos.odontologia.esquemas import (
@@ -36,7 +37,31 @@ def _salida(fila: Odontograma) -> OdontogramaSalida:
         creado_en=fila.creado_en,
         denticion=fila.denticion,
         piezas=fila.piezas,
+        nivel_sensibilidad=fila.nivel_sensibilidad,
     )
+
+
+async def _hay_version_n3(
+    sesion: Sesion,
+    paciente_id: uuid.UUID,
+    principal: Principal,
+    version: int | None = None,
+    *,
+    solo_vigente: bool = True,
+) -> bool:
+    if principal.tiene_permiso("historia_clinica.leer_sensible"):
+        return False
+    criterios = [
+        Odontograma.paciente_id == paciente_id,
+        Odontograma.clinica_id == principal.clinica_id,
+        Odontograma.nivel_sensibilidad == "N3",
+    ]
+    if version is None and solo_vigente:
+        criterios.append(Odontograma.vigente.is_(True))
+    elif version is not None:
+        criterios.append(Odontograma.version == version)
+    consulta = select(exists().where(*criterios))
+    return bool(await sesion.scalar(consulta))
 
 
 @enrutador.get(
@@ -54,6 +79,15 @@ async def obtener_odontograma(
 ) -> OdontogramaSalida | None:
     servicio = ServicioOdontograma(sesion, reloj)
     fila = await servicio.obtener(paciente_id, principal=principal, version=version)
+    nivel_auditoria = (
+        NivelSensibilidad(fila.nivel_sensibilidad)
+        if fila is not None
+        else (
+            NivelSensibilidad.CLINICO_SENSIBLE
+            if await _hay_version_n3(sesion, paciente_id, principal, version)
+            else NivelSensibilidad.CLINICO
+        )
+    )
     await auditor.registrar(
         [
             construir_entrada(
@@ -63,7 +97,7 @@ async def obtener_odontograma(
                 entidad_tipo="odontograma",
                 entidad_id=fila.id if fila is not None else None,
                 paciente_id=paciente_id,
-                nivel_sensibilidad=NivelSensibilidad.CLINICO,
+                nivel_sensibilidad=nivel_auditoria,
                 version=fila.version if fila is not None else None,
             )
         ]
@@ -87,6 +121,12 @@ async def listar_versiones_odontograma(
     filas = await ServicioOdontograma(sesion, reloj).listar_versiones(
         paciente_id, principal=principal
     )
+    nivel_auditoria = (
+        NivelSensibilidad.CLINICO_SENSIBLE
+        if any(fila.nivel_sensibilidad == "N3" for fila in filas)
+        or await _hay_version_n3(sesion, paciente_id, principal, solo_vigente=False)
+        else NivelSensibilidad.CLINICO
+    )
     await auditor.registrar(
         [
             construir_entrada(
@@ -96,7 +136,7 @@ async def listar_versiones_odontograma(
                 entidad_tipo="odontograma",
                 entidad_id=fila.id,
                 paciente_id=paciente_id,
-                nivel_sensibilidad=NivelSensibilidad.CLINICO,
+                nivel_sensibilidad=nivel_auditoria,
                 version=fila.version,
             )
             for fila in filas
@@ -108,7 +148,7 @@ async def listar_versiones_odontograma(
                 ahora=reloj.ahora(),
                 entidad_tipo="odontograma",
                 paciente_id=paciente_id,
-                nivel_sensibilidad=NivelSensibilidad.CLINICO,
+                nivel_sensibilidad=nivel_auditoria,
                 versiones=0,
             )
         ]
@@ -131,7 +171,12 @@ async def crear_odontograma(
     paciente_id: Annotated[uuid.UUID, Path()],
     datos: OdontogramaInicial,
 ) -> OdontogramaSalida:
-    fila = await ServicioOdontograma(sesion, reloj).crear(paciente_id, datos, principal=principal)
+    fila = await ServicioOdontograma(sesion, reloj).crear(
+        paciente_id,
+        datos,
+        principal=principal,
+        nivel_sensibilidad=datos.nivel_sensibilidad,
+    )
     await auditor.registrar(
         [
             construir_entrada(
@@ -141,7 +186,7 @@ async def crear_odontograma(
                 entidad_tipo="odontograma",
                 entidad_id=fila.id,
                 paciente_id=paciente_id,
-                nivel_sensibilidad=NivelSensibilidad.CLINICO,
+                nivel_sensibilidad=NivelSensibilidad(fila.nivel_sensibilidad),
                 version=fila.version,
                 denticion=fila.denticion,
             )
@@ -172,6 +217,7 @@ async def versionar_odontograma(
         version_base=datos.version_base,
         motivo=datos.motivo,
         principal=principal,
+        nivel_sensibilidad=datos.nivel_sensibilidad,
     )
     await auditor.registrar(
         [
@@ -182,7 +228,7 @@ async def versionar_odontograma(
                 entidad_tipo="odontograma",
                 entidad_id=fila.id,
                 paciente_id=paciente_id,
-                nivel_sensibilidad=NivelSensibilidad.CLINICO,
+                nivel_sensibilidad=NivelSensibilidad(fila.nivel_sensibilidad),
                 version=fila.version,
                 version_base=datos.version_base,
             )

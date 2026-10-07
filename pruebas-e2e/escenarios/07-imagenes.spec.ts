@@ -23,7 +23,7 @@ test('el profesional carga y vuelve a ver una imagen cifrada del paciente', asyn
     .click();
 
   const ficha = page.locator('.ficha');
-  await ficha.getByRole('tab', { name: 'Imágenes clínicas' }).click();
+  await ficha.getByRole('tab', { name: 'Imágenes' }).click();
   const galeria = ficha.locator('section[aria-label="Imágenes clínicas del paciente"]');
   const descripcion = `Control visual E2E ${Date.now()}`;
   await galeria.getByLabel('Piezas FDI (opcional)').fill('36');

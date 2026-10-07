@@ -9,7 +9,7 @@
  * Revocar no borra nada: el registro anterior queda para demostrar que hubo
  * consentimiento mientras se enviaron mensajes.
  */
-import { Component, computed, effect, inject, input, signal } from '@angular/core';
+import { Component, computed, effect, inject, input, signal, ChangeDetectionStrategy } from '@angular/core';
 import { DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 
@@ -71,6 +71,7 @@ import { SesionService } from '../nucleo/servicios/sesion.service';
       }
     </section>
   `,
+  changeDetection: ChangeDetectionStrategy.Eager,
   styles: `
     .consentimientos { display: grid; gap: var(--espacio-2); margin-top: var(--espacio-4); }
     .consentimientos h3 { margin: 0 0 var(--espacio-1); }

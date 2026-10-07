@@ -15,7 +15,9 @@ es precisamente como se cuelan los agujeros de autorizacion.
 
 from __future__ import annotations
 
+import re
 import uuid
+from pathlib import Path
 
 import pytest
 
@@ -35,6 +37,64 @@ from app.nucleo.autorizacion import (
 )
 
 pytestmark = pytest.mark.unitaria
+
+_ROLES_MATRIZ = (
+    "superadministrador",
+    "administrador_clinica",
+    "recepcion",
+    "profesional",
+    "asistente",
+    "auditor",
+)
+
+
+def _permisos_documentados_por_rol() -> dict[str, frozenset[str]]:
+    """Lee los permisos concedidos en la matriz publicada de seguridad."""
+    archivo = Path(__file__).resolve().parents[3] / "docs" / "security.md"
+    texto = archivo.read_text(encoding="utf-8")
+    tabla = texto.split("## 2. Matriz de permisos", maxsplit=1)[1].split(
+        "Observaciones que importan:", maxsplit=1
+    )[0]
+    roles = dict(zip(_ROLES_MATRIZ, range(1, 7), strict=True))
+    permisos = {rol: set() for rol in roles}
+    codigos_en_tabla: set[str] = set()
+
+    for linea in tabla.splitlines():
+        if not linea.startswith("|") or "`" not in linea:
+            continue
+        celdas = [celda.strip() for celda in linea.strip("|").split("|")]
+        etiqueta = celdas[0].split("(", maxsplit=1)[0]
+        codigos = [
+            codigo.strip()
+            for grupo in re.findall(r"`([^`]+)`", etiqueta)
+            for codigo in grupo.split("/")
+        ]
+        if not codigos:
+            continue
+        assert not codigos_en_tabla.intersection(codigos), (
+            f"La matriz repite permisos: {sorted(codigos_en_tabla.intersection(codigos))}."
+        )
+        codigos_en_tabla.update(codigos)
+
+        for rol, indice in roles.items():
+            valores = [valor.strip().replace("**", "") for valor in celdas[indice].split("/")]
+            if len(valores) == 1:
+                valores *= len(codigos)
+            assert len(valores) == len(codigos), (
+                f"La fila {linea!r} no alinea sus permisos y decisiones para {rol}."
+            )
+            for codigo, valor in zip(codigos, valores, strict=True):
+                decision = valor[:1]
+                assert decision in {"✓", "○", "—"}, (
+                    f"Decisión desconocida para {rol}, {codigo}: {valor!r}."
+                )
+                if decision != "—":
+                    permisos[rol].add(codigo)
+
+    return {rol: frozenset(codigos) for rol, codigos in permisos.items()}
+
+
+_PERMISOS_DOCUMENTADOS_POR_ROL = _permisos_documentados_por_rol()
 
 
 class TestCatalogo:
@@ -73,6 +133,25 @@ class TestCatalogo:
 class TestMatrizDePermisos:
     """Comprueba las decisiones de docs/security.md, seccion 2."""
 
+    def test_la_matriz_documenta_todos_los_permisos_del_catalogo(self) -> None:
+        documentados = set().union(*_PERMISOS_DOCUMENTADOS_POR_ROL.values())
+        assert documentados == set(PERMISOS_POR_CODIGO), (
+            f"Sin matriz: {sorted(set(PERMISOS_POR_CODIGO) - documentados)}; "
+            f"sin catálogo: {sorted(documentados - set(PERMISOS_POR_CODIGO))}"
+        )
+
+    @pytest.mark.parametrize("rol", _ROLES_MATRIZ)
+    def test_la_matriz_documentada_coincide_con_el_rol_implementado(self, rol: str) -> None:
+        """Cada acceso permitido/denegado coincide para los seis roles base."""
+        documentados = _PERMISOS_DOCUMENTADOS_POR_ROL[rol]
+        implementados = PERMISOS_POR_ROL[rol]
+        faltan_en_el_rol = sorted(documentados - implementados)
+        sobran_en_el_rol = sorted(implementados - documentados)
+        assert not faltan_en_el_rol and not sobran_en_el_rol, (
+            f"{rol}: faltan permisos {faltan_en_el_rol}; "
+            f"permisos no documentados/concedidos de más {sobran_en_el_rol}"
+        )
+
     def test_recepcion_no_accede_a_informacion_clinica(self) -> None:
         """Recepcion ve que hay una cita, no por que.
 
@@ -87,6 +166,8 @@ class TestMatrizDePermisos:
         # Pero si puede operar la agenda
         assert "cita.crear" in recepcion
         assert "paciente.leer_administrativo" in recepcion
+        # Puede exportar conteos operativos agregados sin nombres ni datos de pacientes.
+        assert "reporte.exportar" in recepcion
 
     def test_superadministrador_no_accede_a_historia_clinica(self) -> None:
         """Separa la administracion tecnica del acceso clinico.

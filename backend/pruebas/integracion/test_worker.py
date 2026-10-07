@@ -23,6 +23,7 @@ from app.nucleo.configuracion import Configuracion
 from app.nucleo.reloj import Reloj
 from app.tareas.adherencia import evaluar_alertas_adherencia
 from app.tareas.agenda import expirar_bloqueos
+from app.tareas.al_ingestas_conocimiento import procesar_ingestas_conocimiento
 from app.tareas.contexto import al_arrancar, al_parar
 from app.tareas.outbox import encolar_recordatorios
 from app.tareas.worker import ConfiguracionWorker
@@ -54,6 +55,7 @@ class TestConfiguracionDelWorker:
         assert expirar_bloqueos.__name__ in nombres
         assert encolar_recordatorios.__name__ in nombres
         assert evaluar_alertas_adherencia.__name__ in nombres
+        assert procesar_ingestas_conocimiento.__name__ in nombres
 
     async def test_los_periodicos_son_unicos_entre_replicas(self) -> None:
         """Sin `unique`, cada replica ejecutaria el mismo cron.

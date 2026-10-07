@@ -442,6 +442,36 @@ class RelacionAsistencial(Base, MezclaIdentificador, MezclaAuditoria):
         return self.vigente_hasta is None or self.vigente_hasta > ahora
 
 
+class AvisoAccesoEmergencia(Base, MezclaIdentificador, MezclaAuditoria):
+    """Aviso administrativo sin datos del paciente ni motivo clínico."""
+
+    __tablename__ = "aviso_acceso_emergencia"
+
+    clinica_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("clinica.id", ondelete="CASCADE"))
+    relacion_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("relacion_asistencial.id", ondelete="CASCADE"), unique=True
+    )
+    profesional_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("profesional.id", ondelete="RESTRICT")
+    )
+    revisada_en: Mapped[datetime | None] = mapped_column(default=None)
+    revisada_por: Mapped[uuid.UUID | None] = mapped_column(default=None)
+
+    __table_args__ = (
+        CheckConstraint(
+            "(revisada_en IS NULL AND revisada_por IS NULL) OR "
+            "(revisada_en IS NOT NULL AND revisada_por IS NOT NULL)",
+            name="revision_con_actor_y_fecha",
+        ),
+        Index(
+            "ix_aviso_acceso_emergencia_pendiente",
+            "clinica_id",
+            "creado_en",
+            postgresql_where=text("revisada_en IS NULL"),
+        ),
+    )
+
+
 def telefono_normalizado() -> ColumnElement[str]:
     r"""Expresion SQL del numero de WhatsApp reducido a digitos.
 

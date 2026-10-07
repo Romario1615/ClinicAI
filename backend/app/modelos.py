@@ -43,6 +43,7 @@ from app.modulos.conocimiento.modelos import (
 )
 from app.modulos.conversaciones.demo_modelos import SesionDemo
 from app.modulos.conversaciones.modelos import (
+    AvisoRevisionTratamiento,
     Conversacion,
     EstadoConversacion,
     IntencionEntrante,
@@ -51,11 +52,14 @@ from app.modulos.conversaciones.modelos import (
 from app.modulos.historia.modelos import (
     AlertaAdherencia,
     Diagnostico,
+    EstadoPlantillaAnamnesis,
     EstadoReceta,
     EstadoToma,
     NotaEvolucion,
+    PlantillaAnamnesis,
     Receta,
     RecetaMedicamento,
+    RespuestaAnamnesis,
     SeveridadAlerta,
     TipoNota,
     Toma,
@@ -72,6 +76,7 @@ from app.modulos.lista_espera.modelos import (
 from app.modulos.odontologia.modelos import (
     EstadoPlan,
     EstadoProcedimiento,
+    Formulario033,
     MedioAceptacion,
     Odontograma,
     PlantillaPlan,
@@ -102,6 +107,7 @@ from app.modulos.outbox.modelos import (
 from app.modulos.pacientes.modelos import (
     Alergia,
     Antecedente,
+    AvisoAccesoEmergencia,
     Consentimiento,
     DocumentoPaciente,
     EstadoEscaneoAntivirus,
@@ -112,7 +118,7 @@ from app.modulos.pacientes.modelos import (
     TipoConsentimiento,
     TipoDocumento,
 )
-from app.modulos.pagos.modelos import Pago
+from app.modulos.pagos.modelos import CargoPago, Pago, PagoComprobante, PagoHistorial
 from app.modulos.postconsulta.modelos import IndicacionPostconsulta
 from app.modulos.profesionales.modelos import (
     AgendaPlantilla,
@@ -151,12 +157,15 @@ __all__ = [
     "AmbitoAsignacion",
     "Antecedente",
     "Auditoria",
+    "AvisoAccesoEmergencia",
+    "AvisoRevisionTratamiento",
     "Base",
     "BloqueoAgenda",
     "CalendarioConexion",
     "CalendarioEvento",
     "CampanaPromocion",
     "CanalOutbox",
+    "CargoPago",
     "Cita",
     "CitaHistorial",
     "ClaveIdempotencia",
@@ -184,11 +193,13 @@ __all__ = [
     "EstadoOferta",
     "EstadoOutbox",
     "EstadoPlan",
+    "EstadoPlantillaAnamnesis",
     "EstadoProcedimiento",
     "EstadoReceta",
     "EstadoSincronizacion",
     "EstadoToma",
     "Feriado",
+    "Formulario033",
     "FotoUsuario",
     "HistorialAcceso",
     "HorarioAtencion",
@@ -213,8 +224,11 @@ __all__ = [
     "Paciente",
     "PacienteContacto",
     "Pago",
+    "PagoComprobante",
+    "PagoHistorial",
     "Permiso",
     "PlanTratamiento",
+    "PlantillaAnamnesis",
     "PlantillaPlan",
     "PrincipalConocimiento",
     "PrioridadEspera",
@@ -227,6 +241,7 @@ __all__ = [
     "Recordatorio",
     "RegistroPlaca",
     "RelacionAsistencial",
+    "RespuestaAnamnesis",
     "ResultadoAcceso",
     "Rol",
     "RolPermiso",

@@ -59,7 +59,6 @@ from app.nucleo.errores import (
     RecetaNoConfirmada,
     RecursoNoEncontrado,
     ReglaNegocioViolada,
-    RelacionAsistencialRequerida,
 )
 from app.nucleo.errores_bd import traducir_o_propagar
 from app.nucleo.reloj import Reloj
@@ -68,6 +67,7 @@ from app.nucleo.reloj import Reloj
 # durante un ano" produciria 8.760 filas; el limite las acota y obliga a
 # revisar la pauta en lugar de llenar la tabla en silencio.
 MAXIMO_TOMAS_POR_MEDICAMENTO = 400
+LONGITUD_MINIMA_MOTIVO_RECETA = 5
 
 # Umbrales de la alerta de adherencia. Son operativos, no clinicos: no dicen
 # si el tratamiento funciona, solo cuando avisar a quien lo indico.
@@ -97,6 +97,7 @@ class DatosNota:
     paciente_id: uuid.UUID
     profesional_id: uuid.UUID | None
     tipo: str
+    nivel_sensibilidad: str = "N2"
     motivo_consulta: str | None = None
     subjetivo: str | None = None
     objetivo: str | None = None
@@ -153,6 +154,7 @@ class ServicioHistoria:
         aplicacion no lo conoce antes de insertar.
         """
         self._exigir(principal, "historia_clinica.escribir")
+        nivel = self._nivel_nota(datos.nivel_sensibilidad, principal)
         autor = self._autor(principal, datos.profesional_id)
         await self._exigir_relacion(principal, datos.paciente_id)
 
@@ -170,6 +172,7 @@ class ServicioHistoria:
             version=1,
             vigente=True,
             tipo=datos.tipo,
+            nivel_sensibilidad=nivel.value,
             motivo_consulta=datos.motivo_consulta,
             subjetivo=datos.subjetivo,
             objetivo=datos.objetivo,
@@ -194,7 +197,7 @@ class ServicioHistoria:
                     entidad_tipo="nota_evolucion",
                     entidad_id=nota.id,
                     paciente_id=nota.paciente_id,
-                    nivel_sensibilidad=NivelSensibilidad.CLINICO,
+                    nivel_sensibilidad=nivel,
                 ),
             ),
         )
@@ -230,6 +233,11 @@ class ServicioHistoria:
             raise RecursoNoEncontrado("La nota solicitada no existe.")
 
         await self._exigir_relacion(principal, actual.paciente_id)
+        nivel = self._nivel_nota(
+            datos.nivel_sensibilidad,
+            principal,
+            anterior=NivelSensibilidad(actual.nivel_sensibilidad),
+        )
 
         # Se marca la anterior antes de insertar la nueva: el indice unico
         # parcial solo admite una vigente, y hacerlo al reves lo violaria.
@@ -246,6 +254,7 @@ class ServicioHistoria:
             vigente=True,
             motivo_modificacion=motivo_limpio,
             tipo=datos.tipo,
+            nivel_sensibilidad=nivel.value,
             motivo_consulta=datos.motivo_consulta,
             subjetivo=datos.subjetivo,
             objetivo=datos.objetivo,
@@ -270,7 +279,7 @@ class ServicioHistoria:
                     entidad_tipo="nota_evolucion",
                     entidad_id=nueva.id,
                     paciente_id=nueva.paciente_id,
-                    nivel_sensibilidad=NivelSensibilidad.CLINICO,
+                    nivel_sensibilidad=nivel,
                     motivo=motivo_limpio,
                     version_anterior=actual.version,
                 ),
@@ -309,7 +318,13 @@ class ServicioHistoria:
             entidad_tipo="paciente",
             entidad_id=paciente_id,
             paciente_id=paciente_id,
-            nivel_sensibilidad=NivelSensibilidad.CLINICO,
+            nivel_sensibilidad=(
+                NivelSensibilidad.CLINICO_SENSIBLE
+                if any(
+                    n.nivel_sensibilidad == NivelSensibilidad.CLINICO_SENSIBLE.value for n in notas
+                )
+                else NivelSensibilidad.CLINICO
+            ),
             # La clave es `versiones_devueltas` y no `notas_devueltas`: el
             # validador de auditoria rechaza toda clave que se parezca a un
             # campo sensible, y «notas» lo es. El validador no puede saber
@@ -320,6 +335,36 @@ class ServicioHistoria:
             especialidades_revisadas=sorted(str(e) for e in especialidades or ()),
         )
         return notas, (entrada,)
+
+    @staticmethod
+    def _nivel_nota(
+        solicitado: str,
+        principal: Principal,
+        *,
+        anterior: NivelSensibilidad | None = None,
+    ) -> NivelSensibilidad:
+        """Valida N3 y evita que una correccion rebaje sensibilidad."""
+        nivel = NivelSensibilidad(solicitado)
+        if anterior == NivelSensibilidad.CLINICO_SENSIBLE:
+            nivel = NivelSensibilidad.CLINICO_SENSIBLE
+        if nivel == NivelSensibilidad.CLINICO_SENSIBLE and not principal.tiene_permiso(
+            "historia_clinica.leer_sensible"
+        ):
+            raise PermisoDenegado(
+                "Se requiere permiso clínico sensible para registrar una nota N3."
+            )
+        return nivel
+
+    @staticmethod
+    def _nivel_receta(solicitado: str, principal: Principal) -> NivelSensibilidad:
+        nivel = NivelSensibilidad(solicitado)
+        if nivel == NivelSensibilidad.CLINICO_SENSIBLE and not principal.tiene_permiso(
+            "historia_clinica.leer_sensible"
+        ):
+            raise PermisoDenegado(
+                "Se requiere permiso clínico sensible para registrar una receta N3."
+            )
+        return nivel
 
     # ==================================================================
     #  Recetas
@@ -333,6 +378,7 @@ class ServicioHistoria:
         medicamentos: list[DatosMedicamento],
         indicaciones_generales: str | None = None,
         nota_id: uuid.UUID | None = None,
+        nivel_sensibilidad: str = "N2",
     ) -> ResultadoClinico:
         """Crea una receta en **borrador**.
 
@@ -348,6 +394,7 @@ class ServicioHistoria:
             raise ReglaNegocioViolada("Una receta necesita al menos un medicamento.")
         if principal.clinica_id is None:
             raise PermisoDenegado("La sesion no tiene clinica asociada.")
+        nivel = self._nivel_receta(nivel_sensibilidad, principal)
 
         ahora = self._reloj.ahora()
         receta = Receta(
@@ -357,6 +404,7 @@ class ServicioHistoria:
             nota_id=nota_id,
             estado=EstadoReceta.BORRADOR.value,
             indicaciones_generales=indicaciones_generales,
+            nivel_sensibilidad=nivel.value,
             creado_por=principal.actor_id,
         )
         self._sesion.add(receta)
@@ -391,7 +439,7 @@ class ServicioHistoria:
                     entidad_tipo="receta",
                     entidad_id=receta.id,
                     paciente_id=paciente_id,
-                    nivel_sensibilidad=NivelSensibilidad.CLINICO,
+                    nivel_sensibilidad=nivel,
                     lineas=len(medicamentos),
                     firma_delegada=delegada,
                 ),
@@ -441,7 +489,7 @@ class ServicioHistoria:
                     entidad_tipo="receta",
                     entidad_id=receta.id,
                     paciente_id=receta.paciente_id,
-                    nivel_sensibilidad=NivelSensibilidad.CLINICO,
+                    nivel_sensibilidad=NivelSensibilidad(receta.nivel_sensibilidad),
                     firma_delegada=delegada,
                     profesional_firmante=str(profesional_id),
                 ),
@@ -503,7 +551,7 @@ class ServicioHistoria:
                     entidad_tipo="receta",
                     entidad_id=receta.id,
                     paciente_id=receta.paciente_id,
-                    nivel_sensibilidad=NivelSensibilidad.CLINICO,
+                    nivel_sensibilidad=NivelSensibilidad(receta.nivel_sensibilidad),
                     motivo=motivo_limpio,
                 ),
                 construir_entrada(
@@ -514,6 +562,144 @@ class ServicioHistoria:
                     entidad_id=receta.id,
                     paciente_id=receta.paciente_id,
                     cantidad=canceladas,
+                ),
+            ),
+        )
+
+    async def versionar_receta(
+        self,
+        receta_id: uuid.UUID,
+        *,
+        principal: Principal,
+        profesional_id: uuid.UUID,
+        motivo: str,
+        indicaciones_generales: str | None,
+        medicamentos: list[DatosMedicamento],
+    ) -> ResultadoClinico:
+        """Sustituye una receta vigente con una versión firmada en una transacción.
+
+        Conserva la receta y sus tomas anteriores. Solo cancela las tomas
+        futuras pendientes, crea el nuevo calendario y cancela/reprograma sus
+        recordatorios en la misma transacción HTTP.
+        """
+        self._exigir(principal, "receta.crear")
+        self._exigir(principal, "receta.confirmar")
+        firmante, delegada = await self._firma(principal, profesional_id)
+        motivo_limpio = motivo.strip()
+        if len(motivo_limpio) < LONGITUD_MINIMA_MOTIVO_RECETA:
+            raise ReglaNegocioViolada("Explique el motivo del cambio de receta.")
+        if not medicamentos:
+            raise ReglaNegocioViolada("Una receta necesita al menos un medicamento.")
+
+        ahora = self._reloj.ahora()
+        anterior = await self._repo.obtener_receta(
+            receta_id, principal=principal, ahora=ahora, bloquear=True
+        )
+        if anterior is None:
+            raise RecursoNoEncontrado("La receta solicitada no existe.")
+        if anterior.estado != EstadoReceta.CONFIRMADA.value:
+            raise ConflictoEstado(
+                "Solo se puede crear una versión nueva de una receta confirmada "
+                f"(estado actual: {anterior.estado})."
+            )
+        await self._exigir_relacion(principal, anterior.paciente_id)
+
+        anterior.estado = EstadoReceta.SUSPENDIDA.value
+        anterior.suspendida_en = ahora
+        anterior.motivo_suspension = motivo_limpio
+        anterior.actualizado_por = principal.actor_id
+        canceladas = await self._cancelar_tomas_futuras(anterior.id, desde=ahora)
+        await ServicioRecordatorios(self._sesion, self._reloj).cancelar_tomas_receta(
+            anterior.id, motivo=f"Receta sustituida: {motivo_limpio}"
+        )
+        await self._flush()
+
+        nueva = Receta(
+            clinica_id=anterior.clinica_id,
+            paciente_id=anterior.paciente_id,
+            profesional_id=firmante,
+            nota_id=anterior.nota_id,
+            receta_anterior_id=anterior.id,
+            estado=EstadoReceta.BORRADOR.value,
+            indicaciones_generales=indicaciones_generales,
+            nivel_sensibilidad=anterior.nivel_sensibilidad,
+            creado_por=principal.actor_id,
+            actualizado_por=principal.actor_id,
+        )
+        self._sesion.add(nueva)
+        await self._flush()
+
+        for medicamento in medicamentos:
+            self._sesion.add(
+                RecetaMedicamento(
+                    receta_id=nueva.id,
+                    nombre=medicamento.nombre,
+                    concentracion=medicamento.concentracion,
+                    forma=medicamento.forma,
+                    dosis=medicamento.dosis,
+                    via=medicamento.via,
+                    cuando_sea_necesario=medicamento.cuando_sea_necesario,
+                    frecuencia_horas=medicamento.frecuencia_horas,
+                    duracion_dias=medicamento.duracion_dias,
+                    hora_primera_toma=medicamento.hora_primera_toma,
+                    instrucciones=medicamento.instrucciones,
+                    creado_por=principal.actor_id,
+                )
+            )
+        await self._flush()
+        nueva.estado = EstadoReceta.CONFIRMADA.value
+        nueva.confirmada_en = ahora
+        nueva.confirmada_por = firmante
+        await self._flush()
+        generadas = await self._generar_tomas(nueva, desde=ahora)
+        await ServicioRecordatorios(self._sesion, self._reloj).programar_tomas(nueva.id)
+
+        return ResultadoClinico(
+            receta=nueva,
+            tomas_canceladas=canceladas,
+            tomas_generadas=generadas,
+            auditoria=(
+                construir_entrada(
+                    accion=AccionAuditada.RECETA_MODIFICADA,
+                    principal=principal,
+                    ahora=ahora,
+                    entidad_tipo="receta",
+                    entidad_id=anterior.id,
+                    paciente_id=anterior.paciente_id,
+                    nivel_sensibilidad=NivelSensibilidad(anterior.nivel_sensibilidad),
+                    motivo=motivo_limpio,
+                    version_nueva_id=str(nueva.id),
+                    tomas_canceladas=canceladas,
+                    firma_delegada=delegada,
+                ),
+                construir_entrada(
+                    accion=AccionAuditada.TOMAS_CANCELADAS,
+                    principal=principal,
+                    ahora=ahora,
+                    entidad_tipo="receta",
+                    entidad_id=anterior.id,
+                    paciente_id=anterior.paciente_id,
+                    cantidad=canceladas,
+                ),
+                construir_entrada(
+                    accion=AccionAuditada.RECETA_CONFIRMADA,
+                    principal=principal,
+                    ahora=ahora,
+                    entidad_tipo="receta",
+                    entidad_id=nueva.id,
+                    paciente_id=nueva.paciente_id,
+                    nivel_sensibilidad=NivelSensibilidad(nueva.nivel_sensibilidad),
+                    profesional_firmante=str(firmante),
+                    firma_delegada=delegada,
+                ),
+                construir_entrada(
+                    accion=AccionAuditada.TOMAS_GENERADAS,
+                    principal=principal,
+                    ahora=ahora,
+                    entidad_tipo="receta",
+                    entidad_id=nueva.id,
+                    paciente_id=nueva.paciente_id,
+                    cantidad=generadas,
                 ),
             ),
         )
@@ -843,9 +1029,7 @@ class ServicioHistoria:
             ahora=self._reloj.ahora(),
         )
         if not existe:
-            raise RelacionAsistencialRequerida(
-                "No tiene una relacion asistencial vigente con este paciente."
-            )
+            raise RecursoNoEncontrado("El paciente solicitado no existe.")
 
     async def _flush(self) -> None:
         try:

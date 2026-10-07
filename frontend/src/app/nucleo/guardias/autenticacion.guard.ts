@@ -11,7 +11,9 @@
  */
 import { inject } from '@angular/core';
 import { Router, type CanActivateFn } from '@angular/router';
+import { map } from 'rxjs';
 
+import { ModoLocalService } from '../servicios/modo-local.service';
 import { SesionService } from '../servicios/sesion.service';
 
 /** Exige sesion abierta. */
@@ -68,6 +70,15 @@ export function guardiaPermiso(...codigos: readonly string[]): CanActivateFn {
     return router.createUrlTree(['/sin-permiso']);
   };
 }
+
+/** No permite llegar a herramientas sintéticas fuera del backend local. */
+export const guardiaSoloLocal: CanActivateFn = () => {
+  const modoLocal = inject(ModoLocalService);
+  const router = inject(Router);
+  return modoLocal.comprobar().pipe(
+    map((local) => local || router.createUrlTree(['/panel'])),
+  );
+};
 
 /** Oculta la consola de organizaciones a cuentas de administración de clínica. */
 export const guardiaSuperadministrador: CanActivateFn = () => {

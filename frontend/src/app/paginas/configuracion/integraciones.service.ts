@@ -31,6 +31,19 @@ export interface DatosClinica {
   correo: string | null;
 }
 
+export interface DescansoHorario { readonly id?: string; hora_inicio: string; hora_fin: string; motivo: string | null; }
+export interface HorarioSede {
+  readonly id: string; dia_semana: number; hora_inicio: string; hora_fin: string;
+  granularidad_minutos: number; vigente_desde: string | null; vigente_hasta: string | null;
+  descansos: DescansoHorario[];
+}
+export interface FeriadoAgenda {
+  readonly id: string; sede_id: string | null; fecha: string; nombre: string;
+  recurrente_anual: boolean; hora_inicio: string | null; hora_fin: string | null;
+}
+export type DatosHorarioSede = Omit<HorarioSede, 'id' | 'descansos'> & { descansos: Omit<DescansoHorario, 'id'>[] };
+export type DatosFeriadoAgenda = Omit<FeriadoAgenda, 'id'>;
+
 @Injectable({ providedIn: 'root' })
 export class IntegracionesService {
   private readonly http = inject(HttpClient);
@@ -61,5 +74,29 @@ export class IntegracionesService {
         datos,
       )
       .pipe(catchError(traducirFallo));
+  }
+
+  horarios(sedeId: string): Observable<HorarioSede[]> {
+    return this.http.get<HorarioSede[]>(`${this.configuracion.urlApi}/configuracion/agenda/sedes/${encodeURIComponent(sedeId)}/horarios`).pipe(catchError(traducirFallo));
+  }
+  guardarHorario(sedeId: string, datos: DatosHorarioSede, id?: string): Observable<HorarioSede> {
+    const url = id
+      ? `${this.configuracion.urlApi}/configuracion/agenda/horarios/${encodeURIComponent(id)}`
+      : `${this.configuracion.urlApi}/configuracion/agenda/sedes/${encodeURIComponent(sedeId)}/horarios`;
+    return (id ? this.http.put<HorarioSede>(url, datos) : this.http.post<HorarioSede>(url, datos)).pipe(catchError(traducirFallo));
+  }
+  eliminarHorario(id: string): Observable<void> {
+    return this.http.delete<void>(`${this.configuracion.urlApi}/configuracion/agenda/horarios/${encodeURIComponent(id)}`).pipe(catchError(traducirFallo));
+  }
+  feriados(sedeId: string, desde: string, hasta: string): Observable<FeriadoAgenda[]> {
+    const consulta = new URLSearchParams({ sede_id: sedeId, desde, hasta });
+    return this.http.get<FeriadoAgenda[]>(`${this.configuracion.urlApi}/configuracion/agenda/feriados?${consulta}`).pipe(catchError(traducirFallo));
+  }
+  guardarFeriado(datos: DatosFeriadoAgenda, id?: string): Observable<FeriadoAgenda> {
+    const url = `${this.configuracion.urlApi}/configuracion/agenda/feriados${id ? `/${encodeURIComponent(id)}` : ''}`;
+    return (id ? this.http.put<FeriadoAgenda>(url, datos) : this.http.post<FeriadoAgenda>(url, datos)).pipe(catchError(traducirFallo));
+  }
+  eliminarFeriado(id: string): Observable<void> {
+    return this.http.delete<void>(`${this.configuracion.urlApi}/configuracion/agenda/feriados/${encodeURIComponent(id)}`).pipe(catchError(traducirFallo));
   }
 }

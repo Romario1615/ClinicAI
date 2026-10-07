@@ -38,6 +38,20 @@
   font-size: 0.9rem;
 }
 
+.cabecera-agenda__meta {
+  display: flex;
+  align-items: center;
+  gap: var(--espacio-3);
+  flex-wrap: wrap;
+}
+
+.cabecera-agenda__error {
+  flex-basis: 100%;
+  margin: 0;
+  color: var(--peligro);
+  font-size: 0.82rem;
+}
+
 /* --- Barra de contexto: los filtros en una línea --- */
 .barra-contexto {
   display: flex;

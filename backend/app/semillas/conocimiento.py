@@ -291,6 +291,7 @@ async def cargar_conocimiento(
                 effective_from=documento.effective_from,
                 effective_until=documento.effective_until,
                 sensitivity_level=documento.sensitivity_level,
+                vigente=True,
             )
             sesion.add(fila)
             filas.append(fila)

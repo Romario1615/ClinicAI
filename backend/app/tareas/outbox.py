@@ -33,6 +33,12 @@ from app.mensajeria.adaptadores import (
     CredencialesWhatsApp,
     RegistroCanales,
 )
+from app.mensajeria.canales_clinica import (
+    AdaptadorCorreoPorClinica,
+    AdaptadorWhatsAppPorClinica,
+    credenciales_smtp,
+    credenciales_whatsapp,
+)
 from app.mensajeria.recordatorios import ServicioRecordatorios
 from app.mensajeria.servicios import ServicioOutbox
 from app.modulos.outbox.modelos import CanalOutbox
@@ -40,6 +46,7 @@ from app.nucleo.bd import GestorBaseDatos
 from app.nucleo.configuracion import Configuracion
 from app.nucleo.registro import obtener_logger
 from app.nucleo.reloj import Reloj
+from app.nucleo.seguridad import CifradorDatos
 
 _logger = obtener_logger(__name__)
 
@@ -49,7 +56,9 @@ _logger = obtener_logger(__name__)
 TAMANO_LOTE = 50
 
 
-def construir_canales(configuracion: Configuracion) -> RegistroCanales:
+def construir_canales(
+    configuracion: Configuracion, *, gestor: GestorBaseDatos | None = None
+) -> RegistroCanales:
     """Registro de adaptadores segun el entorno.
 
     Publica para que las pruebas puedan comprobar que en modo `sandbox` no se
@@ -84,6 +93,25 @@ def construir_canales(configuracion: Configuracion) -> RegistroCanales:
     registro.registrar(CanalOutbox.CORREO.value, AdaptadorSandbox("correo_sandbox"))
     registro.registrar(CanalOutbox.INTERNO.value, AdaptadorSandbox("interno_sandbox"))
 
+    # Con acceso a la base de datos, cada mensaje sale con las credenciales que
+    # su clínica guardó en «Integraciones»; lo anterior queda de respaldo.
+    if gestor is not None:
+        cifrador = CifradorDatos(configuracion.clave_cifrado_datos.get_secret_value())
+        whatsapp = registro.obtener(CanalOutbox.WHATSAPP.value)
+        correo = registro.obtener(CanalOutbox.CORREO.value)
+        if whatsapp is not None:
+            registro.registrar(
+                CanalOutbox.WHATSAPP.value,
+                AdaptadorWhatsAppPorClinica(
+                    whatsapp, lambda c: credenciales_whatsapp(gestor, cifrador, c)
+                ),
+            )
+        if correo is not None:
+            registro.registrar(
+                CanalOutbox.CORREO.value,
+                AdaptadorCorreoPorClinica(correo, lambda c: credenciales_smtp(gestor, cifrador, c)),
+            )
+
     return registro
 
 
@@ -97,7 +125,7 @@ async def procesar_outbox(ctx: dict[Any, Any], *_argumentos: Any, **_opciones: A
     gestor: GestorBaseDatos = ctx["gestor_bd"]
     reloj: Reloj = ctx["reloj"]
     configuracion: Configuracion = ctx["configuracion"]
-    canales = construir_canales(configuracion)
+    canales = construir_canales(configuracion, gestor=gestor)
 
     entregados = 0
     async for sesion in gestor.sesion():
@@ -122,6 +150,7 @@ async def procesar_outbox(ctx: dict[Any, Any], *_argumentos: Any, **_opciones: A
                 reintentables=resumen.reintentables,
                 fallidos=resumen.fallidos,
                 sin_adaptador=resumen.sin_adaptador,
+                descartados=resumen.descartados,
             )
         if resumen.tomados == TAMANO_LOTE:
             # El lote salio lleno: quedan mensajes esperando. Importa saberlo

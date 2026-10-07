@@ -2,7 +2,7 @@
 
 El catalogo es cerrado
 ----------------------
-Siete herramientas, fijadas por la especificacion.  No hay carga dinamica, no
+Ocho herramientas, fijadas por la especificacion.  No hay carga dinamica, no
 hay descubrimiento por modulo, no hay forma de anadir una en tiempo de
 ejecucion.  Un catalogo que se puede ampliar desde fuera es un catalogo que un
 dia contendra algo que nadie reviso, y aqui lo que se revisa es precisamente

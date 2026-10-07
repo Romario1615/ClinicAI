@@ -157,8 +157,12 @@ async def cargar_clinico(
     entonces la interfaz se prueba contra datos imposibles.
     """
     if await _ya_sembrado(sesion, clinica_id):
+        local = await _asegurar_historico_acceso_local(sesion, clinica_id=clinica_id, reloj=reloj)
+        tomas = await _sembrar_caso_adherencia(sesion, clinica_id=clinica_id, reloj=reloj)
         return ResumenClinico(
-            tomas=await _sembrar_caso_adherencia(sesion, clinica_id=clinica_id, reloj=reloj)
+            notas=local.notas,
+            correcciones=local.correcciones,
+            tomas=tomas,
         )
 
     parejas = await _parejas(sesion, clinica_id)
@@ -179,11 +183,75 @@ async def cargar_clinico(
             resumen=resumen,
         )
 
+    local = await _asegurar_historico_acceso_local(sesion, clinica_id=clinica_id, reloj=reloj)
+    tomas = await _sembrar_caso_adherencia(sesion, clinica_id=clinica_id, reloj=reloj)
     return _con(
         resumen,
-        tomas=resumen.tomas
-        + await _sembrar_caso_adherencia(sesion, clinica_id=clinica_id, reloj=reloj),
+        notas=resumen.notas + local.notas,
+        correcciones=resumen.correcciones + local.correcciones,
+        tomas=resumen.tomas + tomas,
     )
+
+
+async def _asegurar_historico_acceso_local(
+    sesion: AsyncSession, *, clinica_id: uuid.UUID, reloj: Reloj
+) -> ResumenClinico:
+    """Hace visible una historia versionada al profesional del acceso local.
+
+    Las relaciones de la clínica pueden pertenecer a varios profesionales;
+    solo uno es el que resuelve el botón local de acceso. Sin un caso de prueba
+    dentro de su ámbito, el resto de los datos clínicos puede existir y aun así
+    la pantalla quedar vacía para E2E y revisión manual.
+    """
+    pareja = await _pareja_profesional_acceso_local(sesion, clinica_id)
+    if pareja is None:
+        return ResumenClinico()
+    paciente_id, profesional_id = pareja
+    anterior = await sesion.scalar(
+        select(func.count())
+        .select_from(NotaEvolucion)
+        .where(
+            NotaEvolucion.paciente_id == paciente_id,
+            NotaEvolucion.profesional_id == profesional_id,
+            NotaEvolucion.vigente.is_(False),
+        )
+    )
+    if anterior:
+        return ResumenClinico()
+
+    principal = _principal_sembrador(clinica_id, profesional_id)
+    servicio = ServicioHistoria(sesion, RepositorioHistoria(sesion), reloj)
+    nota = await servicio.crear_nota(
+        DatosNota(
+            paciente_id=paciente_id,
+            profesional_id=profesional_id,
+            tipo="EVOLUCION",
+            motivo_consulta=f"Control de rutina {MARCA}",
+            subjetivo=f"Texto de demostración {MARCA}. No describe una condición real.",
+            objetivo=f"Texto de demostración {MARCA}. Sin hallazgos clínicos reales.",
+            analisis=f"Texto de demostración {MARCA}.",
+            plan=f"Texto de demostración {MARCA}.",
+        ),
+        principal=principal,
+    )
+    if nota.nota is None:
+        return ResumenClinico()
+    await servicio.versionar_nota(
+        nota.nota.raiz_id,
+        datos=DatosNota(
+            paciente_id=paciente_id,
+            profesional_id=profesional_id,
+            tipo="EVOLUCION",
+            motivo_consulta=f"Control de rutina {MARCA}",
+            subjetivo=f"Texto corregido de demostración {MARCA}.",
+            objetivo=f"Texto corregido de demostración {MARCA}.",
+            analisis=f"Texto corregido de demostración {MARCA}.",
+            plan=f"Texto corregido de demostración {MARCA}.",
+        ),
+        principal=principal,
+        motivo=f"Corrección de demostración {MARCA}: se completó el registro.",
+    )
+    return ResumenClinico(notas=1, correcciones=1)
 
 
 async def _sembrar_caso_adherencia(

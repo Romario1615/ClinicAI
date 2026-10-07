@@ -78,15 +78,20 @@ class MiddlewareCorrelacion(BaseHTTPMiddleware):
                 ruta=request.url.path,
                 duracion_ms=round((time.perf_counter() - comienzo) * 1000, 2),
             )
+            _registrar_metricas(request, 500, time.perf_counter() - comienzo)
             limpiar_contexto()
             raise
 
         duracion_ms = round((time.perf_counter() - comienzo) * 1000, 2)
+        _registrar_metricas(request, respuesta.status_code, duracion_ms / 1000)
         respuesta.headers[CABECERA_CORRELACION] = correlacion
         for nombre, valor in CABECERAS_SEGURIDAD.items():
             respuesta.headers.setdefault(nombre, valor)
 
-        if request.url.path not in RUTAS_SILENCIOSAS:
+        ruta_metricas = getattr(
+            getattr(request.app.state, "configuracion", None), "ruta_metricas", None
+        )
+        if request.url.path not in RUTAS_SILENCIOSAS and request.url.path != ruta_metricas:
             _logger.info(
                 "acceso",
                 metodo=request.method,
@@ -101,6 +106,20 @@ class MiddlewareCorrelacion(BaseHTTPMiddleware):
 
         limpiar_contexto()
         return respuesta
+
+
+def _registrar_metricas(request: Request, estado: int, duracion_segundos: float) -> None:
+    """Registra solo el patrón de ruta, nunca la URL con identificadores."""
+    metricas = getattr(request.app.state, "metricas", None)
+    if metricas is None:
+        return
+
+    metricas.registrar_solicitud(
+        metodo=request.method,
+        ruta=request.url.path,
+        estado=estado,
+        duracion_segundos=duracion_segundos,
+    )
 
 
 def _sanear_correlacion(valor: str) -> str:

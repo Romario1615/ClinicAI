@@ -65,4 +65,26 @@ test.describe('Pacientes', () => {
     await expect(page.locator('.ficha')).toContainText(/esta ficha muestra lo administrativo/i);
     await expect(page.locator('.ficha')).toContainText(/historial.*no est[aá]n aqu[ií]|datos cl[ií]nicos/i);
   });
+
+  test('el buscador global carga la ficha al seleccionar un resultado', async ({ page }) => {
+    const nombrePaciente = await page
+      .locator('table tbody tr')
+      .first()
+      .locator('td')
+      .first()
+      .innerText();
+    const apellido = nombrePaciente.split(',')[0].trim();
+    const buscador = page.getByRole('search');
+    await buscador.getByRole('searchbox').fill(apellido);
+    await buscador.getByRole('button', { name: 'Buscar', exact: true }).click();
+
+    const resultados = page.getByRole('region', { name: 'Resultados de la búsqueda' });
+    const primerResultado = resultados.locator('.buscador__opcion').first();
+    await expect(primerResultado).toBeVisible();
+    await primerResultado.click();
+
+    const ficha = page.getByRole('dialog');
+    await expect(ficha).toBeVisible();
+    await expect(ficha.locator('app-ficha-paciente')).toBeVisible();
+  });
 });

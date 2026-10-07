@@ -41,6 +41,7 @@ def _configuracion_produccion_valida(**sobreescrituras: Any) -> dict[str, Any]:
         "proveedor_llm": "mock",
         "proveedor_embeddings": "mock",
         "frontend_url": "https://clinica.example",
+        "metricas_token": secrets.token_urlsafe(32),
     }
     base.update(sobreescrituras)
     return base
@@ -59,6 +60,22 @@ class TestValoresPorDefecto:
     def test_frontend_url_publica_tiene_default_local(self) -> None:
         cfg = Configuracion(_env_file=None)
         assert cfg.frontend_url == "http://localhost:4200"
+
+    @pytest.mark.parametrize(
+        "ruta",
+        [
+            "metrics",
+            "//metrics",
+            "/salud/listo",
+            "/api/{id}",
+            "/api/v1/metrics",
+            "/documentacion",
+            "/metrics/",
+        ],
+    )
+    def test_ruta_metricas_invalida_se_rechaza(self, ruta: str) -> None:
+        with pytest.raises(ValidationError, match="RUTA_METRICAS"):
+            Configuracion(_env_file=None, ruta_metricas=ruta)
 
     @pytest.mark.parametrize(
         "url",
@@ -138,6 +155,11 @@ class TestValidacionProduccion:
     def test_configuracion_produccion_correcta_se_acepta(self) -> None:
         cfg = Configuracion(_env_file=None, **_configuracion_produccion_valida())
         assert cfg.entorno.es_produccion
+
+    def test_produccion_exige_token_para_metricas_habilitadas(self) -> None:
+        datos = _configuracion_produccion_valida(metricas_token="")
+        with pytest.raises(ValidationError, match="METRICAS_TOKEN"):
+            Configuracion(_env_file=None, **datos)
 
     @pytest.mark.parametrize(
         ("campo", "valor", "fragmento_esperado"),

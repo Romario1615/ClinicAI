@@ -23,7 +23,7 @@ from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modulos.organizacion.modelos import Clinica
-from app.modulos.usuarios.modelos import RolPermiso, Usuario
+from app.modulos.usuarios.modelos import RolPermiso, Sesion, Usuario
 from app.nucleo.reloj import RelojFijo
 from pruebas.api.conftest import (
     CONTRASENA,
@@ -84,6 +84,37 @@ class TestInicioSesion:
         # Un par de tokens no puede quedarse en la cache de un proxy.
         assert respuesta.headers["Cache-Control"] == "no-store"
         assert respuesta.headers["X-Request-Id"]
+
+    async def test_rol_que_exige_2fa_no_emite_tokens_si_no_esta_configurado(
+        self,
+        cliente: AsyncClient,
+        api: str,
+        sesion: AsyncSession,
+        usuario: Usuario,
+        clinica: Clinica,
+        configuracion_rol_con_2fa: str,
+    ) -> None:
+        await conceder_permisos(
+            sesion,
+            usuario,
+            clinica,
+            "agenda.leer",
+            codigo_rol=configuracion_rol_con_2fa,
+        )
+
+        respuesta = await cliente.post(
+            _ruta(api, "/sesion"),
+            json={"correo": usuario.correo, "contrasena": CONTRASENA},
+        )
+
+        assert respuesta.status_code == 403
+        assert respuesta.json()["codigo"] == "SEGUNDO_FACTOR_REQUERIDO"
+        assert "token_acceso" not in respuesta.json()
+        assert "token_refresco" not in respuesta.json()
+        sesiones_usuario = await sesion.scalar(
+            sa.select(sa.func.count()).select_from(Sesion).where(Sesion.usuario_id == usuario.id)
+        )
+        assert sesiones_usuario == 0
 
     async def test_contrasena_incorrecta_devuelve_401_generico(
         self, cliente: AsyncClient, api: str, usuario: Usuario, clinica: Clinica

@@ -231,9 +231,15 @@ class Cita(Base, MezclaIdentificador, MezclaAuditoria):
     )
     # Trazabilidad y tope de turnos liberados por reagendamientos sucesivos
     # aceptados desde la lista de espera.
-    cadena_lista_espera_id: Mapped[uuid.UUID | None] = mapped_column(default=None)
+    cadena_lista_espera_id: Mapped[uuid.UUID | None] = mapped_column(
+        default=None,
+        comment="Identificador de la cadena de reagendamientos desde lista de espera",
+    )
     profundidad_lista_espera: Mapped[int] = mapped_column(
-        SmallInteger, default=0, server_default=text("0")
+        SmallInteger,
+        default=0,
+        server_default=text("0"),
+        comment="Máximo: 5 eslabones de horarios liberados",
     )
     serie_recurrente_id: Mapped[uuid.UUID | None] = mapped_column(default=None)
     clave_idempotencia: Mapped[str | None] = mapped_column(String(200), default=None)
@@ -298,6 +304,12 @@ class Cita(Base, MezclaIdentificador, MezclaAuditoria):
             "clave_idempotencia",
             unique=True,
             postgresql_where=text("clave_idempotencia IS NOT NULL"),
+        ),
+        Index(
+            "ix_cita_cadena_lista_espera",
+            "cadena_lista_espera_id",
+            "profundidad_lista_espera",
+            postgresql_where=text("cadena_lista_espera_id IS NOT NULL"),
         ),
         CheckConstraint("duracion_minutos > 0", name="duracion_positiva"),
         CheckConstraint(

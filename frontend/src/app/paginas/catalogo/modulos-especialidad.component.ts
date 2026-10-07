@@ -6,7 +6,7 @@
  * Cambiarlo pide motivo y queda versionado y auditado en el servidor, que es
  * quien de verdad niega los módulos no activos.
  */
-import { Component, inject, signal } from '@angular/core';
+import { Component, inject, signal, ChangeDetectionStrategy } from '@angular/core';
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { FormsModule } from '@angular/forms';
 
@@ -134,6 +134,7 @@ interface Configuracion {
       </app-ventana-flotante>
     }
   `,
+  changeDetection: ChangeDetectionStrategy.Eager,
   styles: `
     .centrado { text-align: center; }
     .accion { text-align: right; white-space: nowrap; }

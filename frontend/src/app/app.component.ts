@@ -10,7 +10,7 @@
  * además el filtro de ámbito. Esconder un enlace solo evita que alguien pulse
  * algo que va a recibir un 403 (CLAUDE.md, regla 7).
  */
-import { Component, computed, effect, inject, signal } from '@angular/core';
+import { Component, computed, effect, inject, signal, ChangeDetectionStrategy } from '@angular/core';
 import { Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 
 import { BuscadorGlobalComponent } from './compartido/buscador-global.component';
@@ -22,6 +22,7 @@ import { PERMISOS } from './nucleo/servicios/configuracion';
 import { AutenticacionService } from './nucleo/servicios/autenticacion.service';
 import { PendientesService } from './nucleo/servicios/pendientes.service';
 import { SesionService } from './nucleo/servicios/sesion.service';
+import { ModoLocalService } from './nucleo/servicios/modo-local.service';
 
 interface EnlaceNavegacion {
   readonly ruta: string;
@@ -39,6 +40,8 @@ interface EnlaceNavegacion {
   /** Cierto si la sección todavía usa datos sintéticos. */
   readonly demostracion: boolean;
   readonly rol?: string;
+  /** Solo se muestra cuando el propio backend confirma que está en local. */
+  readonly soloLocal?: boolean;
 }
 
 const NAVEGACION: readonly EnlaceNavegacion[] = [
@@ -47,7 +50,7 @@ const NAVEGACION: readonly EnlaceNavegacion[] = [
   {
     ruta: '/usuarios',
     etiqueta: 'Usuarios y roles',
-    icono: 'usuarios',
+    icono: 'roles',
     permisos: [PERMISOS.usuarioLeer],
     demostracion: false,
   },
@@ -102,6 +105,13 @@ const NAVEGACION: readonly EnlaceNavegacion[] = [
     demostracion: false,
   },
   {
+    ruta: '/equipo',
+    etiqueta: 'Equipo clínico',
+    icono: 'usuarios',
+    permisos: [PERMISOS.profesionalGestionar],
+    demostracion: false,
+  },
+  {
     ruta: '/promociones',
     etiqueta: 'Promociones',
     icono: 'megafono',
@@ -128,10 +138,18 @@ const NAVEGACION: readonly EnlaceNavegacion[] = [
     ruta: '/agente-demo',
     etiqueta: 'Agente demo',
     icono: 'agente',
-    // Simulador para probar el agente: es de administración, no del día a día
-    // de recepción ni del personal clínico.
-    permisos: [PERMISOS.configuracionEscribir],
+    // El backend requiere este permiso y, además, limita el endpoint a local.
+    permisos: [PERMISOS.conversacionResponder],
+    soloLocal: true,
     demostracion: true,
+  },
+  {
+    ruta: '/seguridad',
+    etiqueta: 'Seguridad clínica',
+    icono: 'escudo',
+    llevaInsignia: true,
+    permisos: [PERMISOS.auditoriaLeer],
+    demostracion: false,
   },
   {
     ruta: '/asistente',
@@ -170,12 +188,14 @@ const NAVEGACION: readonly EnlaceNavegacion[] = [
     VentanaFlotanteComponent,
   ],
   templateUrl: './app.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './app.component.scss',
 })
 export class AppComponent {
   private readonly autenticacion = inject(AutenticacionService);
   private readonly router = inject(Router);
   protected readonly sesion = inject(SesionService);
+  private readonly modoLocal = inject(ModoLocalService);
   protected readonly pendientes = inject(PendientesService);
 
   protected readonly menuAbierto = signal(false);
@@ -188,6 +208,8 @@ export class AppComponent {
     effect(() => {
       if (this.sesion.autenticado()) {
         this.pendientes.cargar();
+      } else {
+        this.pendientes.limpiar();
       }
     });
   }
@@ -209,7 +231,8 @@ export class AppComponent {
   protected readonly enlaces = computed(() =>
     NAVEGACION.filter(
       (enlace) => (!enlace.rol || Boolean(this.sesion.identidad()?.roles.includes(enlace.rol))) &&
-        (enlace.permisos.length === 0 || this.sesion.tieneAlgunPermiso(...enlace.permisos)),
+        (enlace.permisos.length === 0 || this.sesion.tieneAlgunPermiso(...enlace.permisos)) &&
+        (!enlace.soloLocal || this.modoLocal.habilitado()),
     ),
   );
 
@@ -218,7 +241,13 @@ export class AppComponent {
   }
 
   protected alternarNotificaciones(): void {
-    this.notificacionesAbiertas.update((abiertas) => !abiertas);
+    this.notificacionesAbiertas.update((abiertas) => {
+      if (!abiertas) {
+        this.pendientes.refrescarCobrosVencidos();
+        this.pendientes.refrescarOfertasSinAvisar();
+      }
+      return !abiertas;
+    });
   }
 
   protected cerrarNotificaciones(): void {

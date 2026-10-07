@@ -4,7 +4,7 @@ Dos capas, y conviene no confundirlas
 -------------------------------------
 **La garantia es estructural.**  No existe ninguna herramienta que cree o
 modifique una receta, una dosis, una via, una frecuencia o un tratamiento.  El
-agente no puede hacerlo porque no hay por donde: el registro expone siete
+agente no puede hacerlo porque no hay por donde: el registro expone ocho
 herramientas y ninguna toca contenido clinico.  Esa es la proteccion real, y
 hay una prueba que enumera el registro para que siga siendo cierta.
 

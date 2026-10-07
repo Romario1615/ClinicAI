@@ -25,17 +25,24 @@ registro real.
 from __future__ import annotations
 
 import uuid
-from datetime import timedelta
+from datetime import datetime, timedelta
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Path, Query, status
+from sqlalchemy import func, select
 
+from app.modulos.historia.autorizacion import PuedeLeerHistoriaDiscreta
 from app.modulos.historia.especialidades import especialidades_de_notas
 from app.modulos.historia.esquemas import (
+    AlergiaEntrada,
+    AlergiaHistoriaSalida,
     AlertaAdherenciaSalida,
+    AntecedenteEntrada,
+    AntecedenteHistoriaSalida,
     AtenderAlertaAdherencia,
     ConfirmacionReceta,
     CorreccionNota,
+    DesactivacionAlergia,
     MedicamentoSalida,
     NotaEntrada,
     NotaSalida,
@@ -44,14 +51,17 @@ from app.modulos.historia.esquemas import (
     RegistroToma,
     ResultadoConfirmacion,
     ResultadoSuspension,
+    ResultadoVersionReceta,
     SuspensionReceta,
     TomaSalida,
+    VersionRecetaEntrada,
 )
 from app.modulos.historia.modelos import NotaEvolucion, Receta, RecetaMedicamento
 from app.modulos.historia.repositorio import RepositorioHistoria
 from app.modulos.historia.servicios import DatosMedicamento, DatosNota
+from app.modulos.pacientes.modelos import Alergia, Antecedente, Paciente
 from app.nucleo.auditoria import AccionAuditada, construir_entrada
-from app.nucleo.autorizacion import Principal
+from app.nucleo.autorizacion import NivelSensibilidad, Principal
 from app.nucleo.dependencias import (
     Auditor,
     RelojActual,
@@ -60,15 +70,233 @@ from app.nucleo.dependencias import (
     Sesion,
     exige_permiso,
 )
-from app.nucleo.errores import ErrorDominio
+from app.nucleo.errores import (
+    ConflictoEstado,
+    ErrorDominio,
+    PermisoDenegado,
+    RecursoNoEncontrado,
+)
 
 enrutador = APIRouter(prefix="/historia", tags=["historia clinica"])
 
-PuedeLeer = Annotated[Principal, Depends(exige_permiso("historia_clinica.leer"))]
 PuedeEscribir = Annotated[Principal, Depends(exige_permiso("historia_clinica.escribir"))]
 PuedeCrearReceta = Annotated[Principal, Depends(exige_permiso("receta.crear"))]
 PuedeConfirmarReceta = Annotated[Principal, Depends(exige_permiso("receta.confirmar"))]
 PuedeLeerReceta = Annotated[Principal, Depends(exige_permiso("receta.leer"))]
+
+
+async def _exigir_acceso_anamnesis(
+    sesion: Sesion, principal: Principal, paciente_id: uuid.UUID, ahora: datetime
+) -> None:
+    """Aplica clínica, ámbito de paciente y relación asistencial en SQL."""
+    if principal.clinica_id is None:
+        raise RecursoNoEncontrado("El paciente solicitado no existe.")
+    consulta_paciente = select(Paciente.id).where(
+        Paciente.id == paciente_id,
+        Paciente.clinica_id == principal.clinica_id,
+    )
+    if not principal.ambito.todos_los_pacientes:
+        if not principal.ambito.pacientes:
+            raise RecursoNoEncontrado("El paciente solicitado no existe.")
+        consulta_paciente = consulta_paciente.where(Paciente.id.in_(principal.ambito.pacientes))
+    # Serializa la creación de alergias por paciente: la comprobación de
+    # duplicados sigue protegida si dos profesionales guardan a la vez.
+    paciente = await sesion.scalar(consulta_paciente.with_for_update())
+    if paciente is None:
+        raise RecursoNoEncontrado("El paciente solicitado no existe.")
+    if principal.profesional_id is not None and not await RepositorioHistoria(
+        sesion
+    ).tiene_relacion_asistencial(
+        paciente_id=paciente_id,
+        profesional_id=principal.profesional_id,
+        ahora=ahora,
+    ):
+        raise RecursoNoEncontrado("El paciente solicitado no existe.")
+
+
+def _exigir_profesional(principal: Principal) -> uuid.UUID:
+    if principal.profesional_id is None:
+        raise PermisoDenegado("Solo un profesional puede registrar datos de anamnesis.")
+    return principal.profesional_id
+
+
+@enrutador.post(
+    "/pacientes/{paciente_id}/anamnesis/alergias",
+    response_model=AlergiaHistoriaSalida,
+    status_code=status.HTTP_201_CREATED,
+    summary="Registrar una alergia confirmada por un profesional",
+)
+async def registrar_alergia(
+    paciente_id: Annotated[uuid.UUID, Path()],
+    datos: AlergiaEntrada,
+    principal: PuedeEscribir,
+    sesion: Sesion,
+    reloj: RelojActual,
+    auditor: Auditor,
+) -> AlergiaHistoriaSalida:
+    profesional_id = _exigir_profesional(principal)
+    ahora = reloj.ahora()
+    await _exigir_acceso_anamnesis(sesion, principal, paciente_id, ahora)
+    sustancia = datos.sustancia.strip()
+    existente = await sesion.scalar(
+        select(Alergia.id).where(
+            Alergia.paciente_id == paciente_id,
+            Alergia.activa.is_(True),
+            func.lower(func.trim(Alergia.sustancia)) == sustancia.lower(),
+        )
+    )
+    if existente is not None:
+        raise ConflictoEstado("Esta sustancia ya figura como alergia activa.")
+    alergia = Alergia(
+        paciente_id=paciente_id,
+        sustancia=sustancia,
+        tipo_reaccion=datos.tipo_reaccion.strip() if datos.tipo_reaccion else None,
+        severidad=datos.severidad,
+        registrado_por=profesional_id,
+        registrado_en=ahora,
+        creado_por=principal.actor_id,
+    )
+    sesion.add(alergia)
+    await sesion.flush()
+    await auditor.registrar(
+        [
+            construir_entrada(
+                accion=AccionAuditada.ANAMNESIS_REGISTRADA,
+                principal=principal,
+                ahora=ahora,
+                entidad_tipo="alergia",
+                entidad_id=alergia.id,
+                paciente_id=paciente_id,
+                nivel_sensibilidad=NivelSensibilidad.CLINICO,
+                tipo_registro="alergia",
+                severidad=alergia.severidad,
+            )
+        ]
+    )
+    await sesion.commit()
+    return AlergiaHistoriaSalida(
+        id=alergia.id,
+        sustancia=alergia.sustancia,
+        tipo_reaccion=alergia.tipo_reaccion,
+        severidad=alergia.severidad,
+        registrado_en=alergia.registrado_en,
+    )
+
+
+@enrutador.post(
+    "/pacientes/{paciente_id}/anamnesis/antecedentes",
+    response_model=AntecedenteHistoriaSalida,
+    status_code=status.HTTP_201_CREATED,
+    summary="Registrar un antecedente clínico",
+)
+async def registrar_antecedente(
+    paciente_id: Annotated[uuid.UUID, Path()],
+    datos: AntecedenteEntrada,
+    principal: PuedeEscribir,
+    sesion: Sesion,
+    reloj: RelojActual,
+    auditor: Auditor,
+) -> AntecedenteHistoriaSalida:
+    profesional_id = _exigir_profesional(principal)
+    ahora = reloj.ahora()
+    await _exigir_acceso_anamnesis(sesion, principal, paciente_id, ahora)
+    if (
+        datos.nivel_sensibilidad == NivelSensibilidad.CLINICO_SENSIBLE.value
+        and not principal.tiene_permiso("historia_clinica.leer_sensible")
+    ):
+        raise PermisoDenegado(
+            "Se requiere permiso clínico sensible para registrar un antecedente N3."
+        )
+    nivel = NivelSensibilidad(datos.nivel_sensibilidad)
+    antecedente = Antecedente(
+        paciente_id=paciente_id,
+        categoria=datos.categoria,
+        descripcion=datos.descripcion,
+        registrado_por=profesional_id,
+        registrado_en=ahora,
+        nivel_sensibilidad=nivel.value,
+        creado_por=principal.actor_id,
+    )
+    sesion.add(antecedente)
+    await sesion.flush()
+    await auditor.registrar(
+        [
+            construir_entrada(
+                accion=AccionAuditada.ANAMNESIS_REGISTRADA,
+                principal=principal,
+                ahora=ahora,
+                entidad_tipo="antecedente",
+                entidad_id=antecedente.id,
+                paciente_id=paciente_id,
+                nivel_sensibilidad=nivel,
+                categoria=antecedente.categoria,
+            )
+        ]
+    )
+    await sesion.commit()
+    return AntecedenteHistoriaSalida(
+        id=antecedente.id,
+        categoria=antecedente.categoria,
+        descripcion=antecedente.descripcion,
+        nivel_sensibilidad=antecedente.nivel_sensibilidad,
+        registrado_en=antecedente.registrado_en,
+    )
+
+
+@enrutador.post(
+    "/pacientes/{paciente_id}/anamnesis/alergias/{alergia_id}/desactivacion",
+    response_model=AlergiaHistoriaSalida,
+    summary="Desactivar una alergia conservando el motivo y el historial",
+)
+async def desactivar_alergia(
+    paciente_id: Annotated[uuid.UUID, Path()],
+    alergia_id: Annotated[uuid.UUID, Path()],
+    datos: DesactivacionAlergia,
+    principal: PuedeEscribir,
+    sesion: Sesion,
+    reloj: RelojActual,
+    auditor: Auditor,
+) -> AlergiaHistoriaSalida:
+    _exigir_profesional(principal)
+    ahora = reloj.ahora()
+    await _exigir_acceso_anamnesis(sesion, principal, paciente_id, ahora)
+    alergia = await sesion.scalar(
+        select(Alergia)
+        .where(
+            Alergia.id == alergia_id,
+            Alergia.paciente_id == paciente_id,
+            Alergia.activa.is_(True),
+        )
+        .with_for_update()
+    )
+    if alergia is None:
+        raise RecursoNoEncontrado("La alergia solicitada no existe.")
+    alergia.activa = False
+    alergia.desactivada_por = principal.actor_id
+    alergia.desactivada_en = ahora
+    alergia.motivo_desactivacion = datos.motivo
+    alergia.actualizado_por = principal.actor_id
+    await auditor.registrar(
+        [
+            construir_entrada(
+                accion=AccionAuditada.ALERGIA_DESACTIVADA,
+                principal=principal,
+                ahora=ahora,
+                entidad_tipo="alergia",
+                entidad_id=alergia.id,
+                paciente_id=paciente_id,
+                nivel_sensibilidad=NivelSensibilidad.CLINICO,
+            )
+        ]
+    )
+    await sesion.commit()
+    return AlergiaHistoriaSalida(
+        id=alergia.id,
+        sustancia=alergia.sustancia,
+        tipo_reaccion=alergia.tipo_reaccion,
+        severidad=alergia.severidad,
+        registrado_en=alergia.registrado_en,
+    )
 
 
 def _a_nota(nota: NotaEvolucion) -> NotaSalida:
@@ -82,6 +310,7 @@ def _a_nota(nota: NotaEvolucion) -> NotaSalida:
         profesional_id=nota.profesional_id,
         cita_id=nota.cita_id,
         tipo=nota.tipo,
+        nivel_sensibilidad=nota.nivel_sensibilidad,
         motivo_consulta=nota.motivo_consulta,
         subjetivo=nota.subjetivo,
         objetivo=nota.objetivo,
@@ -101,7 +330,9 @@ def _a_receta(receta: Receta, medicamentos: list[RecetaMedicamento]) -> RecetaSa
         confirmada_en=receta.confirmada_en,
         suspendida_en=receta.suspendida_en,
         motivo_suspension=receta.motivo_suspension,
+        receta_anterior_id=receta.receta_anterior_id,
         indicaciones_generales=receta.indicaciones_generales,
+        nivel_sensibilidad=receta.nivel_sensibilidad,
         creado_en=receta.creado_en,
         medicamentos=[
             MedicamentoSalida(
@@ -114,6 +345,7 @@ def _a_receta(receta: Receta, medicamentos: list[RecetaMedicamento]) -> RecetaSa
                 cuando_sea_necesario=m.cuando_sea_necesario,
                 frecuencia_horas=m.frecuencia_horas,
                 duracion_dias=m.duracion_dias,
+                hora_primera_toma=m.hora_primera_toma,
                 instrucciones=m.instrucciones,
             )
             for m in medicamentos
@@ -126,6 +358,7 @@ def _a_datos_nota(datos: NotaEntrada) -> DatosNota:
         paciente_id=datos.paciente_id,
         profesional_id=datos.profesional_id,
         tipo=datos.tipo,
+        nivel_sensibilidad=datos.nivel_sensibilidad,
         motivo_consulta=datos.motivo_consulta,
         subjetivo=datos.subjetivo,
         objetivo=datos.objetivo,
@@ -147,11 +380,12 @@ def _a_datos_nota(datos: NotaEntrada) -> DatosNota:
     response_model=list[NotaSalida],
     summary="Historia clinica de un paciente",
     responses={
-        403: {"description": "Sin permiso, o sin relacion asistencial con el paciente"},
+        403: {"description": "Sin permiso"},
+        404: {"description": "Paciente inexistente o fuera de alcance"},
     },
 )
 async def leer_historia(
-    principal: PuedeLeer,
+    principal: PuedeLeerHistoriaDiscreta,
     servicio: ServicioDeHistoria,
     sesion: Sesion,
     auditor: Auditor,
@@ -192,7 +426,10 @@ async def leer_historia(
     response_model=NotaSalida,
     status_code=status.HTTP_201_CREATED,
     summary="Crear una nota de evolucion",
-    responses={403: {"description": "Sin permiso o sin relacion asistencial"}},
+    responses={
+        403: {"description": "Sin permiso para escribir"},
+        404: {"description": "Paciente inexistente, fuera de alcance o sin relación asistencial"},
+    },
 )
 async def crear_nota(
     principal: PuedeEscribir,
@@ -254,6 +491,8 @@ async def listar_recetas(
     principal: PuedeLeerReceta,
     repo: RepoHistoria,
     servicio: ServicioDeHistoria,
+    sesion: Sesion,
+    auditor: Auditor,
     paciente_id: Annotated[uuid.UUID, Path()],
     solo_vigentes: Annotated[bool, Query()] = False,
 ) -> list[RecetaSalida]:
@@ -261,6 +500,21 @@ async def listar_recetas(
     recetas = await repo.listar_recetas(
         principal=principal, paciente_id=paciente_id, ahora=ahora, solo_vigentes=solo_vigentes
     )
+    if recetas:
+        auditorias = [
+            construir_entrada(
+                accion=AccionAuditada.RECETA_LEIDA,
+                principal=principal,
+                ahora=ahora,
+                entidad_tipo="receta",
+                entidad_id=receta.id,
+                paciente_id=receta.paciente_id,
+                nivel_sensibilidad=NivelSensibilidad(receta.nivel_sensibilidad),
+            )
+            for receta in recetas
+        ]
+        await auditor.registrar(auditorias)
+        await sesion.commit()
     salida: list[RecetaSalida] = []
     for receta in recetas:
         medicamentos = await repo.medicamentos_de(receta.id)
@@ -293,6 +547,7 @@ async def crear_receta(
         profesional_id=datos.profesional_id,
         nota_id=datos.nota_id,
         indicaciones_generales=datos.indicaciones_generales,
+        nivel_sensibilidad=datos.nivel_sensibilidad,
         medicamentos=[
             DatosMedicamento(
                 nombre=m.nombre,
@@ -316,6 +571,61 @@ async def crear_receta(
         raise ErrorDominio("No se pudo crear la receta.")
     medicamentos = await repo.medicamentos_de(resultado.receta.id)
     return _a_receta(resultado.receta, medicamentos)
+
+
+@enrutador.post(
+    "/recetas/{receta_id}/versiones",
+    response_model=ResultadoVersionReceta,
+    status_code=status.HTTP_201_CREATED,
+    summary="Sustituir una receta confirmada por una nueva versión firmada",
+    responses={
+        404: {"description": "No existe, o esta fuera de alcance"},
+        409: {"description": "La receta ya no está vigente"},
+    },
+)
+async def versionar_receta(
+    principal: PuedeConfirmarReceta,
+    datos: VersionRecetaEntrada,
+    servicio: ServicioDeHistoria,
+    repo: RepoHistoria,
+    sesion: Sesion,
+    auditor: Auditor,
+    receta_id: Annotated[uuid.UUID, Path()],
+) -> ResultadoVersionReceta:
+    """Conserva la receta anterior, sus tomas pasadas y su motivo de cambio."""
+    resultado = await servicio.versionar_receta(
+        receta_id,
+        principal=principal,
+        profesional_id=datos.profesional_id,
+        motivo=datos.motivo,
+        indicaciones_generales=datos.indicaciones_generales,
+        medicamentos=[
+            DatosMedicamento(
+                nombre=m.nombre,
+                dosis=m.dosis,
+                via=m.via,
+                cuando_sea_necesario=m.cuando_sea_necesario,
+                frecuencia_horas=m.frecuencia_horas,
+                duracion_dias=m.duracion_dias,
+                hora_primera_toma=m.hora_primera_toma,
+                concentracion=m.concentracion,
+                forma=m.forma,
+                instrucciones=m.instrucciones,
+            )
+            for m in datos.medicamentos
+        ],
+    )
+    await auditor.registrar(resultado.auditoria)
+    await sesion.commit()
+
+    if resultado.receta is None:  # pragma: sin cobertura - el servicio devuelve receta o lanza
+        raise ErrorDominio("No se pudo crear la nueva versión de la receta.")
+    medicamentos = await repo.medicamentos_de(resultado.receta.id)
+    return ResultadoVersionReceta(
+        receta=_a_receta(resultado.receta, medicamentos),
+        tomas_canceladas=resultado.tomas_canceladas,
+        tomas_generadas=resultado.tomas_generadas,
+    )
 
 
 @enrutador.post(

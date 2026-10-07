@@ -78,7 +78,25 @@ class AccionAuditada(StrEnum):
     INTEGRACION_CONFIGURADA = "integracion.configurada"
     CLINICA_CREADA = "clinica.creada"
     CLINICA_MODIFICADA = "clinica.modificada"
+    HORARIO_MODIFICADO = "horario_sede.modificado"
+    FERIADO_CREADO = "feriado.creado"
+    FERIADO_MODIFICADO = "feriado.modificado"
+    FERIADO_ELIMINADO = "feriado.eliminado"
     SEDE_CREADA = "sede.creada"
+    SEDE_MODIFICADA = "sede.modificada"
+    ESPECIALIDAD_CREADA = "especialidad.creada"
+    ESPECIALIDAD_MODIFICADA = "especialidad.modificada"
+    SERVICIO_CREADO = "servicio.creado"
+    SERVICIO_MODIFICADO = "servicio.modificado"
+    CONSULTORIO_CREADO = "consultorio.creado"
+    CONSULTORIO_MODIFICADO = "consultorio.modificado"
+    BLOQUEO_AGENDA_CREADO = "bloqueo_agenda.creado"
+    BLOQUEO_AGENDA_MODIFICADO = "bloqueo_agenda.modificado"
+    BLOQUEO_AGENDA_ELIMINADO = "bloqueo_agenda.eliminado"
+    PROFESIONAL_CREADO = "profesional.creado"
+    PROFESIONAL_MODIFICADO = "profesional.modificado"
+    PROFESIONAL_CONSULTADO = "profesional.consultado"
+    AGENDA_PROFESIONAL_MODIFICADA = "agenda_profesional.modificada"
     DASHBOARD_ANALISIS_IA = "dashboard.analisis_ia"
 
     # --- Pacientes ---
@@ -101,6 +119,8 @@ class AccionAuditada(StrEnum):
     NOTA_ANULADA = "nota_evolucion.anulada"
     DIAGNOSTICO_REGISTRADO = "diagnostico.registrado"
     ACCESO_EMERGENCIA = "acceso_emergencia.usado"
+    ACCESO_EMERGENCIA_AVISO_LEIDO = "acceso_emergencia.aviso_leido"
+    ACCESO_EMERGENCIA_AVISO_REVISADO = "acceso_emergencia.aviso_revisado"
     ACCESO_SENSIBLE = "acceso_sensible.usado"
 
     # --- Imagenes clinicas y odontologia ---
@@ -110,6 +130,10 @@ class AccionAuditada(StrEnum):
     FOTO_PERFIL_ACTUALIZADA = "paciente.foto_actualizada"
     ODONTOGRAMA_CONSULTADO = "odontograma.consultado"
     ODONTOGRAMA_VERSIONADO = "odontograma.versionado"
+    FORMULARIO_033_CREADO = "formulario_033.creado"
+    FORMULARIO_033_VERSIONADO = "formulario_033.versionado"
+    FORMULARIO_033_CONSULTADO = "formulario_033.consultado"
+    FORMULARIO_033_EXPORTADO = "formulario_033.exportado"
     PLAN_CONSULTADO = "plan_tratamiento.consultado"
     PLAN_CREADO = "plan_tratamiento.creado"
     PLAN_MODIFICADO = "plan_tratamiento.modificado"
@@ -155,6 +179,7 @@ class AccionAuditada(StrEnum):
 
     # --- Recetas ---
     RECETA_CREADA = "receta.creada"
+    RECETA_LEIDA = "receta.leida"
     RECETA_CONFIRMADA = "receta.confirmada"
     RECETA_MODIFICADA = "receta.modificada"
     RECETA_SUSPENDIDA = "receta.suspendida"
@@ -163,6 +188,9 @@ class AccionAuditada(StrEnum):
     TOMA_REGISTRADA = "toma.registrada"
     ALERTA_ADHERENCIA_CREADA = "alerta_adherencia.creada"
     ALERTA_ADHERENCIA_ATENDIDA = "alerta_adherencia.atendida"
+    AVISO_TRATAMIENTO_CREADO = "aviso_tratamiento.creado"
+    AVISO_TRATAMIENTO_LEIDO = "aviso_tratamiento.leido"
+    AVISO_TRATAMIENTO_REVISADO = "aviso_tratamiento.revisado"
     CONTROL_TRATAMIENTO_ATENDIDO = "control_tratamiento.atendido"
 
     # --- Conocimiento y RAG ---
@@ -195,6 +223,17 @@ class AccionAuditada(StrEnum):
     PAGO_REGISTRADO = "pago.registrado"
     PAGO_VALIDADO = "pago.validado"
     PAGO_RECHAZADO = "pago.rechazado"
+    PAGO_COMPROBANTE_CARGADO = "pago.comprobante_cargado"
+    PAGO_COMPROBANTES_LISTADOS = "pago.comprobantes_listados"
+    PAGO_COMPROBANTE_CONSULTADO = "pago.comprobante_consultado"
+    ANAMNESIS_REGISTRADA = "anamnesis.registrada"
+    PLANTILLA_ANAMNESIS_CREADA = "plantilla_anamnesis.creada"
+    PLANTILLA_ANAMNESIS_MODIFICADA = "plantilla_anamnesis.modificada"
+    PLANTILLA_ANAMNESIS_PUBLICADA = "plantilla_anamnesis.publicada"
+    ALERGIA_DESACTIVADA = "alergia.desactivada"
+    CARGO_PAGO_CREADO = "cargo_pago.creado"
+    CARGO_PAGO_CONCILIADO = "cargo_pago.total_conciliado"
+    CARGO_PAGO_VENCIMIENTO_FIJADO = "cargo_pago.vencimiento_fijado"
 
     # --- Analitica ---
     PREDICCION_CONSULTADA = "prediccion.consultada"

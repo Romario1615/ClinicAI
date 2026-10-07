@@ -1,6 +1,6 @@
 # Base de conocimiento y recuperación (RAG)
 
-> **Última actualización:** 2026‑10‑05 · fase funcional cerrada en modo simulado; E‑20 ACL documental resuelto.
+> **Última actualización:** 2026‑10‑06 · E‑20 ACL documental resuelto; carga de PDF textual disponible con protección de archivo.
 >
 > El proyecto ya tiene un circuito de agente con herramientas administrativas y un
 > simulador local. El webhook de WhatsApp todavía deriva los mensajes al personal y no
@@ -309,7 +309,7 @@ de otra persona con buena puntuación. Si algún día hace falta, será una tabl
 | Variable | Valor | Para qué |
 |---|---|---|
 | `PROVEEDOR_EMBEDDINGS` | `fastembed` \| `mock` | Un modo desconocido **falla**, no cae al simulado |
-| `MODELO_EMBEDDINGS` | `intfloat/multilingual-e5-small` | |
+| `MODELO_EMBEDDINGS` | `sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2` | Multilingüe, 384 dimensiones. `intfloat/multilingual-e5-small` no existe en fastembed 0.7. Los prefijos `passage:`/`query:` solo se aplican a modelos E5 |
 | `DIMENSION_EMBEDDINGS` | 384 | Cambiarla exige migración: `vector(n)` lleva la dimensión en el esquema |
 | `RAG_TOP_K` | 8 | Fragmentos devueltos (tope duro: 20) |
 | `RAG_TOP_K_CANDIDATOS` | 40 | Candidatos por ranking antes de fusionar |
@@ -356,22 +356,40 @@ es qué documentos se usaron. Hay una prueba que lo comprueba.
    herramientas (`find_availability`, `handoff_to_human`…) y su memoria de conversación.
 2. **Medir con el modelo real** (E‑9). Hasta entonces, las cifras de la sección 5 miden el
    suelo, no la calidad.
-3. **Carga de PDF** (RF‑M01). Hoy solo texto: extraer de un PDF exige análisis de archivo y
-   antivirus, que van con el resto de la gestión documental.
-4. **`knowledge_permissions` no se aplica todavía.** La tabla existe y el filtro por rol y
-   usuario sobre documentos concretos no está implementado; hoy el control es por clínica,
-   sede, especialidad y nivel de sensibilidad.
-5. **Reindexado al cambiar de modelo.** La columna `modelo` permite convivir con dos, pero no
-   hay trabajo que reindexe.
+3. **PDF escaneados y texto visualmente oculto.** El servidor extrae texto seleccionable de
+   documentos de hasta 20 MB, 200 páginas y 500 000 caracteres; rechaza cifrado y acciones
+   activas. En producción ClamAV es obligatorio. Este entorno de desarrollo no tiene ClamAV
+   conectado; la API y la pantalla avisan que el análisis no está disponible. No se conserva el PDF.
+   OCR y análisis de capas/posición del texto no están implementados.
+4. **La reanudación de ingesta la hace el worker.** La fuente y el trabajo se guardan antes de
+   generar embeddings. El barrido de ARQ recoge cada minuto hasta diez trabajos `PENDIENTE`;
+   `FOR UPDATE SKIP LOCKED` permite repartirlos entre réplicas y el procesamiento es
+   transaccional e idempotente. Si el proveedor falla de forma controlada, el trabajo queda
+   `FALLIDA` y no se reintenta en bucle; después de corregir el proveedor, el mismo contenido
+   permite reintentar la misma versión. La copia temporal se elimina al completar.
+5. **Reindexado al cambiar de modelo.** La columna `modelo` permite convivir con dos.
+   `uv run python -m herramientas.reindexar_conocimiento` genera los vectores que faltan para
+   el modelo configurado; es idempotente y no toca el texto. No corre solo: se lanza tras
+   cambiar `PROVEEDOR_EMBEDDINGS` o `MODELO_EMBEDDINGS`.
 6. **Latencia bajo carga** (RNF‑03, P95 < 2 s). Sin medir: HNSW con pre‑filtro puede
    necesitar explorar más grafo para reunir `k` candidatos, y eso solo se ve con volumen.
+
+La recuperación filtra `knowledge_chunks.vigente` junto con estado, clínica, vigencia y ACL.
+Para cargar cambios a un documento aprobado o publicado, primero se devuelve a borrador;
+el contenido deja de responder hasta que la versión nueva se revisa y aprueba. Las versiones
+históricas permanecen para trazabilidad, pero nunca vuelven a las respuestas del RAG.
+
+La preparación durable se confirma antes de calcular embeddings. Si el proveedor falla, la
+API devuelve 503, deja el trabajo `FALLIDA` con un mensaje saneado y conserva temporalmente
+el texto fuente. Al reintentar el mismo contenido, recupera la misma versión. El indexado y
+el cambio de versión vigente se confirman en una sola transacción.
 
 ---
 
 ## 13. Evidencia
 
 ```
-uv run pytest -m rag -q          →  80 passed
+uv run pytest -m rag -q          →  82 passed (80 anteriores + 2 rutas PDF)
 uv run pytest -q                 →  1140 passed
 uv run pytest --cov=app          →  92,0 %
 uv run ruff check . ; mypy app   →  sin hallazgos
@@ -393,10 +411,11 @@ SELECT is_generated, generation_expression FROM information_schema.columns
 | Suite | Casos | Qué cubre |
 |---|---|---|
 | `test_rag_fugas.py` | 21 | Siete casos negativos, cada uno con su prueba de control |
-| `test_conocimiento_api.py` | 21 | Separación de permisos, auditoría sin la consulta |
+| `test_conocimiento_api.py` | 23 | Separación de permisos, auditoría sin la consulta, ingesta PDF |
+| `test_conocimiento_archivos.py` | 10 | Tipo, tamaño, páginas/texto, acciones activas, cifrado, texto extraíble y antivirus |
 | `test_fragmentacion.py` | 19 | Cortes, solape, parámetros inválidos |
 | `test_embeddings.py` | 13 | Determinismo, normalización, selección de proveedor |
-| `test_conocimiento.py` | 22 | Ciclo de vida, propagación a fragmentos |
+| `test_conocimiento.py` | 23 | Ciclo de vida, propagación a fragmentos y recuperación exclusiva de la versión vigente |
 | `test_saneamiento.py` | 34 | Patrones, evasiones, falsos positivos |
 | `test_recuperador.py` | 9 | Contexto citado, sin fuente |
 | `test_evaluacion_rag.py` | 7 | Hit@K y casos negativos deliberados |

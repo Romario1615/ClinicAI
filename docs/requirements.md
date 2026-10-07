@@ -224,6 +224,7 @@ Prioridad: **B** bloqueante para operar · **A** alta · **M** media.
 | RF‑P03 | Validación manual con registro del validador | A |
 | RF‑P04 | **Sin almacenar tarjetas, claves, OTP ni credenciales financieras** | B |
 | RF‑P05 | Auditoría de cambios de estado | A |
+| RF‑P06 | Exportar agregados financieros por fecha, estado y método; solo dentro del ámbito autorizado, sin identidad de pacientes y con auditoría | A |
 
 ## RF‑Q · Dashboard
 

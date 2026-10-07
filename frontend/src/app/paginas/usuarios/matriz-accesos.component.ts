@@ -10,7 +10,7 @@
  * Es solo lectura. Cambiar lo que puede hacer un rol se hace creando un rol de
  * la clínica con sus permisos; los roles del sistema no se modifican.
  */
-import { Component, computed, input } from '@angular/core';
+import { Component, computed, input, ChangeDetectionStrategy } from '@angular/core';
 
 interface RolConPermisos {
   readonly id: string;
@@ -103,6 +103,7 @@ const TEXTO_NIVEL: Record<Nivel, string> = {
       </div>
     </section>
   `,
+  changeDetection: ChangeDetectionStrategy.Eager,
   styles: `
     .matriz { padding: 1.25rem; border: 1px solid var(--borde); border-radius: 14px; background: var(--superficie); }
     h2 { margin: 0.1rem 0 0.4rem; font-size: 1.15rem; }

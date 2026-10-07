@@ -63,9 +63,7 @@ async def _receta(
         clinica_id=clinica.id,
         paciente_id=paciente.id,
         profesional_id=profesional.id,
-        estado="CONFIRMADA",
-        confirmada_en=reloj.ahora(),
-        confirmada_por=profesional.id,
+        estado="BORRADOR",
     )
     sesion.add(receta)
     await sesion.flush()
@@ -79,6 +77,10 @@ async def _receta(
             duracion_dias=5,
         )
     )
+    await sesion.flush()
+    receta.estado = "CONFIRMADA"
+    receta.confirmada_en = reloj.ahora()
+    receta.confirmada_por = profesional.id
     await sesion.flush()
     return receta
 
@@ -120,7 +122,11 @@ async def test_publica_avisa_sin_datos_clinicos_y_el_paciente_lee_con_su_fecha(
 
     mensaje = (
         await sesion.execute(
-            sa.select(OutboxMensaje).where(OutboxMensaje.tipo == "INDICACIONES_DISPONIBLES")
+            sa.select(OutboxMensaje).where(
+                OutboxMensaje.tipo == "INDICACIONES_DISPONIBLES",
+                OutboxMensaje.entidad_origen_tipo == "indicacion_postconsulta",
+                OutboxMensaje.entidad_origen_id == cuerpo["id"],
+            )
         )
     ).scalar_one()
     texto = str(mensaje.carga_util["texto"])

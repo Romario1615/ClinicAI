@@ -27,6 +27,7 @@ import {
   pacienteConVersionAnterior,
 } from '../apoyo/datos';
 import { acceder, irA } from '../apoyo/sesion';
+import { huecosVisiblesEnAgenda } from '../apoyo/agenda';
 
 const API = process.env.URL_API ?? 'http://127.0.0.1:8000/api/v1';
 
@@ -221,9 +222,9 @@ test('el profesional completa un plan y atiende su control posterior', async ({ 
     );
     await fecha.fill(fechaAgenda(dias));
     await cargando;
-    if (await page.locator('.fila-dia--hueco').count()) break;
+    if (await huecosVisiblesEnAgenda(page).count()) break;
   }
-  const hueco = page.locator('.fila-dia--hueco').first();
+  const hueco = huecosVisiblesEnAgenda(page).first();
   await expect(hueco, 'debe haber al menos un turno disponible para agendar la fase').toBeVisible();
   await hueco.click();
   const reserva = page.waitForResponse(

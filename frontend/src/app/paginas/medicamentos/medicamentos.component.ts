@@ -27,7 +27,7 @@
  * cuenta omisiones sobre esperadas; no concluye que el tratamiento falle ni
  * sugiere cambiarlo. La pantalla tampoco (CLAUDE.md, regla 5).
  */
-import { Component, computed, inject, signal } from '@angular/core';
+import { Component, computed, inject, signal, ChangeDetectionStrategy } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 
 import {
@@ -72,6 +72,7 @@ import { ResumenModuloComponent } from '../../compartido/resumen-modulo.componen
   standalone: true,
   imports: [ResumenModuloComponent, FormsModule, CargandoComponent, ErrorComponent, VacioComponent],
   templateUrl: './medicamentos.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './medicamentos.component.scss',
 })
 export class MedicamentosComponent {

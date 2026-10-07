@@ -62,6 +62,8 @@ export interface OfertaSinAvisar {
 export interface EntradaPendientes {
   readonly citas: readonly Cita[];
   readonly ofertasSinAvisar: readonly OfertaSinAvisar[];
+  /** Total real del servidor si la primera página no contiene toda la cola. */
+  readonly ofertasSinAvisarTotal?: number;
   readonly ahora: Date;
   /** Traduce un identificador de paciente a un nombre mostrable. */
   readonly nombrePaciente: (id: string) => string;
@@ -107,7 +109,8 @@ function sujeto(ids: readonly string[], nombre: (id: string) => string, singular
  * que corre, y dentro de eso lo que vence antes.
  */
 export function derivarPendientes(entrada: EntradaPendientes): readonly TareaPendiente[] {
-  const { citas, ofertasSinAvisar, ahora, nombrePaciente } = entrada;
+  const { citas, ofertasSinAvisar, ofertasSinAvisarTotal, ahora, nombrePaciente } = entrada;
+  const cantidadOfertas = ofertasSinAvisarTotal ?? ofertasSinAvisar.length;
   const tareas: TareaPendiente[] = [];
 
   // --- 1. Turnos bloqueados que caducan -----------------------------------
@@ -136,7 +139,7 @@ export function derivarPendientes(entrada: EntradaPendientes): readonly TareaPen
   }
 
   // --- 2. Ofertas de lista de espera que nadie ha comunicado --------------
-  if (ofertasSinAvisar.length > 0) {
+  if (cantidadOfertas > 0) {
     const conPlazo = ofertasSinAvisar
       .filter((oferta) => oferta.oferta_expira_en !== null)
       .sort(
@@ -152,9 +155,9 @@ export function derivarPendientes(entrada: EntradaPendientes): readonly TareaPen
       etiqueta: 'Nadie ha llamado',
       plazo: minutos === null ? 'sin plazo' : plazoLegible(minutos),
       titulo:
-        ofertasSinAvisar.length === 1
+        cantidadOfertas === 1
           ? '1 oferta de lista de espera sin avisar'
-          : `${ofertasSinAvisar.length} ofertas de lista de espera sin avisar`,
+          : `${cantidadOfertas} ofertas de lista de espera sin avisar`,
       detalle:
         'Estos pacientes no tienen consentimiento para mensajes automáticos: tienen un turno reservado del que no saben nada. Si nadie llama, el hueco vuelve a la cola.',
       accion: 'Abrir la cola de llamadas',

@@ -28,11 +28,12 @@
  * un denominador inventado es peor que no tenerlo: se toman decisiones de
  * contratación con él.
  */
-import { Component, computed, inject, signal } from '@angular/core';
+import { Component, computed, inject, signal, ChangeDetectionStrategy } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 
 import { ColaTrabajoComponent } from '../../compartido/cola-trabajo.component';
+import { IconoComponent, type NombreIcono } from '../../compartido/icono.component';
 import { TarjetasIndicadoresComponent } from '../../compartido/tarjetas-indicadores.component';
 import { IndicadoresService, type Indicadores } from '../../nucleo/servicios/indicadores.service';
 import { indicadoresDe } from '../../nucleo/utilidades/indicadores';
@@ -47,7 +48,7 @@ import {
   type ResumenPanel,
 } from '../../nucleo/servicios/operaciones.service';
 import { SesionService } from '../../nucleo/servicios/sesion.service';
-import type { Cita, Profesional } from '../../nucleo/modelos/dominio';
+import type { Cita, Especialidad, Profesional, Sede, Servicio } from '../../nucleo/modelos/dominio';
 import { derivarPendientes, type TareaPendiente } from '../../nucleo/utilidades/pendientes';
 import { cargaPorProfesional, duracionLegible } from '../../nucleo/utilidades/secuencia-dia';
 import { hoyEnZona, rangoDelDia, sumarDias } from '../../nucleo/utilidades/fechas';
@@ -68,15 +69,21 @@ const DIAS_POR_PERIODO: Record<string, number> = { hoy: 1, '7': 7, '30': 30 };
 @Component({
   selector: 'app-panel',
   standalone: true,
-  imports: [FormsModule, RouterLink, ColaTrabajoComponent, TarjetasIndicadoresComponent],
+  imports: [
+    FormsModule,
+    RouterLink,
+    ColaTrabajoComponent,
+    IconoComponent,
+    TarjetasIndicadoresComponent,
+  ],
   template: `
     <div class="cabecera-pagina">
       <div>
-        <p class="ceja">GESTIÓN CLÍNICA</p>
+        <p class="ceja panel__ceja"><app-icono nombre="diente-conectado" [tamano]="16" /> GESTIÓN CLÍNICA</p>
         <h1>Panel de seguimiento</h1>
         <p class="panel__contexto">{{ hoyLegible() }} · horario de {{ zona() }}</p>
       </div>
-      <a class="boton boton--principal" routerLink="/agenda">Abrir agenda</a>
+      <a class="boton boton--principal" routerLink="/agenda"><app-icono nombre="calendario-check" [tamano]="18" /> Abrir agenda</a>
     </div>
 
     @if (error()) {
@@ -171,6 +178,47 @@ const DIAS_POR_PERIODO: Record<string, number> = { hoy: 1, '7': 7, '30': 30 };
           </div>
         </div>
 
+        <div class="filtros-dashboard" aria-label="Filtros de métricas">
+          <label class="campo campo--linea"><span class="campo__etiqueta">Desde</span>
+            <input class="campo__control" type="date" name="dashboard-desde" [ngModel]="fechaDesde()" (ngModelChange)="cambiarFechaDesde($event)" />
+          </label>
+          <label class="campo campo--linea"><span class="campo__etiqueta">Hasta</span>
+            <input class="campo__control" type="date" name="dashboard-hasta" [ngModel]="fechaHasta()" (ngModelChange)="cambiarFechaHasta($event)" />
+          </label>
+          <label class="campo campo--linea"><span class="campo__etiqueta">Sede</span>
+            <select class="campo__control" name="dashboard-sede" [ngModel]="sedeId()" (ngModelChange)="cambiarSede($event)">
+              <option value="">Todas las sedes</option>
+              @for (sede of sedes(); track sede.id) { <option [value]="sede.id">{{ sede.nombre }}</option> }
+            </select>
+          </label>
+          <label class="campo campo--linea"><span class="campo__etiqueta">Especialidad</span>
+            <select class="campo__control" name="dashboard-especialidad" [ngModel]="especialidadId()" (ngModelChange)="cambiarEspecialidad($event)">
+              <option value="">Todas las especialidades</option>
+              @for (especialidad of especialidades(); track especialidad.id) { <option [value]="especialidad.id">{{ especialidad.nombre }}</option> }
+            </select>
+          </label>
+          <label class="campo campo--linea"><span class="campo__etiqueta">Profesional</span>
+            <select class="campo__control" name="dashboard-profesional" [ngModel]="profesionalId()" (ngModelChange)="profesionalId.set($event); aplicarFiltros()">
+              <option value="">Todos los profesionales</option>
+              @for (profesional of profesionales(); track profesional.id) { <option [value]="profesional.id">{{ profesional.nombre }} {{ profesional.apellido }}</option> }
+            </select>
+          </label>
+          <label class="campo campo--linea"><span class="campo__etiqueta">Servicio</span>
+            <select class="campo__control" name="dashboard-servicio" [ngModel]="servicioId()" (ngModelChange)="servicioId.set($event); aplicarFiltros()">
+              <option value="">Todos los servicios</option>
+              @for (servicio of servicios(); track servicio.id) { <option [value]="servicio.id">{{ servicio.nombre }}</option> }
+            </select>
+          </label>
+          <label class="campo campo--linea"><span class="campo__etiqueta">Estado de cita</span>
+            <select class="campo__control" name="dashboard-estado" [ngModel]="estadoCita()" (ngModelChange)="estadoCita.set($event); aplicarFiltros()">
+              <option value="">Todos los estados</option>
+              @for (estado of estados; track estado.codigo) { <option [value]="estado.codigo">{{ estado.etiqueta }}</option> }
+            </select>
+          </label>
+          <button class="boton boton--pequeno filtros-dashboard__limpiar" type="button" (click)="limpiarFiltros()" [disabled]="!hayFiltros()">Limpiar filtros</button>
+        </div>
+        @if (errorFechas()) { <p class="aviso-error" role="alert">{{ errorFechas() }}</p> }
+
         @if (cargandoResumen()) {
           <p role="status">Consultando actividad…</p>
         } @else if (resumen()) {
@@ -200,6 +248,19 @@ const DIAS_POR_PERIODO: Record<string, number> = { hoy: 1, '7': 7, '30': 30 };
             </article>
 
             <article class="tarjeta">
+              <p class="cifra__titulo">Pacientes atendidos</p>
+              @if (r.pacientes_nuevos === null || r.pacientes_recurrentes === null) {
+                <p class="campo__ayuda">El filtro por estado impide comparar primeras atenciones completadas.</p>
+              } @else {
+                <dl class="pacientes-tipo">
+                  <div><dt>Nuevos</dt><dd class="numerico">{{ r.pacientes_nuevos }}</dd></div>
+                  <div><dt>Recurrentes</dt><dd class="numerico">{{ r.pacientes_recurrentes }}</dd></div>
+                </dl>
+                <p class="campo__ayuda">Clasificados por su primera atención completada dentro del filtro.</p>
+              }
+            </article>
+
+            <article class="tarjeta">
               <p class="cifra__titulo">Sala de espera</p>
               <strong class="cifra numerico">{{ r.espera.personas_en_espera }}</strong>
               <p class="campo__ayuda">paciente(s) esperando en el periodo</p>
@@ -217,6 +278,56 @@ const DIAS_POR_PERIODO: Record<string, number> = { hoy: 1, '7': 7, '30': 30 };
                 </p>
               }
             </article>
+
+            <article class="tarjeta">
+              <p class="cifra__titulo">Recuperación de turnos</p>
+              @if (r.recuperacion_turnos.turnos_liberados === null) {
+                <p class="campo__ayuda">Elige “Todos los estados” para consultar cancelaciones y recuperaciones.</p>
+              } @else {
+                <dl class="pacientes-tipo">
+                  <div><dt>Liberados</dt><dd class="numerico">{{ r.recuperacion_turnos.turnos_liberados }}</dd></div>
+                  <div><dt>Recuperados</dt><dd class="numerico">{{ r.recuperacion_turnos.turnos_recuperados }}</dd></div>
+                </dl>
+                <p class="campo__ayuda">
+                  Los liberados usan la fecha de cancelación; los recuperados, la fecha de aceptación.
+                  @if (r.recuperacion_turnos.promedio_minutos_para_recuperar === null) {
+                    Sin ofertas aceptadas en el periodo.
+                  } @else {
+                    Media hasta aceptar una oferta: {{ r.recuperacion_turnos.promedio_minutos_para_recuperar }} min.
+                  }
+                </p>
+              }
+            </article>
+
+            @if (r.adherencia; as a) {
+              <article class="tarjeta">
+                <p class="cifra__titulo">Registro de medicación</p>
+                <strong class="cifra numerico">
+                  @if (a.porcentaje_registro_positivo === null) {
+                    —
+                  } @else {
+                    {{ a.porcentaje_registro_positivo }}%
+                  }
+                </strong>
+                <dl class="pacientes-tipo">
+                  <div><dt>Tomas registradas</dt><dd class="numerico">{{ a.tomas_confirmadas }}</dd></div>
+                  <div><dt>Omitidas</dt><dd class="numerico">{{ a.tomas_omitidas }}</dd></div>
+                </dl>
+                <p class="campo__ayuda">
+                  @if (a.porcentaje_registro_positivo === null) {
+                    Sin tomas confirmadas u omitidas en este periodo.
+                  } @else {
+                    Porcentaje de tomas registradas como realizadas entre las registradas.
+                  }
+                  {{ a.seguimientos_pendientes }}
+                  {{ a.seguimientos_pendientes === 1 ? 'seguimiento pendiente actualmente' : 'seguimientos pendientes actualmente' }}.
+                </p>
+                <p class="campo__ayuda">Dato administrativo del registro, no evalúa el resultado del tratamiento.</p>
+                @if (sedeId() || servicioId()) {
+                  <p class="campo__ayuda">Con filtro de sede o servicio se consideran recetas vinculadas a una cita de ese contexto.</p>
+                }
+              </article>
+            }
 
             @if (r.pagos; as pagos) {
               <article class="tarjeta">
@@ -242,7 +353,7 @@ const DIAS_POR_PERIODO: Record<string, number> = { hoy: 1, '7': 7, '30': 30 };
                 <span class="insignia" [class]="'insignia--' + estado.clase">
                   {{ estado.etiqueta }}
                 </span>
-                <span class="estados__pista">
+                <span class="estados__pista" aria-hidden="true">
                   <span
                     class="estados__barra"
                     [class]="'estados__barra--' + estado.clase"
@@ -252,6 +363,57 @@ const DIAS_POR_PERIODO: Record<string, number> = { hoy: 1, '7': 7, '30': 30 };
                 <span class="numerico estados__valor">{{ estado.cantidad }}</span>
               </div>
             }
+          </div>
+
+          <div class="tendencias" role="group" aria-label="Distribución de citas en el periodo">
+            <section class="tarjeta tendencia" aria-labelledby="tendencia-diaria">
+              <h3 id="tendencia-diaria">Citas por día</h3>
+              @if (r.tendencia_diaria.length === 0) {
+                <p class="campo__ayuda">Sin citas en este periodo.</p>
+              } @else {
+                <ul class="tendencia__lista">
+                  @for (item of r.tendencia_diaria; track item.fecha) {
+                    <li>
+                      <span>{{ etiquetaFecha(item.fecha) }}</span>
+                      <span class="tendencia__pista" aria-hidden="true"><span [style.width.%]="(item.total / maximoTendencia(r.tendencia_diaria)) * 100"></span></span>
+                      <strong class="numerico">{{ item.total }}</strong>
+                    </li>
+                  }
+                </ul>
+              }
+            </section>
+            <section class="tarjeta tendencia" aria-labelledby="tendencia-semanal">
+              <h3 id="tendencia-semanal">Citas por día de la semana</h3>
+              @if (r.por_dia_semana.length === 0) {
+                <p class="campo__ayuda">Sin citas en este periodo.</p>
+              } @else {
+                <ul class="tendencia__lista">
+                  @for (item of r.por_dia_semana; track item.dia) {
+                    <li>
+                      <span>{{ etiquetaDia(item.dia) }}</span>
+                      <span class="tendencia__pista" aria-hidden="true"><span [style.width.%]="(item.total / maximoTendencia(r.por_dia_semana)) * 100"></span></span>
+                      <strong class="numerico">{{ item.total }}</strong>
+                    </li>
+                  }
+                </ul>
+              }
+            </section>
+            <section class="tarjeta tendencia" aria-labelledby="tendencia-horaria">
+              <h3 id="tendencia-horaria">Citas por hora local</h3>
+              @if (r.por_hora.length === 0) {
+                <p class="campo__ayuda">Sin citas en este periodo.</p>
+              } @else {
+                <ul class="tendencia__lista">
+                  @for (item of r.por_hora; track item.hora) {
+                    <li>
+                      <span>{{ etiquetaHora(item.hora) }}</span>
+                      <span class="tendencia__pista" aria-hidden="true"><span [style.width.%]="(item.total / maximoTendencia(r.por_hora)) * 100"></span></span>
+                      <strong class="numerico">{{ item.total }}</strong>
+                    </li>
+                  }
+                </ul>
+              }
+            </section>
           </div>
         }
       </section>
@@ -265,9 +427,12 @@ const DIAS_POR_PERIODO: Record<string, number> = { hoy: 1, '7': 7, '30': 30 };
     @if (sesion.tienePermiso(PERMISOS.metricasLeer)) {
       <section class="bloque seguimiento" aria-labelledby="seguimiento-inteligente">
         <div class="bloque__cabecera">
-          <h2 id="seguimiento-inteligente">Seguimiento inteligente</h2>
+        <h2 id="seguimiento-inteligente"><app-icono nombre="actividad-inteligente" [tamano]="18" /> Seguimiento inteligente</h2>
           <span class="bloque__linea" aria-hidden="true"></span>
           <span class="seguimiento__metodo">Señales basadas en actividad real</span>
+          <button class="boton boton--pequeno" type="button" (click)="generarResumenLocal()" [disabled]="analizandoLocal()">
+            {{ analizandoLocal() ? 'Preparando…' : 'Resumen operativo' }}
+          </button>
           @if (sesion.tienePermiso(PERMISOS.configuracionEscribir)) {
             <button class="boton boton--pequeno" type="button" (click)="generarAnalisisIA()" [disabled]="analizandoIA()">
               {{ analizandoIA() ? 'Analizando…' : 'Analizar con IA' }}
@@ -275,11 +440,34 @@ const DIAS_POR_PERIODO: Record<string, number> = { hoy: 1, '7': 7, '30': 30 };
           }
         </div>
         @if (errorIA()) { <p class="aviso-error" role="alert">{{ errorIA() }}</p> }
-        @if (analisisIA()) { <article class="tarjeta analisis-ia"><p class="ceja">ANÁLISIS OPERATIVO · {{ periodo() === 'hoy' ? 'HOY' : periodo() + ' DÍAS' }}</p><p>{{ analisisIA() }}</p></article> }
+        @if (!resumenLocal().length && !analisisIA()) {
+          <div class="seguimiento__vacio">
+            <img
+              src="/images/seguimiento-inteligente-clinica.svg"
+              alt=""
+              aria-hidden="true"
+              width="192"
+              height="144"
+              loading="lazy"
+            />
+            <div>
+              <p class="ceja"><app-icono nombre="revision-operativa" [tamano]="15" /> LECTURA DEL PERIODO</p>
+              <h3>El pulso operativo de la clínica, en contexto</h3>
+              <p>Prepara un resumen con actividad real o solicita un análisis con IA para este periodo.</p>
+            </div>
+          </div>
+        }
+        @if (resumenLocal().length) {
+          <article class="tarjeta analisis-ia" aria-live="polite">
+            <p class="ceja"><app-icono nombre="revision-operativa" [tamano]="15" /> RESUMEN OPERATIVO LOCAL · {{ etiquetaPeriodo() }}</p>
+            <ul>@for (hallazgo of resumenLocal(); track hallazgo) { <li>{{ hallazgo }}</li> }</ul>
+          </article>
+        }
+        @if (analisisIA()) { <article class="tarjeta analisis-ia"><p class="ceja"><app-icono nombre="analisis-ia" [tamano]="15" /> ANÁLISIS GENERATIVO · {{ etiquetaPeriodo() }}</p><p>{{ analisisIA() }}</p></article> }
         <div class="seguimiento__rejilla">
           @for (senal of senalesSeguimiento(); track senal.titulo) {
             <article class="tarjeta seguimiento__senal" [class.seguimiento__senal--alerta]="senal.alerta">
-              <span class="seguimiento__punto" aria-hidden="true"></span>
+              <span class="seguimiento__pictograma" aria-hidden="true"><app-icono [nombre]="senal.icono" [tamano]="18" /></span>
               <div><h3>{{ senal.titulo }}</h3><p>{{ senal.detalle }}</p></div>
             </article>
           }
@@ -288,6 +476,7 @@ const DIAS_POR_PERIODO: Record<string, number> = { hoy: 1, '7': 7, '30': 30 };
       </section>
     }
   `,
+  changeDetection: ChangeDetectionStrategy.Eager,
   styles: `
     .cabecera-pagina {
       position: relative;
@@ -297,10 +486,50 @@ const DIAS_POR_PERIODO: Record<string, number> = { hoy: 1, '7': 7, '30': 30 };
       border: 1px solid var(--borde);
       border-radius: var(--radio);
       background-image:
-        linear-gradient(90deg, rgb(255 255 255 / 96%) 0%, rgb(255 255 255 / 87%) 48%, rgb(255 255 255 / 22%) 100%),
-        url('/images/inicio-coordinacion.png');
-      background-position: center, center 58%;
+        linear-gradient(90deg, rgb(5 31 42 / 82%) 0%, rgb(5 31 42 / 67%) 43%, rgb(5 31 42 / 19%) 100%),
+        url('/images/panel-clinicai-dental-network-v1.jpg');
+      background-position: center, 50% 52%;
       background-size: cover;
+      isolation: isolate;
+      animation: panel-fondo-desplazamiento 28s ease-in-out infinite alternate;
+      color: #fff;
+    }
+
+    .cabecera-pagina::after {
+      content: '';
+      position: absolute;
+      z-index: 0;
+      inset: -55% 12% -55% 42%;
+      pointer-events: none;
+      background: radial-gradient(ellipse, rgb(95 209 196 / 25%), transparent 66%);
+      opacity: .8;
+      animation: panel-resplandor 14s ease-in-out infinite alternate;
+    }
+
+    .cabecera-pagina::before {
+      content: '';
+      position: absolute;
+      z-index: 0;
+      inset: 0;
+      pointer-events: none;
+      background: linear-gradient(112deg, transparent 36%, rgb(182 255 246 / 9%) 52%, transparent 68%);
+      background-size: 220% 100%;
+      animation: panel-brillo 18s ease-in-out infinite;
+    }
+
+    @keyframes panel-fondo-desplazamiento {
+      from { background-position: center, 48% 52%; }
+      to { background-position: center, 54% 52%; }
+    }
+
+    @keyframes panel-resplandor {
+      from { transform: translate3d(-2%, 0, 0) scale(.96); opacity: .55; }
+      to { transform: translate3d(2%, 1%, 0) scale(1.04); opacity: .9; }
+    }
+
+    @keyframes panel-brillo {
+      0%, 18% { background-position: 100% 0; }
+      72%, 100% { background-position: 0 0; }
     }
 
     .cabecera-pagina > div,
@@ -308,6 +537,8 @@ const DIAS_POR_PERIODO: Record<string, number> = { hoy: 1, '7': 7, '30': 30 };
       position: relative;
       z-index: 1;
     }
+
+    .cabecera-pagina h1 { color: #fff; }
 
     @media (max-width: 600px) {
       .cabecera-pagina {
@@ -317,10 +548,24 @@ const DIAS_POR_PERIODO: Record<string, number> = { hoy: 1, '7': 7, '30': 30 };
       }
     }
 
+    @media (prefers-reduced-motion: reduce) {
+      .cabecera-pagina,
+      .cabecera-pagina::after,
+      .cabecera-pagina::before,
+      .panel__ceja app-icono { animation: none; }
+    }
+
     .panel__contexto {
       margin: 2px 0 0;
-      color: var(--texto-suave);
+      color: #d1e7e7;
       font-size: 0.9rem;
+    }
+
+    .panel__ceja { display: flex; align-items: center; gap: var(--espacio-2); color: #aaf4e9; }
+    .panel__ceja app-icono { animation: panel-latido 5s ease-in-out infinite; }
+    @keyframes panel-latido {
+      0%, 100% { transform: scale(1); filter: drop-shadow(0 0 0 rgb(170 244 233 / 0%)); }
+      50% { transform: scale(1.08); filter: drop-shadow(0 0 7px rgb(170 244 233 / 60%)); }
     }
 
     .bloque {
@@ -328,16 +573,56 @@ const DIAS_POR_PERIODO: Record<string, number> = { hoy: 1, '7': 7, '30': 30 };
     }
 
     .seguimiento__metodo { color:var(--texto-tenue); font-size:.78rem; }
+    .seguimiento__vacio {
+      display:grid;
+      grid-template-columns:minmax(120px, 190px) minmax(0, 1fr);
+      align-items:center;
+      gap:var(--espacio-4);
+      margin:0 0 var(--espacio-3);
+      padding:var(--espacio-3) var(--espacio-4);
+      overflow:hidden;
+      border:1px solid var(--borde);
+      border-radius:var(--radio);
+      background:
+        radial-gradient(ellipse at 82% 24%, rgb(95 209 196 / 13%), transparent 42%),
+        linear-gradient(115deg, rgb(238 248 245 / 86%), rgb(255 255 255 / 96%) 66%);
+      background-size:190% 190%, 100% 100%;
+      animation:seguimiento-fondo 26s ease-in-out infinite alternate;
+    }
+    .seguimiento__vacio img {
+      display:block;
+      width:100%;
+      max-height:138px;
+      object-fit:contain;
+      animation:seguimiento-flotar 8s ease-in-out infinite;
+    }
+    .seguimiento__vacio .ceja { display:flex; align-items:center; gap:var(--espacio-1); color:var(--acento-fuerte); }
+    .seguimiento__vacio h3 { margin:0; font-size:1.04rem; }
+    .seguimiento__vacio p:last-child { max-width:62ch; margin:var(--espacio-1) 0 0; color:var(--texto-suave); }
+    @keyframes seguimiento-flotar { 0%,100% { transform:translateY(0); } 50% { transform:translateY(-4px); } }
+    @keyframes seguimiento-fondo { from { background-position:15% 0%, center; } to { background-position:85% 100%, center; } }
+    .tendencias { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,280px),1fr)); gap:var(--espacio-3); margin-top:var(--espacio-3); }
+    .tendencia h3 { margin:0 0 var(--espacio-3); font-size:.9rem; }
+    .tendencia .campo__ayuda { margin:0; }
+    .tendencia__lista { display:grid; gap:var(--espacio-2); list-style:none; margin:0; padding:0; }
+    .tendencia__lista li { display:grid; grid-template-columns:minmax(62px,auto) minmax(48px,1fr) 2ch; align-items:center; gap:var(--espacio-2); font-size:.82rem; }
+    .tendencia__pista { overflow:hidden; height:8px; border-radius:999px; background:var(--superficie-hundida); }
+    .tendencia__pista span { display:block; height:100%; min-width:3px; border-radius:inherit; background:var(--acento); }
+    .tendencia__lista strong { text-align:right; }
+    .seguimiento .bloque__cabecera h2 app-icono { color:var(--acento); animation:pulso-red-ia 4s ease-in-out infinite; }
+    @keyframes pulso-red-ia { 0%,100% { filter:drop-shadow(0 0 0 rgb(34 116 112 / 0%)); } 50% { filter:drop-shadow(0 0 5px rgb(34 116 112 / 35%)); } }
     .seguimiento__rejilla { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:var(--espacio-3); }
     .seguimiento__senal { display:flex; align-items:flex-start; gap:var(--espacio-3); padding:var(--espacio-4); }
     .seguimiento__senal h3 { margin:0; font-size:.98rem; }
     .seguimiento__senal p { margin:var(--espacio-1) 0 0; color:var(--texto-suave); font-size:.9rem; }
-    .seguimiento__punto { flex:0 0 10px; width:10px; height:10px; margin-top:5px; border-radius:50%; background:var(--exito); }
-    .seguimiento__senal--alerta .seguimiento__punto { background:var(--aviso); }
+    .seguimiento__pictograma { display:grid; flex:0 0 34px; width:34px; height:34px; place-items:center; border-radius:11px; color:var(--acento-fuerte); background:var(--acento-suave); }
+    .seguimiento__senal--alerta .seguimiento__pictograma { color:var(--aviso); background:var(--aviso-fondo); }
     .seguimiento__nota { margin:var(--espacio-2) 0 0; color:var(--texto-tenue); font-size:.8rem; }
     .analisis-ia { margin:0 0 var(--espacio-3); padding:var(--espacio-4); border-color:var(--acento); white-space:pre-line; }
-    .analisis-ia p:last-child { margin-bottom:0; }
+    .analisis-ia p:last-child, .analisis-ia ul:last-child { margin-bottom:0; }
     @media (max-width:700px) { .seguimiento__rejilla { grid-template-columns:1fr; } }
+    @media (max-width:540px) { .seguimiento__vacio { grid-template-columns:100px minmax(0,1fr); gap:var(--espacio-2); padding:var(--espacio-2); } .seguimiento__vacio h3 { font-size:.94rem; } .seguimiento__vacio p:last-child { font-size:.84rem; } }
+    @media (prefers-reduced-motion: reduce) { .seguimiento__vacio, .seguimiento__vacio img, .seguimiento .bloque__cabecera h2 app-icono { animation:none; } }
 
     .bloque__cabecera {
       display: flex;
@@ -346,6 +631,9 @@ const DIAS_POR_PERIODO: Record<string, number> = { hoy: 1, '7': 7, '30': 30 };
       margin-bottom: var(--espacio-3);
 
       h2 {
+        display: flex;
+        align-items: center;
+        gap: var(--espacio-2);
         margin: 0;
         font-size: 0.85rem;
         font-weight: 700;
@@ -393,6 +681,27 @@ const DIAS_POR_PERIODO: Record<string, number> = { hoy: 1, '7': 7, '30': 30 };
       background: var(--acento);
       color: var(--acento-texto);
     }
+
+    .filtros-dashboard {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(min(100%, 190px), 1fr));
+      align-items: end;
+      gap: var(--espacio-3);
+      padding: var(--espacio-4);
+      margin: 0 0 var(--espacio-4);
+      border: 1px solid var(--borde);
+      border-radius: var(--radio);
+      background: var(--superficie-elevada);
+    }
+
+    .filtros-dashboard .campo { min-width: 0; margin: 0; }
+    .filtros-dashboard .campo__control { min-height: 42px; }
+    .filtros-dashboard__limpiar { justify-self: start; min-height: 42px; }
+
+    .pacientes-tipo { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--espacio-3); margin: 0; }
+    .pacientes-tipo div { display: grid; gap: var(--espacio-1); }
+    .pacientes-tipo dt { color: var(--texto-suave); font-size: .85rem; }
+    .pacientes-tipo dd { margin: 0; font-size: 1.6rem; font-weight: 750; }
 
     /* --- Carga por profesional --- */
     .carga {
@@ -613,23 +922,57 @@ export class PanelComponent {
     { clave: '7', etiqueta: '7 días' },
     { clave: '30', etiqueta: '30 días' },
   ] as const;
+  protected readonly estados = ESTADOS;
 
   protected readonly periodo = signal<string>('hoy');
-  protected readonly zona = signal('America/Guayaquil');
+  protected readonly sedeId = signal('');
+  protected readonly sedes = signal<readonly Sede[]>([]);
+  private readonly zonaClinica = signal('America/Guayaquil');
+  protected readonly zona = computed(() =>
+    this.sedes().find((sede) => sede.id === this.sedeId())?.zona_horaria ?? this.zonaClinica(),
+  );
+  protected readonly fechaDesde = signal(hoyEnZona('America/Guayaquil'));
+  protected readonly fechaHasta = signal(hoyEnZona('America/Guayaquil'));
+  protected readonly especialidadId = signal('');
+  protected readonly profesionalId = signal('');
+  protected readonly servicioId = signal('');
+  protected readonly estadoCita = signal('');
 
   protected readonly resumen = signal<ResumenPanel | null>(null);
   /** El mismo resumen del periodo anterior, solo para la variación. */
   protected readonly anterior = signal<ResumenPanel | null>(null);
   protected readonly citasHoy = signal<readonly Cita[]>([]);
   protected readonly ofertasSinAvisar = signal<readonly EntradaEspera[]>([]);
+  protected readonly especialidades = signal<readonly Especialidad[]>([]);
+  protected readonly servicios = signal<readonly Servicio[]>([]);
   protected readonly profesionales = signal<readonly Profesional[]>([]);
+  protected readonly hayFiltros = computed(() => Boolean(
+    this.periodo() !== 'hoy' || this.sedeId() || this.especialidadId() || this.profesionalId() || this.servicioId() || this.estadoCita(),
+  ));
+  protected readonly errorFechas = computed(() => {
+    const inicio = this.fechaDesde();
+    const fin = this.fechaHasta();
+    const esFecha = (valor: string) => {
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(valor)) return false;
+      const instante = Date.parse(`${valor}T00:00:00Z`);
+      return Number.isFinite(instante) && new Date(instante).toISOString().slice(0, 10) === valor;
+    };
+    if (!esFecha(inicio) || !esFecha(fin)) return 'Indica una fecha de inicio y una fecha de fin válidas.';
+    if (inicio > fin) return 'La fecha de inicio debe ser anterior o igual a la fecha de fin.';
+    const desde = Date.parse(rangoDelDia(inicio, this.zona()).desde);
+    const hasta = Date.parse(rangoDelDia(fin, this.zona()).hasta);
+    if (hasta - desde > 366 * 24 * 60 * 60 * 1000) return 'El periodo no puede superar 366 días.';
+    return '';
+  });
 
   protected readonly cargandoResumen = signal(false);
   protected readonly cargandoHoy = signal(false);
   protected readonly error = signal('');
   protected readonly analisisIA = signal('');
+  protected readonly resumenLocal = signal<readonly string[]>([]);
   protected readonly errorIA = signal('');
   protected readonly analizandoIA = signal(false);
+  protected readonly analizandoLocal = signal(false);
 
   protected readonly hoyLegible = computed(() =>
     new Intl.DateTimeFormat('es-EC', {
@@ -672,6 +1015,9 @@ export class PanelComponent {
    */
   protected readonly inasistencia = computed(() => {
     const actual = this.resumen();
+    if (this.estadoCita()) {
+      return { valor: '—', delta: null as string | null, sube: false, lectura: 'La tasa no se calcula mientras se filtra por un único estado.' };
+    }
     if (!actual || actual.total_citas === 0) {
       return { valor: '—', delta: null as string | null, sube: false, lectura: 'Sin citas en el periodo.' };
     }
@@ -698,6 +1044,31 @@ export class PanelComponent {
     };
   });
 
+  protected maximoTendencia(items: readonly { total: number }[]): number {
+    return Math.max(1, ...items.map((item) => item.total));
+  }
+
+  protected etiquetaDia(dia: number): string {
+    return ['', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'][dia] ?? '—';
+  }
+
+  /** La API devuelve una fecha de calendario local, no un instante UTC. */
+  protected etiquetaFecha(fecha: string): string {
+    const mediodiaUtc = new Date(`${fecha}T12:00:00Z`);
+    if (Number.isNaN(mediodiaUtc.getTime())) {
+      return fecha;
+    }
+    return new Intl.DateTimeFormat('es-EC', {
+      weekday: 'short',
+      day: 'numeric',
+      timeZone: 'UTC',
+    }).format(mediodiaUtc);
+  }
+
+  protected etiquetaHora(hora: number): string {
+    return `${String(hora).padStart(2, '0')}:00`;
+  }
+
   /** Estados con al menos una cita, escalados contra el mayor. */
   protected readonly estadosConDatos = computed(() => {
     const datos = this.resumen();
@@ -718,19 +1089,19 @@ export class PanelComponent {
   protected readonly senalesSeguimiento = computed(() => {
     const resumen = this.resumen();
     const abiertas = this.pendientes().length;
-    const inasistencia = resumen?.total_citas
+    const inasistencia = resumen?.total_citas && !this.estadoCita()
       ? ((resumen.citas['NO_SHOW'] ?? 0) / resumen.total_citas) * 100
       : null;
-    const senales: { titulo: string; detalle: string; alerta: boolean }[] = [];
+    const senales: { titulo: string; detalle: string; alerta: boolean; icono: NombreIcono }[] = [];
     senales.push(abiertas > 0
-      ? { titulo: `${abiertas} tarea(s) requieren seguimiento`, detalle: 'Hay citas por confirmar, turnos que vencen u ofertas de espera sin comunicar en la jornada.', alerta: true }
-      : { titulo: 'La cola de hoy está al día', detalle: 'No hay tareas operativas urgentes en la agenda consultada.', alerta: false });
+      ? { titulo: `${abiertas} tarea(s) requieren seguimiento`, detalle: 'Hay citas por confirmar, turnos que vencen u ofertas de espera sin comunicar en la jornada.', alerta: true, icono: 'agenda' }
+      : { titulo: 'La cola de hoy está al día', detalle: 'No hay tareas operativas urgentes en la agenda consultada.', alerta: false, icono: 'calendario-check' });
     if (inasistencia !== null) {
       senales.push(inasistencia >= 10
-        ? { titulo: 'Inasistencia sobre 10 %', detalle: `La tasa del periodo es ${inasistencia.toFixed(1)} %. Revise confirmaciones y los periodos comparables.`, alerta: true }
-        : { titulo: 'Inasistencia bajo control', detalle: `La tasa del periodo es ${inasistencia.toFixed(1)} % sobre ${resumen!.total_citas} citas.`, alerta: false });
-    } else {
-      senales.push({ titulo: 'Aún no hay base para comparar', detalle: 'El periodo no contiene citas para calcular indicadores de asistencia.', alerta: false });
+        ? { titulo: 'Inasistencia sobre 10 %', detalle: `La tasa del periodo es ${inasistencia.toFixed(1)} %. Revise confirmaciones y los periodos comparables.`, alerta: true, icono: 'pulso' }
+        : { titulo: 'Inasistencia bajo control', detalle: `La tasa del periodo es ${inasistencia.toFixed(1)} % sobre ${resumen!.total_citas} citas.`, alerta: false, icono: 'pulso' });
+    } else if (!this.estadoCita()) {
+      senales.push({ titulo: 'Aún no hay base para comparar', detalle: 'El periodo no contiene citas para calcular indicadores de asistencia.', alerta: false, icono: 'metricas' });
     }
     const esperando = resumen?.espera;
     if (esperando && esperando.personas_en_espera > 0) {
@@ -740,11 +1111,12 @@ export class PanelComponent {
           ? `${esperando.espera_mayor_15_minutos} superan 15 minutos; revise la atención pendiente.`
           : 'La espera registrada todavía no supera 15 minutos.',
         alerta: esperando.espera_mayor_15_minutos > 0,
+        icono: 'sala-clinica',
       });
     }
     const pendientesPago = Object.entries(resumen?.pagos ?? {}).find(([estado]) => ['PENDING', 'UNDER_REVIEW', 'PROOF_RECEIVED'].includes(estado));
     if (pendientesPago) {
-      senales.push({ titulo: 'Cobros en seguimiento', detalle: `El estado ${pendientesPago[0]} suma ${pendientesPago[1]}.`, alerta: true });
+      senales.push({ titulo: 'Cobros en seguimiento', detalle: `El estado ${pendientesPago[0]} suma ${pendientesPago[1]}.`, alerta: true, icono: 'pagos' });
     }
     return senales;
   });
@@ -786,32 +1158,164 @@ export class PanelComponent {
       next: (datos) => this.indicadores.set(datos),
       error: () => this.indicadores.set(null),
     });
-    this.catalogo.profesionales().subscribe({
-      next: (lista) => this.profesionales.set(lista),
-      error: () => this.profesionales.set([]),
+    this.catalogo.clinica().subscribe({
+      next: (clinica) => {
+        const anterior = this.zona();
+        this.zonaClinica.set(clinica.zona_horaria);
+        if (anterior !== this.zona() && this.periodo() !== 'personalizado') this.cambiarPeriodo(this.periodo());
+      },
+      error: () => undefined,
     });
+    this.catalogo.sedes().subscribe({ next: (lista) => this.sedes.set(lista), error: () => this.sedes.set([]) });
+    this.catalogo.especialidades().subscribe({ next: (lista) => this.especialidades.set(lista), error: () => this.especialidades.set([]) });
+    this.cargarServicios();
+    this.cargarProfesionales();
     this.cargar();
   }
 
   protected cambiarPeriodo(clave: string): void {
     this.periodo.set(clave);
+    const fin = hoyEnZona(this.zona());
+    const dias = DIAS_POR_PERIODO[clave] ?? 1;
+    this.fechaHasta.set(fin);
+    this.fechaDesde.set(sumarDias(fin, -(dias - 1)));
     this.analisisIA.set('');
+    this.resumenLocal.set([]);
     this.cargarResumen();
   }
 
-  protected generarAnalisisIA(): void {
-    const dias = DIAS_POR_PERIODO[this.periodo()] ?? 1;
+  protected cambiarSede(id: string): void {
+    this.sedeId.set(id);
+    this.profesionalId.set('');
+    if (this.periodo() !== 'personalizado') {
+      const fin = hoyEnZona(this.zona());
+      const dias = DIAS_POR_PERIODO[this.periodo()] ?? 1;
+      this.fechaHasta.set(fin);
+      this.fechaDesde.set(sumarDias(fin, -(dias - 1)));
+    }
+    this.cargarProfesionales();
+    this.aplicarFiltros();
+  }
+
+  protected cambiarEspecialidad(id: string): void {
+    this.especialidadId.set(id);
+    this.servicioId.set('');
+    this.profesionalId.set('');
+    this.cargarServicios();
+    this.cargarProfesionales();
+    this.aplicarFiltros();
+  }
+
+  protected limpiarFiltros(): void {
+    this.periodo.set('hoy');
+    this.sedeId.set('');
     const hoy = hoyEnZona(this.zona());
-    const inicio = sumarDias(hoy, -(dias - 1));
-    const desde = rangoDelDia(inicio, this.zona()).desde;
-    const hasta = rangoDelDia(hoy, this.zona()).hasta;
+    this.fechaDesde.set(hoy);
+    this.fechaHasta.set(hoy);
+    this.especialidadId.set('');
+    this.profesionalId.set('');
+    this.servicioId.set('');
+    this.estadoCita.set('');
+    this.cargarServicios();
+    this.cargarProfesionales();
+    this.aplicarFiltros();
+  }
+
+  protected aplicarFiltros(): void {
+    this.analisisIA.set('');
+    this.resumenLocal.set([]);
+    if (this.errorFechas()) {
+      this.resumen.set(null);
+      this.anterior.set(null);
+      this.cargandoResumen.set(false);
+      return;
+    }
+    this.cargarResumen();
+  }
+
+  protected cambiarFechaDesde(fecha: string): void {
+    this.fechaDesde.set(fecha);
+    this.periodo.set('personalizado');
+    this.aplicarFiltros();
+  }
+
+  protected cambiarFechaHasta(fecha: string): void {
+    this.fechaHasta.set(fecha);
+    this.periodo.set('personalizado');
+    this.aplicarFiltros();
+  }
+
+  protected etiquetaPeriodo(): string {
+    if (this.periodo() === 'hoy') return 'HOY';
+    if (this.periodo() !== 'personalizado') return `${this.periodo()} DÍAS`;
+    const formato = (fecha: string) => {
+      const instante = Date.parse(`${fecha}T12:00:00Z`);
+      if (!Number.isFinite(instante) || new Date(instante).toISOString().slice(0, 10) !== fecha) return '—';
+      return new Intl.DateTimeFormat('es-EC', {
+        timeZone: 'UTC', day: '2-digit', month: 'short', year: 'numeric',
+      }).format(new Date(instante));
+    };
+    return `${formato(this.fechaDesde())} – ${formato(this.fechaHasta())}`;
+  }
+
+  private cargarServicios(): void {
+    this.catalogo.servicios(this.especialidadId() || undefined).subscribe({
+      next: (lista) => this.servicios.set(lista),
+      error: () => this.servicios.set([]),
+    });
+  }
+
+  private cargarProfesionales(): void {
+    this.catalogo.profesionales({
+      especialidadId: this.especialidadId() || undefined,
+      sedeId: this.sedeId() || undefined,
+    }).subscribe({
+      next: (lista) => this.profesionales.set(lista),
+      error: () => this.profesionales.set([]),
+    });
+  }
+
+  private parametrosFiltros(): Record<string, string> {
+    const parametros: Record<string, string> = {};
+    if (this.sedeId()) parametros['sede_id'] = this.sedeId();
+    if (this.especialidadId()) parametros['especialidad_id'] = this.especialidadId();
+    if (this.profesionalId()) parametros['profesional_id'] = this.profesionalId();
+    if (this.servicioId()) parametros['servicio_id'] = this.servicioId();
+    if (this.estadoCita()) parametros['estado'] = this.estadoCita();
+    return parametros;
+  }
+
+  protected generarResumenLocal(): void {
+    const parametros = this.rangoAnalisis();
+    this.analizandoLocal.set(true);
+    this.errorIA.set('');
+    this.resumenLocal.set([]);
+    this.operaciones.analizar<{ hallazgos: string[] }>('/dashboard/analisis-local', parametros).subscribe({
+      next: (resultado) => { this.resumenLocal.set(resultado.hallazgos); this.analizandoLocal.set(false); },
+      error: (fallo: unknown) => {
+        this.errorIA.set(fallo instanceof FalloApi ? fallo.message : 'No se pudo preparar el resumen operativo.');
+        this.analizandoLocal.set(false);
+      },
+    });
+  }
+
+  protected generarAnalisisIA(): void {
+    const parametros = this.rangoAnalisis();
     this.analizandoIA.set(true);
     this.errorIA.set('');
     this.analisisIA.set('');
-    this.operaciones.analizar<{ analisis: string }>('/dashboard/analisis-ia', { desde, hasta }).subscribe({
+    this.operaciones.analizar<{ analisis: string }>('/dashboard/analisis-ia', parametros).subscribe({
       next: (resultado) => { this.analisisIA.set(resultado.analisis); this.analizandoIA.set(false); },
       error: (fallo: unknown) => { this.errorIA.set(fallo instanceof FalloApi ? fallo.message : 'No se pudo generar el análisis.'); this.analizandoIA.set(false); },
     });
+  }
+
+  private rangoAnalisis(): Record<string, string> {
+    return {
+      desde: rangoDelDia(this.fechaDesde(), this.zona()).desde,
+      hasta: rangoDelDia(this.fechaHasta(), this.zona()).hasta,
+      ...this.parametrosFiltros(),
+    };
   }
 
   protected irALaAgenda(): void {
@@ -832,19 +1336,23 @@ export class PanelComponent {
     this.cargandoResumen.set(true);
     this.error.set('');
 
-    const dias = DIAS_POR_PERIODO[this.periodo()] ?? 1;
-    const hoy = hoyEnZona(this.zona());
-    const inicio = sumarDias(hoy, -(dias - 1));
+    const inicio = this.fechaDesde();
+    const fin = this.fechaHasta();
+    const dias = Math.round((Date.parse(`${fin}T00:00:00Z`) - Date.parse(`${inicio}T00:00:00Z`)) / (24 * 60 * 60 * 1000)) + 1;
     const previoFin = sumarDias(inicio, -1);
     const previoInicio = sumarDias(previoFin, -(dias - 1));
 
     const actual = rangoDelDia(inicio, this.zona());
-    const finActual = rangoDelDia(hoy, this.zona());
+    const finActual = rangoDelDia(fin, this.zona());
     const previo = rangoDelDia(previoInicio, this.zona());
     const finPrevio = rangoDelDia(previoFin, this.zona());
 
     this.operaciones
-      .leer<ResumenPanel>('/dashboard/', { desde: actual.desde, hasta: finActual.hasta })
+      .leer<ResumenPanel>('/dashboard/', {
+        desde: actual.desde,
+        hasta: finActual.hasta,
+        ...this.parametrosFiltros(),
+      })
       .subscribe({
         next: (datos) => {
           this.resumen.set(datos);
@@ -852,12 +1360,18 @@ export class PanelComponent {
         },
         error: (fallo: FalloApi) => {
           this.error.set(fallo.message);
+          this.resumen.set(null);
+          this.anterior.set(null);
           this.cargandoResumen.set(false);
         },
       });
 
     this.operaciones
-      .leer<ResumenPanel>('/dashboard/', { desde: previo.desde, hasta: finPrevio.hasta })
+      .leer<ResumenPanel>('/dashboard/', {
+        desde: previo.desde,
+        hasta: finPrevio.hasta,
+        ...this.parametrosFiltros(),
+      })
       .subscribe({
         // Sin el periodo anterior la pantalla sigue sirviendo: se muestra la
         // tasa sin variación en lugar de un error.

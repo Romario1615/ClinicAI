@@ -1,4 +1,4 @@
-import { Component, inject, input, OnInit, output, signal } from '@angular/core';
+import { Component, inject, input, OnInit, output, signal, ChangeDetectionStrategy } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ApiService, FalloApi } from '../../nucleo/servicios/api.service';
 import type { Cita, Consultorio, TurnoDisponible } from '../../nucleo/modelos/dominio';
@@ -55,6 +55,7 @@ import { formatearHora, rangoDelDia } from '../../nucleo/utilidades/fechas';
       </form>
     </dialog>
   `,
+  changeDetection: ChangeDetectionStrategy.Eager,
   styles: `
     :host { position: fixed; inset: 0; z-index: 50; display: grid; place-items: center; padding: 1rem; background: rgb(22 32 46 / 45%); }
     dialog { position: static; border: 0; padding: 0; max-width: 520px; width: 100%; max-height: 90vh; overflow: auto; background: transparent; }

@@ -5,7 +5,7 @@
  * confirmar, pagos por validar). Con `enlace` la tarjeta lleva al sitio donde
  * se resuelve: el número no es decoración, es la entrada a la tarea.
  */
-import { Component, input } from '@angular/core';
+import { Component, input, ChangeDetectionStrategy } from '@angular/core';
 import { NgTemplateOutlet } from '@angular/common';
 import { RouterLink } from '@angular/router';
 
@@ -51,6 +51,7 @@ export interface Indicador {
       }
     </ng-template>
   `,
+  changeDetection: ChangeDetectionStrategy.Eager,
   styles: `
     :host { display: block; }
     .indicadores {

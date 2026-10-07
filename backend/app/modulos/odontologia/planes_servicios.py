@@ -60,16 +60,16 @@ class ServicioPlanesTratamiento:
         await self._guardia.acceso_clinico(
             principal, paciente_id, "plan_tratamiento.leer", self._reloj.ahora()
         )
+        consulta_planes = select(PlanTratamiento).where(
+            PlanTratamiento.paciente_id == paciente_id,
+            PlanTratamiento.clinica_id == principal.clinica_id,
+        )
+        if not principal.tiene_permiso("historia_clinica.leer_sensible"):
+            consulta_planes = consulta_planes.where(PlanTratamiento.nivel_sensibilidad != "N3")
         planes = list(
             (
                 await self._sesion.execute(
-                    select(PlanTratamiento)
-                    .where(
-                        PlanTratamiento.paciente_id == paciente_id,
-                        PlanTratamiento.clinica_id == principal.clinica_id,
-                    )
-                    .order_by(PlanTratamiento.creado_en.desc())
-                    .limit(100)
+                    consulta_planes.order_by(PlanTratamiento.creado_en.desc()).limit(100)
                 )
             )
             .scalars()
@@ -104,6 +104,10 @@ class ServicioPlanesTratamiento:
         profesional_id = principal.profesional_id
         if profesional_id is None:
             raise PermisoDenegado("Solo una cuenta profesional puede crear un plan clínico.")
+        if datos.nivel_sensibilidad == "N3" and not principal.tiene_permiso(
+            "historia_clinica.leer_sensible"
+        ):
+            raise PermisoDenegado("Se requiere permiso clínico sensible para crear un plan N3.")
 
         servicio_ids = {item.servicio_id for item in datos.procedimientos if item.servicio_id}
         if servicio_ids:
@@ -130,6 +134,7 @@ class ServicioPlanesTratamiento:
             estado=EstadoPlan.BORRADOR.value,
             moneda=datos.moneda,
             observaciones=datos.observaciones,
+            nivel_sensibilidad=datos.nivel_sensibilidad,
             creado_por=principal.actor_id,
         )
         self._sesion.add(plan)
@@ -385,6 +390,8 @@ class ServicioPlanesTratamiento:
         el procedimiento se completa igual: un aviso nunca bloquea un acto
         clinico. Una sola vez por fase (clave de deduplicacion).
         """
+        if plan.nivel_sensibilidad == "N3":
+            return False
         pendiente_en_fase = any(
             item.fase == fase and item.estado == EstadoProcedimiento.PENDIENTE.value
             for item in procedimientos
@@ -524,6 +531,10 @@ class ServicioPlanesTratamiento:
         await self._guardia.acceso_clinico(
             principal, plan.paciente_id, permiso, self._reloj.ahora()
         )
+        if plan.nivel_sensibilidad == "N3" and not principal.tiene_permiso(
+            "historia_clinica.leer_sensible"
+        ):
+            raise RecursoNoEncontrado("El plan de tratamiento solicitado no existe.")
         return plan
 
     async def _procedimientos(self, plan_id: uuid.UUID) -> list[ProcedimientoPlan]:

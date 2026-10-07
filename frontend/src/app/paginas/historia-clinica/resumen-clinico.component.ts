@@ -9,17 +9,20 @@
  * que corre en el servidor de la clínica. No se guarda y lleva su aviso: es
  * una ayuda de lectura, no una conclusión clínica.
  */
-import { Component, effect, inject, input, signal, untracked } from '@angular/core';
+import { Component, effect, inject, input, signal, untracked, ChangeDetectionStrategy } from '@angular/core';
 import { DatePipe, LowerCasePipe } from '@angular/common';
+import { FormsModule } from '@angular/forms';
 
 import { OperacionesService } from '../../nucleo/servicios/operaciones.service';
 import { FalloApi } from '../../nucleo/servicios/api.service';
+import { SesionService } from '../../nucleo/servicios/sesion.service';
+import { AnamnesisCapturaComponent } from './anamnesis-captura.component';
 
 export interface ResumenClinico {
   readonly edad: number | null;
   readonly sexo: string | null;
-  readonly alergias: readonly { sustancia: string; reaccion: string | null; severidad: string }[];
-  readonly antecedentes: readonly { categoria: string; descripcion: string }[];
+  readonly alergias: readonly { id: string; sustancia: string; reaccion: string | null; severidad: string }[];
+  readonly antecedentes: readonly { categoria: string; descripcion: string; nivel_sensibilidad: string }[];
   readonly medicacion_activa: readonly {
     nombre: string;
     concentracion: string | null;
@@ -35,11 +38,12 @@ export interface ResumenClinico {
   readonly ultimas_notas: readonly {
     fecha: string;
     tipo: string;
+    nivel_sensibilidad: 'N2' | 'N3';
     motivo_consulta: string | null;
     analisis: string | null;
     plan: string | null;
   }[];
-  readonly planes: readonly { titulo: string; estado: string; procedimientos_pendientes: number }[];
+  readonly planes: readonly { titulo: string; estado: string; procedimientos_pendientes: number; nivel_sensibilidad: 'N2' | 'N3' }[];
   readonly ultima_atencion: string | null;
   readonly proxima_cita: string | null;
   readonly redaccion_disponible: boolean;
@@ -48,7 +52,7 @@ export interface ResumenClinico {
 @Component({
   selector: 'app-resumen-clinico',
   standalone: true,
-  imports: [DatePipe, LowerCasePipe],
+  imports: [DatePipe, LowerCasePipe, FormsModule, AnamnesisCapturaComponent],
   template: `
     <section class="resumen" aria-labelledby="titulo-resumen">
       <header class="resumen__cabecera">
@@ -76,13 +80,49 @@ export interface ResumenClinico {
           </div>
         }
         @if (errorRedaccion()) { <p class="resumen__aviso" role="alert">{{ errorRedaccion() }}</p> }
+        @if (errorAnamnesis()) { <p class="resumen__aviso" role="alert">{{ errorAnamnesis() }}</p> }
+        @if (avisoAnamnesis()) { <p class="resumen__aviso" role="status">{{ avisoAnamnesis() }}</p> }
 
         <div class="rejilla">
           <div class="bloque" [class.bloque--alerta]="hayAlergiaGrave()">
-            <h4>Alergias</h4>
-            @for (a of d.alergias; track a.sustancia) {
-              <p><strong>{{ a.sustancia }}</strong> · {{ severidad(a.severidad) }}@if (a.reaccion) { · {{ a.reaccion }} }</p>
+            <div class="bloque__cabecera"><h4>Alergias</h4>
+              @if (puedeEditarAnamnesis()) { <button type="button" class="boton boton--pequeno" (click)="formularioAlergia.set(!formularioAlergia())">{{ formularioAlergia() ? 'Cerrar' : 'Añadir alergia' }}</button> }
+            </div>
+            @for (a of d.alergias; track a.id) {
+              <div class="registro-clinico"><p><strong>{{ a.sustancia }}</strong> · {{ severidad(a.severidad) }}@if (a.reaccion) { · {{ a.reaccion }} }</p>
+                @if (puedeEditarAnamnesis() && alergiaDesactivando() !== a.id) { <button class="boton boton--texto" type="button" (click)="abrirDesactivacion(a.id)">Desactivar</button> }
+                @if (alergiaDesactivando() === a.id) {
+                  <form class="formulario-anamnesis" (ngSubmit)="desactivarAlergia(a.id)">
+                    <label class="campo"><span class="campo__etiqueta">Motivo para desactivar</span><input class="campo__control" name="motivo-desactivacion" [(ngModel)]="motivoDesactivacion" minlength="5" maxlength="500" required /></label>
+                    <div class="acciones-anamnesis"><button class="boton boton--pequeno" type="button" (click)="alergiaDesactivando.set(null)">Cancelar</button><button class="boton boton--pequeno" type="submit" [disabled]="guardandoAnamnesis() || motivoDesactivacion.trim().length < 5">Confirmar desactivación</button></div>
+                  </form>
+                }
+              </div>
             } @empty { <p class="resumen__nada">Sin alergias registradas.</p> }
+            @if (formularioAlergia()) {
+              <form class="formulario-anamnesis" (ngSubmit)="registrarAlergia()">
+                <label class="campo"><span class="campo__etiqueta">Sustancia</span><input class="campo__control" name="sustancia" [(ngModel)]="nuevaSustancia" minlength="2" maxlength="200" required /></label>
+                <label class="campo"><span class="campo__etiqueta">Reacción observada</span><input class="campo__control" name="reaccion" [(ngModel)]="nuevaReaccion" maxlength="200" /></label>
+                <label class="campo"><span class="campo__etiqueta">Severidad registrada</span><select class="campo__control" name="severidad" [(ngModel)]="nuevaSeveridad"><option value="LEVE">Leve</option><option value="MODERADA">Moderada</option><option value="GRAVE">Grave</option><option value="ANAFILAXIA">Anafilaxia</option></select></label>
+                <button class="boton boton--principal boton--pequeno" type="submit" [disabled]="guardandoAnamnesis() || nuevaSustancia.trim().length < 2">Guardar alergia registrada</button>
+              </form>
+            }
+          </div>
+
+          <div class="bloque">
+            <div class="bloque__cabecera"><h4>Antecedentes</h4>
+              @if (puedeEditarAnamnesis()) { <button type="button" class="boton boton--pequeno" (click)="formularioAntecedente.set(!formularioAntecedente())">{{ formularioAntecedente() ? 'Cerrar' : 'Añadir antecedente' }}</button> }
+            </div>
+            @for (a of d.antecedentes; track a.descripcion) { <p><span class="tenue">{{ categoriaAntecedente(a.categoria) }}:</span> {{ a.descripcion }} @if (a.nivel_sensibilidad === 'N3') { <span class="insignia-sensible">Acceso sensible · N3</span> }</p> }
+            @empty { <p class="resumen__nada">Sin antecedentes registrados.</p> }
+            @if (formularioAntecedente()) {
+              <form class="formulario-anamnesis" (ngSubmit)="registrarAntecedente()">
+                <label class="campo"><span class="campo__etiqueta">Categoría</span><select class="campo__control" name="categoria" [(ngModel)]="nuevaCategoria"><option value="PERSONAL">Personal</option><option value="FAMILIAR">Familiar</option><option value="QUIRURGICO">Quirúrgico</option><option value="FARMACOLOGICO">Farmacológico</option><option value="HABITOS">Hábitos</option><option value="OTRO">Otro</option></select></label>
+                <label class="campo"><span class="campo__etiqueta">Descripción</span><textarea class="campo__control" name="descripcion-antecedente" [(ngModel)]="nuevaDescripcion" minlength="3" maxlength="4000" required></textarea></label>
+                <label class="campo"><span class="campo__etiqueta">Sensibilidad</span><select class="campo__control" name="sensibilidad-antecedente" [(ngModel)]="nuevoNivelSensibilidad"><option value="N2">Clínica · N2</option>@if (puedeLeerSensible()) { <option value="N3">Clínica sensible · N3</option> }</select><span class="campo__ayuda">Los antecedentes N3 solo aparecen con permiso sensible y generan auditoría reforzada.</span></label>
+                <button class="boton boton--principal boton--pequeno" type="submit" [disabled]="guardandoAnamnesis() || nuevaDescripcion.trim().length < 3">Guardar antecedente</button>
+              </form>
+            }
           </div>
 
           <div class="bloque">
@@ -116,21 +156,27 @@ export interface ResumenClinico {
           <div class="bloque">
             <h4>Tratamiento y citas</h4>
             @for (p of d.planes; track p.titulo) {
-              <p><strong>{{ p.titulo }}</strong> · {{ estadoPlan(p.estado) }} · {{ p.procedimientos_pendientes }} procedimiento(s) pendiente(s)</p>
+              <p><strong>{{ p.titulo }}</strong> · {{ estadoPlan(p.estado) }} · {{ p.procedimientos_pendientes }} procedimiento(s) pendiente(s) @if (p.nivel_sensibilidad === 'N3') { <span class="insignia-sensible">Acceso sensible · N3</span> }</p>
             } @empty { <p class="resumen__nada">Sin planes en curso.</p> }
             <p class="tenue">
               Última atención: {{ d.ultima_atencion ? (d.ultima_atencion | date: 'dd/MM/yy') : 'sin registro' }} ·
               Próxima cita: {{ d.proxima_cita ? (d.proxima_cita | date: 'dd/MM/yy HH:mm') : 'sin agendar' }}
             </p>
-            @if (d.antecedentes.length) {
-              <h4 class="sub">Antecedentes</h4>
-              @for (a of d.antecedentes; track a.descripcion) { <p><span class="tenue">{{ a.categoria | lowercase }}:</span> {{ a.descripcion }}</p> }
-            }
           </div>
         </div>
       }
     </section>
+    @if (puedeAccederAnamnesis()) {
+      <section class="anamnesis-acceso" aria-label="Anamnesis configurable">
+        <button type="button" class="boton boton--secundario" [attr.aria-expanded]="anamnesisAbierta()"
+          (click)="alternarAnamnesis()">
+          {{ anamnesisAbierta() ? 'Ocultar formularios de anamnesis' : 'Abrir formularios de anamnesis' }}
+        </button>
+        @if (anamnesisAbierta()) { <app-anamnesis-captura [pacienteId]="pacienteId()" /> }
+      </section>
+    }
   `,
+  changeDetection: ChangeDetectionStrategy.Eager,
   styles: `
     .resumen { display: grid; gap: var(--espacio-3); padding: var(--espacio-4); border: 1px solid var(--borde); border-radius: var(--radio); background: var(--superficie-elevada); }
     .resumen__cabecera { display: flex; justify-content: space-between; align-items: flex-start; gap: var(--espacio-3); }
@@ -141,6 +187,13 @@ export interface ResumenClinico {
     .rejilla { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: var(--espacio-3); }
     .bloque { padding: var(--espacio-3); border-radius: var(--radio); background: var(--superficie); border: 1px solid var(--superficie-hundida); }
     .bloque h4 { margin: 0 0 var(--espacio-2); font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--texto-suave); }
+    .bloque__cabecera { display: flex; align-items: center; justify-content: space-between; gap: var(--espacio-2); margin-bottom: var(--espacio-2); }
+    .bloque__cabecera h4 { margin: 0; }
+    .registro-clinico { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; }
+    .registro-clinico p { flex: 1 1 200px; }
+    .boton--texto { padding: 0; border: 0; background: transparent; color: var(--texto-suave); font: inherit; font-size: .78rem; text-decoration: underline; cursor: pointer; }
+    .formulario-anamnesis { display: grid; gap: var(--espacio-2); margin-top: var(--espacio-3); padding-top: var(--espacio-3); border-top: 1px solid var(--borde); }
+    .acciones-anamnesis { display: flex; justify-content: flex-end; gap: var(--espacio-2); }
     .bloque h4.sub { margin-top: var(--espacio-3); }
     .bloque p { margin: 0 0 var(--espacio-1); font-size: 0.88rem; }
     .bloque--alerta { border-color: color-mix(in srgb, var(--peligro) 45%, transparent); background: var(--peligro-fondo); }
@@ -148,6 +201,7 @@ export interface ResumenClinico {
     .adherencia { margin-top: var(--espacio-2) !important; color: var(--texto-suave); }
     .alerta { color: var(--aviso); }
     .tenue { color: var(--texto-suave); }
+    .insignia-sensible { display:inline-flex; margin-left:var(--espacio-1); padding:1px 7px; border:1px solid color-mix(in srgb,var(--aviso) 40%,transparent); border-radius:999px; background:var(--aviso-fondo); color:var(--aviso); font-size:.72rem; font-weight:700; }
     .redaccion { padding: var(--espacio-3); border-radius: var(--radio); background: var(--acento-suave); }
     .redaccion__texto { margin: 0 0 var(--espacio-2); white-space: pre-line; }
     .redaccion__aviso { margin: 0; font-size: 0.78rem; color: var(--texto-suave); }
@@ -155,6 +209,7 @@ export interface ResumenClinico {
 })
 export class ResumenClinicoComponent {
   private readonly api = inject(OperacionesService);
+  private readonly sesion = inject(SesionService);
   readonly pacienteId = input.required<string>();
 
   protected readonly datos = signal<ResumenClinico | null>(null);
@@ -163,6 +218,37 @@ export class ResumenClinicoComponent {
   protected readonly redactando = signal(false);
   protected readonly errorRedaccion = signal('');
   protected readonly redaccion = signal<{ texto: string; modelo: string; aviso: string } | null>(null);
+  protected readonly formularioAlergia = signal(false);
+  protected readonly formularioAntecedente = signal(false);
+  protected readonly anamnesisAbierta = signal(false);
+  protected readonly alergiaDesactivando = signal<string | null>(null);
+  protected readonly guardandoAnamnesis = signal(false);
+  protected readonly avisoAnamnesis = signal('');
+  protected readonly errorAnamnesis = signal('');
+  protected nuevaSustancia = '';
+  protected nuevaReaccion = '';
+  protected nuevaSeveridad = 'MODERADA';
+  protected nuevaCategoria = 'PERSONAL';
+  protected nuevaDescripcion = '';
+  protected nuevoNivelSensibilidad = 'N2';
+  protected motivoDesactivacion = '';
+
+  protected puedeEditarAnamnesis(): boolean {
+    return this.sesion.tienePermiso('historia_clinica.escribir') &&
+      !!this.sesion.identidad()?.profesional_id;
+  }
+
+  protected puedeAccederAnamnesis(): boolean {
+    return this.sesion.tienePermiso('historia_clinica.leer') || this.puedeEditarAnamnesis();
+  }
+
+  protected alternarAnamnesis(): void {
+    this.anamnesisAbierta.update((abierta) => !abierta);
+  }
+
+  protected puedeLeerSensible(): boolean {
+    return this.sesion.tienePermiso('historia_clinica.leer_sensible');
+  }
 
   constructor() {
     effect(() => {
@@ -182,11 +268,7 @@ export class ResumenClinicoComponent {
       },
       error: (fallo: FalloApi) => {
         this.cargando.set(false);
-        this.error.set(
-          fallo.codigo === 'RELACION_ASISTENCIAL_REQUERIDA'
-            ? 'Sin relación asistencial con este paciente: el resumen solo lo ve quien le atiende.'
-            : fallo.message,
-        );
+        this.error.set(fallo.estado === 404 ? 'La información clínica solicitada no está disponible con este acceso.' : fallo.message);
       },
     });
   }
@@ -210,6 +292,82 @@ export class ResumenClinicoComponent {
           this.errorRedaccion.set(fallo.message);
         },
       });
+  }
+
+  protected registrarAlergia(): void {
+    this.enviarAnamnesis('alergias', {
+      sustancia: this.nuevaSustancia.trim(),
+      tipo_reaccion: this.nuevaReaccion.trim() || null,
+      severidad: this.nuevaSeveridad,
+    }, 'Alergia registrada.');
+  }
+
+  protected registrarAntecedente(): void {
+    this.enviarAnamnesis('antecedentes', {
+      categoria: this.nuevaCategoria,
+      descripcion: this.nuevaDescripcion.trim(),
+      nivel_sensibilidad: this.nuevoNivelSensibilidad,
+    }, 'Antecedente registrado.');
+  }
+
+  protected abrirDesactivacion(id: string): void {
+    this.alergiaDesactivando.set(id);
+    this.motivoDesactivacion = '';
+    this.errorAnamnesis.set('');
+  }
+
+  protected desactivarAlergia(id: string): void {
+    if (this.motivoDesactivacion.trim().length < 5) return;
+    this.guardandoAnamnesis.set(true);
+    this.errorAnamnesis.set('');
+    this.api.guardar(
+      `/historia/pacientes/${this.pacienteId()}/anamnesis/alergias/${id}/desactivacion`,
+      { motivo: this.motivoDesactivacion.trim() },
+      crypto.randomUUID(),
+    ).subscribe({
+      next: () => {
+        this.alergiaDesactivando.set(null);
+        this.guardandoAnamnesis.set(false);
+        this.avisoAnamnesis.set('Alergia desactivada; su registro y motivo se conservaron.');
+        this.cargar(this.pacienteId());
+      },
+      error: (fallo: FalloApi) => {
+        this.guardandoAnamnesis.set(false);
+        this.errorAnamnesis.set(fallo.message);
+      },
+    });
+  }
+
+  protected categoriaAntecedente(categoria: string): string {
+    return ({ PERSONAL: 'Personal', FAMILIAR: 'Familiar', QUIRURGICO: 'Quirúrgico', FARMACOLOGICO: 'Farmacológico', HABITOS: 'Hábitos', OTRO: 'Otro' } as Record<string, string>)[categoria] ?? categoria;
+  }
+
+  private enviarAnamnesis(
+    tipo: 'alergias' | 'antecedentes', datos: unknown, mensaje: string,
+  ): void {
+    this.guardandoAnamnesis.set(true);
+    this.errorAnamnesis.set('');
+    this.avisoAnamnesis.set('');
+    this.api.guardar(
+      `/historia/pacientes/${this.pacienteId()}/anamnesis/${tipo}`,
+      datos,
+      crypto.randomUUID(),
+    ).subscribe({
+      next: () => {
+        this.guardandoAnamnesis.set(false);
+        this.formularioAlergia.set(false);
+        this.formularioAntecedente.set(false);
+        this.nuevaSustancia = '';
+        this.nuevaReaccion = '';
+        this.nuevaDescripcion = '';
+        this.avisoAnamnesis.set(mensaje);
+        this.cargar(this.pacienteId());
+      },
+      error: (fallo: FalloApi) => {
+        this.guardandoAnamnesis.set(false);
+        this.errorAnamnesis.set(fallo.message);
+      },
+    });
   }
 
   protected hayAlergiaGrave(): boolean {

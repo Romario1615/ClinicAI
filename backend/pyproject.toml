@@ -70,6 +70,9 @@ dependencies = [
     # Se elige `filetype` (Python puro) en lugar de python-magic, que en
     # Windows exige libmagic como biblioteca nativa.
     "filetype>=1.2,<2",
+    # El XML de documentos Word procede de archivos cargados por usuarios;
+    # el parser debe bloquear DTD y entidades incluso con codificaciones mixtas.
+    "defusedxml>=0.7.1,<0.8",
 
     # --- Zonas horarias --------------------------------------------------
     # zoneinfo esta en la biblioteca estandar, pero Windows no trae la base
@@ -115,6 +118,7 @@ dev = [
     "mypy>=1.13,<2",
     "types-redis>=4.6,<5",
     "types-pyyaml>=6.0,<7",
+    "PyYAML>=6.0,<7",
 
     # --- Seguridad -------------------------------------------------------
     "pip-audit>=2.7,<3",
@@ -140,6 +144,7 @@ select = [
     "B",         # bugbear
     "C4",        # comprehensions
     "DTZ",       # flake8-datetimez: prohibe fechas sin zona horaria (ADR-0010)
+    "TID251",    # rechaza datetime.now directo fuera de la abstraccion de reloj
     "S",         # bandit
     "A",         # builtins sombreados
     "RET",       # returns
@@ -177,13 +182,13 @@ known-first-party = ["app"]
 
 [tool.ruff.lint.per-file-ignores]
 # Las pruebas pueden usar valores fijos y estructuras mas laxas
-"pruebas/**" = ["S", "PLR2004", "ARG", "DTZ"]
+"pruebas/**" = ["S", "PLR2004", "ARG", "DTZ", "TID251"]
 # Alembic genera codigo con su propio estilo.  PLR0915 sobra porque una
 # migracion inicial de 39 tablas son, por definicion, muchas sentencias
 # seguidas; dividirla en funciones no la haria mas legible.
 "alembic/**" = ["ERA", "E", "F", "I", "ARG", "PTH", "PLR0915"]
 # El modulo del reloj es el unico autorizado a llamar a datetime.now
-"app/nucleo/reloj.py" = ["DTZ005"]
+"app/nucleo/reloj.py" = ["DTZ005", "TID251"]
 # El catalogo de acciones de auditoria contiene nombres como
 # `token.refrescado`, que S105 confunde con contrasenas incrustadas.
 "app/nucleo/auditoria.py" = ["S105"]
@@ -230,6 +235,14 @@ ignore_missing_imports = true
 [[tool.mypy.overrides]]
 module = ["alembic.versions.*"]
 ignore_errors = true
+
+[[tool.mypy.overrides]]
+# Con Python 3.12 el lock instala numpy 2.5, cuyos stubs usan sintaxis 3.12 que
+# mypy rechaza con `python_version = "3.11"`. Llega por Pillow, pgvector y fastembed;
+# no se analiza codigo de terceros.
+module = ["numpy", "numpy.*"]
+follow_imports = "skip"
+follow_imports_for_stubs = true
 
 # ---------------------------------------------------------------------------
 #  pytest
@@ -291,6 +304,11 @@ exclude_lines = [
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
+
+[dependency-groups]
+dev = [
+    "types-defusedxml>=0.7.0.20260504",
+]
 
 [tool.hatch.build.targets.wheel]
 packages = ["app"]

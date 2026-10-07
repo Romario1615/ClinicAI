@@ -23,18 +23,15 @@
  * impresion de que nunca existio, y lo que se necesita saber es justo lo
  * contrario: que existio y por que se retiro.
  *
- * Lo que todavia no hace
- * ----------------------
- * Escribir notas, crear recetas, confirmarlas ni registrar tomas. Los
- * endpoints existen y estan probados. Escribir historia clinica desde una
- * interfaz a medio construir es la clase de cosa que no se hace con prisa:
- * queda para cuando la pantalla tenga su propio recorrido de revision.
+ * Las recetas se crean como borrador, se confirman por el profesional y se
+ * pueden sustituir por una versión firmada que conserva el historial y
+ * cancela las tomas futuras de la pauta anterior.
  */
-import { Component, computed, inject, signal } from '@angular/core';
+import { Component, DestroyRef, computed, inject, signal, ChangeDetectionStrategy } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute } from '@angular/router';
 import { forkJoin, of } from 'rxjs';
-import { catchError } from 'rxjs/operators';
+import { catchError, map, switchMap } from 'rxjs/operators';
 
 import {
   CargandoComponent,
@@ -66,6 +63,7 @@ import { NotaEditorComponent } from './nota-editor.component';
 import { RecetaEditorComponent } from './receta-editor.component';
 import { OdontogramaComponent } from './odontograma.component';
 import { PlanesTratamientoComponent } from './planes-tratamiento.component';
+import { Formulario033Component } from './formulario-033.component';
 import type { Paciente } from '../../nucleo/modelos/dominio';
 import { formatearFechaLarga, formatearHora } from '../../nucleo/utilidades/fechas';
 
@@ -107,6 +105,7 @@ const VIAS: Record<string, string> = {
 type Pestana =
   | 'evolucion'
   | 'odontograma'
+  | 'formulario033'
   | 'periodoncia'
   | 'imagenes'
   | 'planes'
@@ -115,13 +114,16 @@ type Pestana =
 
 import { TipoDocumentoPipe } from '../../compartido/tipo-documento.pipe';
 import { ResumenModuloComponent } from '../../compartido/resumen-modulo.component';
+import { IconoComponent } from '../../compartido/icono.component';
 import { ResumenClinicoComponent } from './resumen-clinico.component';
 import { IndicacionesPacienteComponent } from './indicaciones-paciente.component';
+import { OperacionesService } from '../../nucleo/servicios/operaciones.service';
 @Component({
   selector: 'app-historia-clinica',
   standalone: true,
   imports: [
     ResumenModuloComponent,
+    IconoComponent,
     ResumenClinicoComponent,
     IndicacionesPacienteComponent,
     FormsModule,
@@ -131,6 +133,7 @@ import { IndicacionesPacienteComponent } from './indicaciones-paciente.component
     VacioComponent,
     OdontogramaComponent,
     PlanesTratamientoComponent,
+    Formulario033Component,
     FotoPerfilComponent,
     GaleriaImagenesComponent,
     IndicePlacaComponent,
@@ -139,10 +142,13 @@ import { IndicacionesPacienteComponent } from './indicaciones-paciente.component
     SelectorEspecialidadComponent,
   ],
   templateUrl: './historia-clinica.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './historia-clinica.component.scss',
 })
 export class HistoriaClinicaComponent {
+  private readonly destroyRef = inject(DestroyRef);
   private readonly api = inject(ApiService);
+  private readonly operaciones = inject(OperacionesService);
   protected readonly sesion = inject(SesionService);
   protected readonly especialidades = inject(EspecialidadHistoriaService);
 
@@ -162,7 +168,13 @@ export class HistoriaClinicaComponent {
   /** Cierto cuando el backend nego las notas por permiso, no por un fallo. */
   protected readonly notasDenegadas = signal(false);
   /** El 403 fue por falta de vinculo con ESTE paciente, no por el rol. */
-  protected readonly sinRelacion = signal(false);
+  protected readonly accesoNoDisponible = signal(false);
+  protected readonly motivoAccesoEmergencia = signal('');
+  protected readonly solicitandoAccesoEmergencia = signal(false);
+  protected readonly avisoAccesoEmergencia = signal('');
+  protected readonly errorAccesoEmergencia = signal('');
+  private readonly accesosEmergenciaVigentes = new Map<string, number>();
+  private temporizadorAccesoEmergencia: ReturnType<typeof setTimeout> | null = null;
 
   // --- Permisos ---
   // Se leen del principal, no se adivinan: el backend es la autoridad y
@@ -175,6 +187,14 @@ export class HistoriaClinicaComponent {
   );
   protected readonly puedeLeerOdontograma = computed(() =>
     this.sesion.tienePermiso(PERMISOS.odontogramaLeer),
+  );
+  protected readonly puedeLeerFormulario033 = computed(() =>
+    this.sesion.tienePermiso(PERMISOS.historiaLeer) &&
+    this.sesion.tienePermiso(PERMISOS.historiaLeerSensible),
+  );
+  protected readonly puedeEditarFormulario033 = computed(() =>
+    this.sesion.tienePermiso(PERMISOS.historiaEscribir) &&
+    this.sesion.tienePermiso(PERMISOS.historiaLeerSensible),
   );
   protected readonly puedeLeerPlanes = computed(() =>
     this.sesion.tieneAlgunPermiso(
@@ -189,6 +209,9 @@ export class HistoriaClinicaComponent {
   protected readonly puedeEscribirNotas = computed(() =>
     this.sesion.tienePermiso(PERMISOS.historiaEscribir),
   );
+  protected readonly puedeSolicitarAccesoEmergencia = computed(() =>
+    this.sesion.tienePermiso(PERMISOS.accesoEmergenciaSolicitar),
+  );
   protected readonly puedeEditarFoto = computed(() =>
     this.sesion.tienePermiso(PERMISOS.pacienteEditar),
   );
@@ -200,9 +223,13 @@ export class HistoriaClinicaComponent {
       { clave: 'evolucion', texto: 'Evolución' },
     ];
     // Permiso del rol **y** módulo de la especialidad desde la que se revisa.
-    const modulo = (m: ModuloHistoria) => this.especialidades.tieneModulo(m);
+    // Sin acceso clínico a este paciente, los módulos solo darían «no disponible».
+    const modulo = (m: ModuloHistoria) => this.especialidades.tieneModulo(m) && !this.accesoNoDisponible();
     if (this.puedeLeerOdontograma() && modulo('odontograma')) {
       lista.push({ clave: 'odontograma', texto: 'Odontograma' });
+    }
+    if (this.puedeLeerFormulario033() && modulo('odontograma')) {
+      lista.push({ clave: 'formulario033', texto: 'Formulario MSP 033' });
     }
     if (this.puedeLeerOdontograma() && modulo('periodoncia')) {
       lista.push({ clave: 'periodoncia', texto: 'Periodoncia · placa' });
@@ -239,13 +266,25 @@ export class HistoriaClinicaComponent {
     this.sesion.tienePermiso(PERMISOS.recetaConfirmar),
   );
   protected readonly creandoReceta = signal(false);
+  protected readonly versionandoReceta = signal<Receta | null>(null);
   protected readonly confirmando = signal(false);
   protected readonly avisoReceta = signal('');
 
   protected alGuardarReceta(): void {
+    const fueVersion = this.versionandoReceta() !== null;
     this.creandoReceta.set(false);
-    this.avisoReceta.set('Receta guardada como borrador. Confírmela para generar las tomas.');
+    this.versionandoReceta.set(null);
+    this.avisoReceta.set(
+      fueVersion
+        ? 'Nueva versión firmada. Las tomas futuras de la receta anterior se cancelaron y se generó el calendario actualizado.'
+        : 'Receta guardada como borrador. Confírmela para generar las tomas.',
+    );
     this.cargarHistoria();
+  }
+
+  protected cerrarEditorReceta(): void {
+    this.creandoReceta.set(false);
+    this.versionandoReceta.set(null);
   }
 
   /**
@@ -298,6 +337,7 @@ export class HistoriaClinicaComponent {
   });
 
   constructor() {
+    this.destroyRef.onDestroy(() => this.limpiarTemporizadorAccesoEmergencia());
     this.cargarPacientes();
     this.especialidades.cargar();
     // «Abrir historia completa» desde la ficha llega con ?paciente=<id>.
@@ -328,16 +368,18 @@ export class HistoriaClinicaComponent {
   }
 
   protected abrir(paciente: Paciente): void {
+    this.limpiarTemporizadorAccesoEmergencia();
     this.cargandoHistoria.set(true);
     this.errorHistoria.set(null);
     this.notasDenegadas.set(false);
-    this.sinRelacion.set(false);
+    this.accesoNoDisponible.set(false);
     this.notas.set([]);
     this.recetas.set([]);
 
     this.api.paciente(paciente.id).subscribe({
       next: (detalle) => {
         this.paciente.set(detalle);
+        this.programarCaducidadAccesoEmergencia(paciente.id);
         this.cargarHistoria();
       },
       error: (fallo: FalloApi) => {
@@ -353,6 +395,7 @@ export class HistoriaClinicaComponent {
   }
 
   protected cerrar(): void {
+    this.limpiarTemporizadorAccesoEmergencia();
     this.pestana.set('evolucion');
     this.editando.set(undefined);
     this.paciente.set(null);
@@ -360,7 +403,10 @@ export class HistoriaClinicaComponent {
     this.recetas.set([]);
     this.errorHistoria.set(null);
     this.notasDenegadas.set(false);
-    this.sinRelacion.set(false);
+    this.accesoNoDisponible.set(false);
+    this.motivoAccesoEmergencia.set('');
+    this.avisoAccesoEmergencia.set('');
+    this.errorAccesoEmergencia.set('');
   }
 
   // ======================================================================
@@ -383,35 +429,113 @@ export class HistoriaClinicaComponent {
     this.cargandoHistoria.set(true);
     this.errorHistoria.set(null);
 
-    forkJoin({
-      notas: this.puedeLeerNotas()
-        ? this.api.notas(paciente.id, this.incluirHistorico(), this.especialidades.elegida()?.id ?? null).pipe(
-            catchError((fallo: FalloApi) => {
-              if (fallo.estado === 403) {
-                this.notasDenegadas.set(true);
-                this.sinRelacion.set(fallo.codigo === 'RELACION_ASISTENCIAL_REQUERIDA');
-                return of([] as readonly Nota[]);
-              }
-              throw fallo;
-            }),
+    // Primero se pregunta si hay acceso clínico (200 sí/no): sin relación
+    // asistencial no se piden las notas, que solo darían 404.
+    const acceso$ = this.puedeLeerNotas()
+      ? this.operaciones
+          .leer<{ acceso_clinico: boolean }>(`/pacientes/${paciente.id}/acceso-clinico`)
+          .pipe(
+            map((r) => r.acceso_clinico),
+            catchError(() => of(null)),
           )
-        : of([] as readonly Nota[]),
-      recetas: this.puedeLeerRecetas()
-        ? this.api
-            .recetas(paciente.id)
-            .pipe(catchError(() => of([] as readonly Receta[])))
-        : of([] as readonly Receta[]),
-    }).subscribe({
-      next: (datos) => {
-        this.notas.set(datos.notas);
-        this.recetas.set(datos.recetas);
-        this.cargandoHistoria.set(false);
+      : of(null);
+
+    acceso$
+      .pipe(
+        switchMap((acceso) => {
+          if (acceso === false) {
+            this.notasDenegadas.set(true);
+            this.accesoNoDisponible.set(true);
+          }
+          return forkJoin({
+            notas:
+              this.puedeLeerNotas() && acceso !== false
+                ? this.api
+                    .notas(paciente.id, this.incluirHistorico(), this.especialidades.elegida()?.id ?? null)
+                    .pipe(
+                      catchError((fallo: FalloApi) => {
+                        if (fallo.estado === 403 || fallo.estado === 404) {
+                          this.notasDenegadas.set(true);
+                          this.accesoNoDisponible.set(fallo.estado === 404);
+                          return of([] as readonly Nota[]);
+                        }
+                        throw fallo;
+                      }),
+                    )
+                : of([] as readonly Nota[]),
+            recetas: this.puedeLeerRecetas()
+              ? this.api.recetas(paciente.id).pipe(catchError(() => of([] as readonly Receta[])))
+              : of([] as readonly Receta[]),
+          });
+        }),
+      )
+      .subscribe({
+        next: (datos) => {
+          this.notas.set(datos.notas);
+          this.recetas.set(datos.recetas);
+          this.cargandoHistoria.set(false);
+        },
+        error: (fallo: FalloApi) => {
+          this.errorHistoria.set(fallo);
+          this.cargandoHistoria.set(false);
+        },
+      });
+  }
+
+  protected solicitarAccesoEmergencia(): void {
+    const paciente = this.paciente();
+    const motivo = this.motivoAccesoEmergencia().trim();
+    if (!paciente || motivo.length < 12 || this.solicitandoAccesoEmergencia()) return;
+    this.solicitandoAccesoEmergencia.set(true);
+    this.avisoAccesoEmergencia.set('');
+    this.errorAccesoEmergencia.set('');
+    this.api.solicitarAccesoEmergencia(paciente.id, motivo).subscribe({
+      next: ({ vence_en }) => {
+        this.solicitandoAccesoEmergencia.set(false);
+        this.motivoAccesoEmergencia.set('');
+        this.notasDenegadas.set(false);
+        this.accesoNoDisponible.set(false);
+        const venceMs = new Date(vence_en).getTime();
+        this.accesosEmergenciaVigentes.set(paciente.id, venceMs);
+        this.avisoAccesoEmergencia.set(
+          `Acceso temporal concedido hasta ${new Date(vence_en).toLocaleTimeString('es-EC', { hour: '2-digit', minute: '2-digit' })}. La administración recibió un aviso.`,
+        );
+        this.programarCaducidadAccesoEmergencia(paciente.id);
+        this.cargarHistoria();
       },
-      error: (fallo: FalloApi) => {
-        this.errorHistoria.set(fallo);
-        this.cargandoHistoria.set(false);
+      error: (fallo: unknown) => {
+        this.solicitandoAccesoEmergencia.set(false);
+        this.errorAccesoEmergencia.set(
+          fallo instanceof FalloApi ? fallo.message : 'No se pudo solicitar el acceso temporal.',
+        );
       },
     });
+  }
+
+  private programarCaducidadAccesoEmergencia(pacienteId: string): void {
+    this.limpiarTemporizadorAccesoEmergencia();
+    const venceEn = this.accesosEmergenciaVigentes.get(pacienteId);
+    if (venceEn === undefined) return;
+    const demora = venceEn - Date.now();
+    if (demora <= 0) {
+      this.accesosEmergenciaVigentes.delete(pacienteId);
+      return;
+    }
+    this.temporizadorAccesoEmergencia = setTimeout(() => {
+      this.accesosEmergenciaVigentes.delete(pacienteId);
+      this.temporizadorAccesoEmergencia = null;
+      if (this.paciente()?.id === pacienteId) {
+        this.cerrar();
+        this.avisoAccesoEmergencia.set('El acceso temporal expiró. La historia se cerró.');
+      }
+    }, demora);
+  }
+
+  private limpiarTemporizadorAccesoEmergencia(): void {
+    if (this.temporizadorAccesoEmergencia !== null) {
+      clearTimeout(this.temporizadorAccesoEmergencia);
+      this.temporizadorAccesoEmergencia = null;
+    }
   }
 
   /** Otra especialidad: otras notas y otros módulos. */

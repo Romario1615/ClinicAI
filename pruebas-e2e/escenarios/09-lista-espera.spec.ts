@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import type { APIRequestContext } from '@playwright/test';
 import { expect, test } from '../apoyo/prueba';
 import { acceder, CODIGOS_ROL, irA } from '../apoyo/sesion';
+import { seleccionarCitaEnAgenda } from '../apoyo/agenda';
 
 const API = process.env.URL_API ?? 'http://127.0.0.1:8000/api/v1';
 const fecha = (iso: string) => new Intl.DateTimeFormat('en-CA', {
@@ -96,8 +97,10 @@ test('recepción anota, ofrece y resuelve un turno de la lista de espera', async
     await selector.getByLabel('Buscar paciente').fill(`Espera ${sufijo}`);
     await selector.getByRole('button', { name: 'Buscar', exact: true }).click();
     await selector.getByRole('combobox', { name: 'Paciente', exact: true }).selectOption(paciente.id);
-    await page.getByRole('combobox', { name: 'Sede', exact: true }).selectOption(agenda.sede.id);
-    await page.getByRole('combobox', { name: 'Servicio', exact: true }).selectOption(agenda.servicio.id);
+    await expect(page.getByRole('dialog', { name: 'Anotar a un paciente' })).toBeVisible({ timeout: 4_000 });
+    await expect(page.getByRole('combobox', { name: /^Sede/ })).toBeVisible({ timeout: 4_000 });
+    await page.getByRole('combobox', { name: /^Sede/ }).selectOption(agenda.sede.id);
+    await page.getByRole('combobox', { name: /^Servicio/ }).selectOption(agenda.servicio.id);
     await page.getByRole('combobox', { name: 'Profesional (opcional)', exact: true }).selectOption(agenda.profesional.id);
     const citaPreviaSelector = page.getByRole('combobox', { name: 'Cita actual que desea cambiar (opcional)' });
     await expect(citaPreviaSelector).toBeVisible();
@@ -162,7 +165,7 @@ test('recepción anota, ofrece y resuelve un turno de la lista de espera', async
     await page.getByRole('combobox', { name: 'Profesional', exact: true }).selectOption(agenda.profesional.id);
     await page.getByLabel('Fecha', { exact: true }).fill(fecha(cita.inicio));
     const nombreCita = `${agenda.paciente.nombre} ${agenda.paciente.apellido}`;
-    await page.locator('.fila-dia').filter({ hasText: nombreCita }).first().click();
+    await seleccionarCitaEnAgenda(page, nombreCita);
     const panel = page.locator('.panel');
     await panel.getByRole('button', { name: 'Cancelar la cita' }).click();
     await page.getByLabel('Motivo de la cancelación').fill('Turno liberado para lista de espera sintetica');
@@ -206,25 +209,30 @@ test('recepción anota, ofrece y resuelve un turno de la lista de espera', async
     expect(siguienteEntrada.estado).toBe('OFERTADA');
     expect(Date.parse(siguienteEntrada.oferta_inicio)).toBe(Date.parse(citaPrevia.inicio));
   } finally {
-    for (const id of [entradaId, entradaSiguienteId].filter(Boolean)) {
-      const estado = await agenda.leer(`/lista-espera/`).then((pagina: { elementos: { id: string; estado: string }[] }) =>
-        pagina.elementos.find((fila) => fila.id === id)?.estado,
-      );
-      if (estado === 'ACTIVA' || estado === 'OFERTADA') {
-        await request.post(`${API}/lista-espera/${id}/resolver`, {
-          headers: { ...agenda.headers, 'Idempotency-Key': randomUUID() },
-          data: { accion: 'cancelar' },
-        });
+    const huboFallo = test.info().errors.length > 0;
+    try {
+      for (const id of [entradaId, entradaSiguienteId].filter(Boolean)) {
+        const estado = await agenda.leer(`/lista-espera/`).then((pagina: { elementos: { id: string; estado: string }[] }) =>
+          pagina.elementos.find((fila) => fila.id === id)?.estado,
+        );
+        if (estado === 'ACTIVA' || estado === 'OFERTADA') {
+          await request.post(`${API}/lista-espera/${id}/resolver`, {
+            headers: { ...agenda.headers, 'Idempotency-Key': randomUUID() },
+            data: { accion: 'cancelar' },
+          });
+        }
       }
-    }
-    for (const id of [citaResultanteId, cita.id, citaPrevia.id].filter(Boolean)) {
-      const actual = await agenda.leer(`/agenda/citas/${id}`);
-      if (!['CANCELLED', 'COMPLETED', 'NO_SHOW'].includes(actual.estado)) {
-        await request.post(`${API}/agenda/citas/${id}/cancelacion`, {
-          headers: agenda.headers,
-          data: { motivo: 'Cierre de prueba sintetica de lista de espera' },
-        });
+      for (const id of [citaResultanteId, cita.id, citaPrevia.id].filter(Boolean)) {
+        const actual = await agenda.leer(`/agenda/citas/${id}`);
+        if (!['CANCELLED', 'COMPLETED', 'NO_SHOW'].includes(actual.estado)) {
+          await request.post(`${API}/agenda/citas/${id}/cancelacion`, {
+            headers: agenda.headers,
+            data: { motivo: 'Cierre de prueba sintetica de lista de espera' },
+          });
+        }
       }
+    } catch (fallo) {
+      if (!huboFallo) throw fallo;
     }
   }
 });

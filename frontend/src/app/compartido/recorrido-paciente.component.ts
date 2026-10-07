@@ -5,7 +5,7 @@
  * si la atención se alargó y cuándo salió. Agrupado por día, del más reciente
  * al más antiguo. Sin datos clínicos: lo ve recepción y queda auditado.
  */
-import { Component, OnInit, computed, inject, input, signal } from '@angular/core';
+import { Component, OnInit, computed, inject, input, signal, ChangeDetectionStrategy } from '@angular/core';
 
 import { RecorridoService, type PasoRecorrido } from '../nucleo/servicios/recorrido.service';
 import { formatearFechaLarga, formatearHora } from '../nucleo/utilidades/fechas';
@@ -61,6 +61,7 @@ const TONOS: Record<string, string> = {
       }
     }
   `,
+  changeDetection: ChangeDetectionStrategy.Eager,
   styles: `
     .nada { color: var(--texto-suave); }
     .dia { margin: var(--espacio-4) 0 var(--espacio-2); font-size: 0.8rem; letter-spacing: 0.05em;

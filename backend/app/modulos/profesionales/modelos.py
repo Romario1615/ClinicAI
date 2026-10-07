@@ -198,11 +198,11 @@ class AgendaPlantilla(Base, MezclaIdentificador, MezclaAuditoria):
     )
     sede_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("sede.id", ondelete="CASCADE"))
     dia_semana: Mapped[int] = mapped_column(SmallInteger)
-    hora_inicio: Mapped[object] = mapped_column(String(8))
-    hora_fin: Mapped[object] = mapped_column(String(8))
+    hora_inicio: Mapped[str] = mapped_column(String(8))
+    hora_fin: Mapped[str] = mapped_column(String(8))
     granularidad_minutos: Mapped[int] = mapped_column(SmallInteger, default=15)
-    vigente_desde: Mapped[object | None] = mapped_column(String(10), default=None)
-    vigente_hasta: Mapped[object | None] = mapped_column(String(10), default=None)
+    vigente_desde: Mapped[str | None] = mapped_column(String(10), default=None)
+    vigente_hasta: Mapped[str | None] = mapped_column(String(10), default=None)
 
     __table_args__ = (
         CheckConstraint("dia_semana BETWEEN 1 AND 7", name="dia_semana_iso"),

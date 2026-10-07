@@ -147,11 +147,15 @@ export interface Consultorio {
   readonly nombre: string;
   readonly tipo: TipoConsultorio;
   readonly capacidad: number;
+  readonly activo?: boolean;
 }
 
 export interface Especialidad {
   readonly id: string;
   readonly nombre: string;
+  readonly codigo?: string | null;
+  readonly descripcion?: string | null;
+  readonly activa?: boolean;
 }
 
 export interface Servicio {
@@ -161,6 +165,12 @@ export interface Servicio {
   readonly duracion_minutos: number;
   readonly minutos_preparacion: number;
   readonly precio: number | null;
+  readonly descripcion?: string | null;
+  readonly moneda?: string;
+  readonly activo?: boolean;
+  readonly requiere_pago_previo?: boolean;
+  readonly instrucciones_preparacion?: string | null;
+  readonly tipo_consultorio_requerido?: TipoConsultorio | null;
 }
 
 export interface Profesional {
@@ -169,6 +179,23 @@ export interface Profesional {
   readonly nombre: string;
   readonly apellido: string;
   readonly numero_registro_profesional: string;
+}
+
+export type EstadoDisponibilidadProfesional =
+  | 'DISPONIBLE'
+  | 'AGENDA_COMPLETA'
+  | 'AUSENTE'
+  | 'INACTIVO';
+
+export interface PerfilProfesional extends Profesional {
+  readonly telefono_whatsapp: string | null;
+  readonly correo_calendario: string | null;
+  readonly estado_disponibilidad: EstadoDisponibilidadProfesional;
+  readonly acepta_pacientes_nuevos: boolean;
+  readonly minutos_preparacion_propio: number;
+  readonly activo: boolean;
+  readonly sede_ids: readonly string[];
+  readonly sede_principal_id: string | null;
 }
 
 export interface Paciente {

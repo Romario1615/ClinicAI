@@ -214,6 +214,8 @@ async def _clinico(sesion: AsyncSession, principal: Principal, resultado: Indica
                 PlanTratamiento.clinica_id == clinica,
                 PlanTratamiento.profesional_id == principal.profesional_id,
             )
+            if not principal.tiene_permiso("historia_clinica.leer_sensible"):
+                planes = planes.where(PlanTratamiento.nivel_sensibilidad != "N3")
             clinico.planes_propuestos = await _contar(
                 sesion, planes.where(PlanTratamiento.estado == "PROPUESTO")
             )

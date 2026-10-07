@@ -20,13 +20,14 @@ import uuid
 from datetime import date, datetime, timedelta
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Depends, Path
+from fastapi import APIRouter, Path
 from pydantic import BaseModel
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.ia.resumen_clinico import RedactorResumenClinico
 from app.modulos.agenda.modelos import Cita
+from app.modulos.historia.autorizacion import PuedeLeerHistoriaDiscreta
 from app.modulos.historia.modelos import NotaEvolucion, Receta, RecetaMedicamento, Toma
 from app.modulos.odontologia.modelos import PlanTratamiento, ProcedimientoPlan
 from app.modulos.pacientes.acceso_clinico import GuardiaClinica
@@ -38,14 +39,13 @@ from app.nucleo.dependencias import (
     ConfiguracionActual,
     RelojActual,
     Sesion,
-    exige_permiso,
 )
 
 enrutador = APIRouter(prefix="/historia", tags=["historia clinica"])
-PuedeLeer = Annotated[Principal, Depends(exige_permiso("historia_clinica.leer"))]
 
 
 class AlergiaResumen(BaseModel):
+    id: uuid.UUID
     sustancia: str
     reaccion: str | None
     severidad: str
@@ -54,6 +54,7 @@ class AlergiaResumen(BaseModel):
 class AntecedenteResumen(BaseModel):
     categoria: str
     descripcion: str
+    nivel_sensibilidad: str
 
 
 class MedicamentoResumen(BaseModel):
@@ -78,6 +79,7 @@ class AdherenciaResumen(BaseModel):
 class NotaResumen(BaseModel):
     fecha: datetime
     tipo: str
+    nivel_sensibilidad: str
     motivo_consulta: str | None
     analisis: str | None
     plan: str | None
@@ -87,6 +89,7 @@ class PlanResumen(BaseModel):
     titulo: str
     estado: str
     procedimientos_pendientes: int
+    nivel_sensibilidad: str
 
 
 class ResumenClinico(BaseModel):
@@ -169,30 +172,35 @@ async def construir(
     ).all()
     conteos = {str(estado): int(cantidad) for estado, cantidad in filas_tomas}
 
-    notas = (
-        await sesion.execute(
-            select(NotaEvolucion)
-            .where(NotaEvolucion.paciente_id == paciente_id, NotaEvolucion.vigente.is_(True))
-            .order_by(NotaEvolucion.creado_en.desc())
-            .limit(5)
+    consulta_notas = select(NotaEvolucion).where(
+        NotaEvolucion.paciente_id == paciente_id,
+        NotaEvolucion.vigente.is_(True),
+    )
+    if not principal.tiene_permiso("historia_clinica.leer_sensible"):
+        consulta_notas = consulta_notas.where(
+            NotaEvolucion.nivel_sensibilidad != NivelSensibilidad.CLINICO_SENSIBLE.value
         )
+    notas = (
+        await sesion.execute(consulta_notas.order_by(NotaEvolucion.creado_en.desc()).limit(5))
     ).scalars()
 
-    planes = (
-        await sesion.execute(
-            select(
-                PlanTratamiento.titulo,
-                PlanTratamiento.estado,
-                func.count(ProcedimientoPlan.id).filter(ProcedimientoPlan.estado == "PENDIENTE"),
-            )
-            .outerjoin(ProcedimientoPlan, ProcedimientoPlan.plan_id == PlanTratamiento.id)
-            .where(
-                PlanTratamiento.paciente_id == paciente_id,
-                PlanTratamiento.estado.in_(["BORRADOR", "PROPUESTO", "ACEPTADO"]),
-            )
-            .group_by(PlanTratamiento.id)
+    consulta_planes = (
+        select(
+            PlanTratamiento.titulo,
+            PlanTratamiento.estado,
+            func.count(ProcedimientoPlan.id).filter(ProcedimientoPlan.estado == "PENDIENTE"),
+            PlanTratamiento.nivel_sensibilidad,
         )
-    ).all()
+        .outerjoin(ProcedimientoPlan, ProcedimientoPlan.plan_id == PlanTratamiento.id)
+        .where(
+            PlanTratamiento.paciente_id == paciente_id,
+            PlanTratamiento.estado.in_(["BORRADOR", "PROPUESTO", "ACEPTADO"]),
+        )
+        .group_by(PlanTratamiento.id)
+    )
+    if not principal.tiene_permiso("historia_clinica.leer_sensible"):
+        consulta_planes = consulta_planes.where(PlanTratamiento.nivel_sensibilidad != "N3")
+    planes = (await sesion.execute(consulta_planes)).all()
 
     ultima = (
         await sesion.execute(
@@ -216,12 +224,19 @@ async def construir(
         edad=_edad(paciente.fecha_nacimiento, ahora.date()),
         sexo=paciente.sexo,
         alergias=[
-            AlergiaResumen(sustancia=a.sustancia, reaccion=a.tipo_reaccion, severidad=a.severidad)
+            AlergiaResumen(
+                id=a.id,
+                sustancia=a.sustancia,
+                reaccion=a.tipo_reaccion,
+                severidad=a.severidad,
+            )
             for a in alergias
         ],
         antecedentes=[
             AntecedenteResumen(
-                categoria=a.categoria, descripcion=_recortar(a.descripcion, 200) or ""
+                categoria=a.categoria,
+                descripcion=_recortar(a.descripcion, 200) or "",
+                nivel_sensibilidad=a.nivel_sensibilidad,
             )
             for a in antecedentes
         ],
@@ -249,6 +264,7 @@ async def construir(
             NotaResumen(
                 fecha=n.creado_en,
                 tipo=n.tipo,
+                nivel_sensibilidad=n.nivel_sensibilidad,
                 motivo_consulta=_recortar(n.motivo_consulta, 200),
                 analisis=_recortar(n.analisis),
                 plan=_recortar(n.plan),
@@ -256,8 +272,13 @@ async def construir(
             for n in notas
         ],
         planes=[
-            PlanResumen(titulo=titulo, estado=estado, procedimientos_pendientes=int(pendientes))
-            for titulo, estado, pendientes in planes
+            PlanResumen(
+                titulo=titulo,
+                estado=estado,
+                procedimientos_pendientes=int(pendientes),
+                nivel_sensibilidad=nivel_sensibilidad,
+            )
+            for titulo, estado, pendientes, nivel_sensibilidad in planes
         ],
         ultima_atencion=ultima,
         proxima_cita=proxima,
@@ -265,9 +286,13 @@ async def construir(
     )
 
 
-@enrutador.get("/pacientes/{paciente_id}/resumen-clinico", response_model=ResumenClinico)
+@enrutador.get(
+    "/pacientes/{paciente_id}/resumen-clinico",
+    response_model=ResumenClinico,
+    responses={404: {"description": "Paciente inexistente, fuera de alcance o sin acceso clínico"}},
+)
 async def resumen(
-    principal: PuedeLeer,
+    principal: PuedeLeerHistoriaDiscreta,
     sesion: Sesion,
     reloj: RelojActual,
     auditor: Auditor,
@@ -290,7 +315,22 @@ async def resumen(
                 entidad_tipo="paciente",
                 entidad_id=paciente_id,
                 paciente_id=paciente_id,
-                nivel_sensibilidad=NivelSensibilidad.CLINICO,
+                nivel_sensibilidad=(
+                    NivelSensibilidad.CLINICO_SENSIBLE
+                    if any(
+                        a.nivel_sensibilidad == NivelSensibilidad.CLINICO_SENSIBLE.value
+                        for a in datos.antecedentes
+                    )
+                    or any(
+                        nota.nivel_sensibilidad == NivelSensibilidad.CLINICO_SENSIBLE.value
+                        for nota in datos.ultimas_notas
+                    )
+                    or any(
+                        plan.nivel_sensibilidad == NivelSensibilidad.CLINICO_SENSIBLE.value
+                        for plan in datos.planes
+                    )
+                    else NivelSensibilidad.CLINICO
+                ),
                 vista="resumen_clinico",
             )
         ]
@@ -300,10 +340,12 @@ async def resumen(
 
 
 @enrutador.post(
-    "/pacientes/{paciente_id}/resumen-clinico/redaccion", response_model=RedaccionSalida
+    "/pacientes/{paciente_id}/resumen-clinico/redaccion",
+    response_model=RedaccionSalida,
+    responses={404: {"description": "Paciente inexistente, fuera de alcance o sin acceso clínico"}},
 )
 async def redactar(
-    principal: PuedeLeer,
+    principal: PuedeLeerHistoriaDiscreta,
     sesion: Sesion,
     reloj: RelojActual,
     auditor: Auditor,
@@ -318,6 +360,27 @@ async def redactar(
     carga: dict[str, Any] = datos.model_dump(
         mode="json", exclude={"paciente_id", "redaccion_disponible"}
     )
+    # Un antecedente N3 puede verse en la interfaz con permiso reforzado, pero
+    # queda fuera de la llamada al modelo incluso si Ollama está configurado.
+    carga["antecedentes"] = [
+        antecedente.model_dump(mode="json")
+        for antecedente in datos.antecedentes
+        if antecedente.nivel_sensibilidad != NivelSensibilidad.CLINICO_SENSIBLE.value
+    ]
+    # La IA local recibe métricas y contexto N2; nunca recibe notas N3, aunque
+    # quien solicita la redacción tenga permiso para leerlas.
+    carga["ultimas_notas"] = [
+        nota.model_dump(mode="json")
+        for nota in datos.ultimas_notas
+        if nota.nivel_sensibilidad != NivelSensibilidad.CLINICO_SENSIBLE.value
+    ]
+    # Los planes N3 siguen excluidos aunque quien solicita la redacción tenga
+    # permiso para consultarlos en la interfaz.
+    carga["planes"] = [
+        plan.model_dump(mode="json")
+        for plan in datos.planes
+        if plan.nivel_sensibilidad != NivelSensibilidad.CLINICO_SENSIBLE.value
+    ]
     redaccion = await redactor.redactar(carga)
     await auditor.registrar(
         [

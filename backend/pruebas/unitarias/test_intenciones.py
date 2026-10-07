@@ -34,6 +34,13 @@ pytestmark = [pytest.mark.unitaria, pytest.mark.seguridad]
         ("acepto", IntencionEntrante.ACEPTAR_OFERTA),
         ("TOMADA", IntencionEntrante.REGISTRAR_TOMA),
         ("ya tomé", IntencionEntrante.REGISTRAR_TOMA),
+        ("recordarme después", IntencionEntrante.RECORDAR_TOMA_DESPUES),
+        ("recordatorio en 30 minutos", IntencionEntrante.RECORDAR_TOMA_DESPUES),
+        ("no pude tomarla", IntencionEntrante.NO_PUDO_TOMAR),
+        ("no pude hacer la toma", IntencionEntrante.NO_PUDO_TOMAR),
+        ("tengo un problema con mi medicamento", IntencionEntrante.PROBLEMA_TRATAMIENTO),
+        ("me sienta mal la medicina", IntencionEntrante.PROBLEMA_TRATAMIENTO),
+        ("hablar con la clínica", IntencionEntrante.AYUDA),
         ("BAJA", IntencionEntrante.BAJA),
         ("stop", IntencionEntrante.BAJA),
         ("STOP", IntencionEntrante.BAJA),
@@ -103,11 +110,18 @@ def test_ningun_mensaje_clinico_produce_una_intencion_de_accion() -> None:
     cancelacion, ni una baja. Es un mensaje para un profesional.
     """
     for texto in (
-        "no puedo tomar la pastilla",
         "se me olvido la pastilla, tomo dos?",
         "la medicina me hace mal",
+        "no pude tomar una decisión",
     ):
         assert reconocer(texto) is IntencionEntrante.DESCONOCIDA, texto
+    assert reconocer("no puedo tomar la pastilla") is IntencionEntrante.PROBLEMA_TRATAMIENTO
+
+
+def test_solo_el_reporte_explicito_recibe_etiqueta_de_revision_clinica() -> None:
+    """La etiqueta deriva a una persona; no clasifica sintomas ni gravedad."""
+    assert reconocer("no me sienta mal la medicina") is IntencionEntrante.DESCONOCIDA
+    assert reconocer("la pastilla me da nauseas") is IntencionEntrante.DESCONOCIDA
 
 
 def test_un_mensaje_largo_se_deriva_sin_buscar_palabras_clave() -> None:

@@ -22,12 +22,13 @@
  * formulario más allá del envío.** El correo sí se recuerda, porque no es una
  * credencial y teclearlo cada mañana es fricción sin beneficio.
  */
-import { Component, OnInit, computed, inject, signal } from '@angular/core';
+import { Component, OnInit, computed, inject, signal, ChangeDetectionStrategy } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
 
-import { ApiService, FalloApi } from '../../nucleo/servicios/api.service';
+import { FalloApi } from '../../nucleo/servicios/api.service';
 import { AutenticacionService } from '../../nucleo/servicios/autenticacion.service';
+import { ModoLocalService } from '../../nucleo/servicios/modo-local.service';
 import { SesionService } from '../../nucleo/servicios/sesion.service';
 import { MarcaComponent } from '../../compartido/marca.component';
 
@@ -36,10 +37,11 @@ import { MarcaComponent } from '../../compartido/marca.component';
   standalone: true,
   imports: [FormsModule, MarcaComponent],
   templateUrl: './acceso.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './acceso.component.scss',
 })
 export class AccesoComponent implements OnInit {
-  private readonly api = inject(ApiService);
+  private readonly modoLocal = inject(ModoLocalService);
   private readonly autenticacion = inject(AutenticacionService);
   private readonly router = inject(Router);
   private readonly ruta = inject(ActivatedRoute);
@@ -57,7 +59,7 @@ export class AccesoComponent implements OnInit {
   protected readonly rolesLocales = signal<readonly { codigo: string; nombre: string }[]>([]);
 
   ngOnInit(): void {
-    this.api.accesosLocales().subscribe({
+    this.modoLocal.accesosLocales().subscribe({
       next: (respuesta) => {
         this.rolesLocales.set(respuesta.roles);
         this.modoAccesoLocal.set(respuesta.habilitado && respuesta.roles.length > 0);

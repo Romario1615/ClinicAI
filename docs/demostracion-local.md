@@ -1,6 +1,6 @@
 # ClinicAI: entorno local
 
-Actualizado el 2026-10-05. Esta guía describe el entorno local de ClinicAI, el
+Actualizado el 2026-10-06. Esta guía describe el entorno local de ClinicAI, el
 acceso de desarrollo por roles y las verificaciones ejecutadas. El entorno usa
 cuentas y datos sintéticos; no representa una clínica real ni prepara por sí
 solo un despliegue de producción.
@@ -100,6 +100,8 @@ variar si la semilla de esta instalación no creó una cuenta para alguno de ell
 2. **Agenda.** Seleccionar sede, especialidad, servicio, profesional y una fecha
    futura con disponibilidad. Apartar un horario y confirmar antes de su caducidad.
    También se puede reprogramar o cancelar una cita, indicando el motivo solicitado.
+   En **Configuración → Agenda y feriados**, Administración de clínica puede definir
+   horarios semanales, descansos y cierres para una sede o para toda la clínica.
 3. **Agente demo.** Elegir el simulador local, paciente, sede, servicio, profesional
    y fecha. Iniciar la simulación, pulsar «Buscar horarios», elegir uno y pulsar
    «Confirmar cita». «Mis citas» permite comprobar el resultado guardado. La agenda
@@ -146,17 +148,26 @@ peticiones clínicas se derivan al personal. Las herramientas administrativas
 operan con el ámbito del solicitante y registran auditoría. La disponibilidad
 depende de la agenda existente: si un horario ya se ocupó, debe buscarse otro.
 
+Desde **Configuración → Disponibilidad del equipo**, los roles con `agenda.configurar`
+o `profesional.gestionar` pueden elegir una sede y profesional y mantener sus
+franjas semanales, duración de cita y vigencias. La pantalla indica cuando no hay
+franjas particulares y se usa el horario general de la sede.
+
+Desde **Equipo clínico** (permiso `profesional.gestionar`) se crean y editan perfiles,
+se les asignan especialidades y una o más sedes, y se puede activar o desactivar su
+participación. El acceso de usuario y sus roles se mantienen en **Usuarios y roles**.
+
 ## Evidencia disponible
 
-Ejecuciones verificadas el 2026-10-05:
+Ejecuciones verificadas el 2026-10-06:
 
 | Comprobación | Resultado registrado |
 |---|---|
-| Pruebas de backend | **1510 aprobadas, 3 omitidas** |
+| Pruebas de backend | **1640 aprobadas, 3 omitidas** en la suite completa |
 | Pruebas focalizadas de lista de espera | **55 aprobadas**; incluye rollback real ante la restricción de PostgreSQL y diez respuestas HTTP concurrentes |
-| Suite E2E | **34 escenarios aprobados** con navegador, frontend, API y PostgreSQL; incluye el control posterior dentro del ciclo del plan dental |
-| Pruebas de frontend | **256 aprobadas**; cobertura: **87,99 %** líneas y **74,24 %** ramas, sobre los umbrales de 80 % y 70 % |
-| Estática del backend | Ruff y mypy aprobados |
+| Suite E2E | **55 pruebas aprobadas** con navegador, frontend, API y PostgreSQL; incluye exportación agregada desde Agenda, control posterior dentro del ciclo del plan dental, edición de sede y axe en 20 rutas del menú |
+| Pruebas de frontend | **377 aprobadas**; cobertura: **88,92 %** líneas, **72,17 %** ramas y **81,38 %** funciones, sobre sus umbrales |
+| Estática del backend | Ruff aprobado en los módulos tocados en esta revisión |
 | Pruebas omitidas | Tres integraciones que requieren `PRUEBAS_LLM_REAL=1` y llaman a Anthropic |
 
 Las tres integraciones opcionales se omitieron; no se llamó a Anthropic, Meta ni

@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="680" height="150" viewBox="0 0 680 150" fill="none">
+  <defs>
+    <linearGradient id="line" x1="71" y1="75" x2="609" y2="75" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#8BE5D7" stop-opacity=".22"/>
+      <stop offset=".5" stop-color="#8BE5D7" stop-opacity=".9"/>
+      <stop offset="1" stop-color="#8BE5D7" stop-opacity=".22"/>
+    </linearGradient>
+    <linearGradient id="card" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#fff" stop-opacity=".22"/>
+      <stop offset="1" stop-color="#B9F5EA" stop-opacity=".08"/>
+    </linearGradient>
+  </defs>
+  <path d="M104 75h472" stroke="url(#line)" stroke-width="2" stroke-dasharray="5 7"/>
+  <g stroke="#B9F5EA" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="26" y="25" width="156" height="100" rx="18" fill="url(#card)"/>
+    <rect x="262" y="25" width="156" height="100" rx="18" fill="url(#card)"/>
+    <rect x="498" y="25" width="156" height="100" rx="18" fill="url(#card)"/>
+    <circle cx="104" cy="75" r="24" fill="#0A5555" fill-opacity=".38"/>
+    <path d="M92 64h24v22H92zM92 70h24M98 60v8M110 60v8M98 76h5M107 76h4M98 81h5"/>
+    <circle cx="340" cy="75" r="24" fill="#0A5555" fill-opacity=".38"/>
+    <path d="M332 61h12l7 7v21h-22V61h3ZM344 61v7h7M334 75h12M334 81h8"/>
+    <circle cx="576" cy="75" r="24" fill="#0A5555" fill-opacity=".38"/>
+    <path d="M576 57v5M576 88v5M558 75h5M589 75h5M563 62l4 4M585 84l4 4M589 62l-4 4M567 84l-4 4M576 68v14M569 75h14"/>
+  </g>
+  <g fill="#DFFBF5" fill-opacity=".9">
+    <circle cx="104" cy="75" r="2.5"/><circle cx="340" cy="75" r="2.5"/><circle cx="576" cy="75" r="2.5"/>
+  </g>
+</svg>

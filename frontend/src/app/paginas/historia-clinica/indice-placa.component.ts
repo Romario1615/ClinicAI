@@ -6,7 +6,7 @@
  * vista previa y la serie de controles anteriores para ver la evolución.
  * Los registros no se editan: un control equivocado se compensa con otro.
  */
-import { Component, computed, effect, inject, input, signal } from '@angular/core';
+import { Component, computed, effect, inject, input, signal, ChangeDetectionStrategy } from '@angular/core';
 import { DatePipe, DecimalPipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 
@@ -112,6 +112,7 @@ const NOMBRES_CARA: Record<string, string> = {
       }
     </section>
   `,
+  changeDetection: ChangeDetectionStrategy.Eager,
   styles: `
     .placa { display: grid; gap: var(--espacio-3); }
     .placa__cabecera { display: flex; flex-wrap: wrap; justify-content: space-between; gap: var(--espacio-3); }

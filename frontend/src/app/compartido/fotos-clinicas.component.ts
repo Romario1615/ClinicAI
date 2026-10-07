@@ -21,6 +21,7 @@ import {
   output,
   signal,
   untracked,
+  ChangeDetectionStrategy
 } from '@angular/core';
 import { DatePipe } from '@angular/common';
 
@@ -90,6 +91,7 @@ import { IconoComponent } from './icono.component';
       </div>
     }
   `,
+  changeDetection: ChangeDetectionStrategy.Eager,
   styles: `
     .fotos { display: grid; gap: var(--espacio-2); }
     .fotos__tira { display: flex; flex-wrap: wrap; gap: var(--espacio-2); }

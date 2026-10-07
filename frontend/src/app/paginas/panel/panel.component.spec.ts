@@ -34,7 +34,30 @@ describe('PanelComponent · tablero por rol', () => {
     const http = TestBed.inject(HttpTestingController);
     for (const peticion of http.match(() => true)) {
       if (!peticion.cancelled) {
-        peticion.flush(peticion.request.url.endsWith('/profesionales') ? [] : { elementos: [], total: 0, limite: 200, desplazamiento: 0 });
+        if (peticion.request.url.endsWith('/profesionales')) {
+          peticion.flush([]);
+        } else if (peticion.request.url.endsWith('/catalogo/clinica')) {
+          peticion.flush({ id: 'clinica-1', nombre: 'Clínica', zona_horaria: 'America/Guayaquil', idioma: 'es', moneda: 'USD', telefono: null, correo: null });
+        } else if (/\/catalogo\/(sedes|especialidades|servicios)$/.test(peticion.request.url)) {
+          peticion.flush([]);
+        } else if (peticion.request.url.endsWith('/dashboard/')) {
+          peticion.flush({
+            total_citas: 0,
+            pacientes: 0,
+            pacientes_nuevos: null,
+            pacientes_recurrentes: null,
+            citas: {},
+            tendencia_diaria: [],
+            por_hora: [],
+            por_dia_semana: [],
+            espera: { promedio_minutos: null, personas_en_espera: 0, espera_mayor_15_minutos: 0 },
+            recuperacion_turnos: { turnos_liberados: null, turnos_recuperados: null, promedio_minutos_para_recuperar: null },
+            adherencia: null,
+            pagos: null,
+          });
+        } else {
+          peticion.flush({ elementos: [], total: 0, limite: 200, desplazamiento: 0 });
+        }
       }
     }
     fixture.detectChanges();
@@ -69,5 +92,263 @@ describe('PanelComponent · tablero por rol', () => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const grupos = (fixture.componentInstance as any).tablero().map((g: { titulo: string }) => g.titulo);
     expect(grupos).toEqual(['Pendiente de atender', 'Gestión de la clínica']);
+  });
+
+  it('usa etiquetas ISO y escala los agregados del periodo', () => {
+    const fixture = montar(indicadores({}), ['agenda.leer']);
+    const componente = fixture.componentInstance as unknown as {
+      etiquetaDia(dia: number): string;
+      etiquetaFecha(fecha: string): string;
+      etiquetaHora(hora: number): string;
+      maximoTendencia(items: readonly { total: number }[]): number;
+    };
+    expect(componente.etiquetaDia(1)).toBe('Lun');
+    expect(componente.etiquetaDia(7)).toBe('Dom');
+    expect(componente.etiquetaFecha('2026-10-05')).toMatch(/lun/i);
+    expect(componente.etiquetaFecha('fecha-invalida')).toBe('fecha-invalida');
+    expect(componente.etiquetaHora(8)).toBe('08:00');
+    expect(componente.maximoTendencia([{ total: 2 }, { total: 6 }])).toBe(6);
+    expect(componente.maximoTendencia([])).toBe(1);
+  });
+
+  it('expone las tendencias como listas etiquetadas y conserva el estado vacío', () => {
+    const fixture = montar(indicadores({}), ['dashboard.leer']);
+    const region = (fixture.nativeElement as HTMLElement).querySelector(
+      '[role="group"][aria-label="Distribución de citas en el periodo"]',
+    );
+    expect(region).not.toBeNull();
+    const secciones = Array.from(region?.querySelectorAll('section[aria-labelledby]') ?? []);
+    expect(secciones.length).toBe(3);
+    expect((fixture.nativeElement as HTMLElement).textContent).toContain('Citas por día');
+    expect((fixture.nativeElement as HTMLElement).textContent).toContain('Sin citas en este periodo.');
+    expect(region?.querySelector('ul')).toBeNull();
+  });
+
+  it('presenta fechas y cantidades en texto junto a las barras visuales', () => {
+    const fixture = montar(indicadores({}), ['dashboard.leer']);
+    const componente = fixture.componentInstance as unknown as { cambiarPeriodo(clave: string): void };
+    componente.cambiarPeriodo('7');
+    const http = TestBed.inject(HttpTestingController);
+    const peticiones = http.match((solicitud) => solicitud.url.endsWith('/dashboard/'));
+    expect(peticiones.length).toBe(2);
+    peticiones[0].flush({
+      total_citas: 4, pacientes: 3, pacientes_nuevos: 1, pacientes_recurrentes: 2,
+      citas: { COMPLETED: 4 }, tendencia_diaria: [{ fecha: '2026-10-06', total: 4 }],
+      por_hora: [{ hora: 9, total: 4 }], por_dia_semana: [{ dia: 2, total: 4 }],
+      espera: { promedio_minutos: null, personas_en_espera: 0, espera_mayor_15_minutos: 0 },
+      recuperacion_turnos: { turnos_liberados: 0, turnos_recuperados: 0, promedio_minutos_para_recuperar: null },
+      adherencia: null, pagos: null,
+    });
+    peticiones[1].flush({
+      total_citas: 0, pacientes: 0, pacientes_nuevos: 0, pacientes_recurrentes: 0,
+      citas: {}, tendencia_diaria: [], por_hora: [], por_dia_semana: [],
+      espera: { promedio_minutos: null, personas_en_espera: 0, espera_mayor_15_minutos: 0 },
+      recuperacion_turnos: { turnos_liberados: 0, turnos_recuperados: 0, promedio_minutos_para_recuperar: null },
+      adherencia: null, pagos: null,
+    });
+    fixture.detectChanges();
+    const diaria = (fixture.nativeElement as HTMLElement).querySelector('#tendencia-diaria');
+    expect(diaria?.parentElement?.querySelector('ul li')?.textContent).toContain('4');
+    expect((fixture.nativeElement as HTMLElement).querySelectorAll('.tendencia__pista[aria-hidden="true"]').length).toBe(3);
+    http.verify();
+  });
+
+  it('no conserva cifras anteriores si falla la carga actual del dashboard', () => {
+    const fixture = montar(indicadores({}), ['dashboard.leer']);
+    const componente = fixture.componentInstance as unknown as { cambiarPeriodo(clave: string): void; resumen: () => unknown };
+    componente.cambiarPeriodo('7');
+    const http = TestBed.inject(HttpTestingController);
+    const peticiones = http.match((solicitud) => solicitud.url.endsWith('/dashboard/'));
+    expect(peticiones.length).toBe(2);
+    peticiones[0].flush({ mensaje: 'Fallo temporal del resumen' }, { status: 503, statusText: 'Unavailable' });
+    peticiones[1].flush({
+      total_citas: 0, pacientes: 0, pacientes_nuevos: 0, pacientes_recurrentes: 0,
+      citas: {}, tendencia_diaria: [], por_hora: [], por_dia_semana: [],
+      espera: { promedio_minutos: null, personas_en_espera: 0, espera_mayor_15_minutos: 0 },
+      recuperacion_turnos: { turnos_liberados: 0, turnos_recuperados: 0, promedio_minutos_para_recuperar: null },
+      adherencia: null, pagos: null,
+    });
+    fixture.detectChanges();
+    expect(componente.resumen()).toBeNull();
+    expect((fixture.nativeElement as HTMLElement).querySelector('[role="alert"]')).not.toBeNull();
+    expect((fixture.nativeElement as HTMLElement).querySelector('#tendencia-diaria')).toBeNull();
+    http.verify();
+  });
+
+  it('genera un resumen operativo local sin llamar al proveedor de IA', () => {
+    const fixture = montar(indicadores({}), ['dashboard.leer']);
+    const ilustracion = (fixture.nativeElement as HTMLElement).querySelector(
+      'img[src="/images/seguimiento-inteligente-clinica.svg"]',
+    );
+    expect(ilustracion).not.toBeNull();
+    const botones = Array.from(
+      (fixture.nativeElement as HTMLElement).querySelectorAll('button'),
+    );
+    const boton = botones.find((elemento) => elemento.textContent?.includes('Resumen operativo'));
+    expect(boton).toBeDefined();
+    boton?.click();
+
+    const http = TestBed.inject(HttpTestingController);
+    const peticion = http.expectOne((solicitud) => solicitud.url.endsWith('/dashboard/analisis-local'));
+    expect(peticion.request.method).toBe('POST');
+    peticion.flush({ hallazgos: ['Se registraron 3 citas de 2 pacientes distintos.'] });
+    fixture.detectChanges();
+
+    const texto = (fixture.nativeElement as HTMLElement).textContent ?? '';
+    expect(texto).toContain('RESUMEN OPERATIVO LOCAL');
+    expect(texto).toContain('3 citas de 2 pacientes distintos');
+    expect((fixture.nativeElement as HTMLElement).querySelector('img[src="/images/seguimiento-inteligente-clinica.svg"]')).toBeNull();
+    http.verify();
+  });
+
+  it('envía los filtros de catálogo y estado al resumen agregado', () => {
+    const fixture = montar(indicadores({}), ['dashboard.leer']);
+    const componente = fixture.componentInstance as unknown as {
+      sedeId: { set(valor: string): void };
+      especialidadId: { set(valor: string): void };
+      profesionalId: { set(valor: string): void };
+      servicioId: { set(valor: string): void };
+      estadoCita: { set(valor: string): void };
+      aplicarFiltros(): void;
+    };
+    componente.sedeId.set('sede-1');
+    componente.especialidadId.set('especialidad-1');
+    componente.profesionalId.set('profesional-1');
+    componente.servicioId.set('servicio-1');
+    componente.estadoCita.set('CONFIRMED');
+    componente.aplicarFiltros();
+
+    const http = TestBed.inject(HttpTestingController);
+    const peticiones = http.match((solicitud) => solicitud.url.endsWith('/dashboard/'));
+    expect(peticiones.length).toBe(2);
+    const peticion = peticiones[0];
+    expect(peticion.request.params.get('sede_id')).toBe('sede-1');
+    expect(peticion.request.params.get('especialidad_id')).toBe('especialidad-1');
+    expect(peticion.request.params.get('profesional_id')).toBe('profesional-1');
+    expect(peticion.request.params.get('servicio_id')).toBe('servicio-1');
+    expect(peticion.request.params.get('estado')).toBe('CONFIRMED');
+    for (const solicitud of peticiones) {
+      solicitud.flush({
+        total_citas: 0, pacientes: 0, pacientes_nuevos: null, pacientes_recurrentes: null, citas: {}, tendencia_diaria: [], por_hora: [], por_dia_semana: [],
+        espera: { promedio_minutos: null, personas_en_espera: 0, espera_mayor_15_minutos: 0 }, recuperacion_turnos: { turnos_liberados: null, turnos_recuperados: null, promedio_minutos_para_recuperar: null }, adherencia: null, pagos: null,
+      });
+    }
+    http.verify();
+  });
+
+  it('aplica fechas locales inclusivas y no consulta rangos inválidos', () => {
+    const fixture = montar(indicadores({}), ['dashboard.leer']);
+    const componente = fixture.componentInstance as unknown as {
+      fechaDesde: { set(valor: string): void };
+      fechaHasta: { set(valor: string): void };
+      periodo: { set(valor: string): void };
+      sedeId: { set(valor: string): void };
+      sedes: { set(valor: readonly { id: string; nombre: string; direccion: null; zona_horaria: string }[]): void };
+      aplicarFiltros(): void;
+      errorFechas: () => string;
+    };
+    componente.fechaDesde.set('2026-10-01');
+    componente.fechaHasta.set('2026-10-03');
+    componente.periodo.set('personalizado');
+    componente.aplicarFiltros();
+
+    const http = TestBed.inject(HttpTestingController);
+    const peticiones = http.match((solicitud) => solicitud.url.endsWith('/dashboard/'));
+    expect(peticiones.length).toBe(2);
+    expect(peticiones[0].request.params.get('desde')).toBe('2026-10-01T05:00:00.000Z');
+    expect(peticiones[0].request.params.get('hasta')).toBe('2026-10-04T05:00:00.000Z');
+    for (const solicitud of peticiones) {
+      solicitud.flush({
+        total_citas: 0, pacientes: 0, pacientes_nuevos: null, pacientes_recurrentes: null, citas: {}, tendencia_diaria: [], por_hora: [], por_dia_semana: [],
+        espera: { promedio_minutos: null, personas_en_espera: 0, espera_mayor_15_minutos: 0 }, recuperacion_turnos: { turnos_liberados: null, turnos_recuperados: null, promedio_minutos_para_recuperar: null }, adherencia: null, pagos: null,
+      });
+    }
+    fixture.detectChanges();
+    const botonResumen = Array.from(
+      (fixture.nativeElement as HTMLElement).querySelectorAll('button'),
+    ).find((boton) => boton.textContent?.includes('Resumen operativo'));
+    botonResumen?.click();
+    const consultaLocal = http.expectOne((solicitud) => solicitud.url.endsWith('/dashboard/analisis-local'));
+    expect(consultaLocal.request.params.get('desde')).toBe('2026-10-01T05:00:00.000Z');
+    expect(consultaLocal.request.params.get('hasta')).toBe('2026-10-04T05:00:00.000Z');
+    consultaLocal.flush({ hallazgos: [] });
+
+    componente.sedes.set([{ id: 'sede-1', nombre: 'Sede Este', direccion: null, zona_horaria: 'Pacific/Kiritimati' }]);
+    componente.sedeId.set('sede-1');
+    componente.aplicarFiltros();
+    const consultasSede = http.match((solicitud) => solicitud.url.endsWith('/dashboard/'));
+    expect(consultasSede.length).toBe(2);
+    expect(consultasSede[0].request.params.get('sede_id')).toBe('sede-1');
+    expect(consultasSede[0].request.params.get('desde')).toBe('2026-09-30T10:00:00.000Z');
+    expect(consultasSede[0].request.params.get('hasta')).toBe('2026-10-03T10:00:00.000Z');
+    for (const solicitud of consultasSede) {
+      solicitud.flush({
+        total_citas: 0, pacientes: 0, pacientes_nuevos: null, pacientes_recurrentes: null, citas: {}, tendencia_diaria: [], por_hora: [], por_dia_semana: [],
+        espera: { promedio_minutos: null, personas_en_espera: 0, espera_mayor_15_minutos: 0 }, recuperacion_turnos: { turnos_liberados: null, turnos_recuperados: null, promedio_minutos_para_recuperar: null }, adherencia: null, pagos: null,
+      });
+    }
+
+    componente.fechaDesde.set('2027-01-01');
+    componente.fechaHasta.set('2026-12-31');
+    componente.aplicarFiltros();
+    expect(componente.errorFechas()).toContain('anterior o igual');
+    http.expectNone((solicitud) => solicitud.url.endsWith('/dashboard/'));
+    http.verify();
+  });
+
+  it('muestra pacientes nuevos y recurrentes a partir de atenciones completadas', () => {
+    const fixture = montar(indicadores({}), ['dashboard.leer']);
+    const componente = fixture.componentInstance as unknown as { cambiarPeriodo(clave: string): void };
+    componente.cambiarPeriodo('7');
+
+    const http = TestBed.inject(HttpTestingController);
+    const peticiones = http.match((solicitud) => solicitud.url.endsWith('/dashboard/'));
+    expect(peticiones.length).toBe(2);
+    peticiones[0].flush({
+      total_citas: 8, pacientes: 5, pacientes_nuevos: 2, pacientes_recurrentes: 3,
+      citas: { COMPLETED: 5 }, tendencia_diaria: [], por_hora: [], por_dia_semana: [],
+      espera: { promedio_minutos: null, personas_en_espera: 0, espera_mayor_15_minutos: 0 }, recuperacion_turnos: { turnos_liberados: null, turnos_recuperados: null, promedio_minutos_para_recuperar: null }, adherencia: null, pagos: null,
+    });
+    peticiones[1].flush({
+      total_citas: 4, pacientes: 3, pacientes_nuevos: 1, pacientes_recurrentes: 1,
+      citas: { COMPLETED: 3 }, tendencia_diaria: [], por_hora: [], por_dia_semana: [],
+      espera: { promedio_minutos: null, personas_en_espera: 0, espera_mayor_15_minutos: 0 }, recuperacion_turnos: { turnos_liberados: null, turnos_recuperados: null, promedio_minutos_para_recuperar: null }, adherencia: null, pagos: null,
+    });
+    fixture.detectChanges();
+    const texto = (fixture.nativeElement as HTMLElement).textContent ?? '';
+    expect(texto).toContain('Pacientes atendidos');
+    expect(texto).toContain('Nuevos');
+    expect(texto).toContain('Recurrentes');
+    expect(texto).toContain('Clasificados por su primera atención completada dentro del filtro.');
+    http.verify();
+  });
+
+  it('presenta turnos cancelados, recuperados y tiempo medio de reasignación', () => {
+    const fixture = montar(indicadores({}), ['dashboard.leer']);
+    const componente = fixture.componentInstance as unknown as { cambiarPeriodo(clave: string): void };
+    componente.cambiarPeriodo('7');
+    const http = TestBed.inject(HttpTestingController);
+    const peticiones = http.match((solicitud) => solicitud.url.endsWith('/dashboard/'));
+    for (const peticion of peticiones) {
+      peticion.flush({
+        total_citas: 0, pacientes: 0, pacientes_nuevos: null, pacientes_recurrentes: null,
+        citas: {}, tendencia_diaria: [], por_hora: [], por_dia_semana: [],
+        espera: { promedio_minutos: null, personas_en_espera: 0, espera_mayor_15_minutos: 0 },
+        recuperacion_turnos: { turnos_liberados: 4, turnos_recuperados: 3, promedio_minutos_para_recuperar: 18 },
+        adherencia: { tomas_confirmadas: 8, tomas_omitidas: 2, porcentaje_registro_positivo: 80, seguimientos_pendientes: 1 },
+        pagos: null,
+      });
+    }
+    fixture.detectChanges();
+    const texto = (fixture.nativeElement as HTMLElement).textContent ?? '';
+    expect(texto).toContain('Recuperación de turnos');
+    expect(texto).toContain('Liberados');
+    expect(texto).toContain('Recuperados');
+    expect(texto).toContain('Media hasta aceptar una oferta: 18 min.');
+    expect(texto).toContain('Registro de medicación');
+    expect(texto).toContain('80%');
+    expect(texto).toContain('Omitidas2');
+    expect(texto).toContain('1 seguimiento pendiente actualmente.');
+    http.verify();
   });
 });

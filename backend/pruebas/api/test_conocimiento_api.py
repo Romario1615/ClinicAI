@@ -21,17 +21,27 @@ Lo que estas pruebas protegen
 from __future__ import annotations
 
 import uuid
+from io import BytesIO
 
 import pytest
 import pytest_asyncio
 import sqlalchemy as sa
+from fastapi import FastAPI
 from httpx import AsyncClient
+from pypdf import PdfWriter
+from pypdf.generic import DecodedStreamObject, DictionaryObject, NameObject
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.ia.embeddings import EmbeddingsSimulado
 from app.modulos.auditoria.modelos import Auditoria
 from app.modulos.conocimiento.modelos import (
     EstadoDocumento,
+    EstadoIngesta,
+    KnowledgeChunk,
     KnowledgeDocument,
+    KnowledgeEmbedding,
+    KnowledgeIngestionJob,
+    KnowledgeVersion,
     TipoDocumentoConocimiento,
 )
 from app.modulos.organizacion.modelos import Clinica, Sede
@@ -46,6 +56,29 @@ TEXTO = (
     "22:00 de la noche anterior. Puede beber agua sin limite durante el ayuno. "
     "Traiga la orden medica y su documento de identidad."
 )
+
+
+def _pdf_de_prueba(texto: str = "Guia de preparacion para el examen.") -> bytes:
+    escritor = PdfWriter()
+    pagina = escritor.add_blank_page(width=612, height=792)
+    fuente = escritor._add_object(
+        DictionaryObject(
+            {
+                NameObject("/Type"): NameObject("/Font"),
+                NameObject("/Subtype"): NameObject("/Type1"),
+                NameObject("/BaseFont"): NameObject("/Helvetica"),
+            }
+        )
+    )
+    pagina[NameObject("/Resources")] = DictionaryObject(
+        {NameObject("/Font"): DictionaryObject({NameObject("/F1"): fuente})}
+    )
+    flujo = DecodedStreamObject()
+    flujo.set_data(f"BT /F1 12 Tf 72 720 Td ({texto}) Tj ET".encode("ascii"))
+    pagina[NameObject("/Contents")] = escritor._add_object(flujo)
+    salida = BytesIO()
+    escritor.write(salida)
+    return salida.getvalue()
 
 
 @pytest_asyncio.fixture
@@ -132,6 +165,59 @@ async def _cambiar_estado(
         json={"nuevo_estado": estado.value},
         headers=cabeceras,
     )
+
+
+async def test_pdf_se_analiza_y_su_texto_termina_en_una_version_auditada(
+    cliente: AsyncClient,
+    api: str,
+    cabeceras_cargador: dict[str, str],
+    sesion: AsyncSession,
+) -> None:
+    document_id = await _crear_documento(cliente, api, cabeceras_cargador)
+
+    respuesta = await cliente.post(
+        f"{api}/conocimiento/documentos/{document_id}/versiones/archivo",
+        files={"archivo": ("guia.pdf", _pdf_de_prueba(), "application/pdf")},
+        data={"notas_cambio": "Primera versión PDF"},
+        headers=cabeceras_cargador,
+    )
+
+    assert respuesta.status_code == 201, respuesta.text
+    assert respuesta.json()["document_id"] == str(document_id)
+    assert respuesta.json()["fragmentos"] > 0
+    assert respuesta.json()["escaneo_antivirus"] == "NO_DISPONIBLE"
+    version = await sesion.scalar(
+        sa.select(KnowledgeVersion).where(KnowledgeVersion.document_id == document_id)
+    )
+    assert version is not None
+    assert version.nombre_archivo == "guia.pdf"
+    assert version.notas_cambio == "Primera versión PDF"
+    metadatos = await sesion.scalar(
+        sa.select(Auditoria.metadatos).where(
+            Auditoria.accion == AccionAuditada.DOCUMENTO_CARGADO.value,
+            Auditoria.entidad_id == document_id,
+        )
+    )
+    assert metadatos is not None
+    assert metadatos["tipo_archivo"] == "PDF"
+
+
+async def test_version_pdf_rechaza_contenido_que_finge_ser_archivo(
+    cliente: AsyncClient,
+    api: str,
+    cabeceras_cargador: dict[str, str],
+) -> None:
+    document_id = await _crear_documento(cliente, api, cabeceras_cargador)
+    respuesta = await cliente.post(
+        f"{api}/conocimiento/documentos/{document_id}/versiones/archivo",
+        files={
+            "archivo": ("engaño.pdf", b"%PDF-1.7\n<script>alert(1)</script>", "application/pdf")
+        },
+        headers=cabeceras_cargador,
+    )
+
+    assert respuesta.status_code == 415
+    assert respuesta.json()["codigo"] == "ARCHIVO_NO_PERMITIDO"
 
 
 # ---------------------------------------------------------------------------
@@ -709,6 +795,103 @@ async def test_la_ingesta_queda_auditada(
         )
     )
     assert accion == AccionAuditada.DOCUMENTO_CARGADO.value
+
+
+async def test_la_ingesta_fallida_se_reintenta_sin_duplicar_fragmentos(
+    cliente: AsyncClient,
+    api: str,
+    aplicacion: FastAPI,
+    sesion: AsyncSession,
+    cabeceras_cargador: dict[str, str],
+) -> None:
+    """La fuente y el job sobreviven al fallo del proveedor de embeddings."""
+
+    class EmbeddingsFallaUnaVez:
+        def __init__(self) -> None:
+            self.base = EmbeddingsSimulado()
+            self.nombre_modelo = self.base.nombre_modelo
+            self.dimension = self.base.dimension
+            self.fallar = True
+
+        async def vectorizar(self, textos: list[str]) -> list[list[float]]:
+            if self.fallar:
+                self.fallar = False
+                raise RuntimeError("fallo sintetico del proveedor")
+            return await self.base.vectorizar(textos)
+
+        async def vectorizar_consulta(self, texto: str) -> list[float]:
+            return await self.base.vectorizar_consulta(texto)
+
+    aplicacion.state.embeddings = EmbeddingsFallaUnaVez()
+    document_id = await _crear_documento(cliente, api, cabeceras_cargador)
+    ruta = f"{api}/conocimiento/documentos/{document_id}/versiones"
+    solicitud = {"contenido": TEXTO}
+
+    fallo = await cliente.post(ruta, json=solicitud, headers=cabeceras_cargador)
+    assert fallo.status_code == 503, fallo.text
+    assert fallo.json()["codigo"] == "INGESTA_NO_DISPONIBLE"
+
+    trabajo = await sesion.scalar(
+        sa.select(KnowledgeIngestionJob).where(KnowledgeIngestionJob.document_id == document_id)
+    )
+    assert trabajo is not None
+    assert trabajo.estado == EstadoIngesta.FALLIDA.value
+    assert trabajo.intentos == 1
+    fila_version = await sesion.scalar(
+        sa.select(KnowledgeVersion).where(
+            KnowledgeVersion.document_id == document_id,
+            KnowledgeVersion.version == trabajo.version,
+        )
+    )
+    assert fila_version is not None
+    assert fila_version.contenido_texto == TEXTO
+    assert (
+        await sesion.scalar(
+            sa.select(sa.func.count())
+            .select_from(KnowledgeChunk)
+            .where(KnowledgeChunk.document_id == document_id)
+        )
+        == 0
+    )
+
+    reintento = await cliente.post(ruta, json=solicitud, headers=cabeceras_cargador)
+    assert reintento.status_code == 201, reintento.text
+    assert reintento.json()["version"] == trabajo.version
+    await sesion.refresh(trabajo)
+    await sesion.refresh(fila_version)
+    assert trabajo.estado == EstadoIngesta.COMPLETADA.value
+    assert trabajo.intentos == 2
+    assert fila_version.contenido_texto is None
+
+    duplicada = await cliente.post(ruta, json=solicitud, headers=cabeceras_cargador)
+    assert duplicada.status_code == 201, duplicada.text
+    assert duplicada.json()["version"] == trabajo.version
+    total_versiones = await sesion.scalar(
+        sa.select(sa.func.count())
+        .select_from(KnowledgeVersion)
+        .where(KnowledgeVersion.document_id == document_id)
+    )
+    assert total_versiones == 1
+
+    fragmentos = await sesion.scalar(
+        sa.select(sa.func.count())
+        .select_from(KnowledgeChunk)
+        .where(
+            KnowledgeChunk.document_id == document_id,
+            KnowledgeChunk.version == trabajo.version,
+        )
+    )
+    embeddings = await sesion.scalar(
+        sa.select(sa.func.count())
+        .select_from(KnowledgeEmbedding)
+        .join(KnowledgeChunk, KnowledgeChunk.id == KnowledgeEmbedding.chunk_id)
+        .where(
+            KnowledgeChunk.document_id == document_id,
+            KnowledgeChunk.version == trabajo.version,
+        )
+    )
+    assert fragmentos == trabajo.fragmentos_generados
+    assert embeddings == trabajo.embeddings_generados == fragmentos
 
 
 async def test_la_aprobacion_queda_auditada(

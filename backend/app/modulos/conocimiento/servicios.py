@@ -58,6 +58,7 @@ from app.nucleo.autorizacion import Principal
 from app.nucleo.bd import ejecutar_escritura
 from app.nucleo.errores import (
     DocumentoNoAprobado,
+    IngestaNoDisponible,
     RecursoNoEncontrado,
     ReglaNegocioViolada,
     TransicionEstadoInvalida,
@@ -332,17 +333,50 @@ class ServicioConocimiento:
         nombre_archivo: str | None = None,
         notas_cambio: str | None = None,
     ) -> ResultadoIngesta:
-        """Crea una version nueva, la fragmenta y la vectoriza.
+        """Prepara y procesa una version dentro de la sesion actual.
 
-        La version nueva **no cambia el estado del documento**. Un documento
-        publicado sigue publicado con su version vigente mientras la nueva se
-        revisa: subir contenido no puede ser una via para que texto sin
-        aprobar llegue al agente.
+        Los endpoints separan ambas fases y confirman la preparacion antes de
+        invocar embeddings. Este metodo conserva una entrada simple para
+        semillas y pruebas de integracion.
         """
-        documento = await self._obtener(principal, document_id)
+        trabajo = await self.preparar_ingesta(
+            principal=principal,
+            document_id=document_id,
+            contenido=contenido,
+            nombre_archivo=nombre_archivo,
+            notas_cambio=notas_cambio,
+        )
+        return await self.procesar_ingesta(
+            principal=principal, document_id=document_id, version=trabajo.version
+        )
+
+    async def preparar_ingesta(
+        self,
+        *,
+        principal: Principal,
+        document_id: uuid.UUID,
+        contenido: str,
+        nombre_archivo: str | None = None,
+        notas_cambio: str | None = None,
+    ) -> KnowledgeIngestionJob:
+        """Guarda fuente, version y trabajo antes de generar embeddings.
+
+        El endpoint confirma esta fase por separado. Si el proceso se reinicia
+        durante el indexado, el trabajo pendiente y su texto quedan disponibles
+        para repetirlo con la misma carga.
+        """
+        documento = await self._obtener_bloqueado(principal, document_id)
         if documento.status == EstadoDocumento.ARCHIVED.value:
             raise TransicionEstadoInvalida(
                 "Un documento archivado no admite versiones nuevas. Cree uno nuevo."
+            )
+        if documento.status in {
+            EstadoDocumento.APPROVED.value,
+            EstadoDocumento.PUBLISHED.value,
+        }:
+            raise TransicionEstadoInvalida(
+                "Retire el documento a borrador antes de cargar una version nueva. "
+                "La nueva version debe pasar por revision y aprobacion antes de responder consultas."
             )
 
         texto = contenido.strip()
@@ -351,12 +385,28 @@ class ServicioConocimiento:
 
         hash_contenido = hashlib.sha256(texto.encode("utf-8")).hexdigest()
         ultima = await self._sesion.scalar(
-            select(KnowledgeVersion.version)
+            select(KnowledgeVersion)
             .where(KnowledgeVersion.document_id == document_id)
             .order_by(KnowledgeVersion.version.desc())
             .limit(1)
+            .with_for_update()
         )
-        numero = (ultima or 0) + 1
+        if ultima is not None and ultima.hash_sha256 == hash_contenido:
+            trabajo_existente = await self._sesion.scalar(
+                select(KnowledgeIngestionJob)
+                .where(
+                    KnowledgeIngestionJob.document_id == document_id,
+                    KnowledgeIngestionJob.version == ultima.version,
+                )
+                .with_for_update()
+            )
+            if trabajo_existente is not None and (
+                trabajo_existente.estado == EstadoIngesta.COMPLETADA.value
+                or ultima.contenido_texto is not None
+            ):
+                return trabajo_existente
+
+        numero = (ultima.version if ultima is not None else 0) + 1
 
         analisis = analizar(texto)
         version = KnowledgeVersion(
@@ -364,6 +414,7 @@ class ServicioConocimiento:
             version=numero,
             nombre_archivo=nombre_archivo,
             hash_sha256=hash_contenido,
+            contenido_texto=texto,
             autor_id=principal.actor_id,
             notas_cambio=notas_cambio,
             resultado_analisis_inyeccion=analisis.a_dict(),
@@ -373,51 +424,124 @@ class ServicioConocimiento:
         trabajo = KnowledgeIngestionJob(
             document_id=document_id,
             version=numero,
-            estado=EstadoIngesta.EN_PROCESO.value,
-            paso_actual="fragmentacion",
+            estado=EstadoIngesta.PENDIENTE.value,
+            paso_actual="pendiente",
         )
         self._sesion.add(trabajo)
         await self._sesion.flush()
+        return trabajo
 
-        fragmentos = await self._indexar(documento, numero, texto)
+    async def procesar_ingesta(
+        self, *, principal: Principal, document_id: uuid.UUID, version: int
+    ) -> ResultadoIngesta:
+        """Procesa o reanuda una version sin duplicar fragmentos.
 
-        trabajo.estado = EstadoIngesta.COMPLETADA.value
-        trabajo.paso_actual = None
-        trabajo.fragmentos_generados = fragmentos
-        trabajo.embeddings_generados = fragmentos
-        trabajo.finalizado_en = self._reloj.ahora()
+        El documento y el trabajo quedan bloqueados durante el procesamiento.
+        Ante dos reintentos simultaneos, el segundo devuelve el resultado que
+        completo el primero.
+        """
+        documento = await self._obtener_bloqueado(principal, document_id)
+        trabajo = await self._sesion.scalar(
+            select(KnowledgeIngestionJob)
+            .where(
+                KnowledgeIngestionJob.document_id == document_id,
+                KnowledgeIngestionJob.version == version,
+            )
+            .with_for_update()
+        )
+        fila_version = await self._sesion.scalar(
+            select(KnowledgeVersion)
+            .where(
+                KnowledgeVersion.document_id == document_id,
+                KnowledgeVersion.version == version,
+            )
+            .with_for_update()
+        )
+        if trabajo is None or fila_version is None:
+            raise RecursoNoEncontrado("El trabajo de ingesta no existe.")
 
-        # La version pasa a ser la vigente. El estado del documento NO cambia:
-        # si estaba en borrador sigue en borrador, y sus fragmentos heredan ese
-        # estado, asi que no son recuperables.
-        documento.version_vigente = numero
-        await self._propagar_a_fragmentos(documento)
+        analisis_guardado = fila_version.resultado_analisis_inyeccion or {}
+        riesgo = RiesgoInyeccion(
+            str(analisis_guardado.get("riesgo", RiesgoInyeccion.NINGUNO.value))
+        )
+        requiere_revision = riesgo is RiesgoInyeccion.ALTO and not analisis_guardado.get(
+            "revisado_por"
+        )
+        if trabajo.estado == EstadoIngesta.COMPLETADA.value:
+            return ResultadoIngesta(
+                document_id=document_id,
+                version=version,
+                fragmentos=trabajo.fragmentos_generados,
+                embeddings=trabajo.embeddings_generados,
+                riesgo_inyeccion=riesgo,
+                requiere_revision=requiere_revision,
+            )
+        if fila_version.contenido_texto is None:
+            raise IngestaNoDisponible(
+                "No se conserva el texto necesario para reintentar esta version. Vuelva a cargarla."
+            )
+
+        texto = fila_version.contenido_texto
+        trabajo.estado = EstadoIngesta.EN_PROCESO.value
+        trabajo.paso_actual = "fragmentacion_embeddings"
+        trabajo.error = None
+        trabajo.intentos += 1
         await self._sesion.flush()
 
-        if analisis.riesgo is RiesgoInyeccion.ALTO:
+        try:
+            async with self._sesion.begin_nested():
+                fragmentos = await self._indexar(documento, version, texto)
+                documento.version_vigente = version
+                await self._propagar_a_fragmentos(documento)
+                trabajo.estado = EstadoIngesta.COMPLETADA.value
+                trabajo.paso_actual = None
+                trabajo.fragmentos_generados = fragmentos
+                trabajo.embeddings_generados = fragmentos
+                trabajo.error = None
+                trabajo.finalizado_en = self._reloj.ahora()
+                # El texto fuente se retiene solo mientras sirva para reintentar.
+                fila_version.contenido_texto = None
+                await self._sesion.flush()
+        except Exception as exc:
+            trabajo.estado = EstadoIngesta.FALLIDA.value
+            trabajo.paso_actual = "fragmentacion_embeddings"
+            trabajo.error = "No se pudo generar el indice; vuelva a intentar la carga."
+            trabajo.finalizado_en = self._reloj.ahora()
+            await self._sesion.flush()
+            await self._sesion.commit()
+            logger.warning(
+                "conocimiento.ingesta_fallida",
+                document_id=str(document_id),
+                version=version,
+                tipo_error=type(exc).__name__,
+            )
+            raise IngestaNoDisponible(
+                "No se pudo completar la indexacion. Puede reintentar la carga del documento."
+            ) from exc
+
+        if riesgo is RiesgoInyeccion.ALTO:
             # Nivel `warning`: alguien subio un documento con texto que intenta
             # manipular al agente. Puede ser legitimo, pero nadie deberia
             # enterarse por casualidad.
             logger.warning(
                 "conocimiento.riesgo_inyeccion_detectado",
                 document_id=str(document_id),
-                version=numero,
-                patrones=[h.patron for h in analisis.hallazgos],
+                version=version,
             )
 
         logger.info(
             "conocimiento.version_ingerida",
             document_id=str(document_id),
-            version=numero,
+            version=version,
             fragmentos=fragmentos,
         )
         return ResultadoIngesta(
             document_id=document_id,
-            version=numero,
+            version=version,
             fragmentos=fragmentos,
             embeddings=fragmentos,
-            riesgo_inyeccion=analisis.riesgo,
-            requiere_revision=analisis.bloquea_aprobacion,
+            riesgo_inyeccion=riesgo,
+            requiere_revision=requiere_revision,
         )
 
     async def _indexar(self, documento: KnowledgeDocument, version: int, texto: str) -> int:
@@ -458,6 +582,7 @@ class ServicioConocimiento:
                 effective_from=documento.effective_from,
                 effective_until=documento.effective_until,
                 sensitivity_level=documento.sensitivity_level,
+                vigente=version == documento.version_vigente,
             )
             self._sesion.add(fila)
             filas.append(fila)
@@ -479,8 +604,71 @@ class ServicioConocimiento:
         return len(filas)
 
     # ------------------------------------------------------------------
+    #  Mantenimiento
+    # ------------------------------------------------------------------
+    async def reindexar_embeddings(self, *, limite_lotes: int | None = None) -> int:
+        """Genera los vectores que faltan para el modelo configurado.
+
+        Al cambiar de modelo (por ejemplo, de `mock` al real) los fragmentos
+        existentes se quedan sin vector de ese modelo y la mitad semántica de
+        la búsqueda no los encuentra. El texto no cambia: solo se añaden
+        vectores. Es idempotente; lo ya indexado con el modelo no se repite.
+        Devuelve cuántos vectores creó.
+        """
+        modelo = self._embeddings.nombre_modelo
+        creados = 0
+        lotes = 0
+        while limite_lotes is None or lotes < limite_lotes:
+            ya_indexados = select(KnowledgeEmbedding.chunk_id).where(
+                KnowledgeEmbedding.modelo == modelo
+            )
+            pendientes = (
+                await self._sesion.execute(
+                    select(KnowledgeChunk.id, KnowledgeChunk.contenido)
+                    .where(KnowledgeChunk.id.not_in(ya_indexados))
+                    .order_by(KnowledgeChunk.id)
+                    .limit(LOTE_EMBEDDINGS)
+                )
+            ).all()
+            if not pendientes:
+                break
+            vectores = await self._embeddings.vectorizar([fila.contenido for fila in pendientes])
+            for fila, vector in zip(pendientes, vectores, strict=True):
+                self._sesion.add(
+                    KnowledgeEmbedding(
+                        chunk_id=fila.id,
+                        modelo=modelo,
+                        dimension=self._embeddings.dimension,
+                        embedding=vector,
+                    )
+                )
+            await self._sesion.flush()
+            creados += len(pendientes)
+            lotes += 1
+        logger.info("conocimiento.reindexado", modelo=modelo, vectores=creados)
+        return creados
+
+    # ------------------------------------------------------------------
     #  Auxiliares
     # ------------------------------------------------------------------
+    async def _obtener_bloqueado(
+        self, principal: Principal, document_id: uuid.UUID
+    ) -> KnowledgeDocument:
+        """Resuelve y bloquea un documento dentro de la clinica autorizada."""
+        documento = (
+            await self._sesion.execute(
+                select(KnowledgeDocument)
+                .where(
+                    KnowledgeDocument.id == document_id,
+                    KnowledgeDocument.clinic_id == principal.clinica_id,
+                )
+                .with_for_update()
+            )
+        ).scalar_one_or_none()
+        if documento is None:
+            raise RecursoNoEncontrado("El documento no existe.")
+        return documento
+
     async def _obtener(self, principal: Principal, document_id: uuid.UUID) -> KnowledgeDocument:
         """Documento de la clinica del principal, o 404.
 
@@ -501,7 +689,7 @@ class ServicioConocimiento:
         return documento
 
     async def _propagar_a_fragmentos(self, documento: KnowledgeDocument) -> int:
-        """Copia estado, vigencia y sensibilidad del documento a sus fragmentos.
+        """Copia estado, vigencia, sensibilidad y version activa a sus fragmentos.
 
         Es el precio de la desnormalizacion, y se paga en un solo sitio. Toca
         **todas** las versiones y no solo la vigente: si una version antigua
@@ -520,6 +708,7 @@ class ServicioConocimiento:
                 branch_id=documento.branch_id,
                 specialty_id=documento.specialty_id,
                 service_id=documento.service_id,
+                vigente=KnowledgeChunk.version == documento.version_vigente,
             ),
         )
 

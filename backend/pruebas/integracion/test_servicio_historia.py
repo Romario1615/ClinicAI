@@ -50,7 +50,6 @@ from app.nucleo.errores import (
     PermisoDenegado,
     RecursoNoEncontrado,
     ReglaNegocioViolada,
-    RelacionAsistencialRequerida,
 )
 from app.nucleo.reloj import RelojFijo
 from app.tareas.adherencia import evaluar_alertas_adherencia
@@ -165,7 +164,7 @@ class TestRelacionAsistencial:
         Sin este control, cualquier medico de la clinica escribiria en la
         historia de cualquier paciente.
         """
-        with pytest.raises(RelacionAsistencialRequerida):
+        with pytest.raises(RecursoNoEncontrado):
             await servicio_historia.crear_nota(
                 _datos_nota(paciente.id, profesional.id), principal=principal_medico
             )
@@ -198,7 +197,7 @@ class TestRelacionAsistencial:
         relacion.revocada_en = AHORA
         await sesion.flush()
 
-        with pytest.raises(RelacionAsistencialRequerida):
+        with pytest.raises(RecursoNoEncontrado):
             await servicio_historia.crear_nota(
                 _datos_nota(paciente.id, profesional.id), principal=principal_medico
             )
@@ -216,7 +215,7 @@ class TestRelacionAsistencial:
         relacion.vigente_hasta = AHORA - timedelta(days=1)
         await sesion.flush()
 
-        with pytest.raises(RelacionAsistencialRequerida):
+        with pytest.raises(RecursoNoEncontrado):
             await servicio_historia.crear_nota(
                 _datos_nota(paciente.id, profesional.id), principal=principal_medico
             )
@@ -541,6 +540,121 @@ class TestRecetas:
         )
         assert len(recordatorios) == resultado.tomas_generadas
         assert all(recordatorio.estado == "PROGRAMADO" for recordatorio in recordatorios)
+
+    @pytest.mark.parametrize(
+        ("frecuencia_horas", "duracion_dias", "cantidad_esperada"),
+        [(6, 1, 4), (8, 1, 3), (12, 1, 2), (24, 1, 1), (168, 7, 1)],
+    )
+    async def test_calendario_respeta_frecuencia_duracion_y_hora_local(
+        self,
+        sesion: AsyncSession,
+        reloj_fijo: RelojFijo,
+        principal_medico: Principal,
+        relacion: RelacionAsistencial,
+        paciente,  # type: ignore[no-untyped-def]
+        profesional,  # type: ignore[no-untyped-def]
+        frecuencia_horas: int,
+        duracion_dias: int,
+        cantidad_esperada: int,
+    ) -> None:
+        """El inicio se captura en hora local y se persiste como UTC.
+
+        El reloj está a las 09:00 de Guayaquil. La primera toma indicada para
+        las 10:30 debe convertirse a las 15:30 UTC; las siguientes conservan
+        exactamente el intervalo de la pauta hasta cumplir su duración.
+        """
+        servicio_historia = ServicioHistoria(
+            sesion,
+            RepositorioHistoria(sesion),
+            reloj_fijo,
+            zona_por_defecto="America/Guayaquil",
+        )
+        receta = await servicio_historia.crear_receta(
+            principal=principal_medico,
+            paciente_id=paciente.id,
+            profesional_id=profesional.id,
+            medicamentos=[
+                DatosMedicamento(
+                    nombre="Medicamento con pauta horaria",
+                    dosis="1 unidad",
+                    via="ORAL",
+                    frecuencia_horas=frecuencia_horas,
+                    duracion_dias=duracion_dias,
+                    hora_primera_toma="10:30",
+                )
+            ],
+        )
+        assert receta.receta is not None
+
+        resultado = await servicio_historia.confirmar_receta(
+            receta.receta.id, principal=principal_medico, profesional_id=profesional.id
+        )
+
+        programadas = list(
+            (
+                await sesion.execute(
+                    sa.select(Toma.programada_en)
+                    .join(
+                        RecetaMedicamento,
+                        RecetaMedicamento.id == Toma.receta_medicamento_id,
+                    )
+                    .where(RecetaMedicamento.receta_id == receta.receta.id)
+                    .order_by(Toma.programada_en)
+                )
+            ).scalars()
+        )
+        inicio_utc = datetime(2026, 4, 15, 15, 30, tzinfo=UTC)
+        esperadas = [
+            inicio_utc + timedelta(hours=frecuencia_horas * i) for i in range(cantidad_esperada)
+        ]
+
+        assert resultado.tomas_generadas == cantidad_esperada
+        assert programadas == esperadas
+
+    async def test_hora_primera_toma_que_ya_paso_se_mueve_al_dia_siguiente(
+        self,
+        sesion: AsyncSession,
+        reloj_fijo: RelojFijo,
+        principal_medico: Principal,
+        relacion: RelacionAsistencial,
+        paciente,  # type: ignore[no-untyped-def]
+        profesional,  # type: ignore[no-untyped-def]
+    ) -> None:
+        servicio_historia = ServicioHistoria(
+            sesion,
+            RepositorioHistoria(sesion),
+            reloj_fijo,
+            zona_por_defecto="America/Guayaquil",
+        )
+        receta = await servicio_historia.crear_receta(
+            principal=principal_medico,
+            paciente_id=paciente.id,
+            profesional_id=profesional.id,
+            medicamentos=[
+                DatosMedicamento(
+                    nombre="Medicamento con hora de inicio",
+                    dosis="1 unidad",
+                    via="ORAL",
+                    frecuencia_horas=24,
+                    duracion_dias=1,
+                    hora_primera_toma="08:00",
+                )
+            ],
+        )
+        assert receta.receta is not None
+
+        await servicio_historia.confirmar_receta(
+            receta.receta.id, principal=principal_medico, profesional_id=profesional.id
+        )
+        programada = (
+            await sesion.execute(
+                sa.select(Toma.programada_en)
+                .join(RecetaMedicamento, RecetaMedicamento.id == Toma.receta_medicamento_id)
+                .where(RecetaMedicamento.receta_id == receta.receta.id)
+            )
+        ).scalar_one()
+
+        assert programada == datetime(2026, 4, 16, 13, 0, tzinfo=UTC)
 
     async def test_no_se_confirma_dos_veces(
         self,

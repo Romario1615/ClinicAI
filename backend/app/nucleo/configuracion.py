@@ -120,7 +120,7 @@ class Configuracion(BaseSettings):
     llm_max_tokens: Annotated[int, Field(ge=64, le=32000)] = 2048
     llm_temperatura: Annotated[float, Field(ge=0.0, le=1.0)] = 0.2
     # Profundidad de razonamiento del modelo. `low` es lo adecuado para elegir
-    # entre siete herramientas administrativas: el limite clinico no depende de
+    # entre ocho herramientas administrativas: el limite clinico no depende de
     # lo que el modelo razone, se evalua antes del bucle.
     llm_esfuerzo: Literal["low", "medium", "high", "xhigh", "max"] = "low"
     llm_timeout_segundos: Annotated[int, Field(ge=1, le=300)] = 30
@@ -157,7 +157,7 @@ class Configuracion(BaseSettings):
 
     # --- Embeddings -------------------------------------------------------
     proveedor_embeddings: Literal["fastembed", "ollama", "mock"] = "fastembed"
-    modelo_embeddings: str = "intfloat/multilingual-e5-small"
+    modelo_embeddings: str = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
     dimension_embeddings: Annotated[int, Field(ge=64, le=4096)] = 384
     ruta_cache_embeddings: Path = Path("D:/cache/fastembed")
 
@@ -230,6 +230,7 @@ class Configuracion(BaseSettings):
     # --- Observabilidad ---------------------------------------------------
     metricas_habilitadas: bool = True
     ruta_metricas: str = "/metrics"
+    metricas_token: SecretStr = SecretStr("")
     sentry_dsn: str = ""
 
     # --- Frontend ---------------------------------------------------------
@@ -254,6 +255,21 @@ class Configuracion(BaseSettings):
                 "consulta ni fragmento."
             )
         return valor.strip().rstrip("/")
+
+    @field_validator("ruta_metricas")
+    @classmethod
+    def validar_ruta_metricas(cls, valor: str) -> str:
+        ruta = valor.strip()
+        if (
+            not re.fullmatch(r"/[A-Za-z0-9_-]+", ruta)
+            or ruta.endswith("/")
+            or ruta in {"/salud", "/salud/vivo", "/salud/listo", "/documentacion", "/openapi.json"}
+        ):
+            raise ValueError(
+                "RUTA_METRICAS debe ser una ruta absoluta de un segmento, sin "
+                "parámetros ni colisiones con documentación o sondas de salud."
+            )
+        return ruta
 
     # ------------------------------------------------------------------
     #  Propiedades derivadas
@@ -397,6 +413,13 @@ class Configuracion(BaseSettings):
 
         if not self.postgres_contrasena.get_secret_value() and not self.bd_url:
             fallos.append("POSTGRES_CONTRASENA es obligatoria")
+
+        token_metricas = self.metricas_token.get_secret_value()
+        if self.metricas_habilitadas and len(token_metricas) < LONGITUD_MINIMA_CLAVE_SECRETA:
+            fallos.append(
+                "METRICAS_TOKEN debe tener al menos "
+                f"{LONGITUD_MINIMA_CLAVE_SECRETA} caracteres cuando las métricas están habilitadas"
+            )
 
         # --- CORS ---
         if "*" in self.origenes_cors:

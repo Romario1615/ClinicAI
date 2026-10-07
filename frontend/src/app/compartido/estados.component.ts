@@ -10,7 +10,7 @@
  * Los tres estados se anuncian a los lectores de pantalla con `role` y
  * `aria-live` adecuados: quien no ve el spinner necesita enterarse igual.
  */
-import { Component, input, output } from '@angular/core';
+import { Component, input, output, ChangeDetectionStrategy } from '@angular/core';
 
 @Component({
   selector: 'app-cargando',
@@ -21,6 +21,7 @@ import { Component, input, output } from '@angular/core';
       <span>{{ mensaje() }}</span>
     </div>
   `,
+  changeDetection: ChangeDetectionStrategy.Eager,
   styles: `
     .cargando {
       display: flex;
@@ -61,6 +62,7 @@ export class CargandoComponent {
       <ng-content />
     </div>
   `,
+  changeDetection: ChangeDetectionStrategy.Eager,
   styles: `
     .vacio {
       padding: var(--espacio-7) var(--espacio-5);
@@ -113,6 +115,7 @@ export class VacioComponent {
       }
     </div>
   `,
+  changeDetection: ChangeDetectionStrategy.Eager,
   styles: `
     .error {
       padding: var(--espacio-5);
@@ -161,6 +164,7 @@ export class ErrorComponent {
       Ninguna persona, cita, diagnostico ni medicamento de esta pantalla es real.
     </div>
   `,
+  changeDetection: ChangeDetectionStrategy.Eager,
   styles: `
     .demo {
       padding: var(--espacio-3) var(--espacio-4);

@@ -17,11 +17,30 @@ test.describe('Acceso local por roles', () => {
     await expect(page.locator('input[name="contrasena"]')).toHaveCount(0);
   });
 
+  test('la pantalla de acceso conserva landmarks válidos y permite saltar al contenido con teclado', async ({ page }) => {
+    await page.goto('/acceso');
+    await expect(page.locator('main')).toHaveCount(1);
+    await expect(page.getByRole('group', { name: 'Ingresar como un rol' })).toBeVisible();
+
+    await page.keyboard.press('Tab');
+    await expect(page.getByRole('link', { name: 'Saltar al contenido' })).toBeFocused();
+    await page.keyboard.press('Enter');
+    await expect(page.locator('#contenido')).toBeFocused();
+  });
+
   test('recepción entra y ve la navegación de su rol', async ({ page }) => {
     await acceder(page, 'recepcion');
     const navegacion = page.getByRole('navigation', { name: 'Secciones' });
     await expect(navegacion.getByRole('link', { name: /agenda/i })).toBeVisible();
     await expect(navegacion.getByRole('link', { name: /pacientes/i })).toBeVisible();
+  });
+
+  test('anuncia la sección actual en la navegación', async ({ page }) => {
+    await acceder(page, 'recepcion');
+    const navegacion = page.getByRole('navigation', { name: 'Secciones' });
+    const agenda = navegacion.getByRole('link', { name: /agenda/i });
+    await agenda.click();
+    await expect(agenda).toHaveAttribute('aria-current', 'page');
   });
 
   test('administración de clínica entra en el entorno local', async ({ page }) => {
@@ -56,11 +75,25 @@ test.describe('Acceso local por roles', () => {
     await registro.getByLabel('Correo de acceso').fill(`admin-${sufijo}@example.invalid`);
     await registro.getByLabel('Contraseña temporal').fill('Temporal!Seguro1234');
     await registro.getByRole('button', { name: 'Crear clínica y administrador' }).click();
-    await expect(page.getByRole('status')).toContainText(`Clínica ${nombre} creada`);
+    await expect(page.getByRole('status').filter({ hasText: `Clínica ${nombre} creada` })).toBeVisible();
     await expect(page.getByRole('strong').filter({ hasText: nombre })).toBeVisible();
+
+    const organizacion = page.getByRole('article').filter({ hasText: nombre }).first();
+    await organizacion.getByRole('button', { name: 'Gestionar sedes' }).click();
+    const sedes = page.locator('section').filter({ has: page.getByRole('heading', { name: `Sedes de ${nombre}` }) });
+    await expect(sedes.getByRole('article').filter({ hasText: 'Sede principal' })).toBeVisible();
+    await sedes.getByLabel('Nombre de la sede').fill(`Sucursal E2E ${sufijo}`);
+    await sedes.getByLabel('Dirección').fill('Av. Pruebas 456');
+    await sedes.getByRole('button', { name: 'Crear sede' }).click();
+    await expect(sedes.getByRole('status')).toContainText(`Sede Sucursal E2E ${sufijo} creada`);
+    await expect(sedes.getByRole('article').filter({ hasText: `Sucursal E2E ${sufijo}` })).toBeVisible();
 
     const asignacion = page.locator('section').filter({ has: page.getByRole('heading', { name: 'Dar acceso a una persona' }) });
     await asignacion.locator('select[name="clinicaNuevaUsuario"]').selectOption({ label: nombre });
+    const todasLasSedes = asignacion.getByRole('checkbox', { name: /Acceso a todas las sedes/ });
+    await expect(todasLasSedes).toBeChecked();
+    await todasLasSedes.uncheck();
+    await asignacion.getByRole('checkbox', { name: `Sucursal E2E ${sufijo}` }).check();
     await asignacion.locator('input[name="nombreUsuario"]').fill('Recepción');
     await asignacion.locator('input[name="apellidoUsuario"]').fill('E2E');
     await asignacion.locator('input[name="correoUsuario"]').fill(`recepcion-${sufijo}@example.invalid`);
@@ -69,7 +102,7 @@ test.describe('Acceso local por roles', () => {
     await asignacion.getByRole('button', { name: 'Crear cuenta y asignar módulos' }).click();
     await expect(page.getByRole('status').filter({ hasText: 'Cuenta creada y vinculada' }))
       .toContainText(`Cuenta creada y vinculada a ${nombre}`);
-    await expect(page.getByRole('article').filter({ hasText: `recepcion-${sufijo}@example.invalid` }))
-      .toBeVisible();
+    const cuentaCreada = page.getByRole('article').filter({ hasText: `recepcion-${sufijo}@example.invalid` });
+    await expect(cuentaCreada).toContainText('Acceso limitado a 1 sede');
   });
 });

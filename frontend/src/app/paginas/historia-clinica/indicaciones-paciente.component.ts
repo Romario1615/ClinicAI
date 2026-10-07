@@ -9,7 +9,7 @@
  *
  * Una indicación publicada no se edita: se anula con motivo y se publica otra.
  */
-import { Component, effect, inject, input, signal, untracked } from '@angular/core';
+import { Component, effect, inject, input, signal, untracked, ChangeDetectionStrategy } from '@angular/core';
 import { DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 
@@ -126,6 +126,7 @@ export interface RecetaOpcion {
       </ul>
     </section>
   `,
+  changeDetection: ChangeDetectionStrategy.Eager,
   styles: `
     .indicaciones { display: grid; gap: var(--espacio-3); }
     h3 { margin: 0; } h4 { margin: var(--espacio-2) 0 0; font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--texto-suave); }

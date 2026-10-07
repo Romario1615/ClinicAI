@@ -83,6 +83,8 @@ class MensajeSaliente:
     idioma: str = "es"
     # Media id de Meta para la cabecera de imagen (plantillas de marketing).
     imagen_cabecera: str | None = None
+    # Clínica del mensaje: elige sus credenciales (`canales_clinica.py`).
+    clinica_id: uuid.UUID | None = None
 
 
 # ---------------------------------------------------------------------------

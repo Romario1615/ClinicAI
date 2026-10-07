@@ -19,7 +19,7 @@
  * `rol.asignar`, `usuario.desactivar`, `usuario.editar`); el backend vuelve a
  * comprobarlo en cada petición.
  */
-import { Component, computed, inject, signal } from '@angular/core';
+import { Component, computed, inject, signal, ChangeDetectionStrategy } from '@angular/core';
 import { DatePipe, NgTemplateOutlet } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 
@@ -32,6 +32,7 @@ import { ResumenModuloComponent } from '../../compartido/resumen-modulo.componen
 import { VentanaFlotanteComponent } from '../../compartido/ventana-flotante.component';
 import { FotoPersonaComponent } from '../../compartido/foto-persona.component';
 import { MatrizAccesosComponent } from './matriz-accesos.component';
+import { IconoComponent, type NombreIcono } from '../../compartido/icono.component';
 
 interface UsuarioClinica {
   readonly id: string;
@@ -99,25 +100,27 @@ const CATEGORIAS: Record<string, string> = {
     ResumenModuloComponent,
     VentanaFlotanteComponent,
     FotoPersonaComponent,
+    IconoComponent,
   ],
   template: `
     <header class="encabezado">
       <div>
-        <p class="ceja">ADMINISTRACIÓN DE ACCESOS</p>
+        <p class="ceja"><app-icono nombre="escudo" [tamano]="16" /> ADMINISTRACIÓN DE ACCESOS</p>
         <h1>Usuarios y roles</h1>
         <p class="encabezado__sub">Quién entra a la clínica, con qué rol y qué puede hacer cada rol.</p>
       </div>
-      <div class="acciones">
-        @if (puedeCrearRol()) {
-          <button class="boton" type="button" (click)="abrir({ tipo: 'rol-nuevo' })">Crear rol</button>
-        }
-        @if (puedeDarAcceso()) {
-          <button class="boton boton--principal" type="button" (click)="abrir({ tipo: 'alta' })">
-            Dar acceso a una persona
-          </button>
-        }
-      </div>
     </header>
+
+    <div class="acciones" role="group" aria-label="Acciones de usuarios y roles">
+      @if (puedeCrearRol()) {
+        <button class="boton" type="button" (click)="abrir({ tipo: 'rol-nuevo' })">Crear rol</button>
+      }
+      @if (puedeDarAcceso()) {
+        <button class="boton boton--principal" type="button" (click)="abrir({ tipo: 'alta' })">
+          Dar acceso a una persona
+        </button>
+      }
+    </div>
 
     <app-resumen-modulo modulo="usuarios" />
 
@@ -138,6 +141,7 @@ const CATEGORIAS: Record<string, string> = {
           [attr.aria-selected]="pestana() === tab.clave"
           (click)="pestana.set(tab.clave)"
         >
+          <app-icono [nombre]="tab.icono" [tamano]="17" />
           {{ tab.etiqueta }}
           @if (tab.clave === 'personal') { <span class="cuenta">{{ usuarios().length }}</span> }
           @if (tab.clave === 'roles') { <span class="cuenta">{{ roles().length }}</span> }
@@ -417,16 +421,52 @@ const CATEGORIAS: Record<string, string> = {
       }
     </ng-template>
   `,
+  changeDetection: ChangeDetectionStrategy.Eager,
   styles: `
     :host { display: grid; gap: var(--espacio-4); }
     :host > * { min-width: 0; }
-    .encabezado { display: flex; align-items: flex-end; justify-content: space-between; gap: var(--espacio-4); flex-wrap: wrap; }
+    .encabezado {
+      position: relative;
+      isolation: isolate;
+      overflow: hidden;
+      display: flex;
+      align-items: center;
+      min-height: 190px;
+      padding: var(--espacio-5) var(--espacio-6);
+      border: 1px solid var(--borde);
+      border-radius: var(--radio);
+      background-image:
+        linear-gradient(90deg, rgb(255 255 255 / 99%) 0%, rgb(255 255 255 / 96%) 38%, rgb(255 255 255 / 68%) 59%, rgb(255 255 255 / 4%) 100%),
+        url('/images/usuarios-roles-acceso.jpg');
+      background-position: center, 66% 52%;
+      background-size: cover;
+      animation: usuarios-fondo 32s ease-in-out infinite alternate;
+    }
+    .encabezado::after {
+      content: '';
+      position: absolute;
+      z-index: -1;
+      inset: -45% 7% -45% 48%;
+      background: radial-gradient(ellipse, rgb(95 209 196 / 20%), transparent 68%);
+      pointer-events: none;
+      animation: usuarios-resplandor 16s ease-in-out infinite alternate;
+    }
+    .encabezado > div { position: relative; z-index: 1; max-width: 39rem; }
+    @keyframes usuarios-fondo {
+      from { background-position: center, 63% 52%; }
+      to { background-position: center, 67% 52%; }
+    }
+    @keyframes usuarios-resplandor {
+      from { transform: translate3d(-2%, 0, 0) scale(.96); opacity: .55; }
+      to { transform: translate3d(2%, 1%, 0) scale(1.04); opacity: .9; }
+    }
+    .acciones { display: flex; justify-content: flex-end; gap: var(--espacio-2); flex-wrap: wrap; }
     .encabezado h1 { margin: 2px 0 4px; }
     .encabezado__sub { margin: 0; color: var(--texto-suave); }
-    .ceja { margin: 0; color: var(--acento); font-size: 0.75rem; font-weight: 700; letter-spacing: 0.1em; }
+    .ceja { display: flex; align-items: center; gap: 7px; margin: 0; color: var(--acento); font-size: 0.75rem; font-weight: 700; letter-spacing: 0.1em; }
 
     .pestanas { display: flex; gap: 2px; border-bottom: 1px solid var(--borde); overflow-x: auto; }
-    .pestanas__boton { display: inline-flex; align-items: center; gap: 6px; min-height: var(--toque-minimo); padding: 0 var(--espacio-4);
+    .pestanas__boton { display: inline-flex; align-items: center; gap: 8px; min-height: var(--toque-minimo); padding: 0 var(--espacio-4);
       border: 0; background: transparent; color: var(--texto-suave); font-weight: 650; cursor: pointer; white-space: nowrap; }
     .pestanas__boton:hover { color: var(--texto); }
     .pestanas__boton:focus-visible { outline: 3px solid var(--acento); outline-offset: -3px; }
@@ -488,11 +528,15 @@ const CATEGORIAS: Record<string, string> = {
     .ver-grupo ul { margin: 0; padding-left: 1.2rem; display: grid; gap: 2px; font-size: 0.9rem; }
 
     @media (max-width: 700px) {
+      .encabezado { min-height: 175px; padding: var(--espacio-4); background-position: center, 70% center; }
       .tabla thead { display: none; }
       .tabla tr { display: grid; gap: 6px; padding: var(--espacio-3) 0; border-bottom: 1px solid var(--borde); }
       .tabla td { padding: 0; border: 0; }
       .tabla td.acciones { display: flex; gap: var(--espacio-2); text-align: left; flex-wrap: wrap; }
       .tabla td.acciones .boton + .boton { margin-left: 0; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .encabezado, .encabezado::after { animation: none; }
     }
   `,
 })
@@ -502,10 +546,10 @@ export class UsuariosComponent {
   protected readonly sesion = inject(SesionService);
   protected readonly PERMISOS = PERMISOS;
 
-  protected readonly pestanas: readonly { clave: Pestana; etiqueta: string }[] = [
-    { clave: 'personal', etiqueta: 'Personal' },
-    { clave: 'roles', etiqueta: 'Roles' },
-    { clave: 'matriz', etiqueta: 'Qué puede hacer cada rol' },
+  protected readonly pestanas: readonly { clave: Pestana; etiqueta: string; icono: NombreIcono }[] = [
+    { clave: 'personal', etiqueta: 'Personal', icono: 'usuarios' },
+    { clave: 'roles', etiqueta: 'Roles', icono: 'escudo' },
+    { clave: 'matriz', etiqueta: 'Qué puede hacer cada rol', icono: 'panel' },
   ];
   protected readonly pestana = signal<Pestana>('personal');
   protected readonly ventana = signal<Ventana | null>(null);

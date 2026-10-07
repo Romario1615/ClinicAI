@@ -74,8 +74,12 @@ cd backend
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 pip install uv
-uv sync --frozen
+uv sync --frozen --all-extras      # incluye fastembed (embeddings locales) y dev
 uv run alembic upgrade head
+# Base de conocimiento con el modelo real: PROVEEDOR_EMBEDDINGS=fastembed en .env.
+# La primera vectorizacion descarga el modelo (~240 MB) a RUTA_CACHE_EMBEDDINGS.
+# Tras cambiar de modelo o pasar de mock al real, generar los vectores que faltan:
+uv run python -m herramientas.reindexar_conocimiento
 uv run python -m app.semillas.cargar_sinteticos
 uv run uvicorn app.main:crear_aplicacion --factory --reload
 uv run arq app.tareas.worker.ConfiguracionWorker   # trabajos periodicos

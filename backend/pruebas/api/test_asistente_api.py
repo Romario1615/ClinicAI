@@ -96,7 +96,7 @@ async def test_agenda_siguiente_y_resumen_del_profesional(
         headers=cabeceras,
         json={"texto": "Resumen", "paciente_id": str(paciente.id)},
     )
-    assert sin_relacion.status_code == 403
+    assert sin_relacion.status_code == 404
 
     sesion.add(
         RelacionAsistencial(paciente_id=paciente.id, profesional_id=profesional.id, origen="CITA")

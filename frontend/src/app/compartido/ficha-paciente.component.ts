@@ -32,7 +32,7 @@
  * esta ficha la abre personal con permiso, y comprobar el documento en el
  * mostrador es precisamente cómo se verifica una identidad.
  */
-import { Component, computed, inject, input, type OnInit, output, signal } from '@angular/core';
+import { Component, computed, inject, input, type OnInit, output, signal, ChangeDetectionStrategy } from '@angular/core';
 import { Router } from '@angular/router';
 
 import {
@@ -395,6 +395,7 @@ const DETALLE_CLINICO: Partial<Record<Pestana, string>> = {
               @case ('planes') {
                 <app-planes-tratamiento
                   [pacienteId]="pacienteId()"
+                  [nombrePaciente]="nombre()"
                   [puedeEditar]="puedeEditarPlanes()"
                 />
               }
@@ -411,6 +412,7 @@ const DETALLE_CLINICO: Partial<Record<Pestana, string>> = {
       </section>
     </div>
   `,
+  changeDetection: ChangeDetectionStrategy.Eager,
   styles: `
     .ficha {
       position: relative;

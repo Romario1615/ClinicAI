@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime
-from typing import Annotated
+from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -59,12 +59,15 @@ class ContenidoOdontograma(BaseModel):
 class OdontogramaInicial(ContenidoOdontograma):
     """Primera versión del odontograma de un paciente."""
 
+    nivel_sensibilidad: Literal["N2", "N3"] = "N2"
+
 
 class NuevaVersionOdontograma(ContenidoOdontograma):
     """Reemplazo completo con control optimista y motivo obligatorio."""
 
     version_base: Annotated[int, Field(ge=1)]
     motivo: Annotated[str, Field(min_length=8, max_length=500)]
+    nivel_sensibilidad: Literal["N2", "N3"] = "N2"
 
 
 class OdontogramaSalida(ContenidoOdontograma):
@@ -76,6 +79,7 @@ class OdontogramaSalida(ContenidoOdontograma):
     motivo_modificacion: str | None
     procedimiento_id: uuid.UUID | None
     creado_en: datetime
+    nivel_sensibilidad: Literal["N2", "N3"]
 
 
 __all__ = [

@@ -29,7 +29,7 @@ import random
 import unicodedata
 import uuid
 from dataclasses import dataclass, field
-from datetime import UTC, date, datetime, time, timedelta
+from datetime import date, datetime, time, timedelta
 from zoneinfo import ZoneInfo
 
 from faker import Faker
@@ -63,6 +63,7 @@ from app.modulos.profesionales.modelos import (
 from app.modulos.usuarios.modelos import AmbitoAsignacion, Rol, Usuario, UsuarioRol
 from app.nucleo.autorizacion import TipoAmbito
 from app.nucleo.configuracion import Configuracion
+from app.nucleo.reloj import Reloj, RelojSistema
 from app.nucleo.seguridad import hashear_contrasena
 
 # Marcador visible en cualquier volcado de la base de datos.  Si alguien ve
@@ -230,12 +231,14 @@ async def cargar_datos_sinteticos(  # noqa: PLR0912, PLR0915
     cantidad_pacientes: int = 60,
     cantidad_citas: int = 200,
     semilla: int = SEMILLA_PREDETERMINADA,
+    reloj: Reloj | None = None,
 ) -> ResumenSinteticos:
     """Crea una clinica completa con datos ficticios.
 
-    `semilla` fija el generador aleatorio: dos ejecuciones producen los mismos
-    datos.  Importa para poder reproducir un problema encontrado en desarrollo
-    y para que las capturas de la interfaz no cambien en cada recarga.
+    `semilla` fija el generador aleatorio y `reloj` fija el instante de
+    referencia: con ambos valores iguales se producen los mismos datos.
+    Importa para poder reproducir un problema encontrado en desarrollo y para
+    que las capturas de la interfaz no cambien en cada recarga.
 
     Sobre su longitud: el linter senala que la funcion es larga, y se silencia
     a proposito.  Es un guion secuencial -- organizacion, catalogo, personal,
@@ -262,7 +265,7 @@ async def cargar_datos_sinteticos(  # noqa: PLR0912, PLR0915
     aleatorio = random.Random(semilla)  # noqa: S311
 
     resumen = ResumenSinteticos()
-    ahora = datetime.now(UTC)
+    ahora = (reloj or RelojSistema()).ahora()
 
     # =====================================================================
     #  Clinica y sedes

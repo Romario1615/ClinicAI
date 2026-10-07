@@ -107,6 +107,8 @@ class RepositorioHistoria:
                 )
             )
         consulta = self._acotar(consulta, principal, ahora)
+        if not principal.tiene_permiso("historia_clinica.leer_sensible"):
+            consulta = consulta.where(NotaEvolucion.nivel_sensibilidad != "N3")
 
         consulta = consulta.order_by(
             NotaEvolucion.creado_en.desc(), NotaEvolucion.version.desc()
@@ -345,6 +347,8 @@ class RepositorioHistoria:
         if principal.clinica_id is None:
             return consulta.where(NotaEvolucion.clinica_id == _NINGUNO)
         consulta = consulta.where(NotaEvolucion.clinica_id == principal.clinica_id)
+        if not principal.tiene_permiso("historia_clinica.leer_sensible"):
+            consulta = consulta.where(NotaEvolucion.nivel_sensibilidad != "N3")
 
         ambito = principal.ambito
         if not ambito.todos_los_pacientes:
@@ -360,6 +364,8 @@ class RepositorioHistoria:
         if principal.clinica_id is None:
             return consulta.where(Receta.clinica_id == _NINGUNO)
         consulta = consulta.where(Receta.clinica_id == principal.clinica_id)
+        if not principal.tiene_permiso("historia_clinica.leer_sensible"):
+            consulta = consulta.where(Receta.nivel_sensibilidad != "N3")
 
         ambito = principal.ambito
         if not ambito.todos_los_pacientes:
@@ -368,6 +374,17 @@ class RepositorioHistoria:
             consulta = consulta.where(Receta.paciente_id.in_(ambito.pacientes))
 
         return self._exigir_relacion(consulta, Receta.paciente_id, principal, ahora)
+
+    def consulta_receta_autorizada(
+        self, consulta: Select[Any], *, principal: Principal, ahora: datetime
+    ) -> Select[Any]:
+        """Aplica a una consulta el ámbito y la relación asistencial de recetas.
+
+        Expuesto para informes agregados de otros módulos: reutiliza la misma
+        frontera clínica que el detalle de la historia, sin devolver filas a
+        esos módulos ni duplicar su política de acceso.
+        """
+        return self._acotar_receta(consulta, principal, ahora)
 
     def _exigir_relacion(
         self,

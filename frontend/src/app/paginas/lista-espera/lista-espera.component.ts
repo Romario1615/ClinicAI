@@ -20,7 +20,7 @@
  * que venza, el hueco vuelve a la cola y la ausencia cuenta contra él. Eso va
  * arriba y con su plazo, no mezclado entre las demás filas.
  */
-import { Component, computed, inject, signal } from '@angular/core';
+import { Component, computed, inject, signal, ChangeDetectionStrategy } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { forkJoin } from 'rxjs';
 
@@ -136,21 +136,24 @@ import { ResumenModuloComponent } from '../../compartido/resumen-modulo.componen
     @if (cargando()) {
       <p role="status">Consultando lista…</p>
     } @else if (entradas().length === 0) {
-      <div class="tarjeta">
-        <p class="vacio__titulo">
+      <div class="tarjeta vacio-espera" role="status">
+        <img class="vacio-espera__imagen" src="/images/lista-espera-vacia.svg" alt="" aria-hidden="true" />
+        <div class="vacio-espera__texto">
+          <p class="vacio__titulo">
           @if (soloSinAvisar()) {
             Nadie está esperando una llamada.
           } @else {
             Todavía no hay pacientes en lista de espera.
           }
-        </p>
-        <p class="campo__ayuda">
+          </p>
+          <p class="campo__ayuda">
           @if (soloSinAvisar()) {
             Quite el filtro para ver la cola completa.
           } @else {
             Cuando alguien no encuentre hueco, anótelo aquí y recibirá el primero que se libere.
           }
-        </p>
+          </p>
+        </div>
       </div>
     } @else {
       <ul class="cola-espera">
@@ -465,6 +468,7 @@ import { ResumenModuloComponent } from '../../compartido/resumen-modulo.componen
       </app-ventana-flotante>
     }
   `,
+  changeDetection: ChangeDetectionStrategy.Eager,
   styles: `
     .pagina__nota {
       margin: var(--espacio-1) 0 0;
@@ -665,6 +669,40 @@ import { ResumenModuloComponent } from '../../compartido/resumen-modulo.componen
     .vacio__titulo {
       margin: 0 0 var(--espacio-1);
       font-weight: 600;
+    }
+
+    .vacio-espera {
+      display: grid;
+      grid-template-columns: minmax(120px, 190px) minmax(0, 1fr);
+      align-items: center;
+      gap: clamp(var(--espacio-3), 4vw, var(--espacio-6));
+      min-height: 190px;
+      overflow: hidden;
+    }
+
+    .vacio-espera__imagen {
+      display: block;
+      width: 100%;
+      max-height: 170px;
+      object-fit: contain;
+      animation: espera-ilustracion 8s ease-in-out infinite;
+    }
+
+    .vacio-espera__texto { max-width: 580px; }
+    .vacio-espera__texto .campo__ayuda { margin-bottom: 0; }
+
+    @keyframes espera-ilustracion {
+      0%, 100% { transform: translateY(0); }
+      50% { transform: translateY(-4px); }
+    }
+
+    @media (max-width: 560px) {
+      .vacio-espera { grid-template-columns: minmax(0, 1fr); gap: var(--espacio-2); text-align: center; }
+      .vacio-espera__imagen { width: min(180px, 60%); justify-self: center; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .vacio-espera__imagen { animation: none; }
     }
 
     .insignia {

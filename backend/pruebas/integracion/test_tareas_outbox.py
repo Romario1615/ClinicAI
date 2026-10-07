@@ -242,9 +242,7 @@ async def test_worker_materializa_recordatorio_vencido_en_el_outbox(
         clinica_id=clinica.id,
         paciente_id=paciente_contactable.id,
         profesional_id=profesional.id,
-        estado=EstadoReceta.CONFIRMADA.value,
-        confirmada_en=reloj_fijo.ahora(),
-        confirmada_por=profesional.id,
+        estado=EstadoReceta.BORRADOR.value,
     )
     sesion.add(receta)
     await sesion.flush()
@@ -258,6 +256,10 @@ async def test_worker_materializa_recordatorio_vencido_en_el_outbox(
         duracion_dias=1,
     )
     sesion.add(medicamento)
+    await sesion.flush()
+    receta.estado = EstadoReceta.CONFIRMADA.value
+    receta.confirmada_en = reloj_fijo.ahora()
+    receta.confirmada_por = profesional.id
     await sesion.flush()
     toma = Toma(
         receta_medicamento_id=medicamento.id,

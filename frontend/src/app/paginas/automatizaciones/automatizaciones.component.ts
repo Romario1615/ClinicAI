@@ -9,9 +9,10 @@
  * Apagar o encender pide un motivo: queda en la auditoría y en el historial de
  * la configuración. Los obligatorios no tienen interruptor y dicen por qué.
  */
-import { Component, computed, inject, signal } from '@angular/core';
+import { Component, computed, inject, signal, ChangeDetectionStrategy } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 
+import { IconoComponent } from '../../compartido/icono.component';
 import { OperacionesService } from '../../nucleo/servicios/operaciones.service';
 import { FalloApi } from '../../nucleo/servicios/api.service';
 import { PERMISOS } from '../../nucleo/servicios/configuracion';
@@ -45,15 +46,18 @@ const FASES: readonly { clave: string; titulo: string; ayuda: string }[] = [
 @Component({
   selector: 'app-automatizaciones',
   standalone: true,
-  imports: [FormsModule, VentanaFlotanteComponent],
+  imports: [FormsModule, VentanaFlotanteComponent, IconoComponent],
   template: `
     <header class="encabezado">
-      <p class="ceja">ADMINISTRACIÓN</p>
-      <h1>Automatizaciones</h1>
-      <p class="encabezado__sub">
-        Lo que la plataforma hace sola en cada momento de la atención, y quién lo ve o interviene.
-        Ningún mensaje automático incluye diagnóstico, medicamento ni motivo de consulta.
-      </p>
+      <div class="encabezado__contenido">
+        <p class="ceja"><app-icono nombre="automatizaciones" [tamano]="16" /> ADMINISTRACIÓN</p>
+        <h1>Automatizaciones</h1>
+        <p class="encabezado__sub">
+          Lo que la plataforma hace sola en cada momento de la atención, y quién lo ve o interviene.
+          Ningún mensaje automático incluye diagnóstico, medicamento ni motivo de consulta.
+        </p>
+      </div>
+      <img class="encabezado__ilustracion" src="/images/automatizaciones-flujo-clinica.svg" alt="" aria-hidden="true" width="640" height="400" fetchpriority="low" />
     </header>
 
     @if (error()) { <p class="aviso-error" role="alert">{{ error() }}</p> }
@@ -142,11 +146,19 @@ const FASES: readonly { clave: string; titulo: string; ayuda: string }[] = [
       </app-ventana-flotante>
     }
   `,
+  changeDetection: ChangeDetectionStrategy.Eager,
   styles: `
     :host { display: grid; gap: var(--espacio-5); }
     .ceja { margin: 0; color: var(--acento); font-size: 0.75rem; font-weight: 700; letter-spacing: 0.1em; }
-    .encabezado h1 { margin: 2px 0 4px; }
-    .encabezado__sub { margin: 0; color: var(--texto-suave); max-width: 52rem; }
+    .encabezado { position: relative; isolation: isolate; display: flex; min-height: 220px; align-items: center; overflow: hidden; padding: clamp(20px, 3vw, 36px); border: 1px solid color-mix(in srgb, var(--acento) 14%, var(--borde)); border-radius: calc(var(--radio) + 4px); background: linear-gradient(105deg, var(--superficie-elevada) 0%, color-mix(in srgb, var(--superficie-elevada) 82%, #e0f7f4) 66%, #eaf9f7 100%); box-shadow: var(--sombra-1); }
+    .encabezado::before { content: ''; position: absolute; z-index: -2; inset: -65%; background: radial-gradient(ellipse at 78% 48%, rgb(42 184 171 / 20%), transparent 34%), radial-gradient(ellipse at 92% 15%, rgb(246 199 102 / 13%), transparent 28%); animation: automatizaciones-ambiente 20s ease-in-out infinite alternate; }
+    .encabezado::after { content: ''; position: absolute; z-index: -1; inset: 0; opacity: .26; pointer-events: none; background-image: radial-gradient(circle, #288f87 1.25px, transparent 1.7px), linear-gradient(115deg, transparent 48.9%, rgb(42 150 142 / 34%) 49.5%, rgb(42 150 142 / 34%) 50%, transparent 50.6%); background-size: 32px 32px, 180px 120px; background-position: 0 0, 0 0; mask-image: linear-gradient(100deg, transparent 18%, #000 100%); animation: automatizaciones-red 34s linear infinite; }
+    .encabezado__contenido { position: relative; z-index: 1; width: min(58%, 54rem); }
+    .encabezado h1 { margin: 2px 0 8px; font-size: clamp(1.8rem, 3vw, 2.45rem); }
+    .encabezado__sub { margin: 0; color: var(--texto-suave); max-width: 52rem; line-height: 1.6; }
+    .encabezado__ilustracion { position: absolute; z-index: 0; top: 50%; right: 0; width: min(58%, 780px); height: 145%; transform: translateY(-50%); object-fit: contain; object-position: right center; pointer-events: none; }
+    @keyframes automatizaciones-ambiente { from { transform: translate3d(-1.5%, 1%, 0) scale(.97); opacity: .65; } to { transform: translate3d(1.5%, -1%, 0) scale(1.04); opacity: 1; } }
+    @keyframes automatizaciones-red { from { background-position: 0 0, 0 0; } to { background-position: 96px 64px, 180px 120px; } }
     .vacio { color: var(--texto-suave); }
     .fase__cabecera { display: flex; align-items: baseline; gap: var(--espacio-3); flex-wrap: wrap; margin-bottom: var(--espacio-3); }
     .fase__cabecera h2 { margin: 0; font-size: 1.1rem; }
@@ -177,7 +189,9 @@ const FASES: readonly { clave: string; titulo: string; ayuda: string }[] = [
     .interruptor[aria-checked='true'] { color: var(--exito); }
     .interruptor[aria-checked='true'] .interruptor__pista { background: var(--exito); }
     .interruptor[aria-checked='true'] .interruptor__bola { transform: translateX(16px); }
-    @media (max-width: 600px) { .flujos { grid-template-columns: 1fr; } }
+    @media (max-width: 760px) { .encabezado { min-height: 190px; align-items: flex-start; padding-bottom: 100px; } .encabezado__contenido { width: 100%; } .encabezado__ilustracion { top: auto; bottom: -50px; right: -10px; width: 76%; height: 155px; transform: none; opacity: .76; } }
+    @media (max-width: 600px) { .flujos { grid-template-columns: 1fr; } .encabezado { padding-bottom: 76px; } .encabezado__ilustracion { bottom: -58px; width: 86%; height: 142px; opacity: .58; } }
+    @media (prefers-reduced-motion: reduce) { .encabezado::before, .encabezado::after { animation: none; } }
   `,
 })
 export class AutomatizacionesComponent {

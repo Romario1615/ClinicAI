@@ -25,12 +25,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.modulos.pacientes.modelos import Paciente, RelacionAsistencial
 from app.modulos.pacientes.repositorio import RepositorioPacientes
 from app.nucleo.autorizacion import Principal
-from app.nucleo.errores import (
-    OperacionClinicaNoPermitida,
-    PermisoDenegado,
-    RecursoNoEncontrado,
-    RelacionAsistencialRequerida,
-)
+from app.nucleo.errores import OperacionClinicaNoPermitida, PermisoDenegado, RecursoNoEncontrado
 
 
 class GuardiaClinica:
@@ -68,9 +63,7 @@ class GuardiaClinica:
             ),
         )
         if (await self._sesion.execute(consulta.limit(1))).first() is None:
-            raise RelacionAsistencialRequerida(
-                "No tiene una relacion asistencial vigente con este paciente."
-            )
+            raise RecursoNoEncontrado("El paciente solicitado no existe.")
 
     async def acceso_clinico(
         self, principal: Principal, paciente_id: uuid.UUID, permiso: str, ahora: datetime

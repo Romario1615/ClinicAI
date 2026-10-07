@@ -174,9 +174,13 @@ async def especialidades_de_notas(
     return frozenset(e.id for e, _, _ in permitidas)
 
 
-def exige_modulo(modulo: Modulo, *permisos: str) -> Callable[..., Coroutine[Any, Any, Principal]]:
+def exige_modulo(
+    modulo: Modulo,
+    *permisos: str,
+    exigir_todos: bool = False,
+) -> Callable[..., Coroutine[Any, Any, Principal]]:
     """Permiso **y** una especialidad permitida que use el módulo."""
-    base = exige_permiso(*permisos)
+    base = exige_permiso(*permisos, exigir_todos=exigir_todos)
 
     async def dependencia(
         sesion: Sesion,

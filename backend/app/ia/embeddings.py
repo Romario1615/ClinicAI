@@ -27,7 +27,9 @@ reportara medida, no supuesta (limitacion E-9).
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
+import importlib
 import math
 import struct
 from typing import Protocol, runtime_checkable
@@ -38,6 +40,7 @@ logger = obtener_logger(__name__)
 
 # Dimension por defecto, la del modelo `intfloat/multilingual-e5-small`.
 DIMENSION_POR_DEFECTO = 384
+MODELO_FASTEMBED_POR_DEFECTO = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
 
 # Nombre con el que se guardan los vectores del proveedor simulado. Empieza
 # por `simulado:` a proposito: si un vector de pruebas acabara en una base de
@@ -126,11 +129,10 @@ class EmbeddingsSimulado:
 class EmbeddingsFastembed:
     """Proveedor local con `fastembed` (ONNX, sin clave y sin red en ejecucion).
 
-    **No verificado en esta fase.** El modelo no esta descargado en el equipo
-    de desarrollo y el extra `embeddings` arrastra una version de Pillow con
-    vulnerabilidades conocidas (limitacion E-12), asi que no se instala por
-    defecto. La clase existe para que el cambio de proveedor sea una linea de
-    configuracion y no una reescritura.
+    El modelo se descarga una vez a `ruta_cache` y despues funciona sin red.
+    Por defecto `paraphrase-multilingual-MiniLM-L12-v2` (384 dimensiones,
+    multilingue): `intfloat/multilingual-e5-small`, el valor anterior, no
+    existe en fastembed 0.7 y el modo real fallaba al primer uso.
 
     La calidad de recuperacion con un modelo pequeno es inferior a la de los
     comerciales grandes (limitacion E-9). Se medira y se publicara; no se
@@ -139,7 +141,7 @@ class EmbeddingsFastembed:
 
     def __init__(
         self,
-        nombre_modelo: str = "intfloat/multilingual-e5-small",
+        nombre_modelo: str = MODELO_FASTEMBED_POR_DEFECTO,
         dimension: int = DIMENSION_POR_DEFECTO,
         ruta_cache: str | None = None,
     ) -> None:
@@ -147,6 +149,8 @@ class EmbeddingsFastembed:
         self.dimension = dimension
         self._ruta_cache = ruta_cache
         self._modelo: object | None = None
+        # Los modelos E5 exigen `passage:`/`query:`; los demas, texto limpio.
+        self._e5 = "e5" in nombre_modelo.lower()
 
     def _cargar(self) -> object:
         """Carga el modelo la primera vez que se usa.
@@ -156,24 +160,38 @@ class EmbeddingsFastembed:
         no vectoriza nada.
         """
         if self._modelo is None:
-            from fastembed import TextEmbedding  # noqa: PLC0415
-
-            self._modelo = TextEmbedding(model_name=self.nombre_modelo, cache_dir=self._ruta_cache)
+            # Por `importlib` y no `import`: con fastembed instalado, mypy lo
+            # seguiria hasta los stubs de numpy, que exigen Python 3.12.
+            fastembed = importlib.import_module("fastembed")
+            self._modelo = fastembed.TextEmbedding(
+                model_name=self.nombre_modelo, cache_dir=self._ruta_cache
+            )
             logger.info("embeddings.modelo_cargado", modelo=self.nombre_modelo)
         return self._modelo
 
+    def _embeber(self, textos: list[str]) -> list[list[float]]:
+        vectores = [
+            list(map(float, v))
+            for v in self._cargar().embed(textos)  # type: ignore[attr-defined]
+        ]
+        # Una dimension distinta de la columna vectorial fallaria al guardar
+        # con un error opaco; aqui se dice que esta mal configurado.
+        if vectores and len(vectores[0]) != self.dimension:
+            raise ValueError(
+                f"El modelo {self.nombre_modelo} produce {len(vectores[0])} dimensiones y la "
+                f"configuracion espera {self.dimension}. Ajuste DIMENSION_EMBEDDINGS o el modelo."
+            )
+        return vectores
+
     async def vectorizar(self, textos: list[str]) -> list[list[float]]:
-        # El prefijo `passage:` lo exige el modelo E5 para el lado documento.
-        # Omitirlo no falla: solo recupera peor, que es la forma mas dificil
-        # de detectar un error.
-        modelo = self._cargar()
-        preparados = [f"passage: {texto}" for texto in textos]
-        return [list(map(float, vector)) for vector in modelo.embed(preparados)]  # type: ignore[attr-defined]
+        # El calculo es CPU pura: en un hilo, para no bloquear la API mientras
+        # se ingiere un documento grande.
+        preparados = [f"passage: {t}" for t in textos] if self._e5 else list(textos)
+        return await asyncio.to_thread(self._embeber, preparados)
 
     async def vectorizar_consulta(self, texto: str) -> list[float]:
-        modelo = self._cargar()
-        vectores = list(modelo.embed([f"query: {texto}"]))  # type: ignore[attr-defined]
-        return list(map(float, vectores[0]))
+        preparado = f"query: {texto}" if self._e5 else texto
+        return (await asyncio.to_thread(self._embeber, [preparado]))[0]
 
 
 def construir_proveedor_embeddings(
@@ -197,6 +215,7 @@ def construir_proveedor_embeddings(
 
 __all__ = [
     "DIMENSION_POR_DEFECTO",
+    "MODELO_FASTEMBED_POR_DEFECTO",
     "MODELO_SIMULADO",
     "EmbeddingsFastembed",
     "EmbeddingsSimulado",

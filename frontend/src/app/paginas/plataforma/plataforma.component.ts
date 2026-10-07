@@ -1,4 +1,4 @@
-import { Component, OnInit, inject, signal } from '@angular/core';
+import { Component, OnInit, inject, signal, ChangeDetectionStrategy } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 
 import {
@@ -92,6 +92,7 @@ import {
           <div class="datos"><strong>{{ usuario.nombre }} {{ usuario.apellido }}</strong>
             <span>{{ usuario.correo }} · {{ usuario.clinica_nombre }}</span>
             <span class="etiquetas">{{ usuario.roles.join(' · ') || 'Sin roles' }}</span>
+            @if (!usuario.roles.includes('Superadministrador')) { <span>{{ resumenSedes(usuario) }}</span> }
           </div>
           @if (!usuario.roles.includes('Superadministrador')) {
             <button class="boton boton--pequeno" type="button" (click)="editarAsignacion(usuario)">Clínica y módulos</button>
@@ -103,7 +104,7 @@ import {
     @if (usuarioEditando(); as usuario) {
       <section class="tarjeta">
         <div class="seccion-titulo"><div><h2>Acceso de {{ usuario.nombre }} {{ usuario.apellido }}</h2>
-          <p>El cambio de clínica revoca sus sesiones abiertas y reemplaza los módulos asignados.</p></div></div>
+          <p>Guardar cambios revoca sesiones abiertas, reemplaza los roles y actualiza las sedes habilitadas.</p></div></div>
         <label>Clínica<select name="clinicaDestino" [(ngModel)]="clinicaDestinoId" (ngModelChange)="cambioClinicaDestino($event)">
           @for (clinica of clinicas(); track clinica.id) { @if (clinica.activa) { <option [value]="clinica.id">{{ clinica.nombre }}</option> } }
         </select></label>
@@ -119,7 +120,19 @@ import {
             <option value="">Seleccione un profesional</option>@for (profesional of profesionalesDestino(); track profesional.id) { <option [value]="profesional.id">{{ profesional.nombre }} {{ profesional.apellido }}</option> }
           </select></label>
         }
-        <div class="acciones"><button class="boton boton--principal" type="button" (click)="guardarAsignacion(usuario)" [disabled]="ocupadoUsuario() || rolesDestinoSeleccionados().size === 0">Guardar accesos</button>
+        <h3>Ámbito de sedes</h3>
+        <label class="opcion"><input type="checkbox" [checked]="todasLasSedesDestino()" (change)="todasLasSedesDestino.set($any($event.target).checked)" />
+          <span><strong>Acceso a todas las sedes de {{ nombreClinicaDestino() }}</strong><small>Al desactivarlo, la cuenta solo podrá usar las sedes marcadas.</small></span></label>
+        @if (!todasLasSedesDestino()) {
+          <div class="opciones">
+            @for (sede of sedesDestino(); track sede.id) {
+              <label class="opcion"><input type="checkbox" [checked]="sedesDestinoSeleccionadas().has(sede.id)" (change)="alternarSedeDestino(sede.id, $any($event.target).checked)" />
+                <span><strong>{{ sede.nombre }}</strong><small>{{ sede.direccion || 'Dirección no registrada' }}</small></span></label>
+            }
+          </div>
+          @if (!cargandoSedesDestino() && sedesDestinoSeleccionadas().size === 0) { <p class="mensaje mensaje--error" role="alert">Selecciona al menos una sede para guardar el acceso.</p> }
+        }
+        <div class="acciones"><button class="boton boton--principal" type="button" (click)="guardarAsignacion(usuario)" [disabled]="ocupadoUsuario() || rolesDestinoSeleccionados().size === 0 || cargandoSedesDestino() || (!todasLasSedesDestino() && sedesDestinoSeleccionadas().size === 0)">Guardar accesos</button>
           <button class="boton" type="button" (click)="usuarioEditando.set(null)">Cancelar</button></div>
       </section>
     }
@@ -150,8 +163,20 @@ import {
               <option value="">Seleccione un profesional</option>@for (profesional of profesionalesNuevoUsuario(); track profesional.id) { <option [value]="profesional.id">{{ profesional.nombre }} {{ profesional.apellido }}</option> }
             </select></label>
           }
+          <h3>Ámbito de sedes</h3>
+          <label class="opcion"><input type="checkbox" [checked]="todasLasSedesNuevoUsuario()" (change)="todasLasSedesNuevoUsuario.set($any($event.target).checked)" />
+            <span><strong>Acceso a todas las sedes de la clínica</strong><small>Desactívalo para elegir sedes concretas.</small></span></label>
+          @if (!todasLasSedesNuevoUsuario()) {
+            <div class="opciones">
+              @for (sede of sedesNuevoUsuario(); track sede.id) {
+                <label class="opcion"><input type="checkbox" [checked]="sedesNuevoUsuarioSeleccionadas().has(sede.id)" (change)="alternarSedeNuevoUsuario(sede.id, $any($event.target).checked)" />
+                  <span><strong>{{ sede.nombre }}</strong><small>{{ sede.direccion || 'Dirección no registrada' }}</small></span></label>
+              }
+            </div>
+            @if (!cargandoSedesNuevoUsuario() && sedesNuevoUsuarioSeleccionadas().size === 0) { <p class="mensaje mensaje--error" role="alert">Selecciona al menos una sede para crear la cuenta.</p> }
+          }
         }
-        <button class="boton boton--principal" [disabled]="ocupadoUsuario() || !clinicaNuevaUsuarioId || rolesNuevoUsuarioSeleccionados().size === 0">Crear cuenta y asignar módulos</button>
+        <button class="boton boton--principal" [disabled]="ocupadoUsuario() || !clinicaNuevaUsuarioId || rolesNuevoUsuarioSeleccionados().size === 0 || (!todasLasSedesNuevoUsuario() && sedesNuevoUsuarioSeleccionadas().size === 0)">Crear cuenta y asignar módulos</button>
       </form>
     </section>
 
@@ -190,6 +215,7 @@ import {
       </form>
     </section>
   `,
+  changeDetection: ChangeDetectionStrategy.Eager,
   styles: [`
     :host { display: grid; gap: 1.25rem; }
     .encabezado { display:flex; align-items:flex-start; justify-content:space-between; gap:1rem; }
@@ -237,9 +263,17 @@ export class PlataformaComponent implements OnInit {
   protected readonly rolesDestino = signal<readonly RolPlataforma[]>([]);
   protected readonly profesionalesDestino = signal<readonly ProfesionalPlataforma[]>([]);
   protected readonly rolesDestinoSeleccionados = signal<ReadonlySet<string>>(new Set());
+  protected readonly sedesDestino = signal<readonly SedePlataforma[]>([]);
+  protected readonly sedesDestinoSeleccionadas = signal<ReadonlySet<string>>(new Set());
+  protected readonly todasLasSedesDestino = signal(true);
+  protected readonly cargandoSedesDestino = signal(false);
   protected readonly rolesNuevoUsuario = signal<readonly RolPlataforma[]>([]);
   protected readonly profesionalesNuevoUsuario = signal<readonly ProfesionalPlataforma[]>([]);
   protected readonly rolesNuevoUsuarioSeleccionados = signal<ReadonlySet<string>>(new Set());
+  protected readonly sedesNuevoUsuario = signal<readonly SedePlataforma[]>([]);
+  protected readonly sedesNuevoUsuarioSeleccionadas = signal<ReadonlySet<string>>(new Set());
+  protected readonly todasLasSedesNuevoUsuario = signal(true);
+  protected readonly cargandoSedesNuevoUsuario = signal(false);
   protected clinicaDestinoId = '';
   protected clinicaNuevaUsuarioId = '';
   protected profesionalDestinoId = '';
@@ -315,6 +349,9 @@ export class PlataformaComponent implements OnInit {
     const usuario = this.usuarioEditando();
     const usuarioId = usuario?.id;
     if (!usuarioId) return;
+    const mismaClinica = clinicaId === usuario.clinica_id;
+    this.todasLasSedesDestino.set(mismaClinica && usuario.todas_las_sedes);
+    this.sedesDestinoSeleccionadas.set(new Set(mismaClinica ? usuario.sedes_ids : []));
     this.api.rolesPlataforma(clinicaId).subscribe({
       next: (roles) => {
         this.rolesDestino.set(roles);
@@ -327,13 +364,20 @@ export class PlataformaComponent implements OnInit {
       next: (profesionales) => this.profesionalesDestino.set(profesionales),
       error: (fallo: FalloApi) => this.errorUsuarios.set(fallo.message),
     });
+    this.cargandoSedesDestino.set(true);
+    this.api.sedesPlataforma(clinicaId).subscribe({
+      next: (sedes) => { this.sedesDestino.set(sedes.filter((sede) => sede.activa)); this.cargandoSedesDestino.set(false); },
+      error: (fallo: FalloApi) => { this.errorUsuarios.set(fallo.message); this.cargandoSedesDestino.set(false); },
+    });
     this.profesionalDestinoId = clinicaId === usuario.clinica_id ? usuario.profesional_id ?? '' : '';
   }
 
   protected cambioClinicaNuevaUsuario(clinicaId: string): void {
     this.rolesNuevoUsuarioSeleccionados.set(new Set());
+    this.sedesNuevoUsuarioSeleccionadas.set(new Set());
+    this.todasLasSedesNuevoUsuario.set(true);
     this.profesionalNuevoId = '';
-    if (!clinicaId) { this.rolesNuevoUsuario.set([]); this.profesionalesNuevoUsuario.set([]); return; }
+    if (!clinicaId) { this.rolesNuevoUsuario.set([]); this.profesionalesNuevoUsuario.set([]); this.sedesNuevoUsuario.set([]); return; }
     this.api.rolesPlataforma(clinicaId).subscribe({
       next: (roles) => this.rolesNuevoUsuario.set(roles),
       error: (fallo: FalloApi) => this.errorUsuarios.set(fallo.message),
@@ -341,6 +385,11 @@ export class PlataformaComponent implements OnInit {
     this.api.profesionalesPlataforma(clinicaId).subscribe({
       next: (profesionales) => this.profesionalesNuevoUsuario.set(profesionales),
       error: (fallo: FalloApi) => this.errorUsuarios.set(fallo.message),
+    });
+    this.cargandoSedesNuevoUsuario.set(true);
+    this.api.sedesPlataforma(clinicaId).subscribe({
+      next: (sedes) => { this.sedesNuevoUsuario.set(sedes.filter((sede) => sede.activa)); this.cargandoSedesNuevoUsuario.set(false); },
+      error: (fallo: FalloApi) => { this.errorUsuarios.set(fallo.message); this.cargandoSedesNuevoUsuario.set(false); },
     });
   }
 
@@ -376,6 +425,25 @@ export class PlataformaComponent implements OnInit {
     return this.rolesNuevoUsuario().some((rol) => rol.codigo === 'profesional' && this.rolesNuevoUsuarioSeleccionados().has(rol.id));
   }
 
+  protected nombreClinicaDestino(): string {
+    return this.clinicas().find((clinica) => clinica.id === this.clinicaDestinoId)?.nombre ?? 'la clínica';
+  }
+
+  protected resumenSedes(usuario: UsuarioPlataforma): string {
+    if (usuario.todas_las_sedes) return 'Acceso a todas las sedes';
+    return usuario.sedes_ids.length === 1
+      ? 'Acceso limitado a 1 sede'
+      : `Acceso limitado a ${usuario.sedes_ids.length} sedes`;
+  }
+
+  protected alternarSedeDestino(id: string, activo: boolean): void {
+    this.sedesDestinoSeleccionadas.update((actuales) => actualizarConjunto(actuales, id, activo));
+  }
+
+  protected alternarSedeNuevoUsuario(id: string, activo: boolean): void {
+    this.sedesNuevoUsuarioSeleccionadas.update((actuales) => actualizarConjunto(actuales, id, activo));
+  }
+
   protected guardarAsignacion(usuario: UsuarioPlataforma): void {
     if (this.ocupadoUsuario()) return;
     this.ocupadoUsuario.set(true); this.errorUsuarios.set(''); this.avisoUsuario.set('');
@@ -383,7 +451,13 @@ export class PlataformaComponent implements OnInit {
       clinica_id: this.clinicaDestinoId,
       roles: [...this.rolesDestinoSeleccionados()],
       profesional_id: this.requiereProfesionalDestino() ? this.profesionalDestinoId || null : null,
+      sedes_ids: this.todasLasSedesDestino() ? null : [...this.sedesDestinoSeleccionadas()],
     };
+    if (datos.sedes_ids !== null && datos.sedes_ids.length === 0) {
+      this.errorUsuarios.set('Selecciona al menos una sede para guardar el acceso.');
+      this.ocupadoUsuario.set(false);
+      return;
+    }
     this.api.actualizarAsignacionPlataforma(usuario.id, datos).subscribe({
       next: (actualizado) => {
         if (usuario.clinica_id !== actualizado.clinica_id) {
@@ -409,7 +483,13 @@ export class PlataformaComponent implements OnInit {
       clinica_id: this.clinicaNuevaUsuarioId,
       roles: [...this.rolesNuevoUsuarioSeleccionados()],
       profesional_id: this.requiereProfesionalNuevoUsuario() ? this.profesionalNuevoId || null : null,
+      sedes_ids: this.todasLasSedesNuevoUsuario() ? null : [...this.sedesNuevoUsuarioSeleccionadas()],
     };
+    if (datos.sedes_ids !== null && datos.sedes_ids.length === 0) {
+      this.errorUsuarios.set('Selecciona al menos una sede para crear la cuenta.');
+      this.ocupadoUsuario.set(false);
+      return;
+    }
     this.api.crearUsuarioPlataforma(datos).subscribe({
       next: (creado) => {
         this.usuarios.update((actuales) => [...actuales, creado].sort((a, b) => a.clinica_nombre.localeCompare(b.clinica_nombre) || a.apellido.localeCompare(b.apellido)));
@@ -461,4 +541,10 @@ export class PlataformaComponent implements OnInit {
   private formularioSedeVacio(): AltaSedePlataforma {
     return { nombre: '', direccion: null, telefono: null, zona_horaria: null };
   }
+}
+
+function actualizarConjunto(actual: ReadonlySet<string>, id: string, activo: boolean): ReadonlySet<string> {
+  const siguiente = new Set(actual);
+  if (activo) siguiente.add(id); else siguiente.delete(id);
+  return siguiente;
 }

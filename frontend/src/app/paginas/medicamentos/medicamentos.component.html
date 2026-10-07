@@ -92,13 +92,6 @@
       [correlacion]="error()!.correlacionId ?? ''"
       (reintentar)="cargar()"
     />
-  } @else if (presentadas().length === 0) {
-    <div class="tarjeta">
-      <app-vacio
-        titulo="Sin tomas programadas"
-        detalle="Este paciente no tiene calendario de tomas en esta ventana. Solo una receta confirmada por un profesional genera tomas; un medicamento «cuando sea necesario» nunca las genera."
-      />
-    </div>
   } @else {
     @if (errorAlertas()) {
       <app-error
@@ -148,6 +141,15 @@
         }
       </section>
     }
+
+    @if (presentadas().length === 0) {
+      <div class="tarjeta">
+        <app-vacio
+          titulo="Sin tomas programadas"
+          detalle="Este paciente no tiene calendario de tomas en esta ventana. Solo una receta confirmada por un profesional genera tomas; un medicamento «cuando sea necesario» nunca las genera."
+        />
+      </div>
+    } @else {
 
     <!-- Lo único de esta pantalla sobre lo que hay que actuar hoy. Una toma
          vencida y una futura están ambas en estado PENDIENTE, pero significan
@@ -241,5 +243,6 @@
       Este listado es un <strong>recuento</strong>, no una valoración: no dice si el
       tratamiento funciona ni si hay que cambiarlo. Esa lectura es del profesional.
     </p>
+    }
   }
 }

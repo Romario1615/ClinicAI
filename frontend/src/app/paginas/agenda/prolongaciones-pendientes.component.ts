@@ -7,7 +7,7 @@
  * WhatsApp genérico con la nueva hora. También se puede no aplicar la
  * prolongación, con motivo.
  */
-import { Component, OnInit, inject, input, output, signal } from '@angular/core';
+import { Component, OnInit, inject, input, output, signal, ChangeDetectionStrategy } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 
 import { SesionService } from '../../nucleo/servicios/sesion.service';
@@ -85,6 +85,7 @@ import { VentanaFlotanteComponent } from '../../compartido/ventana-flotante.comp
       </app-ventana-flotante>
     }
   `,
+  changeDetection: ChangeDetectionStrategy.Eager,
   styles: `
     .pendientes { margin-bottom: var(--espacio-4); padding: var(--espacio-3) var(--espacio-4);
       border: 1px solid var(--aviso-borde, var(--borde)); border-left: 4px solid var(--aviso, #c98a1b);

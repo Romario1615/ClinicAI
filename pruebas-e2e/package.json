@@ -5,10 +5,12 @@
   "description": "Escenarios de extremo a extremo contra la aplicacion arrancada.",
   "scripts": {
     "test": "playwright test",
+    "test:a11y": "playwright test escenarios/14-accesibilidad.spec.ts",
     "test:ui": "playwright test --ui",
     "informe": "playwright show-report"
   },
   "devDependencies": {
+    "@axe-core/playwright": "^4.13.0",
     "@playwright/test": "1.63.0"
   }
 }

@@ -35,11 +35,15 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
+import io
 import struct
 from dataclasses import dataclass
 from enum import StrEnum
 
 import filetype
+from pypdf import PdfReader
+from pypdf.errors import PdfReadError
+from pypdf.generic import DictionaryObject
 
 from app.nucleo.configuracion import Configuracion
 from app.nucleo.errores import (
@@ -213,6 +217,90 @@ _LIMPIADORES = {
 }
 
 
+@dataclass(frozen=True, slots=True)
+class ComprobanteSaneado:
+    datos: bytes
+    tipo_mime: str
+    sha256: str
+    antivirus: ResultadoAntivirus
+
+
+def _catalogo_pdf(lector: PdfReader) -> DictionaryObject:
+    raiz = lector.trailer["/Root"].get_object()
+    if not isinstance(raiz, DictionaryObject):
+        raise ArchivoNoPermitido("El PDF tiene un catálogo raíz inválido.")
+    return raiz
+
+
+def _validar_pdf_comprobante(datos: bytes) -> None:
+    """Comprueba estructura acotada y rechaza acciones ejecutables o adjuntos."""
+    if not datos.startswith(b"%PDF-"):
+        raise ArchivoNoPermitido("El contenido no es un documento PDF válido.")
+    try:
+        lector = PdfReader(io.BytesIO(datos), strict=True)
+        if lector.is_encrypted:
+            raise ArchivoNoPermitido("No se admiten comprobantes PDF protegidos con contraseña.")
+        if not lector.pages or len(lector.pages) > 20:  # noqa: PLR2004
+            raise ArchivoNoPermitido("El PDF debe tener entre 1 y 20 páginas.")
+        raiz = _catalogo_pdf(lector)
+        if any(clave in raiz for clave in ("/OpenAction", "/AA", "/JavaScript", "/JS")):
+            raise ArchivoNoPermitido("El PDF contiene acciones activas y no se puede aceptar.")
+        nombres = raiz.get("/Names")
+        if nombres:
+            catalogo_nombres = nombres.get_object()
+            if "/JavaScript" in catalogo_nombres:
+                raise ArchivoNoPermitido("El PDF contiene JavaScript y no se puede aceptar.")
+            if "/EmbeddedFiles" in catalogo_nombres:
+                raise ArchivoNoPermitido("El PDF contiene archivos adjuntos y no se puede aceptar.")
+        for pagina in lector.pages:
+            for anotacion in pagina.get("/Annots", []):
+                objeto = anotacion.get_object()
+                accion = objeto.get("/A")
+                if "/AA" in objeto or (
+                    accion and accion.get_object().get("/S") in {"/JavaScript", "/Launch"}
+                ):
+                    raise ArchivoNoPermitido(
+                        "El PDF contiene acciones activas y no se puede aceptar."
+                    )
+    except ArchivoNoPermitido:
+        raise
+    except (PdfReadError, KeyError, ValueError, TypeError, IndexError) as exc:
+        raise ArchivoNoPermitido("El PDF está dañado o no se puede validar.") from exc
+
+
+async def sanear_comprobante(datos: bytes, configuracion: Configuracion) -> ComprobanteSaneado:
+    """Acepta PDF o imagen raster, valida contenido, analiza virus y calcula hash."""
+    maximo = configuracion.max_tamano_archivo_bytes
+    if len(datos) > maximo:
+        raise ArchivoDemasiadoGrande(
+            f"El comprobante supera {configuracion.max_tamano_archivo_mb} MB."
+        )
+    if not datos:
+        raise ArchivoNoPermitido("El archivo está vacío.")
+    detectado = filetype.guess(datos)
+    tipo = detectado.mime if detectado else None
+    if tipo in TIPOS_IMAGEN:
+        imagen = await sanear_imagen(datos, configuracion)
+        return ComprobanteSaneado(imagen.datos, imagen.tipo_mime, imagen.sha256, imagen.antivirus)
+    if tipo != "application/pdf":
+        raise ArchivoNoPermitido("Solo se admiten comprobantes PDF, JPEG, PNG o WebP.")
+
+    _validar_pdf_comprobante(datos)
+    if configuracion.antivirus_habilitado:
+        if not await analizar_clamd(
+            datos, host=configuracion.clamav_host, puerto=configuracion.clamav_puerto
+        ):
+            raise ArchivoInfectado("El antivirus rechazó el comprobante.")
+        antivirus = ResultadoAntivirus.LIMPIO
+    elif configuracion.entorno.es_produccion:
+        raise ProveedorExternoNoDisponible(
+            "La carga de comprobantes exige antivirus en producción y no está habilitado."
+        )
+    else:
+        antivirus = ResultadoAntivirus.NO_DISPONIBLE
+    return ComprobanteSaneado(datos, tipo, hashlib.sha256(datos).hexdigest(), antivirus)
+
+
 # ---------------------------------------------------------------------------
 #  Antivirus
 # ---------------------------------------------------------------------------
@@ -280,11 +368,13 @@ async def sanear_imagen(datos: bytes, configuracion: Configuracion) -> ImagenSan
 __all__ = [
     "TIPOS_IMAGEN",
     "ArchivoInfectado",
+    "ComprobanteSaneado",
     "ImagenSaneada",
     "ResultadoAntivirus",
     "analizar_clamd",
     "limpiar_jpeg",
     "limpiar_png",
     "limpiar_webp",
+    "sanear_comprobante",
     "sanear_imagen",
 ]

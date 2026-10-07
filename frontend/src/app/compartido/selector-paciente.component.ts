@@ -21,7 +21,7 @@
  * a su paciente concluye que no existe, cuando en realidad está en el puesto
  * 40 de la lista.
  */
-import { Component, computed, inject, output, signal } from '@angular/core';
+import { Component, computed, inject, output, signal, ChangeDetectionStrategy } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import type { Subscription } from 'rxjs';
 
@@ -93,6 +93,7 @@ import type { Paciente } from '../nucleo/modelos/dominio';
       </label>
     </div>
   `,
+  changeDetection: ChangeDetectionStrategy.Eager,
   styles: `
     .selector {
       display: flex;

@@ -1,9 +1,9 @@
 """Lectura del catalogo de la organizacion.
 
-Solo lectura. Crear y modificar sedes, especialidades y servicios es
-administracion de la clinica y llega mas adelante; lo que hace falta ahora es
-que la interfaz pueda ofrecer las opciones existentes en lugar de pedir que
-alguien teclee identificadores UUID a mano.
+Las consultas de catálogo que se usan para agendar aplican obligatoriamente el
+ámbito del principal. Las mutaciones administrativas de sedes y consultorios
+permanecen en las rutas, donde también se auditan; nunca se aceptan IDs como
+sustituto de comprobar el ámbito.
 
 El filtro de ambito es obligatorio y no opcional
 ------------------------------------------------

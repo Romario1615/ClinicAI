@@ -16,6 +16,7 @@ class ImagenSalida(BaseModel):
     id: uuid.UUID
     paciente_id: uuid.UUID
     tipo: TipoImagen
+    nivel_sensibilidad: str
     piezas: list[int]
     tomada_en: date | None
     descripcion: str | None

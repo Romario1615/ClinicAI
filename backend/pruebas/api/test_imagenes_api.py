@@ -20,7 +20,8 @@ from app.modulos.pacientes.modelos import Paciente, RelacionAsistencial
 from app.modulos.profesionales.modelos import Profesional
 from app.modulos.usuarios.modelos import Usuario
 from app.nucleo.auditoria import AccionAuditada
-from pruebas.api.conftest import cabecera_bearer, conceder_permisos
+from app.nucleo.seguridad import hashear_contrasena
+from pruebas.api.conftest import CONTRASENA, cabecera_bearer, conceder_permisos
 
 pytestmark = [pytest.mark.api, pytest.mark.seguridad, pytest.mark.asyncio]
 
@@ -164,6 +165,72 @@ async def test_sin_permiso_clinico_no_lista_imagenes(
         headers=await cabecera_bearer(cliente, usuario, clinica),
     )
     assert respuesta.status_code == 403
+
+
+async def test_n3_exige_permiso_se_filtra_y_se_audita(
+    cliente: AsyncClient,
+    api: str,
+    sesion: AsyncSession,
+    usuario: Usuario,
+    clinica: Clinica,
+    sede: Sede,
+    cabeceras_imagenes: dict[str, str],
+    relacion_imagen: RelacionAsistencial,
+    paciente: Paciente,
+) -> None:
+    ruta = _ruta(api, str(paciente.id))
+    datos = {"tipo": "RADIOGRAFIA_PANORAMICA", "nivel_sensibilidad": "N3"}
+    denegada = await cliente.post(
+        ruta,
+        headers=cabeceras_imagenes,
+        data=datos,
+        files={"archivo": ("sensible.png", _png_sintetico(), "image/png")},
+    )
+    assert denegada.status_code == 403
+
+    await conceder_permisos(
+        sesion,
+        usuario,
+        clinica,
+        "historia_clinica.leer_sensible",
+        sedes=(sede.id,),
+    )
+    subida = await cliente.post(
+        ruta,
+        headers=cabeceras_imagenes,
+        data=datos,
+        files={"archivo": ("sensible.png", _png_sintetico(), "image/png")},
+    )
+    assert subida.status_code == 201, subida.text
+    imagen = subida.json()
+    assert imagen["nivel_sensibilidad"] == "N3"
+
+    listado_autorizado = await cliente.get(ruta, headers=cabeceras_imagenes)
+    assert [item["id"] for item in listado_autorizado.json()] == [imagen["id"]]
+    auditoria = await sesion.scalar(
+        sa.select(Auditoria)
+        .where(Auditoria.accion == AccionAuditada.IMAGEN_CONSULTADA.value)
+        .where(Auditoria.entidad_tipo == "paciente")
+        .where(Auditoria.paciente_id == paciente.id)
+    )
+    assert auditoria is not None and auditoria.nivel_sensibilidad == "N3"
+
+    lector_n2 = Usuario(
+        clinica_id=clinica.id,
+        correo=f"lector-n2-{uuid.uuid4().hex}@example.invalid",
+        hash_contrasena=hashear_contrasena(CONTRASENA),
+        nombre="Lector",
+        apellido="N2",
+    )
+    sesion.add(lector_n2)
+    await sesion.flush()
+    await conceder_permisos(sesion, lector_n2, clinica, "imagen_clinica.leer", sedes=(sede.id,))
+    cabeceras_n2 = await cabecera_bearer(cliente, lector_n2, clinica)
+    listado_filtrado = await cliente.get(ruta, headers=cabeceras_n2)
+    assert listado_filtrado.status_code == 200
+    assert listado_filtrado.json() == []
+    descarga_filtrada = await cliente.get(imagen["url_contenido"], headers=cabeceras_n2)
+    assert descarga_filtrada.status_code == 404
 
 
 async def test_rechaza_html_disfrazado_de_imagen(

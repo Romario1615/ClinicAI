@@ -40,6 +40,7 @@ from typing import Any
 from sqlalchemy import (
     Boolean,
     CheckConstraint,
+    FetchedValue,
     ForeignKey,
     Index,
     Integer,
@@ -73,6 +74,8 @@ class Odontograma(Base, MezclaIdentificador, MezclaAuditoria):
     # Ejemplo del JSON: pieza 36 con estado de cara oclusal en CARIES.
     piezas: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict)
     motivo_modificacion: Mapped[str | None] = mapped_column(Text, default=None)
+    # Clasificación por versión. N3 exige historia_clinica.leer_sensible.
+    nivel_sensibilidad: Mapped[str] = mapped_column(String(2), default="N2")
     # Si la version la genero completar un procedimiento del plan.
     procedimiento_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("procedimiento_plan.id", ondelete="RESTRICT", use_alter=True),
@@ -88,6 +91,7 @@ class Odontograma(Base, MezclaIdentificador, MezclaAuditoria):
             postgresql_where=text("vigente"),
         ),
         CheckConstraint("version >= 1", name="version_positiva"),
+        CheckConstraint("nivel_sensibilidad IN ('N2', 'N3')", name="sensibilidad_valida"),
         CheckConstraint(
             "denticion IN ('PERMANENTE', 'TEMPORAL', 'MIXTA')", name="denticion_valida"
         ),
@@ -138,6 +142,8 @@ class PlanTratamiento(Base, MezclaIdentificador, MezclaAuditoria):
     estado: Mapped[str] = mapped_column(String(16), default=EstadoPlan.BORRADOR.value)
     moneda: Mapped[str] = mapped_column(String(3), default="USD")
     observaciones: Mapped[str | None] = mapped_column(Text, default=None)
+    # Los procedimientos heredan la sensibilidad del plan que los contiene.
+    nivel_sensibilidad: Mapped[str] = mapped_column(String(2), default="N2")
     propuesto_en: Mapped[datetime | None] = mapped_column(default=None)
     aceptado_en: Mapped[datetime | None] = mapped_column(default=None)
     # Constancia de la aceptacion: medio, referencia del documento archivado
@@ -157,6 +163,7 @@ class PlanTratamiento(Base, MezclaIdentificador, MezclaAuditoria):
             "estado IN ('BORRADOR', 'PROPUESTO', 'ACEPTADO', 'COMPLETADO', 'CANCELADO')",
             name="estado_valido",
         ),
+        CheckConstraint("nivel_sensibilidad IN ('N2', 'N3')", name="sensibilidad_valida"),
         CheckConstraint(
             "estado <> 'CANCELADO' OR motivo_cancelacion IS NOT NULL",
             name="cancelacion_con_motivo",
@@ -292,10 +299,74 @@ class RegistroPlaca(Base, MezclaIdentificador, MezclaAuditoria):
     )
 
 
+class Formulario033(Base, MezclaIdentificador, MezclaAuditoria):
+    """Una captura del 033/2021, conservada como documento clínico versionado.
+
+    `contenido` contiene la captura del formulario; `nota_id`, `odontograma_id`
+    y `registro_placa_id` enlazan fuentes clínicas ya versionadas, no copias
+    editables de esas mismas fuentes. `contexto_identidad` congela los datos
+    maestros que se imprimieron para que una corrección posterior de nombre o
+    documento no cambie la representación histórica del formulario.
+    """
+
+    __tablename__ = "formulario_033"
+
+    clinica_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("clinica.id", ondelete="RESTRICT"))
+    paciente_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("paciente.id", ondelete="RESTRICT"))
+    sede_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("sede.id", ondelete="RESTRICT"))
+    profesional_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("profesional.id", ondelete="RESTRICT")
+    )
+    cita_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("cita.id", ondelete="RESTRICT"), default=None
+    )
+    nota_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("nota_evolucion.id", ondelete="RESTRICT"), default=None
+    )
+    odontograma_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("odontograma.id", ondelete="RESTRICT"), default=None
+    )
+    registro_placa_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("registro_placa.id", ondelete="RESTRICT"), default=None
+    )
+    raiz_id: Mapped[uuid.UUID] = mapped_column(FetchedValue())
+    version: Mapped[int] = mapped_column(SmallInteger, default=1)
+    vigente: Mapped[bool] = mapped_column(Boolean, default=True)
+    motivo_modificacion: Mapped[str | None] = mapped_column(Text, default=None)
+    contexto_identidad: Mapped[dict[str, object]] = mapped_column(JSONB)
+    contenido: Mapped[dict[str, object]] = mapped_column(JSONB)
+
+    __mapper_args__ = {"eager_defaults": True}  # noqa: RUF012
+
+    __table_args__ = (
+        UniqueConstraint("raiz_id", "version", name="uq_formulario_033_raiz_version"),
+        Index(
+            "uq_formulario_033_vigente",
+            "raiz_id",
+            unique=True,
+            postgresql_where=text("vigente"),
+        ),
+        Index(
+            "uq_formulario_033_cita_vigente",
+            "cita_id",
+            unique=True,
+            postgresql_where=text("vigente AND cita_id IS NOT NULL"),
+        ),
+        Index("ix_formulario_033_paciente", "clinica_id", "paciente_id", "creado_en"),
+        CheckConstraint("version >= 1", name="version_positiva"),
+        CheckConstraint(
+            "version = 1 OR motivo_modificacion IS NOT NULL", name="modificacion_con_motivo"
+        ),
+        CheckConstraint("jsonb_typeof(contexto_identidad) = 'object'", name="identidad_objeto"),
+        CheckConstraint("jsonb_typeof(contenido) = 'object'", name="contenido_objeto"),
+    )
+
+
 __all__ = [
     "CARAS_OLEARY",
     "EstadoPlan",
     "EstadoProcedimiento",
+    "Formulario033",
     "MedioAceptacion",
     "Odontograma",
     "PlanTratamiento",

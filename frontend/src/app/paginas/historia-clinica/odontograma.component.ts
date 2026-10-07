@@ -12,7 +12,7 @@
  * inmutables en la base de datos; una versión antigua se consulta en solo
  * lectura.
  */
-import { Component, computed, effect, inject, input, signal } from '@angular/core';
+import { Component, computed, effect, inject, input, signal, ChangeDetectionStrategy } from '@angular/core';
 import { DatePipe, NgTemplateOutlet } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 
@@ -30,6 +30,7 @@ import type {
 import { PERMISOS } from '../../nucleo/servicios/configuracion';
 import { SesionService } from '../../nucleo/servicios/sesion.service';
 import { HistorialPiezaComponent } from './historial-pieza.component';
+import { IconoComponent } from '../../compartido/icono.component';
 import {
   CARAS,
   GRUPOS_FDI,
@@ -56,14 +57,24 @@ const REGIONES: readonly { region: Region; puntos: string }[] = [
   { region: 'centro', puntos: '12,12 28,12 28,28 12,28' },
 ];
 
+/** Movimiento de teclado entre las cinco superficies dibujadas. */
+const REGION_POR_FLECHA: Readonly<Record<Region, Readonly<Record<string, Region>>>> = {
+  arriba: { ArrowDown: 'centro', ArrowLeft: 'izquierda', ArrowRight: 'derecha' },
+  abajo: { ArrowUp: 'centro', ArrowLeft: 'izquierda', ArrowRight: 'derecha' },
+  izquierda: { ArrowRight: 'centro', ArrowUp: 'arriba', ArrowDown: 'abajo' },
+  derecha: { ArrowLeft: 'centro', ArrowUp: 'arriba', ArrowDown: 'abajo' },
+  centro: { ArrowUp: 'arriba', ArrowDown: 'abajo', ArrowLeft: 'izquierda', ArrowRight: 'derecha' },
+};
+
 const ES_HALLAZGO_CARA = new Set<string>(HALLAZGOS_CARA.map((h) => h.codigo));
 const ES_HALLAZGO_PIEZA = new Set<string>(HALLAZGOS_PIEZA.map((h) => h.codigo));
 
 @Component({
   selector: 'app-odontograma',
   standalone: true,
-  imports: [FormsModule, DatePipe, NgTemplateOutlet, HistorialPiezaComponent],
+  imports: [FormsModule, DatePipe, NgTemplateOutlet, HistorialPiezaComponent, IconoComponent],
   templateUrl: './odontograma.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './odontograma.component.scss',
 })
 export class OdontogramaComponent {
@@ -73,6 +84,7 @@ export class OdontogramaComponent {
   private readonly sesion = inject(SesionService);
 
   protected readonly puedeEditar = this.sesion.tienePermiso(PERMISOS.odontogramaEscribir);
+  protected readonly puedeLeerSensible = this.sesion.tienePermiso(PERMISOS.historiaLeerSensible);
   private readonly puedeVerPlanes = this.sesion.tienePermiso(PERMISOS.planTratamientoLeer);
   protected readonly denticion = signal<Denticion>('PERMANENTE');
   protected readonly actual = signal<Odontograma | null>(null);
@@ -83,6 +95,7 @@ export class OdontogramaComponent {
   protected readonly cargando = signal(true);
   protected readonly guardando = signal(false);
   protected readonly motivo = signal('');
+  protected readonly nivelSensibilidad = signal<'N2' | 'N3'>('N2');
   protected readonly error = signal<FalloApi | string | null>(null);
   protected readonly aviso = signal('');
   protected readonly borrador = signal<Record<string, EstadoPiezaOdontograma>>({});
@@ -135,6 +148,7 @@ export class OdontogramaComponent {
         this.versiones.set(versiones);
         const vigente = versiones.find((version) => version.vigente) ?? null;
         this.actual.set(vigente);
+        this.nivelSensibilidad.set(vigente?.nivel_sensibilidad ?? 'N2');
         this.denticion.set(vigente?.denticion ?? 'PERMANENTE');
         this.borrador.set(vigente ? this.clonarPiezas(vigente.piezas) : {});
         this.cargando.set(false);
@@ -158,6 +172,7 @@ export class OdontogramaComponent {
     const elegida = this.versiones().find((version) => version.version === Number(valor));
     if (!elegida) return;
     this.actual.set(elegida);
+    this.nivelSensibilidad.set(elegida.nivel_sensibilidad);
     this.denticion.set(elegida.denticion);
     this.borrador.set(this.clonarPiezas(elegida.piezas));
     this.seleccionada.set(null);
@@ -198,6 +213,23 @@ export class OdontogramaComponent {
       caras[cara] = herramienta as HallazgoCara;
     }
     this.actualizarPiezaDe(codigo, { ...estado, caras });
+  }
+
+  /** Permite seleccionar una cara y aplicar la herramienta sin usar ratón. */
+  protected teclaRegion(evento: KeyboardEvent, codigo: number, region: Region): void {
+    if (evento.key === 'Enter' || evento.key === ' ') {
+      evento.preventDefault();
+      this.clicRegion(codigo, region);
+      return;
+    }
+    if (!evento.key.startsWith('Arrow')) return;
+    evento.preventDefault();
+    const siguiente = REGION_POR_FLECHA[region][evento.key];
+    if (!siguiente) return;
+    const objetivo = (evento.currentTarget as SVGPolygonElement)
+      .closest('.diente')
+      ?.querySelector<SVGPolygonElement>(`[data-region="${siguiente}"]`);
+    objetivo?.focus();
   }
 
   /** Clic sobre el número o el contorno: abre la pieza o aplica un hallazgo de pieza. */
@@ -296,8 +328,9 @@ export class OdontogramaComponent {
           contenido,
           actual.version,
           this.motivo().trim(),
+          this.nivelSensibilidad(),
         )
-      : this.api.crearOdontograma(this.pacienteId(), contenido);
+      : this.api.crearOdontograma(this.pacienteId(), contenido, this.nivelSensibilidad());
     peticion.subscribe({
       next: () => {
         this.guardando.set(false);

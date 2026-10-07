@@ -12,7 +12,7 @@
         aria-controls="navegacion-principal"
         (click)="alternarMenu()"
       >
-        <span aria-hidden="true">☰</span>
+        <app-icono nombre="menu" [tamano]="20" />
         <span class="solo-lectores">Alternar navegación</span>
       </button>
 
@@ -24,7 +24,7 @@
 
       <div class="cabecera__notificaciones">
         <button type="button" class="boton boton--plano campana" (click)="alternarNotificaciones()" [attr.aria-expanded]="notificacionesAbiertas()" aria-label="Notificaciones de seguimiento">
-          <app-icono nombre="espera" [tamano]="19" />
+          <app-icono nombre="notificaciones" [tamano]="19" />
           @if (pendientes.notificaciones() > 0) { <span class="campana__cuenta">{{ pendientes.notificaciones() }}</span> }
         </button>
         @if (notificacionesAbiertas()) {
@@ -39,6 +39,12 @@
                 </a>
               }
             }
+            @if (pendientes.cargosVencidosPendientes() > 0) {
+              <a class="notificaciones__item" routerLink="/pagos" (click)="cerrarNotificaciones()">
+                <span class="notificaciones__etiqueta">Cobros vencidos</span>
+                <strong>{{ pendientes.cargosVencidosPendientes() }} cargo(s) con saldo vencido</strong>
+              </a>
+            }
             @if (pendientes.alertasAbiertas().length) {
               <a class="notificaciones__item" routerLink="/medicamentos" (click)="cerrarNotificaciones()">
                 <span class="notificaciones__etiqueta">Seguimiento clínico</span>
@@ -51,8 +57,23 @@
                 <strong>{{ pendientes.conversacionesPendientes() }} conversación(es) derivada(s)</strong>
               </a>
             }
-            @if (!pendientes.cargando() && pendientes.tareas().length === 0 && pendientes.alertasAbiertas().length === 0 && pendientes.conversacionesPendientes() === 0) {
-              <p class="notificaciones__vacio">No hay tareas ni alertas pendientes.</p>
+            @if (pendientes.avisosTratamientoPendientes() > 0) {
+              <a class="notificaciones__item" routerLink="/conversaciones" (click)="cerrarNotificaciones()">
+                <span class="notificaciones__etiqueta">Revisión clínica</span>
+                <strong>{{ pendientes.avisosTratamientoPendientes() }} reporte(s) de tratamiento pendiente(s)</strong>
+              </a>
+            }
+            @if (pendientes.avisosEmergenciaPendientes() > 0) {
+              <a class="notificaciones__item" routerLink="/seguridad" (click)="cerrarNotificaciones()">
+                <span class="notificaciones__etiqueta">Seguridad clínica</span>
+                <strong>{{ pendientes.avisosEmergenciaPendientes() }} acceso(s) temporal(es) por emergencia para revisar</strong>
+              </a>
+            }
+            @if (!pendientes.cargando() && pendientes.notificaciones() === 0) {
+              <div class="notificaciones__vacio">
+                <img src="/images/notificaciones-vacias.png" alt="" aria-hidden="true" width="96" height="100" />
+                <p><strong>Todo al día</strong><span>No hay tareas ni alertas pendientes.</span></p>
+              </div>
             }
             <a class="notificaciones__todo" routerLink="/panel" (click)="cerrarNotificaciones()">Ver seguimiento en el panel</a>
           </section>
@@ -106,10 +127,11 @@
       <ul class="navegacion__lista">
         @for (enlace of enlaces(); track enlace.ruta) {
           <li>
-            @let cantidadInsignia = enlace.ruta === '/conversaciones' ? pendientes.conversacionesPendientes() : pendientes.cuenta();
+            @let cantidadInsignia = enlace.ruta === '/conversaciones' ? pendientes.conversacionesPendientes() : enlace.ruta === '/seguridad' ? pendientes.avisosEmergenciaPendientes() : pendientes.cuenta();
             <a
               [routerLink]="enlace.ruta"
               routerLinkActive="navegacion__enlace--activo"
+              ariaCurrentWhenActive="page"
               class="navegacion__enlace"
               (click)="cerrarMenu()"
             >
@@ -122,7 +144,7 @@
                      punto solo dice que hay algo. -->
                 <span
                   class="navegacion__pendientes numerico"
-                  [attr.aria-label]="cantidadInsignia + (enlace.ruta === '/conversaciones' ? ' conversaciones pendientes' : ' tareas con plazo')"
+                  [attr.aria-label]="cantidadInsignia + (enlace.ruta === '/conversaciones' ? ' conversaciones pendientes' : enlace.ruta === '/seguridad' ? ' avisos de seguridad pendientes' : ' tareas con plazo')"
                 >
                   {{ cantidadInsignia }}
                 </span>

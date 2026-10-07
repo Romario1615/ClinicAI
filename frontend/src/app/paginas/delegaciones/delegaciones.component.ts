@@ -6,7 +6,7 @@
  * un motivo. Sin delegación vigente nadie firma por otro; el servidor lo
  * comprueba en cada receta y la auditoría registra quién actuó.
  */
-import { Component, computed, inject, signal } from '@angular/core';
+import { Component, computed, inject, signal, ChangeDetectionStrategy } from '@angular/core';
 import { DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 
@@ -84,6 +84,7 @@ import type { Profesional } from '../../nucleo/modelos/dominio';
       }
     </section>
   `,
+  changeDetection: ChangeDetectionStrategy.Eager,
   styles: `
     .cabecera { margin-bottom: var(--espacio-5); }
     .cabecera__sub { color: var(--texto-suave); max-width: 44rem; }

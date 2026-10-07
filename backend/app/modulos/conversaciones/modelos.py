@@ -38,7 +38,7 @@ from sqlalchemy import (
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
-from app.nucleo.bd import Base, MezclaIdentificador
+from app.nucleo.bd import Base, MezclaAuditoria, MezclaIdentificador
 
 
 class EstadoConversacion(StrEnum):
@@ -63,6 +63,11 @@ class IntencionEntrante(StrEnum):
     CANCELAR = "CANCELAR"
     ACEPTAR_OFERTA = "ACEPTAR_OFERTA"
     REGISTRAR_TOMA = "REGISTRAR_TOMA"
+    RECORDAR_TOMA_DESPUES = "RECORDAR_TOMA_DESPUES"
+    NO_PUDO_TOMAR = "NO_PUDO_TOMAR"
+    # Clasificacion cerrada que dirige reportes explicitos de problemas de
+    # tratamiento al equipo sin inferir gravedad ni cambiar una pauta.
+    PROBLEMA_TRATAMIENTO = "PROBLEMA_TRATAMIENTO"
     BAJA = "BAJA"
     # Baja solo de las promociones: sigue recibiendo recordatorios de cita.
     BAJA_PROMOCIONES = "BAJA_PROMOCIONES"
@@ -180,14 +185,52 @@ class MensajeEntrante(Base, MezclaIdentificador):
         UniqueConstraint("external_id", name="uq_mensaje_entrante_external_id"),
         CheckConstraint(
             "intencion IN ('CONFIRMAR', 'CANCELAR', 'ACEPTAR_OFERTA', 'REGISTRAR_TOMA', "
-            "'BAJA', 'BAJA_PROMOCIONES', 'ALTA', 'AYUDA', 'DESCONOCIDA')",
+            "'RECORDAR_TOMA_DESPUES', 'NO_PUDO_TOMAR', "
+            "'PROBLEMA_TRATAMIENTO', 'BAJA', 'BAJA_PROMOCIONES', 'ALTA', 'AYUDA', 'DESCONOCIDA')",
             name="intencion_valida",
         ),
         Index("ix_mensaje_entrante_conversacion", "conversacion_id", "recibido_en"),
     )
 
 
+class AvisoRevisionTratamiento(Base, MezclaIdentificador, MezclaAuditoria):
+    """Aviso persistente para revisión humana de un reporte de tratamiento.
+
+    No representa gravedad ni un diagnóstico. Vincula el mensaje con la
+    conversación y registra únicamente si el equipo confirmó su revisión.
+    """
+
+    __tablename__ = "aviso_revision_tratamiento"
+
+    clinica_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("clinica.id", ondelete="CASCADE"))
+    conversacion_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("conversacion.id", ondelete="CASCADE")
+    )
+    mensaje_entrante_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("mensaje_entrante.id", ondelete="CASCADE"), unique=True
+    )
+    revisada_en: Mapped[datetime | None] = mapped_column(default=None)
+    # Se conserva el identificador aunque el usuario se desactive o elimine:
+    # el registro acredita quién confirmó la revisión.
+    revisada_por: Mapped[uuid.UUID | None] = mapped_column(default=None)
+
+    __table_args__ = (
+        CheckConstraint(
+            "(revisada_en IS NULL AND revisada_por IS NULL) OR "
+            "(revisada_en IS NOT NULL AND revisada_por IS NOT NULL)",
+            name="revision_con_actor_y_fecha",
+        ),
+        Index(
+            "ix_aviso_tratamiento_pendiente",
+            "clinica_id",
+            "creado_en",
+            postgresql_where=text("revisada_en IS NULL"),
+        ),
+    )
+
+
 __all__ = [
+    "AvisoRevisionTratamiento",
     "Conversacion",
     "EstadoConversacion",
     "IntencionEntrante",

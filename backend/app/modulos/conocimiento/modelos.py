@@ -43,6 +43,7 @@ from enum import StrEnum
 
 from pgvector.sqlalchemy import Vector
 from sqlalchemy import (
+    Boolean,
     CheckConstraint,
     Computed,
     ForeignKey,
@@ -212,6 +213,9 @@ class KnowledgeVersion(Base, MezclaIdentificador):
     nombre_archivo: Mapped[str | None] = mapped_column(String(255), default=None)
     hash_sha256: Mapped[str] = mapped_column(String(64))
     ruta_almacenamiento: Mapped[str | None] = mapped_column(Text, default=None)
+    # Se conserva solo mientras la ingesta este pendiente o haya fallado para
+    # poder reintentarla; al completarse se borra el duplicado del contenido.
+    contenido_texto: Mapped[str | None] = mapped_column(Text, default=None)
     autor_id: Mapped[uuid.UUID | None] = mapped_column(default=None)
     notas_cambio: Mapped[str | None] = mapped_column(Text, default=None)
     creado_en: Mapped[datetime] = mapped_column(server_default=text("now()"))
@@ -271,6 +275,9 @@ class KnowledgeChunk(Base, MezclaIdentificador):
     effective_from: Mapped[datetime | None] = mapped_column(default=None)
     effective_until: Mapped[datetime | None] = mapped_column(default=None)
     sensitivity_level: Mapped[str] = mapped_column(String(4), default="N1")
+    # Solo la ultima version seleccionada para recuperacion puede aparecer al
+    # agente. Evita que versiones historicas reaparezcan al aprobar el documento.
+    vigente: Mapped[bool] = mapped_column(Boolean, default=True, server_default=text("true"))
 
     creado_en: Mapped[datetime] = mapped_column(server_default=text("now()"))
 
@@ -307,6 +314,7 @@ class KnowledgeChunk(Base, MezclaIdentificador):
             postgresql_where=text("status IN ('APPROVED', 'PUBLISHED')"),
         ),
         Index("ix_knowledge_chunks_documento", "document_id", "version"),
+        Index("ix_knowledge_chunks_documento_vigente", "document_id", "vigente", "status"),
         # Busqueda textual. El GIN sobre el `tsvector` es la mitad textual de
         # la busqueda hibrida (ADR-0013).
         Index(

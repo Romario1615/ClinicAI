@@ -19,6 +19,8 @@
  * que sí se puede ver, sin error: la pantalla que la usa sigue sirviendo.
  */
 import { Injectable, computed, inject, signal } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { interval } from 'rxjs';
 
 import { ApiService, type AlertaAdherencia } from './api.service';
 import { PERMISOS } from './configuracion';
@@ -39,6 +41,11 @@ export class PendientesService {
   private readonly nombres = signal<ReadonlyMap<string, string>>(new Map());
   private readonly alertas = signal<readonly AlertaAdherencia[]>([]);
   private readonly conversaciones = signal(0);
+  private readonly avisosTratamiento = signal(0);
+  private readonly avisosEmergencia = signal(0);
+  private readonly cargosVencidos = signal(0);
+  private readonly totalOfertasSinAvisar = signal(0);
+  private epocaSesion = 0;
 
   readonly cargando = signal(false);
 
@@ -47,6 +54,7 @@ export class PendientesService {
     derivarPendientes({
       citas: this.citas(),
       ofertasSinAvisar: this.ofertas(),
+      ofertasSinAvisarTotal: this.totalOfertasSinAvisar(),
       ahora: new Date(),
       nombrePaciente: (id) => this.nombres().get(id) ?? `Paciente ${id.slice(0, 8)}`,
     }),
@@ -54,12 +62,27 @@ export class PendientesService {
 
   /** Lo que muestra la insignia del menú. Cero significa cero, no «sin datos». */
   readonly cuenta = computed(() => this.tareas().length);
-  readonly notificaciones = computed(() => this.cuenta() + this.alertas().length + this.conversaciones());
-  readonly conversacionesPendientes = this.conversaciones.asReadonly();
+  readonly notificaciones = computed(
+    () => this.cuenta() + this.alertas().length + this.conversaciones() + this.avisosTratamiento() + this.avisosEmergencia() + this.cargosVencidos(),
+  );
+  readonly cargosVencidosPendientes = this.cargosVencidos.asReadonly();
+  readonly conversacionesPendientes = computed(
+    () => this.conversaciones(),
+  );
+  readonly avisosTratamientoPendientes = this.avisosTratamiento.asReadonly();
+  readonly avisosEmergenciaPendientes = this.avisosEmergencia.asReadonly();
   readonly alertasAbiertas = this.alertas.asReadonly();
 
   /** Citas de hoy en el ámbito del usuario. Las usa el panel para la carga. */
   readonly citasDeHoy = this.citas.asReadonly();
+
+  constructor() {
+    // Una oferta puede nacer por una cancelación desde otra sesión. Actualizar
+    // solo al entrar dejaba el aviso invisible durante el resto de la jornada.
+    interval(60_000)
+      .pipe(takeUntilDestroyed())
+      .subscribe(() => this.refrescarOfertasSinAvisar());
+  }
 
   /**
    * Refresca la cola.
@@ -69,18 +92,49 @@ export class PendientesService {
    * reloj que recarga solo hace que el número baile mientras alguien lo lee.
    */
   cargar(zona = 'America/Guayaquil'): void {
+    const epoca = this.epocaSesion;
+    this.refrescarCobrosVencidos();
     if (this.sesion.tienePermiso(PERMISOS.conversacionLeer)) {
       this.api.cuentaConversacionesPendientes().subscribe({
-        next: ({ cantidad }) => this.conversaciones.set(cantidad),
-        error: () => this.conversaciones.set(0),
+        next: ({ cantidad }) => {
+          if (epoca === this.epocaSesion) this.conversaciones.set(cantidad);
+        },
+        error: () => {
+          if (epoca === this.epocaSesion) this.conversaciones.set(0);
+        },
+      });
+      this.api.cuentaAvisosTratamientoPendientes().subscribe({
+        next: ({ cantidad }) => {
+          if (epoca === this.epocaSesion) this.avisosTratamiento.set(cantidad);
+        },
+        error: () => {
+          if (epoca === this.epocaSesion) this.avisosTratamiento.set(0);
+        },
       });
     } else {
       this.conversaciones.set(0);
+      this.avisosTratamiento.set(0);
+    }
+    if (this.sesion.tienePermiso(PERMISOS.auditoriaLeer)) {
+      this.api.cuentaAvisosAccesoEmergencia().subscribe({
+        next: ({ cantidad }) => {
+          if (epoca === this.epocaSesion) this.avisosEmergencia.set(cantidad);
+        },
+        error: () => {
+          if (epoca === this.epocaSesion) this.avisosEmergencia.set(0);
+        },
+      });
+    } else {
+      this.avisosEmergencia.set(0);
     }
     if (this.sesion.tienePermiso(PERMISOS.adherenciaLeer)) {
       this.api.alertasAdherencia().subscribe({
-        next: (alertas) => this.alertas.set(alertas),
-        error: () => this.alertas.set([]),
+        next: (alertas) => {
+          if (epoca === this.epocaSesion) this.alertas.set(alertas);
+        },
+        error: () => {
+          if (epoca === this.epocaSesion) this.alertas.set([]);
+        },
       });
     } else {
       this.alertas.set([]);
@@ -88,6 +142,8 @@ export class PendientesService {
     if (!this.sesion.tienePermiso(PERMISOS.agendaLeer)) {
       this.citas.set([]);
       this.ofertas.set([]);
+      this.totalOfertasSinAvisar.set(0);
+      this.cargando.set(false);
       return;
     }
 
@@ -96,24 +152,84 @@ export class PendientesService {
 
     this.api.citas({ desde, hasta, limite: 200 }).subscribe({
       next: (pagina) => {
+        if (epoca !== this.epocaSesion) return;
         this.citas.set(pagina.elementos);
         this.cargando.set(false);
-        this.resolverNombres(pagina.elementos);
+        this.resolverNombres(pagina.elementos, epoca);
       },
       error: () => {
+        if (epoca !== this.epocaSesion) return;
         this.citas.set([]);
         this.cargando.set(false);
       },
     });
 
-    if (this.sesion.tienePermiso(PERMISOS.listaEsperaGestionar)) {
-      this.operaciones
-        .leer<Pagina<EntradaEspera>>('/lista-espera/', { limite: 25, solo_sin_avisar: true })
-        .subscribe({
-          next: (pagina) => this.ofertas.set(pagina.elementos),
-          error: () => this.ofertas.set([]),
-        });
+    this.refrescarOfertasSinAvisar();
+  }
+
+  /** Refresca la alerta agregada sin volver a consultar toda la jornada. */
+  refrescarOfertasSinAvisar(): void {
+    if (
+      !this.sesion.tienePermiso(PERMISOS.agendaLeer) ||
+      !this.sesion.tienePermiso(PERMISOS.listaEsperaGestionar)
+    ) {
+      this.ofertas.set([]);
+      this.totalOfertasSinAvisar.set(0);
+      return;
     }
+    const epoca = this.epocaSesion;
+    this.operaciones
+      .leer<Pagina<EntradaEspera>>('/lista-espera/', {
+        limite: 25,
+        desplazamiento: 0,
+        solo_sin_avisar: true,
+      })
+      .subscribe({
+        next: (pagina) => {
+          if (epoca !== this.epocaSesion) return;
+          this.ofertas.set(pagina.elementos);
+          this.totalOfertasSinAvisar.set(pagina.total);
+        },
+        // En una falla transitoria se conserva la última alerta cargada; no se
+        // comunica «todo al día» si no se logró consultar al servidor.
+        error: () => undefined,
+      });
+  }
+
+  /** Vacía datos derivados de la sesión cerrada y descarta sus respuestas tardías. */
+  limpiar(): void {
+    this.epocaSesion += 1;
+    this.citas.set([]);
+    this.ofertas.set([]);
+    this.totalOfertasSinAvisar.set(0);
+    this.nombres.set(new Map());
+    this.alertas.set([]);
+    this.conversaciones.set(0);
+    this.avisosTratamiento.set(0);
+    this.avisosEmergencia.set(0);
+    this.cargosVencidos.set(0);
+    this.cargando.set(false);
+  }
+
+  /** Actualiza solo el resumen de cartera que aparece en la campana. */
+  refrescarCobrosVencidos(): void {
+    if (!this.sesion.tienePermiso(PERMISOS.pagoLeer)) {
+      this.cargosVencidos.set(0);
+      return;
+    }
+    const epoca = this.epocaSesion;
+    this.operaciones.leer<Pagina<unknown>>('/pagos/cargos/', {
+      limite: 1,
+      desplazamiento: 0,
+      vencidos: true,
+    }).subscribe({
+      next: (pagina) => {
+        if (epoca === this.epocaSesion) this.cargosVencidos.set(pagina.total);
+      },
+      error: () => {
+        if (epoca === this.epocaSesion) this.cargosVencidos.set(0);
+      },
+    });
   }
 
   /**
@@ -123,7 +239,7 @@ export class PendientesService {
    * listado entero: la clínica de pruebas tiene doscientos pacientes y pedir
    * los cien primeros dejaba a la mitad mostrándose como «Paciente».
    */
-  private resolverNombres(citas: readonly Cita[]): void {
+  private resolverNombres(citas: readonly Cita[], epoca: number): void {
     if (!this.sesion.tienePermiso(PERMISOS.pacienteLeer)) {
       return;
     }
@@ -138,6 +254,7 @@ export class PendientesService {
       }
       this.api.paciente(id).subscribe({
         next: (paciente) => {
+          if (epoca !== this.epocaSesion) return;
           this.nombres.update((actual) => {
             const copia = new Map(actual);
             copia.set(id, `${paciente.nombre} ${paciente.apellido}`);

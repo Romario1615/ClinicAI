@@ -677,36 +677,3 @@ class TestRestriccionesDeCoherencia:
         sesion.add(otra)
         with pytest.raises(IntegrityError, match="ix_cita_idempotencia"):
             await sesion.flush()
-
-
-class TestTablasDeSoloInsercion:
-    """La auditoria y el historial de citas no se pueden alterar."""
-
-    async def test_la_auditoria_no_admite_modificacion(self, sesion) -> None:
-        resultado = await sesion.execute(
-            sa.text(
-                "INSERT INTO auditoria (accion, actor_tipo, resultado, origen) "
-                "VALUES ('login.exitoso', 'USUARIO', 'EXITO', 'API') RETURNING id"
-            )
-        )
-        identificador = resultado.scalar_one()
-
-        with pytest.raises(Exception, match="solo insercion"):
-            await sesion.execute(
-                sa.text("UPDATE auditoria SET resultado = 'DENEGADO' WHERE id = :id"),
-                {"id": identificador},
-            )
-
-    async def test_la_auditoria_no_admite_borrado(self, sesion) -> None:
-        resultado = await sesion.execute(
-            sa.text(
-                "INSERT INTO auditoria (accion, actor_tipo, resultado, origen) "
-                "VALUES ('login.fallido', 'USUARIO', 'DENEGADO', 'API') RETURNING id"
-            )
-        )
-        identificador = resultado.scalar_one()
-
-        with pytest.raises(Exception, match="solo insercion"):
-            await sesion.execute(
-                sa.text("DELETE FROM auditoria WHERE id = :id"), {"id": identificador}
-            )

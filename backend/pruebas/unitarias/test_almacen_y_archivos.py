@@ -12,10 +12,13 @@ from __future__ import annotations
 
 import struct
 from datetime import UTC, datetime
+from io import BytesIO
 from pathlib import Path
 
 import httpx
 import pytest
+from pypdf import PdfWriter
+from pypdf.actions import JavaScript
 
 from app.nucleo.almacen import (
     AlmacenLocal,
@@ -25,10 +28,12 @@ from app.nucleo.almacen import (
     validar_clave,
 )
 from app.nucleo.archivos import (
+    ArchivoInfectado,
     ResultadoAntivirus,
     limpiar_jpeg,
     limpiar_png,
     limpiar_webp,
+    sanear_comprobante,
     sanear_imagen,
 )
 from app.nucleo.configuracion import Configuracion, Entorno
@@ -218,6 +223,49 @@ async def test_sin_antivirus_en_produccion_se_rechaza() -> None:
     )
     with pytest.raises(ProveedorExternoNoDisponible):
         await sanear_imagen(_jpeg(), configuracion)
+
+
+def _pdf_sintetico(*, javascript: bool = False) -> bytes:
+    escritor = PdfWriter()
+    escritor.add_blank_page(width=72, height=72)
+    if javascript:
+        escritor.add_open_action(JavaScript("app.alert('sintetico')"))
+    salida = BytesIO()
+    escritor.write(salida)
+    return salida.getvalue()
+
+
+@pytest.mark.asyncio
+async def test_comprobante_pdf_valida_tipo_estructura_y_analisis_no_disponible() -> None:
+    resultado = await sanear_comprobante(_pdf_sintetico(), _config())
+    assert resultado.tipo_mime == "application/pdf"
+    assert resultado.antivirus is ResultadoAntivirus.NO_DISPONIBLE
+    assert len(resultado.sha256) == 64
+
+
+@pytest.mark.asyncio
+async def test_comprobante_pdf_con_javascript_se_rechaza() -> None:
+    with pytest.raises(ArchivoNoPermitido, match="JavaScript"):
+        await sanear_comprobante(_pdf_sintetico(javascript=True), _config())
+
+
+@pytest.mark.asyncio
+async def test_comprobante_pdf_en_produccion_falla_cerrado_sin_antivirus() -> None:
+    configuracion = Configuracion.model_construct(
+        entorno=Entorno.PRODUCCION, antivirus_habilitado=False, max_tamano_archivo_mb=1
+    )
+    with pytest.raises(ProveedorExternoNoDisponible, match="exige antivirus"):
+        await sanear_comprobante(_pdf_sintetico(), configuracion)
+
+
+@pytest.mark.asyncio
+async def test_comprobante_pdf_infectado_se_rechaza(monkeypatch: pytest.MonkeyPatch) -> None:
+    async def infectado(datos: bytes, *, host: str, puerto: int) -> bool:
+        return False
+
+    monkeypatch.setattr("app.nucleo.archivos.analizar_clamd", infectado)
+    with pytest.raises(ArchivoInfectado):
+        await sanear_comprobante(_pdf_sintetico(), _config(antivirus_habilitado=True))
 
 
 # ===========================================================================

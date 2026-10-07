@@ -222,6 +222,7 @@ def _condiciones(contexto: ContextoAutorizacion) -> list[ColumnElement[bool]]:
         KnowledgeChunk.clinic_id == contexto.clinica_id,
         # Solo aprobados y vigentes (RF-M05).
         KnowledgeChunk.status.in_(sorted(ESTADOS_RECUPERABLES)),
+        KnowledgeChunk.vigente.is_(True),
         or_(
             KnowledgeChunk.effective_from.is_(None),
             KnowledgeChunk.effective_from <= contexto.ahora,

@@ -36,6 +36,14 @@ DIMENSIONES_CLINICA = (
     TipoAmbito.PACIENTE.value,
 )
 
+# El rol base Profesional incluye estas capacidades operativas además de los
+# permisos asistenciales. Son parte de la asignación predefinida del rol y no
+# dan acceso a datos de otros profesionales; el vínculo obligatorio con una
+# ficha activa limita el acceso clínico a su identidad y ámbito.
+PERMISOS_BASE_PROFESIONAL_DELEGABLES = frozenset(
+    {"acceso_emergencia.solicitar", "profesional.conectar_calendario"}
+)
+
 
 async def listar_permisos(sesion: AsyncSession, principal: Principal) -> list[PermisoDisponible]:
     filas = (
@@ -377,6 +385,8 @@ async def _roles_asignables(
         delegables = permisos - (
             PERMISOS_SOLO_ASISTENCIALES if rol.codigo == "profesional" else frozenset()
         )
+        if rol.codigo == "profesional" and rol.es_sistema:
+            delegables -= PERMISOS_BASE_PROFESIONAL_DELEGABLES
         if not delegables <= principal.permisos:
             raise DatosInvalidos("No puede asignar permisos que su propia cuenta no tiene.")
     return list(roles), permisos_por_rol

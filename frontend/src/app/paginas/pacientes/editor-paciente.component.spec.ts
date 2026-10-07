@@ -18,7 +18,7 @@
  *
  * **El error del backend se muestra y el formulario se puede reintentar.**
  */
-import { provideHttpClient } from '@angular/common/http';
+import { provideHttpClient, withXhr } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 
@@ -51,7 +51,7 @@ describe('EditorPacienteComponent', () => {
     TestBed.configureTestingModule({
       imports: [EditorPacienteComponent],
       providers: [
-        provideHttpClient(),
+        provideHttpClient(withXhr()),
         provideHttpClientTesting(),
         { provide: CONFIGURACION, useValue: CONFIGURACION_POR_DEFECTO },
       ],

@@ -1,0 +1,276 @@
+<section class="formulario-033" aria-labelledby="titulo-formulario-033">
+  <header class="encabezado">
+    <div>
+      <p class="ceja">REGISTRO ASISTENCIAL · MSP 033/2021</p>
+      <h2 id="titulo-formulario-033">Formulario odontológico</h2>
+      <p>Captura clínica versionada vinculada al expediente del paciente. Los datos de identidad se completan desde el registro autorizado.</p>
+    </div>
+    @if (puedeEditar() && !seleccionado() && !creando()) {
+      <button class="boton boton--principal" type="button" (click)="nuevo()">Nuevo formulario</button>
+    }
+  </header>
+
+  @if (error()) { <p class="aviso-error" role="alert">{{ error() }}</p> }
+  @if (exito()) { <p class="exito" role="status">{{ exito() }}</p> }
+  @if (cargando()) { <app-cargando mensaje="Cargando formularios clínicos..." /> }
+
+  @if (!cargando() && !seleccionado() && !formularios().length) {
+    <div class="tarjeta vacio">
+      <h3>Aún no hay formularios 033</h3>
+      <p>Registre la atención cuando tenga los hallazgos y antecedentes confirmados.</p>
+      @if (puedeEditar()) { <button class="boton boton--principal" type="button" (click)="nuevo()">Registrar formulario</button> }
+    </div>
+  }
+
+  @if (!seleccionado()) {
+    @for (formulario of formularios(); track formulario.raiz_id) {
+      <article class="tarjeta registro">
+        <div class="registro__cabecera">
+          <div>
+            <h3>Atención del {{ formulario.creado_en | date:'mediumDate' }}</h3>
+            <p>Versión {{ formulario.version }} · {{ formulario.contexto_identidad['sede'] }} · {{ formulario.contexto_identidad['profesional'] }}</p>
+          </div>
+          <div class="registro__acciones">
+            <button class="boton boton--plano boton--pequeno" type="button" [disabled]="exportando() === formulario.raiz_id" (click)="exportar(formulario)">
+              {{ exportando() === formulario.raiz_id ? 'Preparando…' : 'Imprimir / guardar PDF' }}
+            </button>
+            <button class="boton boton--plano boton--pequeno" type="button" (click)="verVersiones(formulario)">
+              {{ raizHistorial() === formulario.raiz_id ? 'Ocultar historial' : 'Ver historial' }}
+            </button>
+            @if (puedeEditar()) { <button class="boton boton--pequeno" type="button" (click)="corregir(formulario)">Crear corrección</button> }
+          </div>
+        </div>
+        <p class="registro__motivo"><strong>Motivo de consulta:</strong> {{ formulario.datos.motivo_consulta }}</p>
+        <details class="detalle-completo">
+          <summary>Ver contenido completo del formulario</summary>
+          <div class="detalle-completo__cuerpo">
+            <section>
+              <h4>Identificación congelada al registrar</h4>
+              <p>{{ formulario.contexto_identidad['nombres'] }} {{ formulario.contexto_identidad['apellidos'] }} · {{ formulario.contexto_identidad['tipo_documento'] }} {{ formulario.contexto_identidad['historia_clinica'] }}</p>
+              <p>Edad registrada: {{ formulario.contexto_identidad['edad'] ?? 'No disponible' }} {{ formulario.contexto_identidad['unidad_edad'] ?? '' }} · Registro profesional: {{ formulario.contexto_identidad['registro_profesional'] ?? 'No informado' }}</p>
+            </section>
+            <section>
+              <h4>Atención</h4>
+              <p><strong>Embarazo:</strong> {{ presencia(formulario.datos.embarazada) }}</p>
+              <p><strong>Motivo:</strong> {{ formulario.datos.motivo_consulta }}</p>
+              <p><strong>Problema actual:</strong> {{ formulario.datos.enfermedad_actual || 'Sin registro' }}</p>
+            </section>
+            <section>
+              <h4>Fuentes vinculadas</h4>
+              @if (formulario.cita_id || formulario.nota_id || formulario.odontograma_id || formulario.registro_placa_id) {
+                <ul class="fuentes__lista">
+                  @if (formulario.cita_id) { <li>Cita · <code>{{ formulario.cita_id }}</code></li> }
+                  @if (formulario.nota_id) { <li>Nota clínica · <code>{{ formulario.nota_id }}</code></li> }
+                  @if (formulario.odontograma_id) { <li>Odontograma · <code>{{ formulario.odontograma_id }}</code></li> }
+                  @if (formulario.registro_placa_id) { <li>Índice de placa · <code>{{ formulario.registro_placa_id }}</code></li> }
+                </ul>
+              } @else { <p>Sin registros relacionados.</p> }
+            </section>
+            <section>
+              <h4>Antecedentes personales y familiares</h4>
+              @for (antecedente of formulario.datos.antecedentes_personales; track antecedente.codigo) {
+                <p><strong>{{ etiqueta(antecedente.codigo) }}:</strong> {{ presencia(antecedente.presente) }}@if (antecedente.detalle) { · {{ antecedente.detalle }} }</p>
+              }
+              @for (antecedente of formulario.datos.antecedentes_familiares; track antecedente.codigo) {
+                <p><strong>Familiar · {{ etiqueta(antecedente.codigo) }}:</strong> {{ presencia(antecedente.presente) }}@if (antecedente.detalle) { · {{ antecedente.detalle }} }</p>
+              }
+            </section>
+            <section>
+              <h4>Constantes vitales</h4>
+              <p>Temperatura: {{ formulario.datos.constantes_vitales.temperatura_c ?? '—' }} °C · Pulso: {{ formulario.datos.constantes_vitales.pulso_minuto ?? '—' }}/min · Respiración: {{ formulario.datos.constantes_vitales.frecuencia_respiratoria_minuto ?? '—' }}/min</p>
+              <p>Presión arterial: {{ formulario.datos.constantes_vitales.presion_sistolica_mmhg ?? '—' }}/{{ formulario.datos.constantes_vitales.presion_diastolica_mmhg ?? '—' }} mmHg</p>
+            </section>
+            <section>
+              <h4>Examen estomatognático</h4>
+              @for (hallazgo of formulario.datos.examen_estomatognatico; track hallazgo.region) {
+                <p><strong>{{ etiqueta(hallazgo.region) }}:</strong> {{ etiqueta(hallazgo.hallazgo) }}@if (hallazgo.detalle) { · {{ hallazgo.detalle }} }@if (hallazgo.grado) { · grado {{ hallazgo.grado }} }</p>
+              }
+            </section>
+            <section>
+              <h4>Salud bucal e índices</h4>
+              <p>Periodontal: {{ formulario.datos.indicadores_salud_bucal.enfermedad_periodontal || 'Sin registro' }} · Oclusión: {{ formulario.datos.indicadores_salud_bucal.oclusion || 'Sin registro' }} · Fluorosis: {{ formulario.datos.indicadores_salud_bucal.fluorosis || 'Sin registro' }}</p>
+              <p><strong>Índices CPO–ceo:</strong> @for (indice of formulario.datos.indices_cpo_ceo | keyvalue; track indice.key) { {{ etiqueta(indice.key) }} {{ indice.value ?? '—' }}@if (!$last) { · } }</p>
+              <div class="tabla-envoltorio"><table class="tabla"><thead><tr><th scope="col">Pieza</th><th scope="col">Placa</th><th scope="col">Cálculo</th><th scope="col">Gingivitis</th></tr></thead><tbody>@for (sitio of formulario.datos.indicadores_salud_bucal.sitios; track sitio.pieza) { <tr><th scope="row">{{ sitio.pieza }}</th><td>{{ sitio.placa ?? 'Sin evaluar' }}</td><td>{{ sitio.calculo ?? 'Sin evaluar' }}</td><td>{{ presencia(sitio.gingivitis) }}</td></tr> }</tbody></table></div>
+            </section>
+            @if (formulario.datos.examenes_complementarios.length) {
+              <section><h4>Exámenes complementarios</h4>@for (examen of formulario.datos.examenes_complementarios; track $index) { <p><strong>{{ etiqueta(examen.tipo) }}:</strong> {{ examen.descripcion }}@if (examen.resultado) { · {{ examen.resultado }} }</p> }</section>
+            }
+            @if (formulario.datos.diagnosticos.length) {
+              <section><h4>Diagnósticos</h4>@for (diagnostico of formulario.datos.diagnosticos; track $index) { <p><strong>{{ etiqueta(diagnostico.tipo) }}:</strong> {{ diagnostico.descripcion }}@if (diagnostico.codigo_cie) { · CIE {{ diagnostico.codigo_cie }} }</p> }</section>
+            }
+            @if (formulario.datos.sesiones_tratamiento.length) {
+              <section><h4>Sesiones de tratamiento</h4>@for (sesion of formulario.datos.sesiones_tratamiento; track $index) { <p><strong>Sesión {{ sesion.numero }} · {{ sesion.fecha | date:'mediumDate' }}</strong>@if (sesion.procedimiento) { · {{ sesion.procedimiento }} }@if (sesion.diagnostico_complicaciones) { · {{ sesion.diagnostico_complicaciones }} }@if (sesion.prescripciones) { · {{ sesion.prescripciones }} }@if (sesion.proxima_cita) { · Próxima cita: {{ sesion.proxima_cita | date:'mediumDate' }} }@if (sesion.alta) { · Alta }</p> }</section>
+            }
+          </div>
+        </details>
+        @if (raizHistorial() === formulario.raiz_id) {
+          <ol class="versiones" aria-label="Versiones del formulario">
+            @for (version of versiones(); track version.id) {
+              <li><strong>Versión {{ version.version }}</strong> · {{ version.creado_en | date:'medium' }}@if (version.motivo_modificacion) { <span> · {{ version.motivo_modificacion }}</span> }@if (version.vigente) { <span class="vigente">Vigente</span> }</li>
+            }
+          </ol>
+        }
+      </article>
+    }
+  }
+
+  @if (seleccionado() || creando()) {
+      <form class="captura" (ngSubmit)="guardar()">
+        <header class="captura__cabecera">
+          <div>
+            <p class="ceja">{{ seleccionado() ? 'CORRECCIÓN VERSIONADA' : 'NUEVA CAPTURA' }}</p>
+            <h3>{{ seleccionado() ? 'Crear nueva versión' : 'Registrar atención' }}</h3>
+          </div>
+          <button class="boton boton--plano" type="button" (click)="cancelar()">Cancelar</button>
+        </header>
+
+        @if (seleccionado()) {
+          <label class="campo correccion"><span class="campo__etiqueta">Motivo de la corrección</span><textarea class="campo__control" name="motivo-correccion" [(ngModel)]="motivoCorreccion" minlength="8" maxlength="500" required></textarea></label>
+        }
+
+        <section class="bloque" aria-labelledby="datos-atencion">
+          <h4 id="datos-atencion">A · Datos de la atención</h4>
+          <div class="rejilla">
+            <label class="campo"><span class="campo__etiqueta">Sede</span><select class="campo__control" name="sede" [(ngModel)]="sedeId" required><option value="">Seleccione una sede</option>@for (sede of sedes(); track sede.id) { <option [value]="sede.id">{{ sede.nombre }}</option> }</select></label>
+            <label class="campo"><span class="campo__etiqueta">Motivo de consulta</span><textarea class="campo__control" name="motivo" [(ngModel)]="datos.motivo_consulta" (input)="actualizarMotivo($event)" minlength="2" maxlength="1000" required></textarea></label>
+            <label class="campo"><span class="campo__etiqueta">Enfermedad o problema actual</span><textarea class="campo__control" name="enfermedad" [(ngModel)]="datos.enfermedad_actual" maxlength="4000"></textarea></label>
+            <label class="campo"><span class="campo__etiqueta">Embarazo</span><select class="campo__control" name="embarazo" [(ngModel)]="datos.embarazada"><option [ngValue]="null">No registrado</option><option [ngValue]="true">Sí</option><option [ngValue]="false">No</option></select></label>
+          </div>
+          @if (seleccionado()) {
+            <p class="ayuda">La identidad de la persona, la clínica y el profesional queda tomada del expediente autorizado al guardar.</p>
+          }
+        </section>
+
+        @if (puedeLeerCitas || puedeLeerNotas || puedeLeerOdontogramas || puedeLeerRegistrosPlaca) {
+          <section class="bloque fuentes" aria-labelledby="fuentes-clinicas">
+            <h4 id="fuentes-clinicas">Fuentes clínicas relacionadas · opcional</h4>
+            <p class="ayuda">Vincule registros del mismo paciente para dejar trazabilidad. La información no se copia sola; revise y confirme cualquier dato que aplique.</p>
+            @if (cargandoFuentes()) { <p class="ayuda" role="status">Buscando registros disponibles…</p> }
+            @if (avisoFuentes()) { <p class="ayuda" role="status">{{ avisoFuentes() }}</p> }
+            @if (errorFuentes()) { <p class="aviso-error" role="alert">{{ errorFuentes() }} <button class="boton boton--pequeno" type="button" (click)="recargarFuentes()">Volver a cargar fuentes</button></p> }
+            <div class="rejilla">
+              @if (puedeLeerCitas) {
+                <label class="campo"><span class="campo__etiqueta">Cita de atención</span><select class="campo__control" name="fuente-cita" [ngModel]="citaId" (ngModelChange)="seleccionarCita($event)"><option value="">Sin cita vinculada</option>@for (cita of citas(); track cita.id) { <option [value]="cita.id">{{ cita.inicio | date:'medium' }} · {{ etiqueta(cita.estado) }}</option> }</select></label>
+              }
+              @if (puedeLeerNotas) {
+                <label class="campo"><span class="campo__etiqueta">Nota clínica</span><select class="campo__control" name="fuente-nota" [ngModel]="notaId" (ngModelChange)="seleccionarNota($event)"><option value="">Sin nota vinculada</option>@for (nota of notas(); track nota.id) { <option [value]="nota.id">{{ nota.creado_en | date:'medium' }} · {{ etiqueta(nota.tipo) }} · {{ nota.motivo_consulta || 'Sin motivo' }}</option> }</select></label>
+              }
+              @if (puedeLeerOdontogramas) {
+                <label class="campo"><span class="campo__etiqueta">Odontograma vigente</span><select class="campo__control" name="fuente-odontograma" [(ngModel)]="odontogramaId"><option value="">Sin odontograma vinculado</option>@if (odontograma(); as actual) { <option [value]="actual.id">Versión {{ actual.version }} · {{ actual.creado_en | date:'mediumDate' }} · {{ etiqueta(actual.denticion) }}</option> }</select></label>
+              }
+              @if (puedeLeerRegistrosPlaca) {
+                <label class="campo"><span class="campo__etiqueta">Índice de placa</span><select class="campo__control" name="fuente-placa" [(ngModel)]="registroPlacaId"><option value="">Sin registro de placa vinculado</option>@for (registro of registrosPlaca(); track registro.id) { <option [value]="registro.id">{{ registro.creado_en | date:'mediumDate' }} · {{ registro.porcentaje }} %</option> }</select></label>
+              }
+            </div>
+            @if (notaId) {
+              <button class="boton boton--pequeno" type="button" (click)="aplicarNota()">Completar campos vacíos desde la nota seleccionada</button>
+            }
+            @if (odontogramaId || registroPlacaId) {
+              <p class="ayuda">El odontograma y el índice quedan enlazados como fuente; sus hallazgos no se transforman automáticamente en datos del Formulario 033.</p>
+            }
+          </section>
+        }
+
+        <section class="bloque" aria-labelledby="antecedentes-personales">
+          <h4 id="antecedentes-personales">D · Antecedentes personales</h4>
+          <div class="rejilla antecedentes">
+            @for (item of datos.antecedentes_personales; track item.codigo) {
+              <div class="antecedente">
+                <label class="campo"><span class="campo__etiqueta">{{ etiqueta(item.codigo) }}</span><select class="campo__control" [name]="'personal-' + item.codigo" [(ngModel)]="item.presente"><option [ngValue]="null">No registrado</option><option [ngValue]="true">Sí</option><option [ngValue]="false">No</option></select></label>
+                @if (item.presente === true) { <label class="campo"><span class="campo__etiqueta">Detalle</span><input class="campo__control" [name]="'personal-detalle-' + item.codigo" [(ngModel)]="item.detalle" maxlength="1000" /></label> }
+              </div>
+            }
+          </div>
+        </section>
+
+        <section class="bloque" aria-labelledby="antecedentes-familiares">
+          <h4 id="antecedentes-familiares">E · Antecedentes familiares</h4>
+          <div class="rejilla antecedentes">
+            @for (item of datos.antecedentes_familiares; track item.codigo) {
+              <div class="antecedente">
+                <label class="campo"><span class="campo__etiqueta">{{ etiqueta(item.codigo) }}</span><select class="campo__control" [name]="'familiar-' + item.codigo" [(ngModel)]="item.presente"><option [ngValue]="null">No registrado</option><option [ngValue]="true">Sí</option><option [ngValue]="false">No</option></select></label>
+                @if (item.presente === true) { <label class="campo"><span class="campo__etiqueta">Detalle</span><input class="campo__control" [name]="'familiar-detalle-' + item.codigo" [(ngModel)]="item.detalle" maxlength="1000" /></label> }
+              </div>
+            }
+          </div>
+        </section>
+
+        <section class="bloque" aria-labelledby="constantes-vitales">
+          <h4 id="constantes-vitales">F · Constantes vitales</h4>
+          <div class="rejilla rejilla--cinco">
+            <label class="campo"><span class="campo__etiqueta">Temperatura °C</span><input class="campo__control" type="number" min="25" max="45" step="0.1" name="temperatura" [(ngModel)]="datos.constantes_vitales.temperatura_c" /></label>
+            <label class="campo"><span class="campo__etiqueta">Pulso por minuto</span><input class="campo__control" type="number" min="20" max="300" name="pulso" [(ngModel)]="datos.constantes_vitales.pulso_minuto" /></label>
+            <label class="campo"><span class="campo__etiqueta">Respiraciones por minuto</span><input class="campo__control" type="number" min="4" max="100" name="respiraciones" [(ngModel)]="datos.constantes_vitales.frecuencia_respiratoria_minuto" /></label>
+            <label class="campo"><span class="campo__etiqueta">Presión sistólica mmHg</span><input class="campo__control" type="number" min="30" max="300" name="presion-sistolica" [(ngModel)]="datos.constantes_vitales.presion_sistolica_mmhg" /></label>
+            <label class="campo"><span class="campo__etiqueta">Presión diastólica mmHg</span><input class="campo__control" type="number" min="20" max="200" name="presion-diastolica" [(ngModel)]="datos.constantes_vitales.presion_diastolica_mmhg" /></label>
+          </div>
+        </section>
+
+        <section class="bloque" aria-labelledby="examen-estomatognatico">
+          <h4 id="examen-estomatognatico">G · Examen estomatognático</h4>
+          <div class="tabla-envoltorio"><table class="tabla"><thead><tr><th scope="col">Región</th><th scope="col">Resultado</th><th scope="col">Hallazgo y grado</th></tr></thead><tbody>
+            @for (item of datos.examen_estomatognatico; track item.region) {
+              <tr><th scope="row">{{ etiqueta(item.region) }}</th><td><select class="campo__control" [name]="'hallazgo-' + item.region" [(ngModel)]="item.hallazgo"><option value="NO_EVALUADO">No evaluado</option><option value="SIN_HALLAZGO">Sin hallazgo</option><option value="PATOLOGIA">Patología</option></select></td><td>@if (item.hallazgo === 'PATOLOGIA') { <div class="detalle-fila"><input class="campo__control" [name]="'detalle-' + item.region" [(ngModel)]="item.detalle" placeholder="Describa el hallazgo" maxlength="1000" required /><input class="campo__control grado" type="number" min="1" max="5" [name]="'grado-' + item.region" [(ngModel)]="item.grado" aria-label="Grado" placeholder="Grado" /></div> } @else { <span class="ayuda">—</span> }</td></tr>
+            }
+          </tbody></table></div>
+        </section>
+
+        <section class="bloque" aria-labelledby="salud-bucal">
+          <h4 id="salud-bucal">H · Indicadores de salud bucal</h4>
+          <div class="rejilla">
+            <label class="campo"><span class="campo__etiqueta">Enfermedad periodontal</span><select class="campo__control" name="periodontal" [(ngModel)]="datos.indicadores_salud_bucal.enfermedad_periodontal"><option value="SIN_REGISTRO">Sin registro</option><option value="LEVE">Leve</option><option value="MODERADA">Moderada</option><option value="SEVERA">Severa</option></select></label>
+            <label class="campo"><span class="campo__etiqueta">Oclusión</span><select class="campo__control" name="oclusion" [(ngModel)]="datos.indicadores_salud_bucal.oclusion"><option value="SIN_REGISTRO">Sin registro</option><option value="ANGLE_I">Angle I</option><option value="ANGLE_II">Angle II</option><option value="ANGLE_III">Angle III</option></select></label>
+            <label class="campo"><span class="campo__etiqueta">Fluorosis</span><select class="campo__control" name="fluorosis" [(ngModel)]="datos.indicadores_salud_bucal.fluorosis"><option value="SIN_REGISTRO">Sin registro</option><option value="LEVE">Leve</option><option value="MODERADA">Moderada</option><option value="SEVERA">Severa</option></select></label>
+          </div>
+          <div class="tabla-envoltorio"><table class="tabla"><thead><tr><th scope="col">Pieza</th><th scope="col">Placa · 0 a 3</th><th scope="col">Cálculo · 0 a 3</th><th scope="col">Gingivitis</th></tr></thead><tbody>
+            @for (sitio of datos.indicadores_salud_bucal.sitios; track sitio.pieza) {
+              <tr><th scope="row">{{ sitio.pieza }}</th><td><select class="campo__control" [name]="'placa-' + sitio.pieza" [(ngModel)]="sitio.placa"><option [ngValue]="null">Sin evaluar</option><option [ngValue]="0">0</option><option [ngValue]="1">1</option><option [ngValue]="2">2</option><option [ngValue]="3">3</option></select></td><td><select class="campo__control" [name]="'calculo-' + sitio.pieza" [(ngModel)]="sitio.calculo"><option [ngValue]="null">Sin evaluar</option><option [ngValue]="0">0</option><option [ngValue]="1">1</option><option [ngValue]="2">2</option><option [ngValue]="3">3</option></select></td><td><select class="campo__control" [name]="'gingivitis-' + sitio.pieza" [(ngModel)]="sitio.gingivitis"><option [ngValue]="null">Sin evaluar</option><option [ngValue]="true">Sí</option><option [ngValue]="false">No</option></select></td></tr>
+            }
+          </tbody></table></div>
+        </section>
+
+        <section class="bloque" aria-labelledby="indice-dental">
+          <h4 id="indice-dental">I · Índices CPO–ceo</h4>
+          <div class="rejilla rejilla--cuatro">
+            @for (campo of cpoCampos; track campo.clave) { <label class="campo"><span class="campo__etiqueta">{{ campo.etiqueta }}</span><input class="campo__control" type="number" min="0" [max]="campo.maximo" [name]="campo.clave" [(ngModel)]="datos.indices_cpo_ceo[campo.clave]" /></label> }
+          </div>
+          <p class="ayuda">Los totales se validan por dentición al guardar: hasta 32 piezas permanentes y 20 temporales.</p>
+        </section>
+
+        <section class="bloque" aria-labelledby="examenes-complementarios">
+          <div class="bloque__titulo"><h4 id="examenes-complementarios">L–M · Exámenes complementarios</h4><button class="boton boton--pequeno" type="button" (click)="datos.examenes_complementarios.push(examenVacio())">Añadir examen</button></div>
+          @for (examen of datos.examenes_complementarios; track $index) {
+            <div class="fila-editor"><label class="campo"><span class="campo__etiqueta">Tipo</span><select class="campo__control" [name]="'tipo-examen-' + $index" [(ngModel)]="examen.tipo"><option value="BIOMETRIA">Biometría</option><option value="QUIMICA_SANGUINEA">Química sanguínea</option><option value="RAYOS_X">Rayos X</option><option value="OTROS">Otros</option></select></label><label class="campo"><span class="campo__etiqueta">Descripción</span><input class="campo__control" [name]="'descripcion-examen-' + $index" [(ngModel)]="examen.descripcion" minlength="2" maxlength="500" required /></label><label class="campo"><span class="campo__etiqueta">Resultado</span><textarea class="campo__control" [name]="'resultado-examen-' + $index" [(ngModel)]="examen.resultado" maxlength="2000"></textarea></label><button class="boton boton--plano" type="button" (click)="datos.examenes_complementarios.splice($index, 1)" [attr.aria-label]="'Quitar examen ' + ($index + 1)">Quitar</button></div>
+          }
+        </section>
+
+        <section class="bloque" aria-labelledby="diagnosticos">
+          <div class="bloque__titulo"><h4 id="diagnosticos">N · Diagnósticos</h4><button class="boton boton--pequeno" type="button" [disabled]="datos.diagnosticos.length >= 6" (click)="datos.diagnosticos.push(diagnosticoVacio())">Añadir diagnóstico</button></div>
+          @for (diagnostico of datos.diagnosticos; track $index) {
+            <div class="fila-editor"><label class="campo"><span class="campo__etiqueta">Tipo</span><select class="campo__control" [name]="'tipo-diagnostico-' + $index" [(ngModel)]="diagnostico.tipo"><option value="PRESUNTIVO">Presuntivo</option><option value="DEFINITIVO">Definitivo</option></select></label><label class="campo"><span class="campo__etiqueta">Código CIE (opcional)</span><input class="campo__control" [name]="'cie-' + $index" [(ngModel)]="diagnostico.codigo_cie" maxlength="16" /></label><label class="campo"><span class="campo__etiqueta">Descripción clínica</span><input class="campo__control" [name]="'descripcion-diagnostico-' + $index" [(ngModel)]="diagnostico.descripcion" minlength="2" maxlength="500" required /></label><button class="boton boton--plano" type="button" (click)="datos.diagnosticos.splice($index, 1)" [attr.aria-label]="'Quitar diagnóstico ' + ($index + 1)">Quitar</button></div>
+          }
+        </section>
+
+        <section class="bloque" aria-labelledby="sesiones">
+          <div class="bloque__titulo"><h4 id="sesiones">O–P · Sesiones de tratamiento</h4><button class="boton boton--pequeno" type="button" [disabled]="datos.sesiones_tratamiento.length >= 6" (click)="datos.sesiones_tratamiento.push(sesionVacia())">Añadir sesión</button></div>
+          @for (sesion of datos.sesiones_tratamiento; track $index) {
+            <div class="sesion-editor">
+              <label class="campo"><span class="campo__etiqueta">Sesión</span><input class="campo__control" type="number" min="1" max="99" [name]="'numero-sesion-' + $index" [(ngModel)]="sesion.numero" required /></label>
+              <label class="campo"><span class="campo__etiqueta">Fecha</span><input class="campo__control" type="date" [name]="'fecha-sesion-' + $index" [(ngModel)]="sesion.fecha" required /></label>
+              <label class="campo"><span class="campo__etiqueta">Diagnóstico o complicaciones</span><textarea class="campo__control" [name]="'diagnostico-sesion-' + $index" [(ngModel)]="sesion.diagnostico_complicaciones" maxlength="2000"></textarea></label>
+              <label class="campo"><span class="campo__etiqueta">Procedimiento realizado</span><textarea class="campo__control" [name]="'procedimiento-sesion-' + $index" [(ngModel)]="sesion.procedimiento" maxlength="3000"></textarea></label>
+              <label class="campo"><span class="campo__etiqueta">Prescripciones</span><textarea class="campo__control" [name]="'prescripciones-sesion-' + $index" [(ngModel)]="sesion.prescripciones" maxlength="3000"></textarea></label>
+              <label class="campo"><span class="campo__etiqueta">Próxima cita</span><input class="campo__control" type="date" [name]="'proxima-sesion-' + $index" [(ngModel)]="sesion.proxima_cita" /></label>
+              <label class="check"><input type="checkbox" [name]="'alta-sesion-' + $index" [(ngModel)]="sesion.alta" /> Alta en esta sesión</label>
+              <button class="boton boton--plano" type="button" (click)="datos.sesiones_tratamiento.splice($index, 1)" [attr.aria-label]="'Quitar sesión ' + ($index + 1)">Quitar</button>
+            </div>
+          }
+        </section>
+
+        <footer class="acciones">
+          <p class="ayuda">El formulario contiene información clínica sensible y cada consulta o cambio queda auditado.</p>
+          <div><button class="boton" type="button" (click)="cancelar()">Cancelar</button><button class="boton boton--principal" type="submit" [disabled]="guardando()">{{ guardando() ? 'Guardando…' : (seleccionado() ? 'Guardar nueva versión' : 'Guardar formulario') }}</button></div>
+        </footer>
+      </form>
+  }
+</section>

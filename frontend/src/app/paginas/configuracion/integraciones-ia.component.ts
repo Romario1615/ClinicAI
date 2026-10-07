@@ -6,7 +6,7 @@
  * lugar de adivinar. El LLM elegido redacta, solo con documentos publicados.
  * Las claves se guardan cifradas y nunca se vuelven a mostrar.
  */
-import { Component, OnInit, inject, signal } from '@angular/core';
+import { Component, OnInit, inject, signal, ChangeDetectionStrategy } from '@angular/core';
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { FormsModule } from '@angular/forms';
 
@@ -123,6 +123,7 @@ const INTENCIONES: Record<string, string> = {
       @if (error()) { <p class="campo__error" role="alert">{{ error() }}</p> }
     </div>
   `,
+  changeDetection: ChangeDetectionStrategy.Eager,
   styles: `
     .ia { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: var(--espacio-4); margin-top: var(--espacio-4); }
     .ia__tarjeta { display: grid; align-content: start; gap: var(--espacio-2); padding: var(--espacio-4); }

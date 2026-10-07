@@ -7,6 +7,7 @@ import {
   input,
   signal,
   untracked,
+  ChangeDetectionStrategy
 } from '@angular/core';
 import { DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -32,6 +33,7 @@ const TIPOS = [
   host: { '(document:keydown.escape)': 'cerrarVisor()' },
   imports: [DatePipe, FormsModule],
   templateUrl: './galeria-imagenes.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './galeria-imagenes.component.scss',
 })
 export class GaleriaImagenesComponent {
@@ -45,6 +47,9 @@ export class GaleriaImagenesComponent {
   protected readonly puedeCargar = computed(() =>
     this.sesion.tienePermiso(PERMISOS.imagenClinicaCargar),
   );
+  protected readonly puedeLeerSensible = computed(() =>
+    this.sesion.tienePermiso('historia_clinica.leer_sensible'),
+  );
   protected readonly imagenes = signal<readonly ImagenPacienteApi[]>([]);
   protected readonly urls = signal<ReadonlyMap<string, string>>(new Map());
   protected readonly cargando = signal(true);
@@ -55,6 +60,7 @@ export class GaleriaImagenesComponent {
   protected readonly exito = signal('');
 
   protected tipo = 'FOTO_INTRAORAL';
+  protected nivelSensibilidad: 'N2' | 'N3' = 'N2';
   protected filtroTipo = '';
   protected filtroPieza = '';
   protected piezas = '';
@@ -119,6 +125,7 @@ export class GaleriaImagenesComponent {
     this.api
       .subirImagenClinica(this.pacienteId(), this.archivo, {
         tipo: this.tipo as Exclude<ImagenPacienteApi['tipo'], 'PERFIL'>,
+        nivel_sensibilidad: this.nivelSensibilidad,
         piezas,
         tomada_en: this.tomadaEn || null,
         descripcion: this.descripcion.trim() || null,
@@ -131,6 +138,7 @@ export class GaleriaImagenesComponent {
           this.piezas = '';
           this.tomadaEn = '';
           this.descripcion = '';
+          this.nivelSensibilidad = 'N2';
           this.exito.set(
             imagen.antivirus === 'LIMPIO'
               ? 'Imagen cargada, saneada y revisada por antivirus.'

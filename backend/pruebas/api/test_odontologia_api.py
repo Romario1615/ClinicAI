@@ -81,8 +81,8 @@ async def test_la_relacion_asistencial_se_exige(
     respuesta = await cliente.post(
         _ruta(api, str(paciente.id)), headers=cabeceras_odonto, json=_contenido()
     )
-    assert respuesta.status_code == 403
-    assert respuesta.json()["codigo"] == "RELACION_ASISTENCIAL_REQUERIDA"
+    assert respuesta.status_code == 404
+    assert respuesta.json()["codigo"] == "RECURSO_NO_ENCONTRADO"
 
 
 async def test_captura_y_versionado_conservan_el_historial(
@@ -144,6 +144,109 @@ async def test_captura_y_versionado_conservan_el_historial(
         .all()
     )
     assert len(eventos) == 2
+
+
+async def test_n3_exige_permiso_se_conserva_y_se_audita(
+    cliente: AsyncClient,
+    api: str,
+    sesion: AsyncSession,
+    cabeceras_odonto: dict[str, str],
+    relacion: RelacionAsistencial,
+    paciente: Paciente,
+    usuario: Usuario,
+    clinica: Clinica,
+    sede: Sede,
+) -> None:
+    ruta = _ruta(api, str(paciente.id))
+    cuerpo = {**_contenido(), "nivel_sensibilidad": "N3"}
+    denegada = await cliente.post(ruta, headers=cabeceras_odonto, json=cuerpo)
+    assert denegada.status_code == 403
+
+    await conceder_permisos(
+        sesion,
+        usuario,
+        clinica,
+        "historia_clinica.leer_sensible",
+        sedes=(sede.id,),
+    )
+    primera = await cliente.post(ruta, headers=cabeceras_odonto, json=cuerpo)
+    assert primera.status_code == 201, primera.text
+    assert primera.json()["nivel_sensibilidad"] == "N3"
+
+    segunda = await cliente.post(
+        f"{ruta}/versiones",
+        headers=cabeceras_odonto,
+        json={
+            **_contenido(),
+            "version_base": 1,
+            "motivo": "Revisión clínica sensible",
+            "nivel_sensibilidad": "N2",
+        },
+    )
+    assert segunda.status_code == 201, segunda.text
+    assert segunda.json()["nivel_sensibilidad"] == "N3"
+
+    niveles = list(
+        (
+            await sesion.execute(
+                sa.select(Auditoria.nivel_sensibilidad).where(
+                    Auditoria.paciente_id == paciente.id,
+                    Auditoria.accion == AccionAuditada.ODONTOGRAMA_VERSIONADO.value,
+                )
+            )
+        )
+        .scalars()
+        .all()
+    )
+    assert niveles == ["N3", "N3"]
+
+
+async def test_lectura_filtra_odontogramas_n3_en_sql(
+    cliente: AsyncClient,
+    api: str,
+    sesion: AsyncSession,
+    cabeceras_odonto: dict[str, str],
+    relacion: RelacionAsistencial,
+    paciente: Paciente,
+    profesional: Profesional,
+    clinica: Clinica,
+    usuario: Usuario,
+) -> None:
+    sesion.add(
+        Odontograma(
+            clinica_id=clinica.id,
+            paciente_id=paciente.id,
+            profesional_id=profesional.id,
+            version=1,
+            vigente=True,
+            denticion="PERMANENTE",
+            piezas={"36": {"caras": {"O": "CARIES"}}},
+            nivel_sensibilidad="N3",
+            creado_por=usuario.id,
+        )
+    )
+    await sesion.flush()
+
+    ruta = _ruta(api, str(paciente.id))
+    lista = await cliente.get(f"{ruta}/versiones", headers=cabeceras_odonto)
+    actual = await cliente.get(ruta, headers=cabeceras_odonto)
+    historica = await cliente.get(f"{ruta}?version=1", headers=cabeceras_odonto)
+    assert lista.status_code == 200 and lista.json() == []
+    assert actual.status_code == 200 and actual.json() is None
+    assert historica.status_code == 200 and historica.json() is None
+    eventos = list(
+        (
+            await sesion.execute(
+                sa.select(Auditoria.nivel_sensibilidad).where(
+                    Auditoria.paciente_id == paciente.id,
+                    Auditoria.accion == AccionAuditada.ODONTOGRAMA_CONSULTADO.value,
+                )
+            )
+        )
+        .scalars()
+        .all()
+    )
+    assert len(eventos) == 3 and set(eventos) == {"N3"}
 
 
 async def test_no_se_pierden_cambios_con_una_version_base_vieja(

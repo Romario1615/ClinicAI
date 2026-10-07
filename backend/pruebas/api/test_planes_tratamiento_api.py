@@ -146,6 +146,122 @@ async def test_crear_proponer_y_leer_conserva_procedimientos_y_auditoria(
     } <= acciones
 
 
+async def test_plan_n3_exige_permiso_y_audita_su_nivel(
+    cliente: AsyncClient,
+    api: str,
+    sesion: AsyncSession,
+    cabeceras_plan: dict[str, str],
+    relacion_plan: RelacionAsistencial,
+    paciente: Paciente,
+    usuario: Usuario,
+    clinica: Clinica,
+    sede: Sede,
+) -> None:
+    ruta = _ruta(api, str(paciente.id))
+    cuerpo = {**_plan(), "nivel_sensibilidad": "N3"}
+    denegado = await cliente.post(ruta, headers=cabeceras_plan, json=cuerpo)
+    assert denegado.status_code == 403
+
+    await conceder_permisos(
+        sesion,
+        usuario,
+        clinica,
+        "historia_clinica.leer_sensible",
+        sedes=(sede.id,),
+    )
+    cabeceras_sensibles = await cabecera_bearer(cliente, usuario, clinica)
+    creado = await cliente.post(ruta, headers=cabeceras_sensibles, json=cuerpo)
+    assert creado.status_code == 201, creado.text
+    assert creado.json()["nivel_sensibilidad"] == "N3"
+
+    propuesto = await cliente.post(
+        f"{api}/odontologia/planes-tratamiento/{creado.json()['id']}/propuesta",
+        headers=cabeceras_sensibles,
+    )
+    assert propuesto.status_code == 200, propuesto.text
+    assert propuesto.json()["nivel_sensibilidad"] == "N3"
+
+    listado = await cliente.get(ruta, headers=cabeceras_sensibles)
+    assert listado.status_code == 200
+    assert listado.json()[0]["nivel_sensibilidad"] == "N3"
+    niveles = list(
+        (
+            await sesion.execute(
+                sa.select(Auditoria.nivel_sensibilidad).where(
+                    Auditoria.paciente_id == paciente.id,
+                    Auditoria.accion.in_(
+                        [
+                            AccionAuditada.PLAN_CREADO.value,
+                            AccionAuditada.PLAN_ESTADO_CAMBIADO.value,
+                            AccionAuditada.PLAN_CONSULTADO.value,
+                        ]
+                    ),
+                )
+            )
+        )
+        .scalars()
+        .all()
+    )
+    assert len(niveles) == 3 and set(niveles) == {"N3"}
+
+
+async def test_plan_n3_se_filtra_y_no_se_puede_mutar_sin_permiso(
+    cliente: AsyncClient,
+    api: str,
+    sesion: AsyncSession,
+    cabeceras_plan: dict[str, str],
+    relacion_plan: RelacionAsistencial,
+    paciente: Paciente,
+    profesional: Profesional,
+    clinica: Clinica,
+    usuario: Usuario,
+) -> None:
+    plan = PlanTratamiento(
+        clinica_id=clinica.id,
+        paciente_id=paciente.id,
+        profesional_id=profesional.id,
+        titulo="Borrador clínico sensible",
+        estado=EstadoPlan.BORRADOR.value,
+        moneda="USD",
+        nivel_sensibilidad="N3",
+        creado_por=usuario.id,
+    )
+    sesion.add(plan)
+    await sesion.flush()
+    procedimiento = ProcedimientoPlan(
+        plan_id=plan.id,
+        fase=1,
+        orden=1,
+        descripcion="Procedimiento sensible",
+        precio="85.00",
+        creado_por=usuario.id,
+    )
+    sesion.add(procedimiento)
+    await sesion.flush()
+
+    ruta = _ruta(api, str(paciente.id))
+    listado = await cliente.get(ruta, headers=cabeceras_plan)
+    propuesta = await cliente.post(
+        f"{api}/odontologia/planes-tratamiento/{plan.id}/propuesta",
+        headers=cabeceras_plan,
+    )
+    assert listado.status_code == 200 and listado.json() == []
+    assert propuesta.status_code == 404
+    eventos = list(
+        (
+            await sesion.execute(
+                sa.select(Auditoria.nivel_sensibilidad).where(
+                    Auditoria.paciente_id == paciente.id,
+                    Auditoria.accion == AccionAuditada.PLAN_CONSULTADO.value,
+                )
+            )
+        )
+        .scalars()
+        .all()
+    )
+    assert eventos == ["N3"]
+
+
 @pytest.mark.parametrize(
     ("pieza", "caras"),
     [("99", "O"), ("36", "Q"), ("36", "OO")],
@@ -422,7 +538,7 @@ async def test_procedimiento_de_otro_paciente_sin_relacion_no_se_completa(
         headers=cabeceras_plan,
         json={},
     )
-    assert respuesta.status_code == 403
+    assert respuesta.status_code == 404
 
 
 async def _plan_dos_fases(

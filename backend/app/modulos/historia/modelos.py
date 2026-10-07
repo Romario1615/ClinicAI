@@ -97,6 +97,12 @@ class SeveridadAlerta(StrEnum):
     URGENTE = "URGENTE"
 
 
+class EstadoPlantillaAnamnesis(StrEnum):
+    BORRADOR = "BORRADOR"
+    PUBLICADA = "PUBLICADA"
+    RETIRADA = "RETIRADA"
+
+
 # ---------------------------------------------------------------------------
 #  Notas de evolucion
 # ---------------------------------------------------------------------------
@@ -157,6 +163,9 @@ class NotaEvolucion(Base, MezclaIdentificador, MezclaAuditoria):
 
     # --- Contenido ---
     tipo: Mapped[str] = mapped_column(String(16), default=TipoNota.EVOLUCION.value)
+    # El control reforzado pertenece a la nota/version, no solo al paciente.
+    # Por omision, las notas existentes y las nuevas son N2.
+    nivel_sensibilidad: Mapped[str] = mapped_column(String(2), default="N2")
     motivo_consulta: Mapped[str | None] = mapped_column(Text, default=None)
     # Estructura SOAP, que es la convencion de la historia clinica orientada
     # a problemas. Se guardan por separado y no como un texto unico para que
@@ -186,6 +195,7 @@ class NotaEvolucion(Base, MezclaIdentificador, MezclaAuditoria):
             "tipo IN ('EVOLUCION', 'ENFERMERIA', 'INTERCONSULTA', 'PROCEDIMIENTO')",
             name="tipo_nota_valido",
         ),
+        CheckConstraint("nivel_sensibilidad IN ('N2', 'N3')", name="sensibilidad_valida"),
         CheckConstraint("version >= 1", name="version_positiva"),
         # A partir de la segunda version el motivo es obligatorio. La primera
         # no lo lleva porque no modifica nada.
@@ -277,6 +287,7 @@ class Receta(Base, MezclaIdentificador, MezclaAuditoria):
     )
 
     indicaciones_generales: Mapped[str | None] = mapped_column(Text, default=None)
+    nivel_sensibilidad: Mapped[str] = mapped_column(String(2), default="N2")
     vigente_desde: Mapped[date | None] = mapped_column(default=None)
     vigente_hasta: Mapped[date | None] = mapped_column(default=None)
 
@@ -296,9 +307,18 @@ class Receta(Base, MezclaIdentificador, MezclaAuditoria):
             name="confirmada_exige_responsable",
         ),
         CheckConstraint(
+            "estado <> 'BORRADOR' OR (confirmada_en IS NULL AND confirmada_por IS NULL)",
+            name="borrador_sin_firma",
+        ),
+        CheckConstraint(
             "estado <> 'SUSPENDIDA' OR motivo_suspension IS NOT NULL",
             name="suspension_exige_motivo",
         ),
+        CheckConstraint(
+            "estado <> 'SUSPENDIDA' OR suspendida_en IS NOT NULL",
+            name="suspension_exige_instante",
+        ),
+        CheckConstraint("nivel_sensibilidad IN ('N2', 'N3')", name="sensibilidad_valida"),
         Index("ix_receta_paciente", "paciente_id", "creado_en"),
         Index("ix_receta_estado", "clinica_id", "estado"),
     )
@@ -396,6 +416,9 @@ class Toma(Base, MezclaIdentificador):
     registrada_por_tipo: Mapped[str | None] = mapped_column(String(16), default=None)
     registrada_por_id: Mapped[uuid.UUID | None] = mapped_column(default=None)
     nota_paciente: Mapped[str | None] = mapped_column(Text, default=None)
+    # Solo mueve el aviso de WhatsApp cuando el paciente pide que le
+    # recordemos después. Nunca cambia la hora de la pauta prescrita.
+    recordatorio_diferido_en: Mapped[datetime | None] = mapped_column(default=None)
 
     creada_en: Mapped[datetime] = mapped_column(server_default=text("now()"))
 
@@ -471,14 +494,84 @@ class AlertaAdherencia(Base, MezclaIdentificador, MezclaAuditoria):
     )
 
 
+class PlantillaAnamnesis(Base, MezclaIdentificador, MezclaAuditoria):
+    """Versión de una plantilla de preguntas configurada por una clínica.
+
+    Las preguntas se guardan como un documento pequeño validado por el API.
+    Una versión publicada queda congelada por un trigger en PostgreSQL; los
+    cambios parten de una copia que incrementa `version`.
+    """
+
+    __tablename__ = "plantilla_anamnesis"
+
+    clinica_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("clinica.id", ondelete="RESTRICT"))
+    nombre: Mapped[str] = mapped_column(String(100))
+    version: Mapped[int] = mapped_column(SmallInteger, default=1)
+    estado: Mapped[str] = mapped_column(String(16), default=EstadoPlantillaAnamnesis.BORRADOR.value)
+    nivel_sensibilidad: Mapped[str] = mapped_column(String(2), default="N2")
+    preguntas: Mapped[list[dict[str, object]]] = mapped_column(JSONB)
+    publicada_en: Mapped[datetime | None] = mapped_column(default=None)
+
+    __table_args__ = (
+        UniqueConstraint("clinica_id", "nombre", "version", name="uq_plantilla_anamnesis_version"),
+        CheckConstraint("version > 0", name="version_positiva"),
+        CheckConstraint("estado IN ('BORRADOR', 'PUBLICADA', 'RETIRADA')", name="estado_valido"),
+        CheckConstraint("nivel_sensibilidad IN ('N2', 'N3')", name="sensibilidad_valida"),
+        CheckConstraint(
+            "jsonb_typeof(preguntas) = 'array' AND jsonb_array_length(preguntas) BETWEEN 1 AND 40",
+            name="preguntas_acotadas",
+        ),
+        CheckConstraint(
+            "(estado = 'BORRADOR') = (publicada_en IS NULL)",
+            name="publicada_exige_fecha",
+        ),
+        Index(
+            "ix_plantilla_anamnesis_publicada",
+            "clinica_id",
+            text("lower(nombre)"),
+            unique=True,
+            postgresql_where=text("estado = 'PUBLICADA'"),
+        ),
+        Index("ix_plantilla_anamnesis_clinica", "clinica_id", "creado_en"),
+    )
+
+
+class RespuestaAnamnesis(Base, MezclaIdentificador):
+    """Captura inmutable de respuestas a una versión publicada."""
+
+    __tablename__ = "respuesta_anamnesis"
+
+    clinica_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("clinica.id", ondelete="RESTRICT"))
+    paciente_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("paciente.id", ondelete="RESTRICT"))
+    plantilla_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("plantilla_anamnesis.id", ondelete="RESTRICT")
+    )
+    version_plantilla: Mapped[int] = mapped_column(SmallInteger)
+    profesional_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("profesional.id", ondelete="RESTRICT")
+    )
+    respuestas: Mapped[dict[str, object]] = mapped_column(JSONB)
+    registrada_en: Mapped[datetime] = mapped_column(server_default=text("now()"))
+    creado_por: Mapped[uuid.UUID | None] = mapped_column(default=None)
+
+    __table_args__ = (
+        CheckConstraint("version_plantilla > 0", name="version_positiva"),
+        CheckConstraint("jsonb_typeof(respuestas) = 'object'", name="respuestas_objeto"),
+        Index("ix_respuesta_anamnesis_paciente", "clinica_id", "paciente_id", "registrada_en"),
+    )
+
+
 __all__ = [
     "AlertaAdherencia",
     "Diagnostico",
+    "EstadoPlantillaAnamnesis",
     "EstadoReceta",
     "EstadoToma",
     "NotaEvolucion",
+    "PlantillaAnamnesis",
     "Receta",
     "RecetaMedicamento",
+    "RespuestaAnamnesis",
     "SeveridadAlerta",
     "TipoNota",
     "Toma",

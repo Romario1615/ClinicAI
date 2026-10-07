@@ -26,11 +26,13 @@ que evita que pulsar dos veces «Reservar» produzca dos citas.
 
 from __future__ import annotations
 
+import csv
+import io
 import uuid
 from datetime import datetime
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Header, Path, Query, Request, status
+from fastapi import APIRouter, Depends, Header, Path, Query, Request, Response, status
 
 from app.modulos.agenda.disponibilidad import ResultadoDisponibilidad
 from app.modulos.agenda.esquemas import (
@@ -47,9 +49,11 @@ from app.modulos.agenda.esquemas import (
 )
 from app.modulos.agenda.modelos import Cita, EstadoCita, OrigenCita
 from app.modulos.agenda.servicios import ResultadoOperacion, SolicitudReserva
+from app.nucleo.auditoria import AccionAuditada, construir_entrada
 from app.nucleo.autorizacion import Principal
 from app.nucleo.dependencias import (
     Auditor,
+    RelojActual,
     RepoAgenda,
     ServicioDeAgenda,
     Sesion,
@@ -63,6 +67,7 @@ enrutador = APIRouter(prefix="/agenda", tags=["agenda"])
 # Permisos declarados una sola vez, para que la ruta y la tabla de
 # `docs/security.md` no puedan divergir por un error de copia.
 PuedeLeerAgenda = Annotated[Principal, Depends(exige_permiso("agenda.leer"))]
+PuedeExportarReportes = Annotated[Principal, Depends(exige_permiso("reporte.exportar"))]
 PuedeCrearCita = Annotated[Principal, Depends(exige_permiso("cita.crear"))]
 PuedeCancelar = Annotated[Principal, Depends(exige_permiso("cita.cancelar"))]
 PuedeReprogramar = Annotated[Principal, Depends(exige_permiso("cita.reprogramar"))]
@@ -289,6 +294,70 @@ async def listar_citas(
         total=total,
         limite=limite,
         desplazamiento=desplazamiento,
+    )
+
+
+@enrutador.get(
+    "/resumen.csv",
+    response_class=Response,
+    summary="Exportar resumen diario de citas sin datos de pacientes",
+    responses={
+        403: {"description": "Se requieren permisos de agenda y exportación"},
+        422: {"description": "Rango inválido o instantes sin zona horaria"},
+    },
+)
+async def exportar_resumen_agenda(
+    peticion: Request,
+    principal: PuedeLeerAgenda,
+    _permiso_reporte: PuedeExportarReportes,
+    repo: RepoAgenda,
+    auditor: Auditor,
+    sesion: Sesion,
+    reloj: RelojActual,
+    desde: Annotated[datetime, Query(description="ISO-8601 con zona horaria.")],
+    hasta: Annotated[datetime, Query(description="Fin exclusivo, ISO-8601 con zona horaria.")],
+    sede_id: Annotated[uuid.UUID | None, Query()] = None,
+    profesional_id: Annotated[uuid.UUID | None, Query()] = None,
+    servicio_id: Annotated[uuid.UUID | None, Query()] = None,
+) -> Response:
+    """Exporta conteos por fecha local y estado, nunca filas de pacientes."""
+    _validar_ventana(desde, hasta)
+    filas = await repo.resumen_diario_estados(
+        principal=principal,
+        desde=desde,
+        hasta=hasta,
+        sede_id=sede_id,
+        profesional_id=profesional_id,
+        servicio_id=servicio_id,
+    )
+
+    salida = io.StringIO(newline="")
+    escritor = csv.writer(salida, delimiter=";", lineterminator="\r\n")
+    escritor.writerow(("Fecha local", "Estado", "Citas"))
+    escritor.writerows(filas)
+
+    await auditor.registrar(
+        [
+            construir_entrada(
+                accion=AccionAuditada.REPORTE_EXPORTADO,
+                principal=principal,
+                ahora=reloj.ahora(),
+                entidad_tipo="resumen_agenda",
+                ip=peticion.client.host if peticion.client else None,
+                correlacion_id=getattr(peticion.state, "correlacion_id", None),
+                tipo_informe="agenda_diaria_estados",
+                desde=desde.isoformat(),
+                hasta=hasta.isoformat(),
+                filas=len(filas),
+            )
+        ]
+    )
+    await sesion.commit()
+
+    return Response(
+        content=("\ufeff" + salida.getvalue()).encode("utf-8"),
+        media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": 'attachment; filename="resumen-agenda.csv"'},
     )
 
 

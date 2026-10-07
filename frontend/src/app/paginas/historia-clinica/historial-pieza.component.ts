@@ -7,7 +7,7 @@
  * sí mismo: el registro de un hallazgo nuevo crea una versión del odontograma
  * en el componente padre, y las fotos pasan por el API de imágenes.
  */
-import { Component, computed, input } from '@angular/core';
+import { Component, computed, input, ChangeDetectionStrategy } from '@angular/core';
 import { DatePipe } from '@angular/common';
 
 import type {
@@ -93,6 +93,7 @@ const ESTADOS_PROCEDIMIENTO: Readonly<Record<string, string>> = {
       />
     </section>
   `,
+  changeDetection: ChangeDetectionStrategy.Eager,
   styles: `
     .historial { display: grid; gap: var(--espacio-2); }
     h4, h5 { margin: 0; }

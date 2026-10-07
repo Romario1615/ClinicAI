@@ -41,6 +41,7 @@ from app.nucleo.errores import (
     TransicionEstadoInvalida,
 )
 from app.nucleo.reloj import RelojFijo
+from app.tareas.al_ingestas_conocimiento import procesar_ingestas_conocimiento
 
 pytestmark = [pytest.mark.integracion, pytest.mark.rag, pytest.mark.asyncio]
 
@@ -193,6 +194,153 @@ async def test_un_documento_archivado_es_terminal(
         )
 
 
+async def test_worker_reanuda_ingesta_pendiente_y_es_idempotente(
+    sesion: AsyncSession,
+    documento: KnowledgeDocument,
+    servicio_conocimiento: ServicioConocimiento,
+    principal: Principal,
+    reloj_fijo: RelojFijo,
+    embeddings: EmbeddingsSimulado,
+) -> None:
+    """El texto confirmado antes del indexado se procesa tras reiniciar la API."""
+
+    class _GestorDeUnaSesion:
+        def __init__(self, sesion_prueba: AsyncSession) -> None:
+            self.sesion_prueba = sesion_prueba
+
+        async def sesion(self):
+            yield self.sesion_prueba
+
+    trabajo = await servicio_conocimiento.preparar_ingesta(
+        principal=principal,
+        document_id=documento.id,
+        contenido=TEXTO,
+    )
+    assert trabajo.estado == EstadoIngesta.PENDIENTE.value
+
+    contexto = {
+        "gestor_bd": _GestorDeUnaSesion(sesion),
+        "reloj": reloj_fijo,
+        "embeddings": embeddings,
+    }
+    completadas = await procesar_ingestas_conocimiento(contexto)
+    assert completadas == 1
+
+    estado = await sesion.scalar(
+        sa.select(KnowledgeIngestionJob.estado).where(
+            KnowledgeIngestionJob.document_id == documento.id,
+            KnowledgeIngestionJob.version == trabajo.version,
+        )
+    )
+    texto_fuente = await sesion.scalar(
+        sa.select(KnowledgeVersion.contenido_texto).where(
+            KnowledgeVersion.document_id == documento.id,
+            KnowledgeVersion.version == trabajo.version,
+        )
+    )
+    cantidad_fragmentos = await sesion.scalar(
+        sa.select(sa.func.count())
+        .select_from(KnowledgeChunk)
+        .where(
+            KnowledgeChunk.document_id == documento.id,
+            KnowledgeChunk.version == trabajo.version,
+        )
+    )
+    cantidad_embeddings = await sesion.scalar(
+        sa.select(sa.func.count())
+        .select_from(KnowledgeEmbedding)
+        .join(KnowledgeChunk, KnowledgeChunk.id == KnowledgeEmbedding.chunk_id)
+        .where(
+            KnowledgeChunk.document_id == documento.id,
+            KnowledgeChunk.version == trabajo.version,
+        )
+    )
+    assert estado == EstadoIngesta.COMPLETADA.value
+    assert texto_fuente is None
+    assert cantidad_fragmentos == cantidad_embeddings > 0
+
+    # Un segundo barrido no vuelve a indexar la versión ya terminada.
+    assert await procesar_ingestas_conocimiento(contexto) == 0
+    assert (
+        await sesion.scalar(
+            sa.select(sa.func.count())
+            .select_from(KnowledgeChunk)
+            .where(
+                KnowledgeChunk.document_id == documento.id,
+                KnowledgeChunk.version == trabajo.version,
+            )
+        )
+        == cantidad_fragmentos
+    )
+
+
+async def test_worker_no_reintenta_en_bucle_si_falla_embeddings(
+    sesion: AsyncSession,
+    documento: KnowledgeDocument,
+    servicio_conocimiento: ServicioConocimiento,
+    principal: Principal,
+    reloj_fijo: RelojFijo,
+) -> None:
+    """Un proveedor caído deja el trabajo durable para reintento manual."""
+
+    class _EmbeddingsCaidos(EmbeddingsSimulado):
+        async def vectorizar(self, textos: list[str]) -> list[list[float]]:
+            raise RuntimeError("Fallo simulado sin exponer detalles al usuario")
+
+    class _GestorDeUnaSesion:
+        def __init__(self, sesion_prueba: AsyncSession) -> None:
+            self.sesion_prueba = sesion_prueba
+
+        async def sesion(self):
+            yield self.sesion_prueba
+
+    trabajo = await servicio_conocimiento.preparar_ingesta(
+        principal=principal,
+        document_id=documento.id,
+        contenido=TEXTO,
+    )
+    contexto = {
+        "gestor_bd": _GestorDeUnaSesion(sesion),
+        "reloj": reloj_fijo,
+        "embeddings": _EmbeddingsCaidos(),
+    }
+
+    assert await procesar_ingestas_conocimiento(contexto) == 0
+    estado = await sesion.scalar(
+        sa.select(KnowledgeIngestionJob.estado).where(
+            KnowledgeIngestionJob.document_id == documento.id,
+            KnowledgeIngestionJob.version == trabajo.version,
+        )
+    )
+    intentos = await sesion.scalar(
+        sa.select(KnowledgeIngestionJob.intentos).where(
+            KnowledgeIngestionJob.document_id == documento.id,
+            KnowledgeIngestionJob.version == trabajo.version,
+        )
+    )
+    fuente = await sesion.scalar(
+        sa.select(KnowledgeVersion.contenido_texto).where(
+            KnowledgeVersion.document_id == documento.id,
+            KnowledgeVersion.version == trabajo.version,
+        )
+    )
+    assert estado == EstadoIngesta.FALLIDA.value
+    assert intentos == 1
+    assert fuente == TEXTO
+
+    # La próxima pasada ignora FALLIDA en vez de repetir un proveedor caído.
+    assert await procesar_ingestas_conocimiento(contexto) == 0
+    assert (
+        await sesion.scalar(
+            sa.select(KnowledgeIngestionJob.intentos).where(
+                KnowledgeIngestionJob.document_id == documento.id,
+                KnowledgeIngestionJob.version == trabajo.version,
+            )
+        )
+        == 1
+    )
+
+
 async def test_volver_a_borrador_retira_la_constancia_de_aprobacion(
     servicio_conocimiento: ServicioConocimiento,
     principal: Principal,
@@ -292,26 +440,80 @@ async def test_los_fragmentos_heredan_el_estado_del_documento(
     assert set(estados) == {EstadoDocumento.DRAFT.value}
 
 
-async def test_una_version_nueva_no_cambia_el_estado_del_documento(
+async def test_no_se_puede_subir_version_nueva_sin_retirar_documento_publicado(
     servicio_conocimiento: ServicioConocimiento,
     principal: Principal,
     documento: KnowledgeDocument,
 ) -> None:
-    """Un documento publicado sigue publicado mientras la version nueva se revisa.
-
-    Si subir contenido devolviera el documento a borrador, el agente se
-    quedaria sin la version aprobada que si estaba en uso.
-    """
+    """La carga no puede cambiar en silencio una version que ya responde al RAG."""
     await servicio_conocimiento.ingerir_texto(
         principal=principal, document_id=documento.id, contenido=TEXTO
     )
     await _publicar(servicio_conocimiento, principal, documento)
 
+    with pytest.raises(TransicionEstadoInvalida, match="Retire el documento"):
+        await servicio_conocimiento.ingerir_texto(
+            principal=principal, document_id=documento.id, contenido=f"{TEXTO} Version dos."
+        )
+    assert documento.status == EstadoDocumento.PUBLISHED.value
+
+
+async def test_el_rag_recupera_solo_la_version_vigente_despues_de_aprobar_cambios(
+    servicio_conocimiento: ServicioConocimiento,
+    principal: Principal,
+    documento: KnowledgeDocument,
+    sesion: AsyncSession,
+    embeddings: EmbeddingsSimulado,
+    clinica: Clinica,
+    instante: datetime,
+) -> None:
+    await servicio_conocimiento.ingerir_texto(
+        principal=principal, document_id=documento.id, contenido=TEXTO
+    )
+    await _publicar(servicio_conocimiento, principal, documento)
+    await servicio_conocimiento.cambiar_estado(
+        principal=principal,
+        document_id=documento.id,
+        nuevo_estado=EstadoDocumento.DRAFT,
+    )
+    texto_nuevo = (
+        "Actualizacion del protocolo: el ayuno empieza a medianoche. "
+        "Esta pauta reemplaza las instrucciones anteriores para esta prueba."
+    )
     resultado = await servicio_conocimiento.ingerir_texto(
-        principal=principal, document_id=documento.id, contenido=f"{TEXTO} Version dos."
+        principal=principal, document_id=documento.id, contenido=texto_nuevo
     )
     assert resultado.version == 2
-    assert documento.status == EstadoDocumento.PUBLISHED.value
+    await _publicar(servicio_conocimiento, principal, documento)
+
+    contexto = ContextoAutorizacion(
+        clinica_id=clinica.id,
+        sedes=None,
+        especialidades=None,
+        nivel_maximo=NivelSensibilidad.CLINICO,
+        ahora=instante,
+        actor_id=None,
+        role_ids=frozenset(),
+        uso_agente=False,
+    )
+    vector = await embeddings.vectorizar_consulta("ayuno protocolo")
+    encontrados = await RepositorioConocimiento(sesion).buscar_conocimiento_autorizado(
+        consulta="ayuno protocolo",
+        vector=vector,
+        modelo_embeddings=embeddings.nombre_modelo,
+        contexto=contexto,
+    )
+
+    assert encontrados
+    assert {fragmento.version for fragmento in encontrados} == {2}
+    versiones_vigentes = (
+        await sesion.scalars(
+            sa.select(KnowledgeChunk.version)
+            .where(KnowledgeChunk.document_id == documento.id, KnowledgeChunk.vigente.is_(True))
+            .distinct()
+        )
+    ).all()
+    assert versiones_vigentes == [2]
 
 
 async def test_las_versiones_se_numeran_de_forma_creciente(
@@ -598,6 +800,11 @@ async def test_la_propagacion_alcanza_a_todas_las_versiones(
         principal=principal, document_id=documento.id, contenido=TEXTO
     )
     await _publicar(servicio_conocimiento, principal, documento)
+    await servicio_conocimiento.cambiar_estado(
+        principal=principal,
+        document_id=documento.id,
+        nuevo_estado=EstadoDocumento.DRAFT,
+    )
     await servicio_conocimiento.ingerir_texto(
         principal=principal, document_id=documento.id, contenido=f"{TEXTO} Segunda."
     )
@@ -744,3 +951,39 @@ async def test_un_documento_publicado_se_puede_retirar_para_corregirlo(
         "Retirado para corregir, el documento no puede seguir recuperandose."
     )
     assert documento.status == EstadoDocumento.DRAFT.value
+
+
+async def test_reindexar_anade_los_vectores_del_modelo_nuevo_una_sola_vez(
+    servicio_conocimiento: ServicioConocimiento,
+    principal: Principal,
+    documento: KnowledgeDocument,
+    sesion: AsyncSession,
+    reloj_fijo: RelojFijo,
+) -> None:
+    """Al cambiar de modelo, los fragmentos existentes reciben su vector nuevo.
+
+    El texto no se toca y repetir el reindexado no duplica nada.
+    """
+    await servicio_conocimiento.ingerir_texto(
+        principal=principal, document_id=documento.id, contenido=TEXTO
+    )
+    otro_modelo = EmbeddingsSimulado()
+    otro_modelo.nombre_modelo = "modelo-nuevo-de-prueba"
+    reindexador = ServicioConocimiento(sesion, reloj_fijo, otro_modelo)
+
+    assert await reindexador.reindexar_embeddings() > 0
+    assert await reindexador.reindexar_embeddings() == 0
+
+    sin_vector_nuevo = await sesion.scalar(
+        sa.select(sa.func.count())
+        .select_from(KnowledgeChunk)
+        .where(
+            KnowledgeChunk.document_id == documento.id,
+            ~KnowledgeChunk.id.in_(
+                sa.select(KnowledgeEmbedding.chunk_id).where(
+                    KnowledgeEmbedding.modelo == "modelo-nuevo-de-prueba"
+                )
+            ),
+        )
+    )
+    assert sin_vector_nuevo == 0

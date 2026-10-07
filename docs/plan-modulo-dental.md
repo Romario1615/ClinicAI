@@ -158,7 +158,18 @@ con vista previa tipo chat. Sin verificar contra Meta ni contra el proveedor de 
 La historia clínica muestra la foto del paciente y se organiza en pestañas según permisos:
 Evolución (notas SOAP con alta y corrección versionada desde la interfaz), Odontograma,
 Periodoncia (índice de placa de O'Leary con serie histórica), Imágenes y radiografías
-(galería con visor y comparación), Planes de tratamiento y Recetas.
+(galería con visor y comparación), Planes de tratamiento y Recetas. En Configuración, los
+administradores pueden diseñar y publicar plantillas versionadas de anamnesis por clínica;
+el profesional abre esos formularios a demanda desde el resumen previo a consulta.
+
+El resumen previo a la consulta también permite al profesional vinculado registrar alergias
+(sustancia, reacción observada y severidad) y antecedentes por categoría. El servidor valida
+permiso, clínica, ámbito y relación asistencial; rechaza duplicados activos de alergia. Desactivar
+una alergia exige motivo y conserva el registro. Las altas y desactivaciones se auditan sin copiar
+sustancias ni descripciones a los metadatos. Las respuestas de anamnesis se guardan inmutables
+contra la versión de preguntas utilizada; N3 exige permiso sensible y se filtra según acceso.
+Estos formularios propios no sustituyen el Formulario oficial MSP 033, cuya versión vigente debe
+confirmarse antes de implementar su PDF trazable.
 
 Corrección de seguridad asociada: el autor de una nota es el profesional de la sesión; el
 cliente ya no puede firmar a nombre de otro.
@@ -209,5 +220,6 @@ texto. Uso:
 ## Credenciales y dependencias pendientes
 
 * MinIO: credenciales solo por variable de entorno (`ALMACEN_*`). `.env.example` sin valores.
-* clamd: ausente en desarrollo; obligatorio antes de producción.
-* Extracción de texto de PDF/DOCX para la base de conocimiento: pendiente (backlog 6.2).
+* clamd: ausente en desarrollo; obligatorio antes de producción y para analizar cargas de archivo.
+* La base de conocimiento ya extrae PDF con texto seleccionable en el servidor (backlog 6.2).
+  OCR para escaneos y extracción DOCX siguen pendientes; producción exige ClamAV.

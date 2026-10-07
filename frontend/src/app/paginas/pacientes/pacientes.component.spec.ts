@@ -20,7 +20,7 @@
  *
  * **La paginacion no pide el listado entero.**
  */
-import { provideHttpClient } from '@angular/common/http';
+import { provideHttpClient, withXhr } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 
@@ -31,195 +31,190 @@ import type { Paciente } from '../../nucleo/modelos/dominio';
 const BASE = CONFIGURACION_POR_DEFECTO.urlApi;
 
 function paciente(sufijo: string, nivel = 'NO_VERIFICADO'): Paciente {
-  return {
-    id: `id-${sufijo}`,
-    tipo_documento: 'CEDULA',
-    numero_documento: `99000000${sufijo}`,
-    nombre: `Nombre${sufijo}`,
-    apellido: `Apellido${sufijo}`,
-    telefono_whatsapp: '+593 99 900 0000',
-    correo: null,
-    fecha_nacimiento: '1990-05-12',
-    nivel_verificacion: nivel,
-  };
+    return {
+        id: `id-${sufijo}`,
+        tipo_documento: 'CEDULA',
+        numero_documento: `99000000${sufijo}`,
+        nombre: `Nombre${sufijo}`,
+        apellido: `Apellido${sufijo}`,
+        telefono_whatsapp: '+593 99 900 0000',
+        correo: null,
+        fecha_nacimiento: '1990-05-12',
+        nivel_verificacion: nivel,
+    };
 }
 
 function pagina(elementos: readonly Paciente[], extra: Record<string, unknown> = {}) {
-  return {
-    elementos,
-    total: elementos.length,
-    limite: 25,
-    desplazamiento: 0,
-    termino_ignorado: false,
-    ...extra,
-  };
+    return {
+        elementos,
+        total: elementos.length,
+        limite: 25,
+        desplazamiento: 0,
+        termino_ignorado: false,
+        ...extra,
+    };
 }
 
 import { ESPECIALIDAD_SINTETICA, INDICADORES_VACIOS } from '../../nucleo/pruebas/sesion-sintetica';
 describe('PacientesComponent', () => {
-  let fixture: ComponentFixture<PacientesComponent>;
-  let http: HttpTestingController;
+    let fixture: ComponentFixture<PacientesComponent>;
+    let http: HttpTestingController;
 
-  beforeEach(() => {
-    TestBed.configureTestingModule({
-      imports: [PacientesComponent],
-      providers: [
-        provideHttpClient(),
-        provideHttpClientTesting(),
-        { provide: CONFIGURACION, useValue: CONFIGURACION_POR_DEFECTO },
-        INDICADORES_VACIOS,
-        ESPECIALIDAD_SINTETICA,
-      ],
-    });
-    fixture = TestBed.createComponent(PacientesComponent);
-    http = TestBed.inject(HttpTestingController);
-  });
-
-  afterEach(() => {
-    // Abrir la ficha consulta la foto por separado; este componente no prueba
-    // esa carga y la respuesta nula expresa que no hay foto configurada.
-    http.match((p) => p.url.endsWith('/foto-perfil')).forEach((p) => p.flush(null));
-    http.verify();
-  });
-
-  /** Resuelve la carga inicial que dispara el constructor. */
-  function responderCargaInicial(cuerpo: object): void {
-    fixture.detectChanges();
-    http.expectOne((peticion) => peticion.url === `${BASE}/pacientes/`).flush(cuerpo);
-    fixture.detectChanges();
-  }
-
-  function texto(): string {
-    return (fixture.nativeElement as HTMLElement).textContent ?? '';
-  }
-
-  it('pide la primera pagina al abrirse, no el listado entero', () => {
-    fixture.detectChanges();
-    const peticion = http.expectOne((p) => p.url === `${BASE}/pacientes/`);
-    expect(peticion.request.params.get('limite')).toBe('25');
-    peticion.flush(pagina([paciente('1')]));
-  });
-
-  it('una respuesta antigua no pisa la de una busqueda posterior', () => {
-    // Buscar mientras el listado inicial sigue cargando: si la respuesta
-    // inicial llega despues, no debe borrar el aviso de «no se buscó».
-    fixture.detectChanges();
-    const inicial = http.expectOne((p) => p.url === `${BASE}/pacientes/` && !p.params.has('termino'));
-    fixture.componentInstance['termino'] = 'a';
-    fixture.componentInstance['buscar']();
-    http
-      .expectOne((p) => p.url === `${BASE}/pacientes/` && p.params.get('termino') === 'a')
-      .flush(pagina([], { termino_ignorado: true }));
-    expect(inicial.cancelled).toBeTrue();
-    fixture.detectChanges();
-
-    expect(texto()).toContain('no llegó a hacerse');
-  });
-
-  it('muestra el listado con el nivel de verificacion de cada fila', () => {
-    responderCargaInicial(pagina([paciente('1', 'NO_VERIFICADO')]));
-
-    expect(texto()).toContain('Apellido1, Nombre1');
-    // El texto legible, no el codigo: «NO_VERIFICADO» no le dice nada a
-    // quien atiende el mostrador.
-    expect(texto()).toContain('Sin verificar');
-  });
-
-  describe('los tres vacios', () => {
-    it('cuando el termino se ignoro dice que NO se busco, no que no haya nadie', () => {
-      responderCargaInicial(pagina([], { termino_ignorado: true }));
-
-      expect(texto()).toContain('no llegó a hacerse');
-      expect(texto()).toContain('La búsqueda no se realizó');
-      // Lo que no debe decir bajo ningun concepto:
-      expect(texto()).not.toContain('No hay pacientes en su ámbito');
-      expect(texto()).not.toContain('Sin coincidencias');
+    beforeEach(() => {
+        TestBed.configureTestingModule({
+            imports: [PacientesComponent],
+            providers: [
+                provideHttpClient(withXhr()),
+                provideHttpClientTesting(),
+                { provide: CONFIGURACION, useValue: CONFIGURACION_POR_DEFECTO },
+                INDICADORES_VACIOS,
+                ESPECIALIDAD_SINTETICA,
+            ],
+        });
+        fixture = TestBed.createComponent(PacientesComponent);
+        http = TestBed.inject(HttpTestingController);
     });
 
-    it('cuando se busco y no hay coincidencias lo dice como tal', () => {
-      responderCargaInicial(pagina([paciente('1')]));
-
-      fixture.componentInstance['termino'] = 'perez';
-      fixture.componentInstance['buscar']();
-      http
-        .expectOne((p) => p.url === `${BASE}/pacientes/`)
-        .flush(pagina([], { termino_ignorado: false }));
-      fixture.detectChanges();
-
-      expect(texto()).toContain('Sin coincidencias');
-      expect(texto()).toContain('perez');
-      expect(texto()).not.toContain('La búsqueda no se realizó');
+    afterEach(() => {
+        // Abrir la ficha consulta la foto por separado; este componente no prueba
+        // esa carga y la respuesta nula expresa que no hay foto configurada.
+        http.match((p) => p.url.endsWith('/foto-perfil')).forEach((p) => p.flush(null));
+        http.verify();
     });
 
-    it('sin termino y sin resultados es que el ambito esta vacio', () => {
-      responderCargaInicial(pagina([]));
+    /** Resuelve la carga inicial que dispara el constructor. */
+    function responderCargaInicial(cuerpo: object): void {
+        fixture.detectChanges();
+        http.expectOne((peticion) => peticion.url === `${BASE}/pacientes/`).flush(cuerpo);
+        fixture.detectChanges();
+    }
 
-      expect(texto()).toContain('No hay pacientes en su ámbito');
-      expect(texto()).not.toContain('Sin coincidencias');
-      expect(texto()).not.toContain('La búsqueda no se realizó');
+    function texto(): string {
+        return (fixture.nativeElement as HTMLElement).textContent ?? '';
+    }
+
+    it('pide la primera pagina al abrirse, no el listado entero', () => {
+        fixture.detectChanges();
+        const peticion = http.expectOne((p) => p.url === `${BASE}/pacientes/`);
+        expect(peticion.request.params.get('limite')).toBe('25');
+        peticion.flush(pagina([paciente('1')]));
     });
-  });
 
-  it('una busqueda nueva vuelve a la primera pagina', () => {
-    responderCargaInicial(pagina([paciente('1')], { total: 60 }));
+    it('una respuesta antigua no pisa la de una busqueda posterior', () => {
+        // Buscar mientras el listado inicial sigue cargando: si la respuesta
+        // inicial llega despues, no debe borrar el aviso de «no se buscó».
+        fixture.detectChanges();
+        const inicial = http.expectOne((p) => p.url === `${BASE}/pacientes/` && !p.params.has('termino'));
+        fixture.componentInstance['termino'] = 'a';
+        fixture.componentInstance['buscar']();
+        http
+            .expectOne((p) => p.url === `${BASE}/pacientes/` && p.params.get('termino') === 'a')
+            .flush(pagina([], { termino_ignorado: true }));
+        expect(inicial.cancelled).toBe(true);
+        fixture.detectChanges();
 
-    fixture.componentInstance['siguiente']();
-    const segunda = http.expectOne((p) => p.url === `${BASE}/pacientes/`);
-    expect(segunda.request.params.get('desplazamiento')).toBe('25');
-    segunda.flush(pagina([paciente('2')], { total: 60, desplazamiento: 25 }));
-    fixture.detectChanges();
+        expect(texto()).toContain('no llegó a hacerse');
+    });
 
-    fixture.componentInstance['termino'] = 'lopez';
-    fixture.componentInstance['buscar']();
-    const busqueda = http.expectOne((p) => p.url === `${BASE}/pacientes/`);
-    // Si conservara el desplazamiento, la primera busqueda saltaria los 25
-    // primeros resultados y pareceria que faltan pacientes.
-    expect(busqueda.request.params.get('desplazamiento')).toBe('0');
-    expect(busqueda.request.params.get('termino')).toBe('lopez');
-    busqueda.flush(pagina([]));
-  });
+    it('muestra el listado con el nivel de verificacion de cada fila', () => {
+        responderCargaInicial(pagina([paciente('1', 'NO_VERIFICADO')]));
 
-  it('la ficha se pide al backend y no se arma con la fila del listado', () => {
-    responderCargaInicial(pagina([paciente('1')]));
+        expect(texto()).toContain('Apellido1, Nombre1');
+        // El texto legible, no el codigo: «NO_VERIFICADO» no le dice nada a
+        // quien atiende el mostrador.
+        expect(texto()).toContain('Sin verificar');
+    });
 
-    fixture.componentInstance['abrir'](paciente('1'));
-    fixture.detectChanges();
+    describe('los tres vacios', () => {
+        it('cuando el termino se ignoro dice que NO se busco, no que no haya nadie', () => {
+            responderCargaInicial(pagina([], { termino_ignorado: true }));
 
-    // Cada lectura de una ficha queda auditada; reutilizar la fila ahorraria
-    // la peticion y perderia el registro de quien consulto a quien.
-    //
-    // La peticion la hace ahora la ficha compartida al montarse dentro de la
-    // ventana flotante, no esta pantalla. Lo que importa se conserva: hay una
-    // peticion por ficha abierta, asi que la lectura sigue quedando registrada.
-    const detalle = http.expectOne(`${BASE}/pacientes/id-1`);
-    detalle.flush({ ...paciente('1'), sexo: 'F', direccion: 'Calle sintetica', activo: true });
-    fixture.detectChanges();
+            expect(texto()).toContain('no llegó a hacerse');
+            expect(texto()).toContain('La búsqueda no se realizó');
+            // Lo que no debe decir bajo ningun concepto:
+            expect(texto()).not.toContain('No hay pacientes en su ámbito');
+            expect(texto()).not.toContain('Sin coincidencias');
+        });
 
-    // La ficha trae ademas el historial de citas del paciente.
-    http
-      .expectOne((p) => p.url === `${BASE}/agenda/citas`)
-      .flush({ elementos: [], total: 0, limite: 50, desplazamiento: 0 });
-    fixture.detectChanges();
+        it('cuando se busco y no hay coincidencias lo dice como tal', () => {
+            responderCargaInicial(pagina([paciente('1')]));
 
-    // Se abre encima, no al final de la tabla.
-    expect(
-      (fixture.nativeElement as HTMLElement).querySelector('[role="dialog"]'),
-    ).not.toBeNull();
-    // Y declara su limite de ambito en la propia pantalla.
-    expect(texto()).toContain('administrativo');
-  });
+            fixture.componentInstance['termino'] = 'perez';
+            fixture.componentInstance['buscar']();
+            http
+                .expectOne((p) => p.url === `${BASE}/pacientes/`)
+                .flush(pagina([], { termino_ignorado: false }));
+            fixture.detectChanges();
 
-  it('un error al cargar se muestra con su codigo, sin dejar la tabla a medias', () => {
-    fixture.detectChanges();
-    http
-      .expectOne((p) => p.url === `${BASE}/pacientes/`)
-      .flush(
-        { codigo: 'LIMITE_TASA_EXCEDIDO', mensaje: 'Demasiadas peticiones.' },
-        { status: 429, statusText: 'Too Many Requests' },
-      );
-    fixture.detectChanges();
+            expect(texto()).toContain('Sin coincidencias');
+            expect(texto()).toContain('perez');
+            expect(texto()).not.toContain('La búsqueda no se realizó');
+        });
 
-    expect(texto()).toContain('No se pudo cargar el listado');
-    expect(texto()).toContain('LIMITE_TASA_EXCEDIDO');
-  });
+        it('sin termino y sin resultados es que el ambito esta vacio', () => {
+            responderCargaInicial(pagina([]));
+
+            expect(texto()).toContain('No hay pacientes en su ámbito');
+            expect(texto()).not.toContain('Sin coincidencias');
+            expect(texto()).not.toContain('La búsqueda no se realizó');
+        });
+    });
+
+    it('una busqueda nueva vuelve a la primera pagina', () => {
+        responderCargaInicial(pagina([paciente('1')], { total: 60 }));
+
+        fixture.componentInstance['siguiente']();
+        const segunda = http.expectOne((p) => p.url === `${BASE}/pacientes/`);
+        expect(segunda.request.params.get('desplazamiento')).toBe('25');
+        segunda.flush(pagina([paciente('2')], { total: 60, desplazamiento: 25 }));
+        fixture.detectChanges();
+
+        fixture.componentInstance['termino'] = 'lopez';
+        fixture.componentInstance['buscar']();
+        const busqueda = http.expectOne((p) => p.url === `${BASE}/pacientes/`);
+        // Si conservara el desplazamiento, la primera busqueda saltaria los 25
+        // primeros resultados y pareceria que faltan pacientes.
+        expect(busqueda.request.params.get('desplazamiento')).toBe('0');
+        expect(busqueda.request.params.get('termino')).toBe('lopez');
+        busqueda.flush(pagina([]));
+    });
+
+    it('la ficha se pide al backend y no se arma con la fila del listado', () => {
+        responderCargaInicial(pagina([paciente('1')]));
+
+        fixture.componentInstance['abrir'](paciente('1'));
+        fixture.detectChanges();
+
+        // Cada lectura de una ficha queda auditada; reutilizar la fila ahorraria
+        // la peticion y perderia el registro de quien consulto a quien.
+        //
+        // La peticion la hace ahora la ficha compartida al montarse dentro de la
+        // ventana flotante, no esta pantalla. Lo que importa se conserva: hay una
+        // peticion por ficha abierta, asi que la lectura sigue quedando registrada.
+        const detalle = http.expectOne(`${BASE}/pacientes/id-1`);
+        detalle.flush({ ...paciente('1'), sexo: 'F', direccion: 'Calle sintetica', activo: true });
+        fixture.detectChanges();
+
+        // La ficha trae ademas el historial de citas del paciente.
+        http
+            .expectOne((p) => p.url === `${BASE}/agenda/citas`)
+            .flush({ elementos: [], total: 0, limite: 50, desplazamiento: 0 });
+        fixture.detectChanges();
+
+        // Se abre encima, no al final de la tabla.
+        expect((fixture.nativeElement as HTMLElement).querySelector('[role="dialog"]')).not.toBeNull();
+        // Y declara su limite de ambito en la propia pantalla.
+        expect(texto()).toContain('administrativo');
+    });
+
+    it('un error al cargar se muestra con su codigo, sin dejar la tabla a medias', () => {
+        fixture.detectChanges();
+        http
+            .expectOne((p) => p.url === `${BASE}/pacientes/`)
+            .flush({ codigo: 'LIMITE_TASA_EXCEDIDO', mensaje: 'Demasiadas peticiones.' }, { status: 429, statusText: 'Too Many Requests' });
+        fixture.detectChanges();
+
+        expect(texto()).toContain('No se pudo cargar el listado');
+        expect(texto()).toContain('LIMITE_TASA_EXCEDIDO');
+    });
 });

@@ -34,6 +34,7 @@ from app.mensajeria.firma import CABECERA_FIRMA, calcular_firma
 from app.mensajeria.rutas import CLAVE_NUMERO
 from app.modulos.auditoria.modelos import Auditoria
 from app.modulos.conversaciones.modelos import (
+    AvisoRevisionTratamiento,
     Conversacion,
     EstadoConversacion,
     IntencionEntrante,
@@ -696,6 +697,70 @@ async def test_un_mensaje_clinico_se_deriva_y_no_se_interpreta(
         )
     )
     assert vigentes == 2
+
+
+async def test_reporte_explicito_de_problema_se_etiqueta_y_deriva_sin_pedir_identidad(
+    cliente_webhook: AsyncClient,
+    api: str,
+    sesion: AsyncSession,
+    clinica: Clinica,
+    numero_de_la_clinica: ConfiguracionClinica,
+    paciente_con_consentimiento: Paciente,
+    telefono: str,
+    id_numero: str,
+) -> None:
+    """El personal recibe la etiqueta sin revelar pacientes de numeros compartidos."""
+    segundo_paciente = Paciente(
+        clinica_id=clinica.id,
+        tipo_documento="CEDULA",
+        numero_documento=f"7{uuid.uuid4().int % 10**9:09d}",
+        nombre="Familiar",
+        apellido="De Prueba",
+        telefono_whatsapp=paciente_con_consentimiento.telefono_whatsapp,
+    )
+    sesion.add(segundo_paciente)
+    await sesion.flush()
+    external_id = "wamid.REPORTE-TRATAMIENTO"
+    respuesta = await _enviar(
+        cliente_webhook,
+        api,
+        _cuerpo_mensaje(
+            "tengo un problema con mi medicamento",
+            external_id=external_id,
+            telefono=telefono,
+            id_numero=id_numero,
+        ),
+    )
+    assert respuesta.status_code == 200
+    assert respuesta.json()["mensajes"] == 1
+    mensaje = (
+        await sesion.execute(
+            sa.select(MensajeEntrante).where(MensajeEntrante.external_id == external_id)
+        )
+    ).scalar_one()
+    assert mensaje.intencion == IntencionEntrante.PROBLEMA_TRATAMIENTO.value
+    conversacion = (
+        await sesion.execute(sa.select(Conversacion).where(Conversacion.clinica_id == clinica.id))
+    ).scalar_one()
+    assert conversacion.estado == EstadoConversacion.EN_HANDOFF.value
+    assert conversacion.motivo_handoff.startswith("REVISIÓN CLÍNICA")
+    assert conversacion.paciente_id is None
+    assert conversacion.seleccion_pendiente is None
+    aviso = await sesion.scalar(
+        sa.select(AvisoRevisionTratamiento).where(
+            AvisoRevisionTratamiento.mensaje_entrante_id == mensaje.id
+        )
+    )
+    assert aviso is not None
+    auditado = await sesion.scalar(
+        sa.select(sa.func.count())
+        .select_from(Auditoria)
+        .where(
+            Auditoria.accion == AccionAuditada.AVISO_TRATAMIENTO_CREADO.value,
+            Auditoria.entidad_id == aviso.id,
+        )
+    )
+    assert auditado == 1
 
 
 # ---------------------------------------------------------------------------

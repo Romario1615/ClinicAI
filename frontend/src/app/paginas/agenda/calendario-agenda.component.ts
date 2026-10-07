@@ -19,7 +19,7 @@
  *
  * Todas las horas se calculan en la zona de la sede, nunca en la del equipo.
  */
-import { Component, computed, input, output } from '@angular/core';
+import { Component, computed, input, output, ChangeDetectionStrategy } from '@angular/core';
 
 import type { Cita, Profesional } from '../../nucleo/modelos/dominio';
 import type { FilaDia } from '../../nucleo/utilidades/secuencia-dia';
@@ -238,6 +238,7 @@ interface Columna {
       }
     }
   `,
+  changeDetection: ChangeDetectionStrategy.Eager,
   styles: `
     :host {
       display: block;

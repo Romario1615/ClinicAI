@@ -20,118 +20,106 @@ import { ColaTrabajoComponent } from './cola-trabajo.component';
 import type { TareaPendiente } from '../nucleo/utilidades/pendientes';
 
 function tarea(extra: Partial<TareaPendiente> = {}): TareaPendiente {
-  return {
-    clase: 'caduca',
-    etiqueta: 'Caduca',
-    plazo: 'en 6 min',
-    titulo: 'Turno bloqueado de Reyna Jurado',
-    detalle: 'Al caducar, el hueco vuelve a la agenda.',
-    accion: 'Confirmar',
-    urgente: true,
-    citas: ['cita-1'],
-    entradas: [],
-    ...extra,
-  };
+    return {
+        clase: 'caduca',
+        etiqueta: 'Caduca',
+        plazo: 'en 6 min',
+        titulo: 'Turno bloqueado de Reyna Jurado',
+        detalle: 'Al caducar, el hueco vuelve a la agenda.',
+        accion: 'Confirmar',
+        urgente: true,
+        citas: ['cita-1'],
+        entradas: [],
+        ...extra,
+    };
 }
 
 describe('ColaTrabajoComponent', () => {
-  let fixture: ComponentFixture<ColaTrabajoComponent>;
+    let fixture: ComponentFixture<ColaTrabajoComponent>;
 
-  function montar(tareas: readonly TareaPendiente[]): void {
-    fixture = TestBed.createComponent(ColaTrabajoComponent);
-    fixture.componentRef.setInput('tareas', tareas);
-    fixture.detectChanges();
-  }
+    function montar(tareas: readonly TareaPendiente[]): void {
+        fixture = TestBed.createComponent(ColaTrabajoComponent);
+        fixture.componentRef.setInput('tareas', tareas);
+        fixture.detectChanges();
+    }
 
-  beforeEach(() => {
-    TestBed.configureTestingModule({ imports: [ColaTrabajoComponent] });
-  });
-
-  it('dice que no queda nada en lugar de dejar el bloque en blanco', () => {
-    montar([]);
-
-    const texto = (fixture.nativeElement as HTMLElement).textContent ?? '';
-    expect(texto).toContain('Nada pendiente');
-    expect((fixture.nativeElement as HTMLElement).querySelectorAll('.cola__item').length).toBe(0);
-  });
-
-  it('pinta una tarjeta por tarea con su plazo', () => {
-    montar([tarea(), tarea({ clase: 'confirmar', etiqueta: 'Sin confirmar', plazo: '2 citas' })]);
-
-    const elemento = fixture.nativeElement as HTMLElement;
-    expect(elemento.querySelectorAll('.cola__item').length).toBe(2);
-    expect(elemento.textContent).toContain('en 6 min');
-    expect(elemento.textContent).toContain('2 citas');
-  });
-
-  it('marca lo urgente con clase y además con el texto del plazo', () => {
-    montar([tarea({ urgente: true, plazo: 'vencido' })]);
-
-    const elemento = fixture.nativeElement as HTMLElement;
-    const item = elemento.querySelector('.cola__item');
-    expect(item?.classList.contains('cola__item--urgente')).toBeTrue();
-    // El texto es lo que hace que no dependa del color.
-    expect(elemento.querySelector('.cola__plazo')?.textContent?.trim()).toBe('vencido');
-  });
-
-  it('no marca de urgente lo que no tiene cuenta atrás', () => {
-    montar([tarea({ urgente: false })]);
-
-    expect(
-      (fixture.nativeElement as HTMLElement)
-        .querySelector('.cola__item')
-        ?.classList.contains('cola__item--urgente'),
-    ).toBeFalse();
-  });
-
-  it('emite la tarea al pulsar la acción principal, sin ejecutar nada', () => {
-    const laTarea = tarea();
-    montar([laTarea]);
-
-    let emitida: TareaPendiente | undefined;
-    fixture.componentInstance.actuar.subscribe((t: TareaPendiente) => {
-      emitida = t;
+    beforeEach(() => {
+        TestBed.configureTestingModule({ imports: [ColaTrabajoComponent] });
     });
 
-    (
-      (fixture.nativeElement as HTMLElement).querySelector(
-        '.cola__item .boton--principal',
-      ) as HTMLButtonElement
-    ).click();
+    it('dice que no queda nada en lugar de dejar el bloque en blanco', () => {
+        montar([]);
 
-    expect(emitida).toBe(laTarea);
-  });
+        const texto = (fixture.nativeElement as HTMLElement).textContent ?? '';
+        expect(texto).toContain('Nada pendiente');
+        expect((fixture.nativeElement as HTMLElement).querySelectorAll('.cola__item').length).toBe(0);
+    });
 
-  it('emite por separado el «ver en la agenda»', () => {
-    montar([tarea()]);
+    it('pinta una tarjeta por tarea con su plazo', () => {
+        montar([tarea(), tarea({ clase: 'confirmar', etiqueta: 'Sin confirmar', plazo: '2 citas' })]);
 
-    let localizada = false;
-    fixture.componentInstance.localizar.subscribe(() => (localizada = true));
+        const elemento = fixture.nativeElement as HTMLElement;
+        expect(elemento.querySelectorAll('.cola__item').length).toBe(2);
+        expect(elemento.textContent).toContain('en 6 min');
+        expect(elemento.textContent).toContain('2 citas');
+    });
 
-    const botones = (fixture.nativeElement as HTMLElement).querySelectorAll(
-      '.cola__item .boton',
-    ) as NodeListOf<HTMLButtonElement>;
-    botones[botones.length - 1].click();
+    it('marca lo urgente con clase y además con el texto del plazo', () => {
+        montar([tarea({ urgente: true, plazo: 'vencido' })]);
 
-    expect(localizada).toBeTrue();
-  });
+        const elemento = fixture.nativeElement as HTMLElement;
+        const item = elemento.querySelector('.cola__item');
+        expect(item?.classList.contains('cola__item--urgente')).toBe(true);
+        // El texto es lo que hace que no dependa del color.
+        expect(elemento.querySelector('.cola__plazo')?.textContent?.trim()).toBe('vencido');
+    });
 
-  it('cuenta las urgentes para que la cabecera pueda decirlo', () => {
-    montar([tarea({ urgente: true }), tarea({ clase: 'confirmar', urgente: false })]);
+    it('no marca de urgente lo que no tiene cuenta atrás', () => {
+        montar([tarea({ urgente: false })]);
 
-    expect(fixture.componentInstance.urgentes()).toBe(1);
-  });
+        expect((fixture.nativeElement as HTMLElement)
+            .querySelector('.cola__item')
+            ?.classList.contains('cola__item--urgente')).toBe(false);
+    });
 
-  it('pasa a rejilla cuando hay ancho, sin cambiar el contenido', () => {
-    fixture = TestBed.createComponent(ColaTrabajoComponent);
-    fixture.componentRef.setInput('tareas', [tarea()]);
-    fixture.componentRef.setInput('rejilla', true);
-    fixture.detectChanges();
+    it('emite la tarea al pulsar la acción principal, sin ejecutar nada', () => {
+        const laTarea = tarea();
+        montar([laTarea]);
 
-    expect(
-      (fixture.nativeElement as HTMLElement).querySelector('.cola')?.classList.contains(
-        'cola--rejilla',
-      ),
-    ).toBeTrue();
-  });
+        let emitida: TareaPendiente | undefined;
+        fixture.componentInstance.actuar.subscribe((t: TareaPendiente) => {
+            emitida = t;
+        });
+
+        ((fixture.nativeElement as HTMLElement).querySelector('.cola__item .boton--principal') as HTMLButtonElement).click();
+
+        expect(emitida).toBe(laTarea);
+    });
+
+    it('emite por separado el «ver en la agenda»', () => {
+        montar([tarea()]);
+
+        let localizada = false;
+        fixture.componentInstance.localizar.subscribe(() => (localizada = true));
+
+        const botones = (fixture.nativeElement as HTMLElement).querySelectorAll('.cola__item .boton') as NodeListOf<HTMLButtonElement>;
+        botones[botones.length - 1].click();
+
+        expect(localizada).toBe(true);
+    });
+
+    it('cuenta las urgentes para que la cabecera pueda decirlo', () => {
+        montar([tarea({ urgente: true }), tarea({ clase: 'confirmar', urgente: false })]);
+
+        expect(fixture.componentInstance.urgentes()).toBe(1);
+    });
+
+    it('pasa a rejilla cuando hay ancho, sin cambiar el contenido', () => {
+        fixture = TestBed.createComponent(ColaTrabajoComponent);
+        fixture.componentRef.setInput('tareas', [tarea()]);
+        fixture.componentRef.setInput('rejilla', true);
+        fixture.detectChanges();
+
+        expect((fixture.nativeElement as HTMLElement).querySelector('.cola')?.classList.contains('cola--rejilla')).toBe(true);
+    });
 });

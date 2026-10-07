@@ -11,7 +11,7 @@
  * **solo para mostrarlos**. La traducción vive aquí y no en el modelo para
  * que el contrato con el backend no dependa del idioma de la interfaz.
  */
-import { Component, computed, input } from '@angular/core';
+import { Component, computed, input, ChangeDetectionStrategy } from '@angular/core';
 
 import type { EstadoCita } from '../nucleo/modelos/dominio';
 
@@ -68,6 +68,7 @@ const PRESENTACION: Record<EstadoCita, Presentacion> = {
       {{ presentacion().etiqueta }}
     </span>
   `,
+  changeDetection: ChangeDetectionStrategy.Eager,
   styles: `
     .insignia {
       display: inline-block;

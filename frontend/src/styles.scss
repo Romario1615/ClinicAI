@@ -33,7 +33,7 @@
 
   --texto: #102a2e;
   --texto-suave: #48646a;
-  --texto-tenue: #637d82;
+  --texto-tenue: #5b7378;
 
   --acento: #0b6e6a;
   --acento-fuerte: #075552;
@@ -470,6 +470,85 @@ textarea.campo__control {
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
+  }
+}
+
+@media print {
+  body.imprimiendo-presupuesto .capa::backdrop {
+    background: transparent !important;
+  }
+
+  body.imprimiendo-presupuesto .capa {
+    position: static !important;
+    display: block !important;
+    width: auto !important;
+    height: auto !important;
+    padding: 0 !important;
+    border: 0 !important;
+    overflow: visible !important;
+    background: #fff !important;
+    animation: none !important;
+  }
+
+  body.imprimiendo-presupuesto .ventana {
+    display: block !important;
+    width: auto !important;
+    height: auto !important;
+    max-height: none !important;
+    overflow: visible !important;
+    border: 0 !important;
+    box-shadow: none !important;
+    animation: none !important;
+    transform: none !important;
+  }
+
+  body.imprimiendo-presupuesto .ventana__cuerpo {
+    display: block !important;
+    height: auto !important;
+    max-height: none !important;
+    overflow: visible !important;
+    padding: 0 !important;
+  }
+
+  body.imprimiendo-presupuesto .ficha,
+  body.imprimiendo-presupuesto .ficha__cuerpo {
+    display: block !important;
+    height: auto !important;
+    max-height: none !important;
+    overflow: visible !important;
+  }
+
+  body.imprimiendo-presupuesto * {
+    visibility: hidden !important;
+  }
+
+  body.imprimiendo-presupuesto .presupuesto-imprimible,
+  body.imprimiendo-presupuesto .presupuesto-imprimible * {
+    visibility: visible !important;
+  }
+
+  body.imprimiendo-presupuesto .presupuesto-imprimible {
+    position: fixed !important;
+    inset: 0 !important;
+    width: 100% !important;
+    max-width: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    background: #fff !important;
+    color: #102a2e !important;
+    font-size: 10pt;
+  }
+
+  body.imprimiendo-presupuesto .presupuesto-imprimible__acciones {
+    display: none !important;
+  }
+
+  body.imprimiendo-presupuesto .presupuesto__tabla thead {
+    background: #e6efef !important;
+    print-color-adjust: exact;
   }
 }
 

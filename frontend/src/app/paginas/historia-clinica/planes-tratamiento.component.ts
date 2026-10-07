@@ -1,4 +1,4 @@
-import { Component, computed, effect, inject, input, signal } from '@angular/core';
+import { Component, computed, effect, inject, input, signal, ChangeDetectionStrategy } from '@angular/core';
 import { DatePipe } from '@angular/common';
 import { FotosClinicasComponent } from '../../compartido/fotos-clinicas.component';
 import { PERMISOS } from '../../nucleo/servicios/configuracion';
@@ -7,6 +7,7 @@ import { Router } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 
 import { ApiService } from '../../nucleo/servicios/api.service';
+import { CatalogoService, type ClinicaCatalogo } from '../../nucleo/servicios/catalogo.service';
 import type {
   HallazgoResultante,
   PlantillaPlan,
@@ -44,15 +45,21 @@ type AccionAbierta =
   standalone: true,
   imports: [DatePipe, FormsModule, FotosClinicasComponent],
   templateUrl: './planes-tratamiento.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './planes-tratamiento.component.scss',
 })
 export class PlanesTratamientoComponent {
   private readonly api = inject(ApiService);
+  private readonly catalogo = inject(CatalogoService);
   private readonly router = inject(Router);
   private readonly sesion = inject(SesionService);
 
   readonly pacienteId = input.required<string>();
+  readonly nombrePaciente = input.required<string>();
   readonly puedeEditar = input(false);
+  protected readonly puedeLeerSensible = computed(() =>
+    this.sesion.tienePermiso(PERMISOS.historiaLeerSensible),
+  );
   protected readonly puedeAgendar = computed(() => this.sesion.tienePermiso(PERMISOS.citaCrear));
   protected readonly puedeVerFotos = computed(() =>
     this.sesion.tienePermiso(PERMISOS.imagenClinicaLeer),
@@ -66,8 +73,15 @@ export class PlanesTratamientoComponent {
   /** La carga devolvió el 404 de acceso clínico: no se ofrece crear nada. */
   protected readonly sinAcceso = signal(false);
   protected readonly exito = signal('');
+  protected readonly presupuestoCargando = signal(false);
+  protected readonly presupuestoError = signal('');
+  protected readonly presupuestoSeleccionado = signal<{
+    readonly plan: PlanTratamiento;
+    readonly clinica: ClinicaCatalogo;
+  } | null>(null);
   protected readonly mostrarFormulario = signal(false);
   protected readonly procedimientos = signal<readonly ProcedimientoPlanNuevo[]>([]);
+  protected readonly hoyIso = new Date().toISOString();
   protected readonly total = computed(() =>
     this.procedimientos().reduce((suma, item) => suma + Number(item.precio), 0),
   );
@@ -88,12 +102,14 @@ export class PlanesTratamientoComponent {
 
   protected titulo = '';
   protected observaciones = '';
+  protected nivelSensibilidad: 'N2' | 'N3' = 'N2';
   protected descripcionProcedimiento = '';
   protected fase = 1;
   protected pieza: string | number = '';
   protected caras = '';
   protected precio = '0.00';
   private solicitud = 0;
+  private solicitudPresupuesto = 0;
 
   constructor() {
     effect(() => this.cargar(this.pacienteId()));
@@ -181,6 +197,7 @@ export class PlanesTratamientoComponent {
       titulo: this.titulo.trim(),
       moneda: 'USD',
       observaciones: this.observaciones.trim() || null,
+      nivel_sensibilidad: this.nivelSensibilidad,
       procedimientos: this.procedimientos(),
     };
     this.guardando.set(true);
@@ -424,6 +441,7 @@ export class PlanesTratamientoComponent {
     this.mostrarFormulario.set(false);
     this.titulo = '';
     this.observaciones = '';
+    this.nivelSensibilidad = 'N2';
     this.procedimientos.set([]);
     this.descripcionProcedimiento = '';
     this.pieza = '';
@@ -447,6 +465,54 @@ export class PlanesTratamientoComponent {
     return plan.procedimientos
       .reduce((suma, item) => suma + Number(item.precio), 0)
       .toFixed(2);
+  }
+
+  protected fechaPresupuesto(fecha: string | null, zona: string): string {
+    if (!fecha || Number.isNaN(Date.parse(fecha))) return 'Sin fecha registrada';
+    return new Intl.DateTimeFormat('es-EC', {
+      day: 'numeric',
+      month: 'long',
+      year: 'numeric',
+      timeZone: zona,
+    }).format(new Date(fecha));
+  }
+
+  /** Carga solo datos públicos de la clínica para imprimir una copia del plan propuesto. */
+  protected prepararPresupuesto(plan: PlanTratamiento): void {
+    if (plan.estado !== 'PROPUESTO' && plan.estado !== 'ACEPTADO') return;
+    const solicitud = ++this.solicitudPresupuesto;
+    this.presupuestoSeleccionado.set(null);
+    this.presupuestoError.set('');
+    this.presupuestoCargando.set(true);
+    this.catalogo.clinica().subscribe({
+      next: (clinica) => {
+        if (solicitud !== this.solicitudPresupuesto) return;
+        this.presupuestoSeleccionado.set({ plan, clinica });
+        this.presupuestoCargando.set(false);
+      },
+      error: () => {
+        if (solicitud !== this.solicitudPresupuesto) return;
+        this.presupuestoError.set('No se pudo cargar la información de la clínica para el presupuesto.');
+        this.presupuestoCargando.set(false);
+      },
+    });
+  }
+
+  protected imprimirPresupuesto(): void {
+    if (!this.presupuestoSeleccionado()) return;
+    document.body.classList.add('imprimiendo-presupuesto');
+    try {
+      window.print();
+    } finally {
+      document.body.classList.remove('imprimiendo-presupuesto');
+    }
+  }
+
+  protected cerrarPresupuesto(): void {
+    this.solicitudPresupuesto += 1;
+    this.presupuestoCargando.set(false);
+    this.presupuestoError.set('');
+    this.presupuestoSeleccionado.set(null);
   }
 
   private mensaje(fallo: unknown): string {

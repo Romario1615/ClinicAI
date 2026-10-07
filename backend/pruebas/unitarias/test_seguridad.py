@@ -20,6 +20,7 @@ from datetime import UTC, datetime, timedelta
 import jwt
 import pyotp
 import pytest
+from argon2 import PasswordHasher
 
 from app.nucleo.errores import TokenInvalido
 from app.nucleo.seguridad import (
@@ -36,6 +37,7 @@ from app.nucleo.seguridad import (
     hashear_contrasena,
     hashear_identificador,
     hashear_jti,
+    requiere_rehash,
     url_provisionamiento_totp,
     validar_politica_contrasena,
     verificar_codigo_totp,
@@ -66,6 +68,18 @@ class TestContrasenas:
     def test_el_hash_usa_argon2id(self) -> None:
         """Argon2id, no PBKDF2 ni bcrypt: resistencia a ataques con GPU."""
         assert hashear_contrasena("ContrasenaSegura123").startswith("$argon2id$")
+
+    def test_los_parametros_antiguos_se_rehashean_al_siguiente_acceso(self) -> None:
+        antiguo = PasswordHasher(
+            time_cost=1,
+            memory_cost=8192,
+            parallelism=1,
+            hash_len=32,
+            salt_len=16,
+        ).hash("ContrasenaSegura123")
+
+        assert requiere_rehash(antiguo)
+        assert not requiere_rehash(hashear_contrasena("ContrasenaSegura123"))
 
     def test_dos_hashes_de_la_misma_contrasena_difieren(self) -> None:
         """Sal aleatoria: dos usuarios con la misma contrasena no coinciden."""

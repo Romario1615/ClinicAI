@@ -26,7 +26,7 @@ from datetime import date, datetime, timedelta
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Path, Request
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import select
 
 from app.mensajeria.adaptadores import RegistroCanales
@@ -95,8 +95,35 @@ class Anulacion(BaseModel):
 
 
 class Verificacion(BaseModel):
-    fecha_nacimiento: date | None = None
-    ultimos_digitos_documento: str | None = Field(default=None, pattern=r"^[0-9A-Za-z]{4}$")
+    model_config = ConfigDict(
+        json_schema_extra={
+            "anyOf": [
+                {
+                    "required": ["fecha_nacimiento"],
+                    "properties": {"fecha_nacimiento": {"type": "string", "format": "date"}},
+                },
+                {
+                    "required": ["ultimos_digitos_documento"],
+                    "properties": {
+                        "ultimos_digitos_documento": {
+                            "type": "string",
+                            "pattern": "^[0-9A-Za-z]{4}$",
+                        }
+                    },
+                },
+            ]
+        }
+    )
+
+    fecha_nacimiento: date | None = Field(
+        default=None,
+        json_schema_extra={"type": "string", "format": "date"},
+    )
+    ultimos_digitos_documento: str | None = Field(
+        default=None,
+        pattern=r"^[0-9A-Za-z]{4}$",
+        json_schema_extra={"type": "string"},
+    )
 
 
 class MedicamentoIndicado(BaseModel):

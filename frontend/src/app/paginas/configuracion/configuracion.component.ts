@@ -1,4 +1,4 @@
-import { Component, OnInit, inject, signal } from '@angular/core';
+import { Component, OnInit, inject, signal, ChangeDetectionStrategy } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 
@@ -6,6 +6,11 @@ import { FalloApi } from '../../nucleo/servicios/api.service';
 import { PERMISOS } from '../../nucleo/servicios/configuracion';
 import { CatalogoService } from '../../nucleo/servicios/catalogo.service';
 import { SesionService } from '../../nucleo/servicios/sesion.service';
+import { IconoComponent } from '../../compartido/icono.component';
+import { AgendaConfiguracionComponent } from './agenda-configuracion.component';
+import { AgendaProfesionalesComponent } from './agenda-profesionales.component';
+import { BloqueosAgendaComponent } from './bloqueos-agenda.component';
+import { SedesConfiguracionComponent } from './sedes-configuracion.component';
 import {
   IntegracionesService,
   type ActualizacionIntegracion,
@@ -30,11 +35,12 @@ const formularioVacio = (ajustes: FormularioIntegracion['ajustes'], secretos: st
 });
 
 import { IntegracionesIaComponent } from './integraciones-ia.component';
+import { AnamnesisConfiguracionComponent } from './anamnesis-configuracion.component';
 
 @Component({
   selector: 'app-configuracion',
   standalone: true,
-  imports: [FormsModule, RouterLink, IntegracionesIaComponent],
+  imports: [FormsModule, RouterLink, IconoComponent, AgendaConfiguracionComponent, AgendaProfesionalesComponent, BloqueosAgendaComponent, SedesConfiguracionComponent, IntegracionesIaComponent, AnamnesisConfiguracionComponent],
   template: `
     <header class="pagina-cabecera">
       <div>
@@ -49,7 +55,12 @@ import { IntegracionesIaComponent } from './integraciones-ia.component';
 
     <nav class="pestanas" aria-label="Administración">
       <button type="button" [class.pestanas__activa]="seccion() === 'clinica'" (click)="seccion.set('clinica')">Datos de la clínica</button>
+      @if (sesion.tienePermiso(PERMISOS.sedeGestionar)) { <button type="button" [class.pestanas__activa]="seccion() === 'sedes'" (click)="seccion.set('sedes')">Sedes</button> }
       <button type="button" [class.pestanas__activa]="seccion() === 'integraciones'" (click)="seccion.set('integraciones')">Integraciones</button>
+      @if (sesion.tienePermiso(PERMISOS.agendaConfigurar)) { <button type="button" [class.pestanas__activa]="seccion() === 'agenda'" (click)="seccion.set('agenda')">Agenda y feriados</button> }
+      @if (sesion.tieneAlgunPermiso(PERMISOS.agendaConfigurar, PERMISOS.profesionalGestionar)) { <button type="button" [class.pestanas__activa]="seccion() === 'equipo'" (click)="seccion.set('equipo')">Disponibilidad del equipo</button> }
+      @if (sesion.tienePermiso(PERMISOS.bloqueoGestionar)) { <button type="button" [class.pestanas__activa]="seccion() === 'bloqueos'" (click)="seccion.set('bloqueos')">Bloqueos</button> }
+      @if (sesion.tienePermiso(PERMISOS.configuracionEscribir)) { <button type="button" [class.pestanas__activa]="seccion() === 'anamnesis'" (click)="seccion.set('anamnesis')">Anamnesis</button> }
       <a routerLink="/usuarios">Usuarios y roles <span aria-hidden="true">↗</span></a>
     </nav>
 
@@ -75,10 +86,23 @@ import { IntegracionesIaComponent } from './integraciones-ia.component';
       </section>
     }
 
+    @if (seccion() === 'anamnesis' && sesion.tienePermiso(PERMISOS.configuracionEscribir)) {
+      <app-anamnesis-configuracion />
+    }
+
     @if (seccion() === 'integraciones') {
 
+    <section class="integraciones-banner" aria-label="Integraciones de la clínica">
+      <div class="integraciones-banner__texto">
+        <p class="ceja"><app-icono nombre="conexiones" [tamano]="16" /> CONECTIVIDAD SEGURA</p>
+        <h2>Los servicios de tu clínica, en un solo lugar</h2>
+        <p>Configura conexiones y credenciales por clínica cuando tengas tus cuentas de proveedor.</p>
+      </div>
+      <img src="/images/integraciones-clinicai-banner.png" alt="" aria-hidden="true" loading="lazy" fetchpriority="low" />
+    </section>
+
     <section class="aviso-seguridad" aria-label="Seguridad de las credenciales">
-      <span class="aviso-seguridad__icono" aria-hidden="true">●</span>
+      <span class="aviso-seguridad__icono"><app-icono nombre="conexion-segura" [tamano]="19" /></span>
       <p>
         Las claves se cifran al guardarse. Solo verás si hay una credencial registrada; su
         contenido nunca se vuelve a mostrar. Cada configuración pertenece a esta clínica.
@@ -93,14 +117,14 @@ import { IntegracionesIaComponent } from './integraciones-ia.component';
     <div class="integraciones">
       <section class="tarjeta integracion">
         <header class="integracion__cabecera">
-          <span class="integracion__simbolo" aria-hidden="true">AI</span>
+          <span class="integracion__simbolo"><app-icono nombre="ia" [tamano]="22" /></span>
           <div><p class="ceja">INTELIGENCIA ARTIFICIAL</p><h2>Anthropic</h2>
             <p>Credenciales y límites del modelo conversacional.</p></div>
         </header>
         <form (ngSubmit)="guardar('anthropic')">
           <label class="interruptor"><input type="checkbox" name="anthropic-habilitada" [(ngModel)]="anthropic.habilitada" />
             <span><strong>Integración habilitada</strong><small>Usar la cuenta de Anthropic de esta clínica.</small></span></label>
-          <label class="campo"><span class="campo__etiqueta">Clave API</span>
+          <label class="campo"><span class="campo__etiqueta"><app-icono nombre="llave-api" [tamano]="15" /> Clave API</span>
             <input class="campo__control" type="password" name="anthropic-api-key" autocomplete="new-password" [(ngModel)]="anthropic.secretos['api_key']" placeholder="sk-ant-…" />
           </label>
           @if (anthropic.guardados['api_key']) {
@@ -124,7 +148,7 @@ import { IntegracionesIaComponent } from './integraciones-ia.component';
 
       <section class="tarjeta integracion">
         <header class="integracion__cabecera">
-          <span class="integracion__simbolo integracion__simbolo--whatsapp" aria-hidden="true">W</span>
+          <span class="integracion__simbolo integracion__simbolo--whatsapp"><app-icono nombre="telefono" [tamano]="22" /></span>
           <div><p class="ceja">MENSAJERÍA</p><h2>WhatsApp Cloud API</h2>
             <p>Datos del número de Meta y validación de webhooks.</p></div>
         </header>
@@ -157,7 +181,7 @@ import { IntegracionesIaComponent } from './integraciones-ia.component';
 
       <section class="tarjeta integracion">
         <header class="integracion__cabecera">
-          <span class="integracion__simbolo integracion__simbolo--calendario" aria-hidden="true">G</span>
+          <span class="integracion__simbolo integracion__simbolo--calendario"><app-icono nombre="agenda" [tamano]="22" /></span>
           <div><p class="ceja">CALENDARIOS</p><h2>Google Calendar</h2>
             <p>Credenciales OAuth para vincular calendarios profesionales.</p></div>
         </header>
@@ -186,7 +210,7 @@ import { IntegracionesIaComponent } from './integraciones-ia.component';
 
       <section class="tarjeta integracion">
         <header class="integracion__cabecera">
-          <span class="integracion__simbolo integracion__simbolo--correo" aria-hidden="true">&#64;</span>
+          <span class="integracion__simbolo integracion__simbolo--correo"><app-icono nombre="correo" [tamano]="22" /></span>
           <div><p class="ceja">CORREO ELECTRÓNICO</p><h2>Servidor SMTP</h2>
             <p>Cuenta para enviar mensajes operativos de la clínica.</p></div>
         </header>
@@ -229,6 +253,19 @@ import { IntegracionesIaComponent } from './integraciones-ia.component';
 
     }
 
+    @if (seccion() === 'agenda' && sesion.tienePermiso(PERMISOS.agendaConfigurar)) {
+      <app-agenda-configuracion />
+    }
+    @if (seccion() === 'sedes' && sesion.tienePermiso(PERMISOS.sedeGestionar)) {
+      <app-sedes-configuracion />
+    }
+    @if (seccion() === 'equipo' && sesion.tieneAlgunPermiso(PERMISOS.agendaConfigurar, PERMISOS.profesionalGestionar)) {
+      <app-agenda-profesionales />
+    }
+    @if (seccion() === 'bloqueos' && sesion.tienePermiso(PERMISOS.bloqueoGestionar)) {
+      <app-bloqueos-agenda />
+    }
+
     <p class="nota-configuracion">
       Los parámetros se guardan cifrados para la clínica de la sesión. El acceso a esta pantalla
       requiere el permiso «configuracion.escribir» y las modificaciones quedan auditadas. La
@@ -236,6 +273,7 @@ import { IntegracionesIaComponent } from './integraciones-ia.component';
       configuración por clínica.
     </p>
   `,
+  changeDetection: ChangeDetectionStrategy.Eager,
   styles: `
     .pagina-cabecera { display:flex; align-items:center; justify-content:space-between; gap:var(--espacio-4); margin-bottom:var(--espacio-4); }
     .pestanas { display:flex; gap:var(--espacio-2); align-items:center; margin-bottom:var(--espacio-4); border-bottom:1px solid var(--borde); }
@@ -249,21 +287,31 @@ import { IntegracionesIaComponent } from './integraciones-ia.component';
     .form-clinica .boton,.form-clinica .campo__ayuda { grid-column:1/-1; justify-self:start; }
     .pagina-cabecera h1 { margin:0; }
     .pagina-cabecera p:last-child { margin:var(--espacio-2) 0 0; color:var(--texto-suave); }
+    .integraciones-banner { position:relative; display:flex; align-items:center; min-height:190px; overflow:hidden; padding:var(--espacio-5); margin-bottom:var(--espacio-4); border:1px solid #193c49; border-radius:calc(var(--radio) + 4px); background:linear-gradient(105deg,#071c2b 0%,#0b2b39 62%,#123b43 100%); isolation:isolate; color:#fff; }
+    .integraciones-banner::after { content:''; position:absolute; z-index:-1; inset:-45%; background:radial-gradient(ellipse at 78% 48%,rgb(95 209 196 / 24%),transparent 34%); animation:ambiente-integraciones 18s ease-in-out infinite alternate; }
+    .integraciones-banner__texto { position:relative; z-index:1; max-width:510px; }
+    .integraciones-banner__texto .ceja { display:flex; align-items:center; gap:7px; margin:0 0 var(--espacio-2); color:#a8f3e5; }
+    .integraciones-banner__texto h2 { margin:0 0 var(--espacio-2); color:#fff; font-size:clamp(1.2rem,2vw,1.6rem); }
+    .integraciones-banner__texto p:last-child { max-width:440px; margin:0; color:#d0e4e7; }
+    .integraciones-banner img { position:absolute; z-index:0; top:0; right:0; width:min(70%,900px); height:100%; object-fit:cover; object-position:center 54%; mask-image:linear-gradient(90deg,transparent 0%,#000 20%); transform-origin:center; animation:integraciones-ilustracion 24s ease-in-out infinite alternate; }
+    @keyframes ambiente-integraciones { from { transform:translate3d(-2%,1%,0) scale(.96); opacity:.55; } to { transform:translate3d(2%,-1%,0) scale(1.06); opacity:1; } }
+    @keyframes integraciones-ilustracion { from { transform:translate3d(0,2px,0) scale(1); } to { transform:translate3d(0,-3px,0) scale(1.018); } }
     .aviso-seguridad { display:flex; align-items:flex-start; gap:var(--espacio-3); padding:var(--espacio-3) var(--espacio-4); margin-bottom:var(--espacio-4); border:1px solid var(--borde); border-radius:var(--radio); background:var(--acento-suave); color:var(--texto); }
     .aviso-seguridad p { margin:0; }
-    .aviso-seguridad__icono { color:var(--acento); font-size:.8rem; line-height:1.8; }
+    .aviso-seguridad__icono { display:grid; place-items:center; color:var(--acento); }
     .integraciones { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:var(--espacio-4); align-items:start; }
     .integracion { min-width:0; padding:var(--espacio-5); }
     .integracion__cabecera { display:flex; align-items:center; gap:var(--espacio-3); padding-bottom:var(--espacio-4); margin-bottom:var(--espacio-4); border-bottom:1px solid var(--borde); }
     .integracion__cabecera h2 { margin:0; font-size:1.15rem; }
     .integracion__cabecera p:last-child { margin:var(--espacio-1) 0 0; color:var(--texto-suave); font-size:.88rem; }
     .integracion__cabecera .ceja { margin:0 0 2px; font-size:.65rem; }
-    .integracion__simbolo { display:grid; flex:0 0 44px; width:44px; height:44px; place-items:center; border-radius:13px; background:var(--acento-suave); color:var(--acento-fuerte); font-size:.9rem; font-weight:800; }
+    .integracion__simbolo { display:grid; flex:0 0 44px; width:44px; height:44px; place-items:center; border-radius:13px; background:var(--acento-suave); color:var(--acento-fuerte); }
     .integracion__simbolo--whatsapp { background:#e3f2ea; color:#1c6b45; }
     .integracion__simbolo--calendario { background:#e7effa; color:#1e5081; }
     .integracion__simbolo--correo { background:#fdf3e0; color:#8a5800; }
     .integracion form { display:grid; gap:var(--espacio-3); }
     .integracion .campo { margin:0; }
+    .integracion .campo__etiqueta:has(app-icono) { display:flex; align-items:center; gap:6px; }
     .interruptor { display:flex; align-items:center; gap:var(--espacio-3); min-height:48px; padding:var(--espacio-2) 0; cursor:pointer; }
     .interruptor > span { display:grid; gap:2px; }
     .interruptor small { color:var(--texto-suave); }
@@ -276,7 +324,8 @@ import { IntegracionesIaComponent } from './integraciones-ia.component';
     .mensaje--bien { color:var(--exito); background:var(--exito-fondo); }
     .mensaje--error { color:var(--peligro); background:var(--peligro-fondo); }
     @media (max-width:900px) { .integraciones { grid-template-columns:1fr; } }
-    @media (max-width:560px) { .pagina-cabecera { align-items:flex-start; } .campos-dos,.form-clinica { grid-template-columns:1fr; } .integracion { padding:var(--espacio-4); } .pestanas { overflow:auto; } }
+    @media (max-width:560px) { .pagina-cabecera { align-items:flex-start; } .campos-dos,.form-clinica { grid-template-columns:1fr; } .integracion { padding:var(--espacio-4); } .pestanas { overflow:auto; } .integraciones-banner { min-height:210px; align-items:flex-start; padding:var(--espacio-4); } .integraciones-banner__texto { max-width:78%; } .integraciones-banner img { width:80%; opacity:.72; mask-image:linear-gradient(90deg,transparent 0%,#000 38%); } }
+    @media (prefers-reduced-motion: reduce) { .integraciones-banner::after,.integraciones-banner img { animation:none; } }
   `,
 })
 export class ConfiguracionComponent implements OnInit {
@@ -289,7 +338,7 @@ export class ConfiguracionComponent implements OnInit {
   protected readonly guardando = signal(false);
   protected readonly error = signal('');
   protected readonly aviso = signal('');
-  protected readonly seccion = signal<'clinica' | 'integraciones'>('clinica');
+  protected readonly seccion = signal<'clinica' | 'sedes' | 'integraciones' | 'agenda' | 'equipo' | 'bloqueos' | 'anamnesis'>('clinica');
   protected readonly clinica = signal<DatosClinica | null>(null);
   protected readonly cargandoClinica = signal(false);
   protected readonly guardandoClinica = signal(false);

@@ -309,12 +309,15 @@ class ServicioAgenda:
             if existente is not None:
                 return ResultadoOperacion(existente, (), era_reintento=True)
 
+        nivel_sensibilidad_procedimiento = NivelSensibilidad.CLINICO
         if solicitud.procedimiento_plan_id is not None:
             if estado is not EstadoCita.CONFIRMED:
                 raise ReglaNegocioViolada(
                     "Un procedimiento del plan solo se puede vincular a una cita confirmada."
                 )
-            await self._validar_procedimiento_para_agenda(solicitud, principal)
+            nivel_sensibilidad_procedimiento = await self._validar_procedimiento_para_agenda(
+                solicitud, principal
+            )
 
         servicio = await self._repo.obtener_servicio(solicitud.servicio_id)
         if servicio is None:
@@ -367,7 +370,9 @@ class ServicioAgenda:
             # la averia que es.
             raise traducir_o_propagar(exc) from exc
 
-        auditoria_vinculo = await self._vincular_procedimiento_agendado(solicitud, principal, cita)
+        auditoria_vinculo = await self._vincular_procedimiento_agendado(
+            solicitud, principal, cita, nivel_sensibilidad_procedimiento
+        )
 
         historial = CitaHistorial(
             cita_id=cita.id,
@@ -409,6 +414,7 @@ class ServicioAgenda:
         solicitud: SolicitudReserva,
         principal: Principal,
         cita: Cita,
+        nivel_sensibilidad: NivelSensibilidad,
     ) -> tuple[EntradaAuditoria, ...]:
         procedimiento_id = solicitud.procedimiento_plan_id
         if procedimiento_id is None:
@@ -438,19 +444,19 @@ class ServicioAgenda:
                 entidad_id=procedimiento_id,
                 sede_id=solicitud.sede_id,
                 paciente_id=solicitud.paciente_id,
-                nivel_sensibilidad=NivelSensibilidad.CLINICO,
+                nivel_sensibilidad=nivel_sensibilidad,
                 cita_id=str(cita.id),
             ),
         )
 
     async def _validar_procedimiento_para_agenda(
         self, solicitud: SolicitudReserva, principal: Principal
-    ) -> None:
+    ) -> NivelSensibilidad:
         """Valida y bloquea una fase clínica para reservarla de forma atómica."""
         consulta = await self._sesion.execute(
             text(
                 "SELECT pp.estado AS procedimiento_estado, pp.cita_id, pp.servicio_id, "
-                "pt.estado AS plan_estado, pt.paciente_id "
+                "pt.estado AS plan_estado, pt.paciente_id, pt.nivel_sensibilidad "
                 "FROM procedimiento_plan AS pp "
                 "JOIN plan_tratamiento AS pt ON pt.id = pp.plan_id "
                 "WHERE pp.id = :procedimiento_id AND pt.clinica_id = :clinica_id "
@@ -463,6 +469,11 @@ class ServicioAgenda:
         )
         procedimiento = consulta.mappings().one_or_none()
         if procedimiento is None or procedimiento["paciente_id"] != solicitud.paciente_id:
+            raise RecursoNoEncontrado("El procedimiento del plan no existe para este paciente.")
+        nivel = NivelSensibilidad(procedimiento["nivel_sensibilidad"])
+        if nivel == NivelSensibilidad.CLINICO_SENSIBLE and not principal.tiene_permiso(
+            "historia_clinica.leer_sensible"
+        ):
             raise RecursoNoEncontrado("El procedimiento del plan no existe para este paciente.")
         if (
             procedimiento["plan_estado"] != "ACEPTADO"
@@ -488,6 +499,7 @@ class ServicioAgenda:
                 EstadoCita.NO_SHOW.value,
             }:
                 raise ConflictoEstado("Este procedimiento ya tiene una cita activa agendada.")
+        return nivel
 
     # ==================================================================
     #  Confirmacion

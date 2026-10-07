@@ -2,7 +2,7 @@
   <header class="odontograma__cabecera">
     <div>
       <p class="ceja">REGISTRO DENTAL</p>
-      <h2 id="titulo-odontograma">Odontograma</h2>
+      <h2 id="titulo-odontograma"><app-icono nombre="radiografia-dental" [tamano]="21" /> Odontograma</h2>
       @if (actual(); as version) {
         <p class="odontograma__meta">
           Versión {{ version.version }} · {{ version.creado_en | date: 'd MMM y, HH:mm' }}
@@ -50,6 +50,17 @@
           <strong>{{ denticion() === 'PERMANENTE' ? 'Permanente' : denticion() === 'TEMPORAL' ? 'Temporal' : 'Mixta' }}</strong>
         }
       </div>
+      @if (puedeGuardar() && puedeLeerSensible && actual()?.nivel_sensibilidad !== 'N3') {
+        <label class="odontograma__historial">
+          <span>Sensibilidad clínica</span>
+          <select aria-label="Sensibilidad clínica del odontograma" [value]="nivelSensibilidad()" (change)="nivelSensibilidad.set($any($event.target).value)">
+            <option value="N2">N2 · Clínico</option>
+            <option value="N3">N3 · Clínico sensible</option>
+          </select>
+        </label>
+      } @else if (actual()?.nivel_sensibilidad === 'N3') {
+        <span class="sensibilidad sensibilidad--n3">N3 · Clínico sensible</span>
+      }
       @if (!puedeGuardar()) {
         <p class="odontograma__pista">Haga clic en una pieza para ver su historial.</p>
       }
@@ -86,6 +97,7 @@
 
     <ng-template #dibujo let-codigo let-superior="superior">
       <div class="diente"
+           [attr.data-pieza]="codigo"
            [class.diente--superior]="superior"
            [class.diente--seleccionado]="seleccionada() === codigo"
            [class.diente--cambiado]="cambiadas().has(codigo)"
@@ -97,10 +109,16 @@
                 (click)="clicPieza(codigo)">
           {{ codigo }}@if (tieneNota(codigo)) {<span class="diente__nota" aria-hidden="true">•</span>}
         </button>
-        <svg viewBox="-6 -6 52 52" aria-hidden="true" focusable="false" class="diente__svg">
+        <svg viewBox="-6 -6 52 52" [attr.aria-label]="'Superficies de la pieza ' + codigo" focusable="false" class="diente__svg">
           @for (r of regiones; track r.region) {
             <svg:polygon [attr.points]="r.puntos" [attr.class]="claseRegion(codigo, r.region)"
-                     (click)="clicRegion(codigo, r.region)">
+                     [attr.data-region]="r.region"
+                     [attr.role]="'button'"
+                     [attr.tabindex]="seleccionada() === codigo ? 0 : -1"
+                     [attr.aria-label]="tituloRegion(codigo, r.region)"
+                     [attr.aria-describedby]="seleccionada() === codigo ? 'ayuda-caras-odontograma' : null"
+                     (click)="clicRegion(codigo, r.region)"
+                     (keydown)="teclaRegion($event, codigo, r.region)">
               <svg:title>{{ tituloRegion(codigo, r.region) }}</svg:title>
             </svg:polygon>
           }
@@ -135,7 +153,8 @@
       </div>
     </ng-template>
 
-    <div class="lienzo" aria-label="Arcadas dentales">
+    <p class="solo-lectores" id="ayuda-caras-odontograma">Seleccione primero el número de una pieza. Use Tab para entrar a sus caras, las flechas para recorrerlas y Enter o la barra espaciadora para aplicar la herramienta elegida. El formulario de la pieza también permite registrar cada cara sin usar el dibujo.</p>
+    <div class="lienzo" role="group" aria-label="Arcadas dentales">
       <div class="lienzo__fila">
         @for (grupo of superiores(); track grupo.nombre) {
           <section class="arcada" [attr.aria-label]="grupo.nombre">

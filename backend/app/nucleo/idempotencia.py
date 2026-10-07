@@ -52,6 +52,7 @@ class AlcanceIdempotencia(StrEnum):
     CITA_REPROGRAMAR = "cita.reprogramar"
     OFERTA_ACEPTAR = "oferta.aceptar"
     PAGO_REGISTRAR = "pago.registrar"
+    CARGO_PAGO_CREAR = "cargo_pago.crear"
     WEBHOOK_WHATSAPP = "webhook.whatsapp"
     OUTBOX_ENTREGA = "outbox.entrega"
     # El `state` de OAuth de calendario. Se registra aqui, y no en

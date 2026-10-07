@@ -248,6 +248,13 @@ class DocumentoNoAprobado(ErrorDominio):
     estado_http = 409
 
 
+class IngestaNoDisponible(ErrorDominio):
+    """No se pudo completar la indexacion; el trabajo puede reintentarse."""
+
+    codigo = "INGESTA_NO_DISPONIBLE"
+    estado_http = 503
+
+
 class SinFuenteAprobada(ErrorDominio):
     """No hay documento aprobado y vigente que responda la consulta.
 

@@ -133,3 +133,20 @@ Es deliberado el orden: un bucle de herramientas sin frontera verificada es
 precisamente lo que estas reglas existen para impedir. Mientras tanto, el
 webhook de WhatsApp sigue rigiendose por ADR-0017 y no ejecuta ninguna
 intencion que cambie una cita.
+
+---
+
+## Actualización del catálogo — 2026-10-06
+
+La decisión original enumeraba siete herramientas. Desde entonces se agregó
+`get_patient_payments`, de solo lectura y protegida por `pago.leer`; devuelve
+los cargos y pagos que corresponden al paciente, pero no crea cargos, no
+registra pagos y no procesa cobros. El catálogo vigente contiene ocho
+herramientas. Las pruebas comprueban por cada una argumentos incompletos,
+derivación y auditoría; las siete que leen o cambian datos también se prueban
+sin permisos. El límite de escritura clínica permanece igual.
+
+El bucle conversacional también fue implementado después de esta decisión,
+con proveedor local de demostración y proveedor Claude. El webhook de WhatsApp
+sigue fuera de ese bucle: esta actualización no cambia ADR‑0017 ni implica que
+el agente se active en conversaciones reales.

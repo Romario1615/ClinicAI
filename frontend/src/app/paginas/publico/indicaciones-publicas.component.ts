@@ -7,7 +7,7 @@
  * bloquea el enlace al quinto fallo. El contenido no se guarda en el
  * navegador: al recargar hay que volver a verificar.
  */
-import { Component, inject, signal } from '@angular/core';
+import { Component, inject, signal, ChangeDetectionStrategy } from '@angular/core';
 import { DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
@@ -104,6 +104,7 @@ export interface IndicacionPublica {
       </article>
     </main>
   `,
+  changeDetection: ChangeDetectionStrategy.Eager,
   styles: `
     .pagina { min-height: 100vh; display: grid; place-items: start center; padding: var(--espacio-5) var(--espacio-4); background: var(--fondo); }
     .tarjeta-publica { width: 100%; max-width: 620px; display: grid; gap: var(--espacio-4); padding: var(--espacio-5); border: 1px solid var(--borde); border-radius: var(--radio); background: var(--superficie-elevada); box-shadow: var(--sombra-2); }

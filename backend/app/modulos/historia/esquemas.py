@@ -36,6 +36,11 @@ ViaEntrada = Literal[
     "OTRA",
 ]
 
+CategoriaAntecedente = Literal[
+    "PERSONAL", "FAMILIAR", "QUIRURGICO", "FARMACOLOGICO", "HABITOS", "OTRO"
+]
+SeveridadAlergiaEntrada = Literal["LEVE", "MODERADA", "GRAVE", "ANAFILAXIA"]
+
 
 class DiagnosticoEntrada(BaseModel):
     model_config = ConfigDict(extra="forbid")
@@ -57,6 +62,7 @@ class NotaEntrada(BaseModel):
     # coincide, la peticion se rechaza (no se firma a nombre de otro).
     profesional_id: uuid.UUID | None = None
     tipo: TipoNotaEntrada = "EVOLUCION"
+    nivel_sensibilidad: Literal["N2", "N3"] = "N2"
     cita_id: uuid.UUID | None = None
 
     motivo_consulta: Annotated[str | None, Field(default=None, max_length=LONGITUD_MOTIVO)]
@@ -76,6 +82,27 @@ class NotaEntrada(BaseModel):
         if valor is None:
             return None
         return valor.strip() or None
+
+
+class SolicitudAccesoEmergencia(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    motivo: Annotated[str, Field(min_length=12, max_length=500)]
+
+
+class AccesoEmergenciaCreado(BaseModel):
+    relacion_id: uuid.UUID
+    vence_en: datetime
+    duracion_minutos: int = 30
+
+
+class AvisoAccesoEmergenciaSalida(BaseModel):
+    """Notificación administrativa que no revela la identidad del paciente."""
+
+    id: uuid.UUID
+    profesional: str
+    creado_en: datetime
+    vence_en: datetime
 
 
 class CorreccionNota(NotaEntrada):
@@ -127,6 +154,7 @@ class RecetaEntrada(BaseModel):
     paciente_id: uuid.UUID
     profesional_id: uuid.UUID
     nota_id: uuid.UUID | None = None
+    nivel_sensibilidad: Literal["N2", "N3"] = "N2"
     indicaciones_generales: Annotated[str | None, Field(default=None, max_length=2000)]
     medicamentos: Annotated[list[MedicamentoEntrada], Field(min_length=1, max_length=30)]
 
@@ -144,6 +172,17 @@ class SuspensionReceta(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     motivo: Annotated[str, Field(min_length=5, max_length=LONGITUD_MOTIVO)]
+
+
+class VersionRecetaEntrada(BaseModel):
+    """Nueva version confirmada de una receta vigente, con firma y motivo."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    profesional_id: uuid.UUID
+    motivo: Annotated[str, Field(min_length=5, max_length=LONGITUD_MOTIVO)]
+    indicaciones_generales: Annotated[str | None, Field(default=None, max_length=2000)]
+    medicamentos: Annotated[list[MedicamentoEntrada], Field(min_length=1, max_length=30)]
 
 
 class RegistroToma(BaseModel):
@@ -179,6 +218,7 @@ class NotaSalida(BaseModel):
     profesional_id: uuid.UUID
     cita_id: uuid.UUID | None
     tipo: str
+    nivel_sensibilidad: str
 
     motivo_consulta: str | None
     subjetivo: str | None
@@ -202,6 +242,7 @@ class MedicamentoSalida(BaseModel):
     cuando_sea_necesario: bool
     frecuencia_horas: int | None
     duracion_dias: int | None
+    hora_primera_toma: str | None
     instrucciones: str | None
 
 
@@ -215,7 +256,9 @@ class RecetaSalida(BaseModel):
     confirmada_en: datetime | None
     suspendida_en: datetime | None
     motivo_suspension: str | None
+    receta_anterior_id: uuid.UUID | None
     indicaciones_generales: str | None
+    nivel_sensibilidad: Literal["N2", "N3"]
     creado_en: datetime
     medicamentos: list[MedicamentoSalida]
 
@@ -235,6 +278,14 @@ class ResultadoSuspension(BaseModel):
 
     receta: RecetaSalida
     tomas_canceladas: int
+
+
+class ResultadoVersionReceta(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    receta: RecetaSalida
+    tomas_canceladas: int
+    tomas_generadas: int
 
 
 class TomaSalida(BaseModel):
@@ -269,11 +320,66 @@ class AtenderAlertaAdherencia(BaseModel):
     nota_profesional: str | None = Field(default=None, max_length=2000)
 
 
+class AlergiaEntrada(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    sustancia: Annotated[str, Field(min_length=2, max_length=200)]
+    tipo_reaccion: Annotated[str | None, Field(max_length=200)] = None
+    severidad: SeveridadAlergiaEntrada
+
+
+class AntecedenteEntrada(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    categoria: CategoriaAntecedente
+    descripcion: Annotated[str, Field(min_length=3, max_length=4000)]
+    nivel_sensibilidad: Literal["N2", "N3"] = "N2"
+
+
+class DesactivacionAlergia(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    motivo: Annotated[str, Field(min_length=5, max_length=500)]
+
+
+class AlergiaHistoriaSalida(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    id: uuid.UUID
+    sustancia: str
+    tipo_reaccion: str | None
+    severidad: str
+    registrado_en: datetime
+
+
+class AntecedenteHistoriaSalida(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    id: uuid.UUID
+    categoria: str
+    descripcion: str
+    nivel_sensibilidad: str
+    registrado_en: datetime
+
+
+class AnamnesisSalida(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    alergias: list[AlergiaHistoriaSalida]
+    antecedentes: list[AntecedenteHistoriaSalida]
+
+
 __all__ = [
+    "AlergiaEntrada",
+    "AlergiaHistoriaSalida",
     "AlertaAdherenciaSalida",
+    "AnamnesisSalida",
+    "AntecedenteEntrada",
+    "AntecedenteHistoriaSalida",
     "AtenderAlertaAdherencia",
     "ConfirmacionReceta",
     "CorreccionNota",
+    "DesactivacionAlergia",
     "DiagnosticoEntrada",
     "DiagnosticoSalida",
     "MedicamentoEntrada",

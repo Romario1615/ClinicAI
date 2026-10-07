@@ -182,6 +182,46 @@ class PaginaCitas(BaseModel):
     desplazamiento: int
 
 
+class DatosBloqueoAgenda(_ConInstantes):
+    """Bloqueo administrativo ligado a una sede y un único recurso opcional."""
+
+    sede_id: uuid.UUID
+    profesional_id: uuid.UUID | None = None
+    consultorio_id: uuid.UUID | None = None
+    tipo: Literal["VACACIONES", "AUSENCIA", "CAPACITACION", "MANTENIMIENTO", "OTRO"] = "OTRO"
+    inicio: InstanteConZona
+    fin: InstanteConZona
+    motivo: Annotated[str | None, Field(max_length=LONGITUD_MAXIMA_MOTIVO)] = None
+    aceptar_citas_afectadas: bool = False
+
+    @field_validator("motivo", mode="before")
+    @classmethod
+    def _limpiar_motivo_bloqueo(cls, valor: object) -> object:
+        return valor.strip() if isinstance(valor, str) else valor
+
+
+class CitaAfectadaBloqueo(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    id: uuid.UUID
+    inicio: datetime
+    fin: datetime
+
+
+class RespuestaBloqueoAgenda(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    id: uuid.UUID
+    sede_id: uuid.UUID
+    profesional_id: uuid.UUID | None
+    consultorio_id: uuid.UUID | None
+    tipo: str
+    inicio: datetime
+    fin: datetime
+    motivo: str | None
+    creado_con_citas_afectadas: bool
+
+
 # Estados que se pueden pedir como filtro. Se declara como literal y no como
 # cadena libre para que un estado mal escrito sea un 422 y no un listado
 # vacio que parece «no hay citas».
@@ -198,11 +238,14 @@ EstadoFiltro = Literal[
 
 __all__ = [
     "DIAS_MAXIMOS_CONSULTA",
+    "CitaAfectadaBloqueo",
+    "DatosBloqueoAgenda",
     "EstadoFiltro",
     "PaginaCitas",
     "PeticionCancelacion",
     "PeticionReprogramacion",
     "PeticionReserva",
+    "RespuestaBloqueoAgenda",
     "RespuestaCita",
     "RespuestaCitaDetalle",
     "RespuestaDisponibilidad",

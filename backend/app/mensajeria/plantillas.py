@@ -227,7 +227,9 @@ PLANTILLAS: dict[TipoMensajeOutbox, Plantilla] = {
         # pantalla de bloqueo revela la condicion de quien lo toma.
         texto=(
             "Hola {nombre}. Es hora de una de las tomas que le indico su profesional.\n\n"
-            "Responda TOMADA cuando la haya hecho. Puede ver el detalle en {enlace}."
+            "Responda con una opción: TOMADA, RECORDARME DESPUÉS, NO PUDE TOMARLA, "
+            "AYUDA o HABLAR CON LA CLÍNICA. "
+            "Puede ver el detalle en {enlace}."
         ),
         variables_permitidas=frozenset({"nombre", "enlace"}),
     ),

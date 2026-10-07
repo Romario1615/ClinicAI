@@ -9,7 +9,7 @@
  * Se identifica por `usuarioId` o, desde la agenda y las fichas, por
  * `profesionalId` (solo lectura: la foto es la de su usuario).
  */
-import { Component, DestroyRef, effect, inject, input, output, signal, untracked } from '@angular/core';
+import { Component, DestroyRef, effect, inject, input, output, signal, untracked, ChangeDetectionStrategy } from '@angular/core';
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 
 import { CONFIGURACION } from '../nucleo/servicios/configuracion';
@@ -44,6 +44,7 @@ import { IconoComponent } from './icono.component';
     }
     @if (error()) { <span class="error" role="alert">{{ error() }}</span> }
   `,
+  changeDetection: ChangeDetectionStrategy.Eager,
   styles: `
     :host { display: inline-flex; flex-direction: column; align-items: center; gap: 6px; flex: 0 0 auto; }
     .foto { display: inline-grid; place-items: center; overflow: hidden; border-radius: 50%;

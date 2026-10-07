@@ -333,6 +333,32 @@ class TestConfiguracionReal:
         assert evento["event"] == "error.simulado"
         assert "RuntimeError" in str(evento.get("exception", ""))
 
+    def test_una_excepcion_real_redacta_datos_personales_en_su_traza(self) -> None:
+        """La cadena real conserva contexto técnico, pero no PII del error."""
+        salida = io.StringIO()
+        configurar_registro(nivel="INFO", formato="json", redactar=True)
+        logging.getLogger().handlers[0].setStream(salida)  # type: ignore[attr-defined]
+
+        try:
+            raise RuntimeError(
+                "Paciente 0912345678, correo persona@example.invalid, telefono +593987654321"
+            )
+        except RuntimeError:
+            obtener_logger("prueba").exception(
+                "error.al_guardar_paciente",
+                paciente_id="3f2b7c1e-0000-4000-8000-000000000001",
+                nombre="Nombre De Prueba",
+            )
+
+        evento = self._capturar(salida)[0]
+        salida_json = json.dumps(evento, ensure_ascii=False)
+        assert "RuntimeError" in salida_json
+        assert "0912345678" not in salida_json
+        assert "persona@example.invalid" not in salida_json
+        assert "+593987654321" not in salida_json
+        assert "Nombre De Prueba" not in salida_json
+        assert evento["paciente_id"] == "3f2b7c1e-0000-4000-8000-000000000001"
+
     def test_el_nivel_filtra(self) -> None:
         salida = io.StringIO()
         configurar_registro(nivel="WARNING", formato="json", redactar=True)

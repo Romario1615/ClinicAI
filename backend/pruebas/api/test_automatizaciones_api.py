@@ -105,6 +105,60 @@ async def test_lista_apaga_y_audita_y_respeta_obligatorios(
     assert acciones == 2
 
 
+async def test_el_estado_de_automatizaciones_no_se_cruza_entre_clinicas(
+    cliente: AsyncClient,
+    api: str,
+    sesion: AsyncSession,
+    usuario: Usuario,
+    clinica: Clinica,
+    sede: Sede,
+    sufijo: str,
+) -> None:
+    """Una clínica no puede leer ni cambiar las preferencias de otra."""
+    otra_clinica = Clinica(
+        nombre=f"Clínica aislada {sufijo}",
+        identificacion_fiscal=f"AISLADA-{sufijo[:12]}",
+        zona_horaria="America/Guayaquil",
+    )
+    sesion.add(otra_clinica)
+    await sesion.flush()
+    otro_usuario = Usuario(
+        clinica_id=otra_clinica.id,
+        correo=f"aislamiento-{sufijo}@example.invalid",
+        hash_contrasena=usuario.hash_contrasena,
+        nombre="Usuario",
+        apellido="Otra clínica",
+    )
+    sesion.add(otro_usuario)
+    await sesion.flush()
+
+    await conceder_permisos(sesion, usuario, clinica, "configuracion.escribir", sedes=(sede.id,))
+    await conceder_permisos(
+        sesion, otro_usuario, otra_clinica, "configuracion.escribir", todas_las_sedes=True
+    )
+    cabeceras = await cabecera_bearer(cliente, usuario, clinica)
+    cabeceras_ajenas = await cabecera_bearer(cliente, otro_usuario, otra_clinica)
+
+    flujo = "promociones"
+    estado_propio = await cliente.get(f"{api}/automatizaciones", headers=cabeceras)
+    estado_ajeno = await cliente.get(f"{api}/automatizaciones", headers=cabeceras_ajenas)
+    assert estado_propio.status_code == estado_ajeno.status_code == 200
+    assert next(item for item in estado_propio.json() if item["codigo"] == flujo)["activo"] is True
+    assert next(item for item in estado_ajeno.json() if item["codigo"] == flujo)["activo"] is True
+
+    cambio = await cliente.put(
+        f"{api}/automatizaciones/{flujo}",
+        json={"activo": False, "motivo": "Pausa exclusiva de esta clínica"},
+        headers=cabeceras,
+    )
+    assert cambio.status_code == 200, cambio.text
+
+    estado_propio = await cliente.get(f"{api}/automatizaciones", headers=cabeceras)
+    estado_ajeno = await cliente.get(f"{api}/automatizaciones", headers=cabeceras_ajenas)
+    assert next(item for item in estado_propio.json() if item["codigo"] == flujo)["activo"] is False
+    assert next(item for item in estado_ajeno.json() if item["codigo"] == flujo)["activo"] is True
+
+
 async def test_un_flujo_apagado_no_encola(
     sesion: AsyncSession, clinica: Clinica, reloj: RelojFijo
 ) -> None:

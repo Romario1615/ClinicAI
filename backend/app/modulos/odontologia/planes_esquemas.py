@@ -5,7 +5,7 @@ from __future__ import annotations
 import uuid
 from datetime import date, datetime
 from decimal import Decimal
-from typing import Annotated
+from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
@@ -61,6 +61,7 @@ class PlanNuevo(BaseModel):
     titulo: Annotated[str, Field(min_length=3, max_length=200)]
     moneda: Annotated[str, Field(pattern=r"^[A-Z]{3}$")] = "USD"
     observaciones: Annotated[str | None, Field(max_length=2000)] = None
+    nivel_sensibilidad: Literal["N2", "N3"] = "N2"
     procedimientos: Annotated[list[ProcedimientoNuevo], Field(min_length=1, max_length=100)]
 
     @field_validator("titulo")
@@ -195,6 +196,7 @@ class PlanSalida(BaseModel):
     estado: EstadoPlan
     moneda: str
     observaciones: str | None
+    nivel_sensibilidad: Literal["N2", "N3"]
     propuesto_en: datetime | None
     aceptado_en: datetime | None
     aceptacion_medio: MedioAceptacion | None = None

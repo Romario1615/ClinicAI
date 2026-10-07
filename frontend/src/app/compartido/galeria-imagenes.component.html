@@ -19,6 +19,15 @@
             }
           </select>
         </label>
+        @if (puedeLeerSensible()) {
+          <label class="campo">
+            <span class="campo__etiqueta">Sensibilidad clínica</span>
+            <select class="campo__control" name="nivelSensibilidad" [(ngModel)]="nivelSensibilidad">
+              <option value="N2">N2 · Clínico</option>
+              <option value="N3">N3 · Clínico sensible</option>
+            </select>
+          </label>
+        }
         <label class="campo">
           <span class="campo__etiqueta">Piezas FDI (opcional)</span>
           <input class="campo__control" name="piezas" [(ngModel)]="piezas" placeholder="14, 15" />
@@ -92,6 +101,7 @@
           }
           <div class="galeria__metadatos">
             <strong>{{ etiquetaTipo(imagen.tipo) }}</strong>
+            @if (imagen.nivel_sensibilidad === 'N3') { <span class="galeria__sensibilidad">Clínica sensible · N3</span> }
             @if (imagen.piezas.length) { <span>Pieza(s) {{ imagen.piezas.join(', ') }}</span> }
             @if (imagen.tomada_en) { <span>Tomada {{ imagen.tomada_en | date: 'mediumDate' }}</span> }
             @if (imagen.descripcion) { <span>{{ imagen.descripcion }}</span> }

@@ -105,6 +105,7 @@
 .diente__svg { width: 3.2rem; height: 3.2rem; display: block; overflow: visible; }
 .diente__svg .cara { fill: var(--odo-sana); stroke: var(--odo-trazo); stroke-width: 1.4; cursor: pointer; transition: fill .12s, filter .12s; }
 .diente__svg .cara:hover { filter: brightness(.9); stroke: var(--acento); stroke-width: 2; }
+.diente__svg .cara:focus-visible { filter: drop-shadow(0 0 2px var(--acento)); stroke: var(--acento-fuerte); stroke-width: 2.8; }
 .diente--ausente .diente__svg .cara { fill: #eef2f3; }
 .diente__svg .cara.cara--caries { fill: var(--odo-caries); }
 .diente__svg .cara.cara--obturacion_resina { fill: var(--odo-resina); }

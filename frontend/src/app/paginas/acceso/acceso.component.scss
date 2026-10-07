@@ -29,6 +29,25 @@
     linear-gradient(100deg, rgb(7 50 53 / 78%) 0%, rgb(8 54 57 / 66%) 46%, rgb(8 54 57 / 42%) 100%),
     url('/images/acceso-equipo.png') 72% center / cover,
     linear-gradient(160deg, var(--marca-fondo-2), var(--marca-fondo));
+  isolation: isolate;
+}
+
+.acceso__marca::before {
+  content: '';
+  position: absolute;
+  z-index: -1;
+  inset: -18%;
+  pointer-events: none;
+  background:
+    radial-gradient(ellipse at 22% 78%, rgb(95 209 196 / 30%), transparent 32%),
+    radial-gradient(ellipse at 78% 25%, rgb(135 225 213 / 24%), transparent 28%);
+  filter: blur(10px);
+  animation: acceso-resplandor 22s ease-in-out infinite alternate;
+}
+
+@keyframes acceso-resplandor {
+  from { transform: translate3d(-1.5%, 1%, 0) scale(.98); opacity: .65; }
+  to { transform: translate3d(1.5%, -1%, 0) scale(1.04); opacity: 1; }
 }
 
 .acceso__logo {
@@ -88,10 +107,23 @@
   box-shadow: 0 0 0 4px rgb(95 209 196 / 20%);
 }
 
-.acceso__pulso {
-  width: 100%;
-  height: 90px;
-  color: rgb(95 209 196 / 55%);
+.acceso__flujo {
+  position: relative;
+  z-index: 1;
+  display: block;
+  width: min(100%, 540px);
+  height: auto;
+  max-height: 112px;
+  object-fit: contain;
+  object-position: left center;
+  opacity: .94;
+  filter: drop-shadow(0 9px 24px rgb(0 26 29 / 18%));
+  animation: acceso-flotar 9s ease-in-out infinite;
+}
+
+@keyframes acceso-flotar {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-4px); }
 }
 
 /* ----- Formulario ----- */
@@ -159,7 +191,7 @@
   }
 
   .acceso__puntos,
-  .acceso__pulso {
+  .acceso__flujo {
     display: none;
   }
 
@@ -303,6 +335,11 @@
   border-radius: 12px;
 }
 
+.acceso__rol-icono--recepcion { color: #1d6283; background: #e8f3f8; }
+.acceso__rol-icono--profesional { color: #9b5660; background: #faedf0; }
+.acceso__rol-icono--asistente { color: #735b9e; background: #f0ecf8; }
+.acceso__rol-icono--auditor { color: #846123; background: #f8f1df; }
+
 .acceso__rol-icono svg {
   width: 23px;
   height: 23px;
@@ -337,4 +374,9 @@
 
 code {
   font-family: var(--fuente-mono);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .acceso__marca::before,
+  .acceso__flujo { animation: none; }
 }

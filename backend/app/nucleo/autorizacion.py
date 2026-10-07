@@ -134,6 +134,7 @@ CATALOGO_PERMISOS: Final[tuple[DefinicionPermiso, ...]] = (
     _p("sede.gestionar", "Crear y modificar sedes y consultorios", "organizacion"),
     _p("especialidad.gestionar", "Crear y modificar especialidades", "organizacion"),
     _p("servicio.gestionar", "Crear y modificar servicios y precios", "organizacion"),
+    _p("agenda.configurar", "Configurar horarios semanales y feriados", "agenda"),
     _p("configuracion.escribir", "Modificar la configuracion de la clinica", "organizacion"),
     # --- Usuarios ---
     _p("usuario.leer", "Ver usuarios", "usuarios"),
@@ -512,6 +513,7 @@ PERMISOS_POR_ROL: Final[dict[str, frozenset[str]]] = {
             "profesional.leer",
             "profesional.gestionar",
             "agenda.leer",
+            "agenda.configurar",
             "cita.crear",
             "cita.reprogramar",
             "cita.cancelar",
@@ -561,6 +563,7 @@ PERMISOS_POR_ROL: Final[dict[str, frozenset[str]]] = {
             "profesional.leer",
             "profesional.gestionar",
             "agenda.leer",
+            "agenda.configurar",
             "cita.crear",
             "cita.reprogramar",
             "cita.cancelar",
@@ -621,6 +624,8 @@ PERMISOS_POR_ROL: Final[dict[str, frozenset[str]]] = {
             "pago.registrar",
             "pago.validar",
             "dashboard.leer",
+            # Exportacion de conteos agregados; el CSV no incluye pacientes.
+            "reporte.exportar",
         }
     ),
     "profesional": frozenset(

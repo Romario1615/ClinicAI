@@ -15,8 +15,9 @@
  * borrador hasta que alguien con `conocimiento.aprobar` lo revise. Quien carga
  * no aprueba, y el backend lo exige aunque esta pantalla se saltara.
  *
- * **No interpreta el archivo.** Se lee como texto plano en el navegador y se
- * envia tal cual; el backend lo fragmenta, lo vectoriza y analiza si contiene
+ * **El PDF no se interpreta en el navegador.** Se envia al servidor para
+ * validar su tipo, analizarlo y extraer el texto; el backend lo fragmenta,
+ * vectoriza y analiza si contiene
  * algo que parezca una instruccion al sistema (ADR-0014). El texto nunca se
  * inyecta como HTML.
  *
@@ -26,7 +27,7 @@
  * binarios: un PDF o un DOCX necesitan extraccion en el servidor, que todavia
  * no existe. Mientras tanto se puede pegar el texto copiado del documento.
  */
-import { Component, computed, inject, input, output, signal } from '@angular/core';
+import { Component, computed, inject, input, output, signal, ChangeDetectionStrategy } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 
 import { IconoComponent } from '../../compartido/icono.component';
@@ -40,7 +41,7 @@ import type {
 /** Limite del backend (`SolicitudIngesta.contenido`). */
 export const MAXIMO_CARACTERES = 500_000;
 /** Tope de tamano de archivo antes de leerlo: evita colgar la pestana. */
-const MAXIMO_BYTES = 2 * 1024 * 1024;
+const MAXIMO_BYTES = 20 * 1024 * 1024;
 const EXTENSIONES = ['.txt', '.md', '.markdown', '.csv'] as const;
 
 export const OPCIONES_TIPO: readonly { valor: TipoDocumento; texto: string }[] = [
@@ -113,6 +114,12 @@ type Origen = 'archivo' | 'texto';
                 <app-icono nombre="aviso" [tamano]="18" />
                 El análisis encontró texto que parece una instrucción al sistema. La aprobación
                 queda bloqueada hasta que una persona lo revise.
+              </p>
+            }
+            @if (res.escaneo_antivirus === 'NO_DISPONIBLE') {
+              <p class="carga__alerta" role="status">
+                El documento se procesó sin análisis antivirus. Este modo local no debe recibir
+                documentos destinados a producción.
               </p>
             }
             <div class="acciones acciones--final">
@@ -209,16 +216,21 @@ type Origen = 'archivo' | 'texto';
                 @if (nombreArchivo(); as nombre) {
                   <strong>{{ nombre }}</strong>
                   <span class="carga__zona-ayuda numerico">
-                    {{ contenido().length.toLocaleString('es') }} caracteres · pulse para cambiar
+                    @if (archivoPdf()) {
+                      {{ esWord() ? 'Word' : 'PDF' }} · {{ (archivoPdf()!.size / 1024).toFixed(0) }} KB · pulse para cambiar
+                    } @else {
+                      {{ contenido().length.toLocaleString('es') }} caracteres · pulse para cambiar
+                    }
                   </span>
                 } @else {
                   <strong>Arrastre un archivo o pulse para elegirlo</strong>
-                  <span class="carga__zona-ayuda">Texto plano: .txt, .md o .csv · hasta 2 MB</span>
+                  <span class="carga__zona-ayuda">PDF, Word (.docx), .txt, .md o .csv · hasta 20 MB</span>
                 }
               </label>
               <p class="campo__ayuda">
-                ¿Tiene un PDF o un Word? Copie su texto y use «Pegar texto». La extracción
-                automática de esos formatos todavía no está disponible.
+                Los PDF y los documentos Word (.docx) se analizan y extraen en el servidor. Los
+                archivos escaneados sin texto seleccionable y los .doc antiguos requieren copiar el
+                texto en «Pegar texto».
               </p>
             } @else {
               <label class="campo">
@@ -290,6 +302,7 @@ type Origen = 'archivo' | 'texto';
       </section>
     </div>
   `,
+  changeDetection: ChangeDetectionStrategy.Eager,
   styles: `
     .dialogo {
       overflow-y: auto;
@@ -453,7 +466,7 @@ export class CargarDocumentoComponent {
 
   protected readonly opcionesTipo = OPCIONES_TIPO;
   protected readonly opcionesSensibilidad = OPCIONES_SENSIBILIDAD;
-  protected readonly aceptados = EXTENSIONES.join(',');
+  protected readonly aceptados = ['.pdf', '.docx', ...EXTENSIONES].join(',');
   protected readonly maximo = MAXIMO_CARACTERES;
 
   protected titulo = '';
@@ -465,6 +478,9 @@ export class CargarDocumentoComponent {
 
   protected readonly origen = signal<Origen>('archivo');
   protected readonly contenido = signal('');
+  /** PDF o Word: se envían como archivo y el servidor extrae el texto. */
+  protected readonly archivoPdf = signal<File | null>(null);
+  protected readonly esWord = computed(() => this.archivoPdf()?.name.toLowerCase().endsWith('.docx') ?? false);
   protected readonly nombreArchivo = signal<string | null>(null);
   protected readonly arrastrando = signal(false);
   protected readonly enviando = signal(false);
@@ -481,6 +497,10 @@ export class CargarDocumentoComponent {
   protected readonly documentoCreadoId = signal<string | null>(null);
 
   protected readonly puedeEnviar = computed(() => {
+    const pdf = this.origen() === 'archivo' ? this.archivoPdf() : null;
+    if (this.origen() === 'archivo' && pdf) {
+      return pdf.size > 0 && pdf.size <= MAXIMO_BYTES;
+    }
     const largo = this.contenido().trim().length;
     return largo > 0 && largo <= MAXIMO_CARACTERES;
   });
@@ -512,10 +532,28 @@ export class CargarDocumentoComponent {
 
   private async leer(archivo: File): Promise<void> {
     this.aviso.set(null);
+    this.archivoPdf.set(null);
+    this.contenido.set('');
+    this.nombreArchivo.set(null);
     const nombre = archivo.name.toLowerCase();
+    if (nombre.endsWith('.pdf') || nombre.endsWith('.docx')) {
+      if (archivo.size > MAXIMO_BYTES) {
+        this.aviso.set('El archivo supera 20 MB. Divídalo en documentos más pequeños.');
+        return;
+      }
+      if (archivo.size === 0) {
+        this.aviso.set('El archivo está vacío.');
+        return;
+      }
+      this.archivoPdf.set(archivo);
+      this.contenido.set('');
+      this.nombreArchivo.set(archivo.name);
+      this.proponerTitulo(archivo.name);
+      return;
+    }
     if (!EXTENSIONES.some((extension) => nombre.endsWith(extension))) {
       this.aviso.set(
-        'Ese formato no se puede leer como texto. Use .txt, .md o .csv, o pegue el texto del documento.',
+        'Formato no admitido. Use PDF, Word (.docx), .txt, .md o .csv, o pegue el texto del documento.',
       );
       return;
     }
@@ -534,11 +572,15 @@ export class CargarDocumentoComponent {
       );
       return;
     }
+    this.archivoPdf.set(null);
     this.contenido.set(texto);
     this.nombreArchivo.set(archivo.name);
+    this.proponerTitulo(archivo.name);
+  }
+
+  private proponerTitulo(nombreArchivo: string): void {
     if (!this.documento() && !this.titulo.trim()) {
-      // Sugerencia de titulo a partir del nombre del archivo.
-      this.titulo = archivo.name.replace(/\.[^.]+$/, '').replace(/[_-]+/g, ' ').trim();
+      this.titulo = nombreArchivo.replace(/\.[^.]+$/, '').replace(/[_-]+/g, ' ').trim();
     }
   }
 
@@ -582,6 +624,17 @@ export class CargarDocumentoComponent {
   }
 
   private subirContenido(documentoId: string): void {
+    const pdf = this.origen() === 'archivo' ? this.archivoPdf() : null;
+    if (pdf) {
+      this.api.ingerirArchivoPdf(documentoId, pdf, this.notas).subscribe({
+        next: (respuesta) => this.ingestaCompletada(respuesta),
+        error: (fallo: FalloApi) => {
+          this.error.set(fallo);
+          this.enviando.set(false);
+        },
+      });
+      return;
+    }
     this.api
       .ingerirVersion(documentoId, {
         contenido: this.contenido(),
@@ -589,16 +642,18 @@ export class CargarDocumentoComponent {
         notas_cambio: this.notas.trim() || null,
       })
       .subscribe({
-        next: (respuesta) => {
-          this.resultado.set(respuesta);
-          this.enviando.set(false);
-          this.cargado.emit(respuesta);
-        },
+        next: (respuesta) => this.ingestaCompletada(respuesta),
         error: (fallo: FalloApi) => {
           this.error.set(fallo);
           this.enviando.set(false);
         },
       });
+  }
+
+  private ingestaCompletada(respuesta: RespuestaIngesta): void {
+    this.resultado.set(respuesta);
+    this.enviando.set(false);
+    this.cargado.emit(respuesta);
   }
 
   protected cerrar(): void {

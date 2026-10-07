@@ -260,6 +260,38 @@ async def test_el_consentimiento_revocado_impide_el_envio(
         )
 
 
+async def test_revocar_despues_de_encolar_impide_la_entrega(
+    servicio: ServicioOutbox,
+    sesion: AsyncSession,
+    canal: AdaptadorSandbox,
+    paciente_con_whatsapp: Paciente,
+    clinica: Clinica,
+    reloj_fijo: RelojFijo,
+    sufijo: str,
+) -> None:
+    """Una baja posterior al encolado debe detener el envío pendiente."""
+    identificador = await servicio.encolar(
+        _solicitud(paciente_con_whatsapp, clinica, clave=f"revocado-pendiente-{sufijo}")
+    )
+    assert identificador is not None
+
+    await sesion.execute(
+        sa.update(Consentimiento)
+        .where(Consentimiento.paciente_id == paciente_con_whatsapp.id)
+        .values(revocado_en=reloj_fijo.ahora())
+    )
+    await sesion.flush()
+
+    resumen = await servicio.procesar_lote(tamano=10, worker="prueba-revocacion")
+
+    mensaje = await sesion.get(OutboxMensaje, identificador)
+    assert mensaje is not None
+    assert mensaje.estado == EstadoOutbox.DESCARTADO.value
+    assert resumen.entregados == 0
+    assert resumen.descartados == 1
+    assert canal.enviados == []
+
+
 async def test_el_recordatorio_de_toma_exige_su_propio_consentimiento(
     servicio: ServicioOutbox,
     paciente_con_whatsapp: Paciente,

@@ -1,0 +1,38 @@
+groups:
+  - name: clinicai-operacion
+    rules:
+      - alert: ClinicAIAPIInaccesible
+        expr: up{job="clinicai-api"} == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: La API de ClinicAI no responde
+          description: Prometheus no pudo obtener métricas de la API durante dos minutos.
+
+      - alert: ClinicAIOutboxFallido
+        expr: clinicai_outbox_mensajes{job="clinicai-api", estado="FALLIDO"} > 0
+        for: 15m
+        labels:
+          severity: critical
+        annotations:
+          summary: Hay mensajes de pacientes que agotaron sus reintentos
+          description: La cola conserva mensajes fallidos que requieren revisión operativa.
+
+      - alert: ClinicAIOutboxAtrasado
+        expr: clinicai_outbox_pendiente_mas_antiguo_segundos{job="clinicai-api"} > 600
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: La cola del outbox lleva más de diez minutos sin avanzar
+          description: Revise el worker y el estado de sus dependencias.
+
+      - alert: ClinicAIOutboxNoConsultable
+        expr: clinicai_outbox_lectura_fallida{job="clinicai-api"} > 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: No se pudo consultar la cola del outbox
+          description: Revise la conexión PostgreSQL de la API y la consulta de métricas.

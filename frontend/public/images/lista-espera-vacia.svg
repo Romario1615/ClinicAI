@@ -1,0 +1,46 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 440 300" fill="none" role="img" aria-labelledby="title desc">
+  <title id="title">Agenda organizada</title>
+  <desc id="desc">Un calendario con una cita confirmada junto a una libreta clínica y una planta.</desc>
+  <defs>
+    <linearGradient id="paper" x1="105" y1="40" x2="278" y2="265" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FFFDF8"/><stop offset="1" stop-color="#E8F2EF"/>
+    </linearGradient>
+    <linearGradient id="teal" x1="242" y1="110" x2="401" y2="265" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#348F89"/><stop offset="1" stop-color="#17605F"/>
+    </linearGradient>
+    <linearGradient id="leaf" x1="42" y1="113" x2="107" y2="188" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#A4C89D"/><stop offset="1" stop-color="#518D78"/>
+    </linearGradient>
+    <filter id="shadow" x="70" y="20" width="350" height="276" color-interpolation-filters="sRGB" filterUnits="userSpaceOnUse">
+      <feGaussianBlur stdDeviation="9"/>
+    </filter>
+  </defs>
+  <ellipse cx="249" cy="267" rx="160" ry="15" fill="#183D3A" opacity=".1" filter="url(#shadow)"/>
+  <!-- Planta -->
+  <path d="M78 227c-3-39 1-73 19-108m-17 57c-22-20-31-39-27-58 20 3 35 17 41 41m5-24c-3-27 6-46 26-57 13 18 12 39-4 62m-34 20c-20-5-37 0-49 16 12 17 29 21 52 11" stroke="#518D78" stroke-width="8" stroke-linecap="round"/>
+  <path d="M52 121c19 3 32 18 41 42-24-4-39-17-41-42Zm45-24c13 18 12 39-4 62-10-23-8-44 4-62Zm-45 99c12-17 29-22 52-11-17 17-34 21-52 11Z" fill="url(#leaf)"/>
+  <path d="m58 224 45 0-5 42H63l-5-42Z" fill="#EAD8BA"/>
+  <path d="M58 224h45l-2 15H60l-2-15Z" fill="#D6B990"/>
+  <path d="M63 266h35" stroke="#C19E75" stroke-width="3" stroke-linecap="round"/>
+  <!-- Libreta -->
+  <rect x="265" y="72" width="146" height="189" rx="22" fill="#174F50"/>
+  <rect x="256" y="64" width="146" height="189" rx="22" fill="url(#teal)" stroke="#247370" stroke-width="3"/>
+  <path d="M281 77v162m14-162v162" stroke="#A9D2C7" stroke-opacity=".36" stroke-width="3" stroke-dasharray="3 8"/>
+  <rect x="333" y="143" width="35" height="35" rx="12" fill="#E8C27C"/>
+  <path d="m343 160 7 7 12-15" stroke="#FFF9E8" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+  <!-- Portapapeles y calendario -->
+  <rect x="94" y="40" width="214" height="222" rx="24" fill="#D6B990"/>
+  <rect x="101" y="33" width="214" height="222" rx="24" fill="url(#paper)" stroke="#D6E4DE" stroke-width="3"/>
+  <path d="M166 31c0-15 12-27 27-27h29c15 0 27 12 27 27v16h-83V31Z" fill="#DDAE6C"/>
+  <rect x="176" y="18" width="33" height="18" rx="9" fill="#F8E2BE"/>
+  <rect x="121" y="74" width="174" height="143" rx="18" fill="#FFFDF7" stroke="#E4E7DF" stroke-width="3"/>
+  <path d="M121 91c0-9 8-17 18-17h138c10 0 18 8 18 17v31H121V91Z" fill="#438E87"/>
+  <rect x="150" y="63" width="11" height="36" rx="5.5" fill="#F7F2E7" stroke="#B8C9BE" stroke-width="2"/>
+  <rect x="254" y="63" width="11" height="36" rx="5.5" fill="#F7F2E7" stroke="#B8C9BE" stroke-width="2"/>
+  <g fill="#C9DCD5">
+    <rect x="140" y="139" width="25" height="22" rx="6"/><rect x="174" y="139" width="25" height="22" rx="6"/><rect x="208" y="139" width="25" height="22" rx="6"/>
+    <rect x="140" y="169" width="25" height="22" rx="6"/><rect x="174" y="169" width="25" height="22" rx="6"/>
+  </g>
+  <circle cx="251" cy="176" r="24" fill="#E5F2EA"/>
+  <path d="m240 176 8 8 15-17" stroke="#398773" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

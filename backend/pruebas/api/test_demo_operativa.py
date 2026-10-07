@@ -2,6 +2,7 @@
 
 import uuid
 from datetime import timedelta
+from zoneinfo import ZoneInfo
 
 import pytest
 from sqlalchemy import func, select
@@ -10,6 +11,7 @@ from app.modulos.agenda.modelos import Cita, CitaHistorial
 from app.modulos.auditoria.modelos import Auditoria
 from app.modulos.conversaciones.demo_modelos import SesionDemo
 from app.modulos.conversaciones.modelos import Conversacion
+from app.modulos.historia.modelos import AlertaAdherencia, Receta, RecetaMedicamento, Toma
 from app.modulos.lista_espera.modelos import (
     EntradaListaEspera,
     EstadoEspera,
@@ -17,7 +19,7 @@ from app.modulos.lista_espera.modelos import (
     OfertaTurno,
 )
 from app.modulos.organizacion.modelos import Clinica
-from app.modulos.pacientes.modelos import Paciente
+from app.modulos.pacientes.modelos import Paciente, RelacionAsistencial
 from app.modulos.profesionales.modelos import ProfesionalSede
 from pruebas.api.conftest import cabecera_bearer, conceder_permisos
 
@@ -161,6 +163,7 @@ async def test_pago_ciclo_e_idempotencia(cliente, api, acceso, cita_demo, sesion
     datos = {
         "cita_id": str(cita_demo.id),
         "importe": "45.50",
+        "total_acordado": "45.50",
         "metodo": "TRANSFERENCIA",
         "referencia": "DEMO-001",
     }
@@ -197,7 +200,12 @@ async def test_pago_y_dashboard_no_cruzan_sede(
     await sesion.flush()
     r = await cliente.post(
         f"{api}/pagos/",
-        json={"cita_id": str(cita_demo.id), "importe": "10.00", "metodo": "EFECTIVO"},
+        json={
+            "cita_id": str(cita_demo.id),
+            "importe": "10.00",
+            "total_acordado": "10.00",
+            "metodo": "EFECTIVO",
+        },
         headers=cabeceras(acceso),
     )
     assert r.status_code == 404
@@ -214,7 +222,8 @@ async def test_pago_y_dashboard_no_cruzan_sede(
     assert r.json()["pacientes"] == 0
 
 
-async def test_dashboard_cifras_reales(cliente, api, acceso, cita_demo, reloj):
+async def test_dashboard_cifras_reales(cliente, api, acceso, cita_demo, reloj, sede):
+    sede.zona_horaria = "Pacific/Kiritimati"
     r = await cliente.get(
         f"{api}/dashboard/",
         params={
@@ -226,11 +235,243 @@ async def test_dashboard_cifras_reales(cliente, api, acceso, cita_demo, reloj):
     assert r.status_code == 200, r.text
     assert r.json()["citas"] == {"CONFIRMED": 1}
     assert r.json()["total_citas"] == r.json()["pacientes"] == 1
+    assert r.json()["pacientes_nuevos"] == 0
+    assert r.json()["pacientes_recurrentes"] == 0
     assert r.json()["espera"] == {
         "promedio_minutos": None,
         "personas_en_espera": 0,
         "espera_mayor_15_minutos": 0,
     }
+    assert r.json()["recuperacion_turnos"] == {
+        "turnos_liberados": 0,
+        "turnos_recuperados": 0,
+        "promedio_minutos_para_recuperar": None,
+    }
+    assert r.json()["adherencia"] is None
+    inicio_local = cita_demo.inicio.astimezone(ZoneInfo(sede.zona_horaria))
+    assert r.json()["tendencia_diaria"] == [{"fecha": inicio_local.date().isoformat(), "total": 1}]
+    assert r.json()["por_hora"] == [{"hora": inicio_local.hour, "total": 1}]
+    assert r.json()["por_dia_semana"] == [{"dia": inicio_local.isoweekday(), "total": 1}]
+
+
+async def test_dashboard_aplica_filtros_de_especialidad_servicio_y_estado(
+    cliente, api, acceso, cita_demo, reloj, sede, profesional, especialidad, servicio
+):
+    base = {
+        "desde": reloj.ahora().isoformat(),
+        "hasta": (reloj.ahora() + timedelta(days=7)).isoformat(),
+    }
+    filtrado = await cliente.get(
+        f"{api}/dashboard/",
+        params={
+            **base,
+            "sede_id": str(sede.id),
+            "profesional_id": str(profesional.id),
+            "especialidad_id": str(especialidad.id),
+            "servicio_id": str(servicio.id),
+            "estado": "CONFIRMED",
+        },
+        headers=acceso,
+    )
+    assert filtrado.status_code == 200, filtrado.text
+    assert filtrado.json()["total_citas"] == 1
+    assert filtrado.json()["citas"] == {"CONFIRMED": 1}
+
+    sin_resultados = await cliente.get(
+        f"{api}/dashboard/", params={**base, "estado": "NO_SHOW"}, headers=acceso
+    )
+    assert sin_resultados.status_code == 200, sin_resultados.text
+    assert sin_resultados.json()["total_citas"] == 0
+    assert sin_resultados.json()["citas"] == {}
+    assert sin_resultados.json()["pacientes_nuevos"] is None
+    assert sin_resultados.json()["pacientes_recurrentes"] is None
+    assert sin_resultados.json()["recuperacion_turnos"] == {
+        "turnos_liberados": None,
+        "turnos_recuperados": None,
+        "promedio_minutos_para_recuperar": None,
+    }
+
+    resumen_local = await cliente.post(
+        f"{api}/dashboard/analisis-local",
+        params={**base, "servicio_id": str(servicio.id), "estado": "CANCELLED"},
+        headers=acceso,
+    )
+    assert resumen_local.status_code == 200, resumen_local.text
+    assert "No hay citas registradas" in resumen_local.json()["hallazgos"][0]
+
+    invalido = await cliente.get(
+        f"{api}/dashboard/", params={**base, "estado": "BORRADOR"}, headers=acceso
+    )
+    assert invalido.status_code == 422, invalido.text
+
+
+async def test_dashboard_clasifica_pacientes_por_primera_atencion_completada(
+    cliente, api, acceso, cita_demo, reloj, sesion
+):
+    cita_demo.estado = "COMPLETED"
+    await sesion.flush()
+    params = {
+        "desde": reloj.ahora().isoformat(),
+        "hasta": (reloj.ahora() + timedelta(days=7)).isoformat(),
+    }
+
+    nuevo = await cliente.get(f"{api}/dashboard/", params=params, headers=acceso)
+    assert nuevo.status_code == 200, nuevo.text
+    assert nuevo.json()["pacientes_nuevos"] == 1
+    assert nuevo.json()["pacientes_recurrentes"] == 0
+
+    sesion.add(
+        Cita(
+            clinica_id=cita_demo.clinica_id,
+            sede_id=cita_demo.sede_id,
+            paciente_id=cita_demo.paciente_id,
+            profesional_id=cita_demo.profesional_id,
+            servicio_id=cita_demo.servicio_id,
+            inicio=reloj.ahora() - timedelta(days=60),
+            duracion_minutos=30,
+            minutos_preparacion=15,
+            estado="COMPLETED",
+            origen="PANEL",
+        )
+    )
+    await sesion.flush()
+
+    recurrente = await cliente.get(f"{api}/dashboard/", params=params, headers=acceso)
+    assert recurrente.status_code == 200, recurrente.text
+    assert recurrente.json()["pacientes_nuevos"] == 0
+    assert recurrente.json()["pacientes_recurrentes"] == 1
+
+
+async def test_dashboard_agrega_adherencia_solo_con_permiso_clinico(
+    cliente,
+    api,
+    acceso,
+    usuario,
+    clinica,
+    sede,
+    paciente,
+    profesional,
+    reloj,
+    sesion,
+):
+    ahora = reloj.ahora()
+    receta = Receta(
+        clinica_id=clinica.id,
+        paciente_id=paciente.id,
+        profesional_id=profesional.id,
+        estado="BORRADOR",
+    )
+    sesion.add_all(
+        [
+            receta,
+            RelacionAsistencial(
+                paciente_id=paciente.id,
+                profesional_id=profesional.id,
+                origen="ASIGNACION",
+            ),
+        ]
+    )
+    await sesion.flush()
+    medicamento = RecetaMedicamento(
+        receta_id=receta.id,
+        nombre="Medicamento de prueba",
+        dosis="1 unidad",
+        via="ORAL",
+        cuando_sea_necesario=False,
+        frecuencia_horas=24,
+        duracion_dias=5,
+        creado_por=profesional.id,
+    )
+    sesion.add(medicamento)
+    await sesion.flush()
+    receta.estado = "CONFIRMADA"
+    receta.confirmada_en = ahora
+    receta.confirmada_por = profesional.id
+    await sesion.flush()
+    sesion.add_all(
+        [
+            Toma(
+                receta_medicamento_id=medicamento.id,
+                paciente_id=paciente.id,
+                programada_en=ahora - timedelta(hours=2),
+                estado="TOMADA",
+                registrada_en=ahora - timedelta(hours=1),
+                registrada_por_tipo="PERSONAL",
+                registrada_por_id=profesional.id,
+            ),
+            Toma(
+                receta_medicamento_id=medicamento.id,
+                paciente_id=paciente.id,
+                programada_en=ahora - timedelta(hours=1),
+                estado="OMITIDA",
+                registrada_en=ahora,
+                registrada_por_tipo="PERSONAL",
+                registrada_por_id=profesional.id,
+            ),
+            Toma(
+                receta_medicamento_id=medicamento.id,
+                paciente_id=paciente.id,
+                programada_en=ahora + timedelta(hours=2),
+                estado="CANCELADA",
+            ),
+            AlertaAdherencia(
+                clinica_id=clinica.id,
+                paciente_id=paciente.id,
+                receta_id=receta.id,
+                profesional_id=profesional.id,
+                tomas_omitidas=4,
+                tomas_esperadas=12,
+                periodo_desde=ahora - timedelta(days=7),
+                periodo_hasta=ahora,
+                creado_por=profesional.id,
+            ),
+        ]
+    )
+    await sesion.flush()
+    periodo = {
+        "desde": (ahora - timedelta(days=1)).isoformat(),
+        "hasta": (ahora + timedelta(days=1)).isoformat(),
+    }
+
+    sin_permiso = await cliente.get(f"{api}/dashboard/", params=periodo, headers=acceso)
+    assert sin_permiso.status_code == 200, sin_permiso.text
+    assert sin_permiso.json()["adherencia"] is None
+
+    await conceder_permisos(sesion, usuario, clinica, "adherencia.leer", sedes=(sede.id,))
+    acceso_clinico = await cabecera_bearer(cliente, usuario, clinica)
+    con_permiso = await cliente.get(f"{api}/dashboard/", params=periodo, headers=acceso_clinico)
+    assert con_permiso.status_code == 200, con_permiso.text
+    assert con_permiso.json()["adherencia"] == {
+        "tomas_confirmadas": 1,
+        "tomas_omitidas": 1,
+        "porcentaje_registro_positivo": 50.0,
+        "seguimientos_pendientes": 1,
+    }
+
+    por_estado = await cliente.get(
+        f"{api}/dashboard/",
+        params={**periodo, "estado": "CONFIRMED"},
+        headers=acceso_clinico,
+    )
+    assert por_estado.status_code == 200, por_estado.text
+    assert por_estado.json()["adherencia"] is None
+
+
+async def test_dashboard_resumen_local_usa_metricas_y_no_requiere_proveedor(
+    cliente, api, acceso, cita_demo, reloj
+):
+    respuesta = await cliente.post(
+        f"{api}/dashboard/analisis-local",
+        params={
+            "desde": reloj.ahora().isoformat(),
+            "hasta": (reloj.ahora() + timedelta(days=7)).isoformat(),
+        },
+        headers=acceso,
+    )
+    assert respuesta.status_code == 200, respuesta.text
+    hallazgos = respuesta.json()["hallazgos"]
+    assert any("1 cita de 1 paciente distinto" in texto for texto in hallazgos)
+    assert all(len(texto) < 300 for texto in hallazgos)
 
 
 async def test_dashboard_mide_espera_y_alerta_a_quien_supera_15_minutos(
@@ -277,7 +518,7 @@ async def test_dashboard_rechaza_rango_invertido(cliente, api, acceso, reloj):
 
 
 async def test_espera_cancelacion_oferta_aceptacion(
-    cliente, api, acceso, cita_demo, paciente, sede, servicio, especialidad
+    cliente, api, acceso, cita_demo, paciente, sede, servicio, especialidad, reloj
 ):
     alta = await cliente.post(
         f"{api}/lista-espera/",
@@ -309,6 +550,20 @@ async def test_espera_cancelacion_oferta_aceptacion(
     assert aceptada.status_code == 200, aceptada.text
     assert aceptada.json()["estado"] == "CUMPLIDA"
     assert aceptada.json()["cita_resultante_id"] != str(cita_demo.id)
+    resumen = await cliente.get(
+        f"{api}/dashboard/",
+        params={
+            "desde": (reloj.ahora() - timedelta(days=1)).isoformat(),
+            "hasta": (reloj.ahora() + timedelta(days=7)).isoformat(),
+        },
+        headers=acceso,
+    )
+    assert resumen.status_code == 200, resumen.text
+    assert resumen.json()["recuperacion_turnos"] == {
+        "turnos_liberados": 1,
+        "turnos_recuperados": 1,
+        "promedio_minutos_para_recuperar": 0,
+    }
     repetida = await cliente.post(
         f"{api}/lista-espera/{entrada_id}/resolver",
         json={"accion": "aceptar"},

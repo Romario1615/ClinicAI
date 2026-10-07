@@ -49,18 +49,33 @@ async function buscarPaciente(
   const acceso = await token(peticion, rol);
   const cabeceras = { Authorization: `Bearer ${acceso}` };
 
-  const listado = await peticion.get(`${API}/pacientes/?limite=50`, { headers: cabeceras });
-  const pacientes: Paciente[] = (await listado.json()).elementos;
-
-  for (const paciente of pacientes) {
-    const respuesta = await peticion.get(`${API}${ruta(paciente.id)}`, { headers: cabeceras });
-    if (respuesta.ok() && tieneDatos(await respuesta.json())) {
-      return paciente;
+  // No basta con la primera página: los pacientes con historia clínica suelen
+  // ser anteriores a los más recientes y pueden quedar fuera del límite.
+  let desplazamiento = 0;
+  let total = Number.POSITIVE_INFINITY;
+  while (desplazamiento < total) {
+    const listado = await peticion.get(
+      `${API}/pacientes/?limite=100&desplazamiento=${desplazamiento}`,
+      { headers: cabeceras },
+    );
+    if (!listado.ok()) {
+      throw new Error(`No se pudo preparar la búsqueda clínica: ${listado.status()}`);
     }
+    const pagina: { readonly elementos: readonly Paciente[]; readonly total: number } =
+      await listado.json();
+    for (const paciente of pagina.elementos) {
+      const respuesta = await peticion.get(`${API}${ruta(paciente.id)}`, { headers: cabeceras });
+      if (respuesta.ok() && tieneDatos(await respuesta.json())) {
+        return paciente;
+      }
+    }
+    total = pagina.total;
+    desplazamiento += pagina.elementos.length;
+    if (pagina.elementos.length === 0) break;
   }
   throw new Error(
     'Ningun paciente del ambito tiene esos datos. ' +
-      'Ejecute la carga de semillas: uv run python -m app.semillas.cargar',
+      'Prepare historia clinica sintetica: uv run python -m app.semillas.cargar --solo-historia-clinica',
   );
 }
 

@@ -36,7 +36,7 @@
  * documento marcado se hace en `RevisionRiesgoComponent`, que muestra el texto
  * antes de dejar marcarlo como revisado.
  */
-import { Component, computed, inject, signal } from '@angular/core';
+import { Component, computed, inject, signal, ChangeDetectionStrategy } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { forkJoin } from 'rxjs';
 
@@ -141,7 +141,11 @@ const ACCIONES: Partial<
     { destino: 'APPROVED', texto: 'Aprobar', principal: true, aprobar: true },
     { destino: 'DRAFT', texto: 'Devolver a borrador', principal: false, aprobar: false },
   ],
-  APPROVED: [{ destino: 'PUBLISHED', texto: 'Publicar', principal: true, aprobar: true }],
+  APPROVED: [
+    { destino: 'DRAFT', texto: 'Retirar para corregir', principal: false, aprobar: false },
+    { destino: 'PUBLISHED', texto: 'Publicar', principal: true, aprobar: true },
+  ],
+  PUBLISHED: [{ destino: 'DRAFT', texto: 'Retirar para corregir', principal: false, aprobar: false }],
 };
 
 const ORDEN_ESTADOS: readonly EstadoDocumento[] = [
@@ -173,6 +177,7 @@ import { ResumenModuloComponent } from '../../compartido/resumen-modulo.componen
     RevisionRiesgoComponent,
   ],
   templateUrl: './conocimiento.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './conocimiento.component.scss',
 })
 export class ConocimientoComponent {

@@ -203,6 +203,40 @@ services:
         max-size: "10m"
         max-file: "3"
 
+  prometheus:
+    # Recolector local opcional. La API corre en Windows y expone `/metrics`;
+    # la IP de Windows desde WSL se descubre al iniciar con el script dedicado.
+    # La interfaz queda ligada a localhost, no a la red de la clínica.
+    profiles: ["observabilidad"]
+    image: prom/prometheus:v3.15.0
+    container_name: clinica-prometheus
+    restart: unless-stopped
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=15d
+      - --web.enable-lifecycle
+    ports:
+      - "127.0.0.1:9090:9090"
+    extra_hosts:
+      - "host.docker.internal:${WINDOWS_HOST_IP:?Ejecute infra/wsl/observabilidad.sh para descubrir la puerta de enlace WSL}"
+    volumes:
+      - ../prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ../prometheus/alertas.yml:/etc/prometheus/alertas.yml:ro
+      - prometheusdata:/prometheus
+    read_only: true
+    tmpfs:
+      - /tmp
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
 volumes:
   clamavdata:
     name: clinica-dev-clamavdata
@@ -212,3 +246,5 @@ volumes:
     name: clinica-dev-pgdata
   redisdata:
     name: clinica-dev-redisdata
+  prometheusdata:
+    name: clinica-dev-prometheusdata

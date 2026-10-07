@@ -138,4 +138,4 @@ async def test_sin_relacion_asistencial_no_se_escribe(
     respuesta = await cliente.post(
         _ruta(api, paciente), headers=cabeceras, json={"piezas_evaluadas": [16]}
     )
-    assert respuesta.status_code == 403
+    assert respuesta.status_code == 404

@@ -45,7 +45,7 @@ from app.modulos.outbox.modelos import (
     Recordatorio,
     TipoMensajeOutbox,
 )
-from app.modulos.pacientes.modelos import Consentimiento, TipoConsentimiento
+from app.modulos.pacientes.modelos import Consentimiento, Paciente, TipoConsentimiento
 from app.nucleo.bd import ejecutar_escritura
 from app.nucleo.errores import ConsentimientoRequerido
 from app.nucleo.registro import obtener_logger
@@ -121,6 +121,7 @@ class ResumenProceso:
     reintentables: int = 0
     fallidos: int = 0
     sin_adaptador: int = 0
+    descartados: int = 0
 
 
 class ServicioOutbox:
@@ -226,11 +227,10 @@ class ServicioOutbox:
     async def _exigir_consentimiento(self, solicitud: SolicitudEnvio) -> None:
         """Comprueba el consentimiento vigente del paciente.
 
-        Se comprueba al **encolar** y no al entregar por una razon practica:
-        si se comprobara al entregar, la operacion de negocio parecera haber
-        avisado al paciente y el aviso se descartaria en silencio horas
-        despues.  Aqui, quien confirma la cita ve en el acto que ese paciente
-        no acepto recibir mensajes.
+        Se comprueba al **encolar** para que quien confirma la operación vea
+        en el acto que el paciente no aceptó recibir mensajes. El worker vuelve
+        a comprobarlo justo antes de la entrega para respetar una revocación
+        ocurrida mientras el mensaje estaba pendiente.
         """
         tipo_requerido = CONSENTIMIENTO_POR_TIPO.get(solicitud.tipo, CONSENTIMIENTO_POR_DEFECTO)
         consulta = select(Consentimiento).where(
@@ -347,6 +347,17 @@ class ServicioOutbox:
         return resumen
 
     async def _entregar(self, mensaje: OutboxMensaje, resumen: ResumenProceso) -> ResumenProceso:
+        if not await self._consentimiento_vigente_para_entrega(mensaje):
+            mensaje.estado = EstadoOutbox.DESCARTADO.value
+            mensaje.ultimo_error = "Consentimiento revocado o ausente antes de la entrega."
+            mensaje.actualizado_en = self._reloj.ahora()
+            logger.info(
+                "outbox.descartado_sin_consentimiento",
+                mensaje_id=str(mensaje.id),
+                tipo=mensaje.tipo,
+            )
+            return _con(resumen, descartados=resumen.descartados + 1)
+
         adaptador = self._canales.obtener(mensaje.canal)
         if adaptador is None:
             # Se devuelve a PENDIENTE con retroceso, no se marca FALLIDO: la
@@ -387,6 +398,7 @@ class ServicioOutbox:
             imagen_cabecera=(
                 str(carga["imagen_cabecera"]) if carga.get("imagen_cabecera") else None
             ),
+            clinica_id=mensaje.clinica_id,
         )
         respuesta = await adaptador.enviar(saliente)
         ahora = self._reloj.ahora()
@@ -425,6 +437,39 @@ class ServicioOutbox:
 
         self._reprogramar(mensaje, detalle)
         return _con(resumen, reintentables=resumen.reintentables + 1)
+
+    async def _consentimiento_vigente_para_entrega(self, mensaje: OutboxMensaje) -> bool:
+        """Revalida en el worker el consentimiento de cada mensaje proactivo.
+
+        El consentimiento puede revocarse entre el encolado y la entrega. El
+        `JOIN` también evita usar una fila de consentimiento cuyo paciente ya
+        no pertenece a la clínica anotada en el outbox.
+        """
+        if mensaje.destino_tipo != "PACIENTE":
+            return True
+        try:
+            tipo_mensaje = TipoMensajeOutbox(mensaje.tipo)
+        except ValueError:
+            return False
+        if tipo_mensaje not in TIPOS_PROACTIVOS_A_PACIENTE:
+            return True
+        if mensaje.clinica_id is None:
+            return False
+
+        tipo_consentimiento = CONSENTIMIENTO_POR_TIPO.get(tipo_mensaje, CONSENTIMIENTO_POR_DEFECTO)
+        consulta = (
+            select(Consentimiento.id)
+            .join(Paciente, Consentimiento.paciente_id == Paciente.id)
+            .where(
+                Paciente.id == mensaje.destino_id,
+                Paciente.clinica_id == mensaje.clinica_id,
+                Consentimiento.tipo == tipo_consentimiento.value,
+                Consentimiento.otorgado.is_(True),
+                Consentimiento.revocado_en.is_(None),
+            )
+            .limit(1)
+        )
+        return (await self._sesion.execute(consulta)).scalar_one_or_none() is not None
 
     def _reprogramar(self, mensaje: OutboxMensaje, motivo: str) -> None:
         """Devuelve el mensaje a la cola con retroceso exponencial."""
@@ -539,6 +584,7 @@ def _con(resumen: ResumenProceso, **cambios: int) -> ResumenProceso:
         "reintentables": resumen.reintentables,
         "fallidos": resumen.fallidos,
         "sin_adaptador": resumen.sin_adaptador,
+        "descartados": resumen.descartados,
     }
     datos.update(cambios)
     return ResumenProceso(**datos)

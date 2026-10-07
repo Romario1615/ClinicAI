@@ -110,13 +110,24 @@
         <span class="campo__etiqueta">Observaciones clínicas (opcional)</span>
         <textarea class="campo__control" name="observacionesPlan" [(ngModel)]="observaciones" maxlength="2000"></textarea>
       </label>
+      @if (puedeLeerSensible()) {
+        <label class="campo">
+          <span class="campo__etiqueta">Sensibilidad del plan y sus procedimientos</span>
+          <select class="campo__control" name="nivelSensibilidadPlan" [(ngModel)]="nivelSensibilidad">
+            <option value="N2">N2 · Clínico</option>
+            <option value="N3">N3 · Clínico sensible</option>
+          </select>
+        </label>
+      }
       <div class="acciones-plan">
         <button class="boton boton--principal" type="submit" [disabled]="guardando() || !procedimientos().length">
           {{ guardando() ? 'Guardando…' : 'Guardar borrador' }}
         </button>
-        <button class="boton" type="button" [disabled]="guardando() || !procedimientos().length" (click)="guardarComoPlantilla()">
-          Guardar como plantilla
-        </button>
+        @if (nivelSensibilidad !== 'N3') {
+          <button class="boton" type="button" [disabled]="guardando() || !procedimientos().length" (click)="guardarComoPlantilla()">
+            Guardar como plantilla
+          </button>
+        }
         <button class="boton" type="button" (click)="reiniciarFormulario()">Descartar</button>
       </div>
     </form>
@@ -139,6 +150,7 @@
             <div>
               <p class="ceja">{{ etiquetaEstado(plan.estado).toUpperCase() }}</p>
               <h3>{{ plan.titulo }}</h3>
+              @if (plan.nivel_sensibilidad === 'N3') { <span class="sensibilidad sensibilidad--n3">N3 · Clínico sensible</span> }
             </div>
             <strong>{{ dinero(totalPlan(plan)) }}</strong>
           </header>
@@ -198,6 +210,16 @@
               </li>
             }
           </ol>
+          @if (plan.estado === 'PROPUESTO' || plan.estado === 'ACEPTADO') {
+            <button
+              class="boton boton--pequeno boton--presupuesto"
+              type="button"
+              [disabled]="presupuestoCargando()"
+              (click)="prepararPresupuesto(plan)"
+            >
+              {{ presupuestoCargando() ? 'Preparando presupuesto…' : 'Ver e imprimir presupuesto' }}
+            </button>
+          }
           @if (plan.observaciones) {
             <p class="plan__observaciones">{{ plan.observaciones }}</p>
           }
@@ -311,6 +333,76 @@
         </article>
       }
     </div>
+  }
+
+  @if (presupuestoCargando()) {
+    <p class="ayuda-presupuesto" role="status">Cargando los datos de la clínica…</p>
+  }
+  @if (presupuestoError()) {
+    <p class="aviso-error" role="alert">{{ presupuestoError() }}</p>
+  }
+  @if (presupuestoSeleccionado(); as presupuesto) {
+    <section class="tarjeta presupuesto-imprimible" aria-labelledby="titulo-presupuesto">
+      <div class="presupuesto-imprimible__acciones">
+        <p class="ayuda-presupuesto">Vista previa generada desde el plan guardado.</p>
+        <div class="acciones">
+          <button class="boton" type="button" (click)="cerrarPresupuesto()">Cerrar</button>
+          <button class="boton boton--principal" type="button" (click)="imprimirPresupuesto()">Imprimir o guardar en PDF</button>
+        </div>
+      </div>
+      <header class="presupuesto__cabecera">
+        <img src="/images/clinicai-simbolo.svg" alt="" aria-hidden="true" width="44" height="44" />
+        <div>
+          <p class="ceja">{{ presupuesto.clinica.nombre }}</p>
+          <h2 id="titulo-presupuesto">Presupuesto de tratamiento</h2>
+          @if (presupuesto.clinica.telefono || presupuesto.clinica.correo) {
+            <p class="presupuesto__contacto">
+              @if (presupuesto.clinica.telefono) { {{ presupuesto.clinica.telefono }} }
+              @if (presupuesto.clinica.telefono && presupuesto.clinica.correo) { · }
+              @if (presupuesto.clinica.correo) { {{ presupuesto.clinica.correo }} }
+            </p>
+          }
+        </div>
+      </header>
+      <div class="presupuesto__datos">
+        <div><span>Paciente</span><strong>{{ nombrePaciente() }}</strong></div>
+        <div><span>Plan</span><strong>{{ presupuesto.plan.titulo }}</strong></div>
+        <div><span>Referencia</span><strong>{{ presupuesto.plan.id }}</strong></div>
+        <div><span>Estado</span><strong>{{ etiquetaEstado(presupuesto.plan.estado) }}</strong></div>
+        <div><span>Propuesto</span><strong>{{ fechaPresupuesto(presupuesto.plan.propuesto_en ?? presupuesto.plan.creado_en, presupuesto.clinica.zona_horaria) }}</strong></div>
+      </div>
+      <div class="presupuesto__tabla-contenedor">
+        <table class="presupuesto__tabla">
+          <thead>
+            <tr><th>Fase</th><th>Procedimiento</th><th>Detalle dental</th><th>Importe</th></tr>
+          </thead>
+          <tbody>
+            @for (item of presupuesto.plan.procedimientos; track item.id) {
+              <tr>
+                <td>{{ item.fase }}</td>
+                <td>{{ item.descripcion }}</td>
+                <td>
+                  @if (item.pieza) { Pieza {{ item.pieza }} } @else { — }
+                  @if (item.caras) { · Caras {{ item.caras }} }
+                </td>
+                <td>{{ dinero(item.precio) }}</td>
+              </tr>
+            }
+          </tbody>
+          <tfoot>
+            <tr><th colspan="3">Total del plan</th><th>{{ dinero(totalPlan(presupuesto.plan)) }}</th></tr>
+          </tfoot>
+        </table>
+      </div>
+      @if (presupuesto.plan.observaciones) {
+        <div class="presupuesto__observaciones"><strong>Observaciones:</strong> {{ presupuesto.plan.observaciones }}</div>
+      }
+      <p class="presupuesto__nota">
+        Emitido {{ fechaPresupuesto(hoyIso, presupuesto.clinica.zona_horaria) }} a partir del plan odontológico registrado. Este documento
+        no es una factura, recibo ni constancia de pago. La clínica debe confirmar la vigencia,
+        impuestos aplicables y condiciones de pago.
+      </p>
+    </section>
   }
 
   <p class="nota-flujo">

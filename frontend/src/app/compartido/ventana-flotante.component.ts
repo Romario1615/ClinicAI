@@ -43,6 +43,7 @@ import {
   input,
   output,
   viewChild,
+  ChangeDetectionStrategy
 } from '@angular/core';
 
 import { IconoComponent } from './icono.component';
@@ -96,6 +97,7 @@ import { IconoComponent } from './icono.component';
       </div>
     </dialog>
   `,
+  changeDetection: ChangeDetectionStrategy.Eager,
   styles: `
     /* <dialog> abierto con showModal(): se pinta en la capa superior del
        navegador, por encima de la cabecera aunque el contenido cree su propio

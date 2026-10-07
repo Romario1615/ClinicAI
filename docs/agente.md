@@ -1,8 +1,9 @@
 # El agente conversacional
 
-> **Estado (2026-09-14):** la capa de herramientas y el **bucle del modelo**
-> estan construidos y probados. Un modelo real (`ProveedorClaude`) invoca las
-> siete herramientas, verificado contra la API y contra PostgreSQL.
+> **Estado (2026-10-06):** la capa de herramientas y el **bucle del modelo**
+> estan construidos y probados. El catalogo tiene ocho herramientas, incluida
+> la consulta de pagos; el modelo real (`ProveedorClaude`) fue verificado contra
+> la API y PostgreSQL.
 > Lo que **no** esta medido es si el modelo elige bien: eso exige su propia
 > evaluacion y es la limitacion E-23.
 >
@@ -28,7 +29,7 @@ La frontera primero permite una afirmacion que se puede comprobar: **cuando el
 modelo entre, no habra una sola operacion clinica a su alcance**, porque no
 existe la herramienta que la haria.
 
-## 2. Las siete herramientas
+## 2. Las ocho herramientas
 
 Los nombres estan en ingles por decision normativa de la especificacion
 ([ADR-0015](decisiones/0015-convencion-idioma.md)). El catalogo es cerrado.
@@ -41,6 +42,7 @@ Los nombres estan en ingles por decision normativa de la especificacion
 | `cancel_appointment` | `cita.cancelar` | si | Cancela. Exige motivo y 24 h de antelacion |
 | `reschedule_appointment` | `cita.reprogramar` | si | Mueve de hora. Exige motivo |
 | `get_patient_appointments` | `agenda.leer` | no | Citas futuras: fecha, hora y estado |
+| `get_patient_payments` | `pago.leer` | no | Cargos y pagos asociados; no registra ni cobra nada |
 | `handoff_to_human` | *ninguno* | si | Pasa la conversacion a una persona |
 
 **Por que `handoff_to_human` no exige permiso.** Derivar no accede a ningun
@@ -70,7 +72,7 @@ la recibe. Devuelve fecha, hora y estado, y nada mas (regla 10).
 ```
 
 El principal **nunca** se construye a partir de texto del usuario ni de la
-salida de un modelo. Una prueba recorre los esquemas JSON de las siete
+salida de un modelo. Una prueba recorre los esquemas JSON de las ocho
 herramientas y falla si alguna admite `clinica_id`, `permisos`, `ambito`,
 `principal` o `rol`.
 
@@ -215,7 +217,7 @@ Ninguna de las de la seccion 3 depende de que el modelo se porte bien:
   una y devuelve un `tool_result`; con llamadas paralelas quedarian
   invocaciones sin responder.
 * **Razonamiento adaptativo con esfuerzo `low`** (`LLM_ESFUERZO`). Elegir entre
-  siete herramientas administrativas no necesita mas, y el limite clinico no
+  ocho herramientas administrativas no necesita mas, y el limite clinico no
   depende de lo que el modelo razone.
 * **Sin parametros de muestreo.** Los modelos actuales rechazan `temperature`
   con el razonamiento activo. `LLM_TEMPERATURA` se conserva para un proveedor

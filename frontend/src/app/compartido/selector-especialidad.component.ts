@@ -5,7 +5,7 @@
  * que alergias, medicamentos y recetas se comparten entre especialidades, para
  * que nadie crea que lo que no ve no existe.
  */
-import { Component, inject, output } from '@angular/core';
+import { Component, inject, output, ChangeDetectionStrategy } from '@angular/core';
 
 import { EspecialidadHistoriaService } from '../nucleo/servicios/especialidad-historia.service';
 
@@ -37,6 +37,7 @@ import { EspecialidadHistoriaService } from '../nucleo/servicios/especialidad-hi
       </div>
     }
   `,
+  changeDetection: ChangeDetectionStrategy.Eager,
   styles: `
     .contexto { display: flex; flex-wrap: wrap; align-items: center; gap: var(--espacio-2) var(--espacio-3);
       padding: var(--espacio-2) var(--espacio-3); border: 1px solid var(--borde); border-radius: var(--radio);

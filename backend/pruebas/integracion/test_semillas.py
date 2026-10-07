@@ -37,7 +37,7 @@ from app.nucleo.autorizacion import (
     PERMISOS_SOLO_ASISTENCIALES,
 )
 from app.nucleo.configuracion import Configuracion
-from app.nucleo.reloj import RelojSistema
+from app.nucleo.reloj import RelojFijo, RelojSistema
 from app.semillas.catalogos import (
     NOMBRES_DE_ROL,
     cargar_catalogos,
@@ -52,6 +52,7 @@ from app.semillas.sinteticos import (
     _documento_sintetico,
     cargar_datos_sinteticos,
 )
+from pruebas.conftest import INSTANTE_REFERENCIA
 
 pytestmark = [pytest.mark.integracion, pytest.mark.asyncio]
 
@@ -227,6 +228,7 @@ class TestSalvaguardaDeProduccion:
             clave_secreta=secrets.token_urlsafe(64),
             clave_cifrado_datos=base64.urlsafe_b64encode(secrets.token_bytes(32)).decode(),
             postgres_contrasena=secrets.token_urlsafe(24),
+            metricas_token=secrets.token_urlsafe(32),
             origenes_cors="https://clinica.example",
             frontend_url="https://clinica.example",
         )
@@ -430,6 +432,26 @@ class TestDatosSinteticos:
         assert _documento_sintetico(7) == _documento_sintetico(7)
         assert _correo_sintetico("Ana Perez", 3) == _correo_sintetico("Ana Perez", 3)
 
+    async def test_la_fecha_de_semilla_usa_el_reloj_inyectado(self, sesion: AsyncSession) -> None:
+        configuracion = Configuracion(_env_file=None, entorno="local")
+        await cargar_catalogos(sesion)
+        await sesion.flush()
+        reloj = RelojFijo(INSTANTE_REFERENCIA)
+        resumen = await cargar_datos_sinteticos(
+            sesion,
+            configuracion,
+            cantidad_pacientes=1,
+            cantidad_citas=1,
+            semilla=919999,
+            reloj=reloj,
+        )
+
+        usuarios = (
+            await sesion.scalars(sa.select(Usuario).where(Usuario.clinica_id == resumen.clinica_id))
+        ).all()
+        assert usuarios
+        assert {usuario.correo_verificado_en for usuario in usuarios} == {reloj.ahora()}
+
     async def test_los_usuarios_tienen_ambito_asignado(self, sesion: AsyncSession, cargado) -> None:
         """Un `usuario_rol` sin ambito no da acceso a nada.
 
@@ -573,10 +595,18 @@ class TestSemillasClinicas:
         Los nombres son deliberadamente «Medicamento de ejemplo X». Si alguien
         sembrara un farmaco real atado a un paciente, esta prueba lo detiene.
         """
+        base, _ = sembrado
         nombres = {
             fila[0]
             for fila in (
-                await sesion.execute(sa.text("SELECT DISTINCT nombre FROM receta_medicamento"))
+                await sesion.execute(
+                    sa.text(
+                        "SELECT DISTINCT rm.nombre FROM receta_medicamento rm "
+                        "JOIN receta r ON r.id = rm.receta_id "
+                        "WHERE r.clinica_id = :clinica"
+                    ),
+                    {"clinica": base.clinica_id},
+                )
             ).all()
         }
         assert nombres, "No se sembro ningun medicamento."

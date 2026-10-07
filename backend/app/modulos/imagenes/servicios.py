@@ -43,6 +43,7 @@ from app.nucleo.autorizacion import NivelSensibilidad, Principal
 from app.nucleo.configuracion import Configuracion
 from app.nucleo.errores import (
     DatosInvalidos,
+    PermisoDenegado,
     ProveedorExternoNoDisponible,
     RecursoNoEncontrado,
 )
@@ -66,6 +67,7 @@ class DatosSubida:
     descripcion: str | None = None
     cita_id: uuid.UUID | None = None
     procedimiento_id: uuid.UUID | None = None
+    nivel_sensibilidad: str = "N2"
 
 
 @dataclass(frozen=True, slots=True)
@@ -111,6 +113,16 @@ class ServicioImagenes:
         self, datos: DatosSubida, *, principal: Principal
     ) -> tuple[ImagenPaciente, tuple[EntradaAuditoria, ...]]:
         await self._alcance(principal, datos.paciente_id, datos.tipo, escribir=True)
+        if datos.tipo.es_clinica:
+            nivel = NivelSensibilidad(datos.nivel_sensibilidad)
+            if nivel not in {NivelSensibilidad.CLINICO, NivelSensibilidad.CLINICO_SENSIBLE}:
+                raise DatosInvalidos("Una imagen clínica debe ser N2 o N3.")
+            if nivel == NivelSensibilidad.CLINICO_SENSIBLE and not principal.tiene_permiso(
+                "historia_clinica.leer_sensible"
+            ):
+                raise PermisoDenegado("Se requiere permiso clínico sensible para registrar N3.")
+        else:
+            nivel = NivelSensibilidad.ADMINISTRATIVO
 
         if datos.cita_id is not None:
             cita = (
@@ -147,11 +159,7 @@ class ServicioImagenes:
             clinica_id=principal.clinica_id,
             paciente_id=datos.paciente_id,
             tipo=datos.tipo.value,
-            nivel_sensibilidad=(
-                NivelSensibilidad.CLINICO.value
-                if datos.tipo.es_clinica
-                else NivelSensibilidad.ADMINISTRATIVO.value
-            ),
+            nivel_sensibilidad=nivel.value,
             piezas=list(piezas),
             tomada_en=datos.tomada_en,
             descripcion=(datos.descripcion or "").strip() or None,
@@ -218,6 +226,8 @@ class ServicioImagenes:
             ImagenPaciente.tipo != TipoImagen.PERFIL.value,
             ImagenPaciente.anulado_en.is_(None),
         )
+        if not principal.tiene_permiso("historia_clinica.leer_sensible"):
+            consulta = consulta.where(ImagenPaciente.nivel_sensibilidad != "N3")
         if tipo is not None:
             consulta = consulta.where(ImagenPaciente.tipo == tipo.value)
         if procedimiento_id is not None:
@@ -237,7 +247,14 @@ class ServicioImagenes:
             entidad_tipo="paciente",
             entidad_id=paciente_id,
             paciente_id=paciente_id,
-            nivel_sensibilidad=NivelSensibilidad.CLINICO,
+            nivel_sensibilidad=(
+                NivelSensibilidad.CLINICO_SENSIBLE
+                if any(
+                    imagen.nivel_sensibilidad == NivelSensibilidad.CLINICO_SENSIBLE.value
+                    for imagen in imagenes
+                )
+                else NivelSensibilidad.CLINICO
+            ),
             operacion="listado",
             imagenes_devueltas=len(imagenes),
         )
@@ -269,29 +286,29 @@ class ServicioImagenes:
             ProcedimientoPlan,
         )
 
-        encontrado = (
-            await self._sesion.execute(
-                select(ProcedimientoPlan.id)
-                .join(PlanTratamiento, PlanTratamiento.id == ProcedimientoPlan.plan_id)
-                .where(
-                    ProcedimientoPlan.id == procedimiento_id,
-                    PlanTratamiento.paciente_id == paciente_id,
-                    PlanTratamiento.clinica_id == principal.clinica_id,
-                )
+        consulta = (
+            select(ProcedimientoPlan.id)
+            .join(PlanTratamiento, PlanTratamiento.id == ProcedimientoPlan.plan_id)
+            .where(
+                ProcedimientoPlan.id == procedimiento_id,
+                PlanTratamiento.paciente_id == paciente_id,
+                PlanTratamiento.clinica_id == principal.clinica_id,
             )
-        ).scalar_one_or_none()
+        )
+        if not principal.tiene_permiso("historia_clinica.leer_sensible"):
+            consulta = consulta.where(PlanTratamiento.nivel_sensibilidad != "N3")
+        encontrado = (await self._sesion.execute(consulta)).scalar_one_or_none()
         if encontrado is None:
             raise RecursoNoEncontrado("El procedimiento indicado no existe para este paciente.")
 
     async def _obtener(self, imagen_id: uuid.UUID, principal: Principal) -> ImagenPaciente:
-        imagen = (
-            await self._sesion.execute(
-                select(ImagenPaciente).where(
-                    ImagenPaciente.id == imagen_id,
-                    ImagenPaciente.clinica_id == principal.clinica_id,
-                )
-            )
-        ).scalar_one_or_none()
+        consulta = select(ImagenPaciente).where(
+            ImagenPaciente.id == imagen_id,
+            ImagenPaciente.clinica_id == principal.clinica_id,
+        )
+        if not principal.tiene_permiso("historia_clinica.leer_sensible"):
+            consulta = consulta.where(ImagenPaciente.nivel_sensibilidad != "N3")
+        imagen = (await self._sesion.execute(consulta)).scalar_one_or_none()
         if imagen is None:
             raise RecursoNoEncontrado("La imagen solicitada no existe.")
         return imagen
@@ -325,7 +342,7 @@ class ServicioImagenes:
                     entidad_tipo="imagen_paciente",
                     entidad_id=imagen.id,
                     paciente_id=imagen.paciente_id,
-                    nivel_sensibilidad=NivelSensibilidad.CLINICO,
+                    nivel_sensibilidad=NivelSensibilidad(imagen.nivel_sensibilidad),
                     operacion="descarga",
                 ),
             )

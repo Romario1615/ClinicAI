@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import UTC, datetime, timedelta
+from zoneinfo import ZoneInfo
 
 import pytest
 import sqlalchemy as sa
@@ -285,6 +286,59 @@ class TestDisponibilidad:
 #  Creacion
 # ===========================================================================
 class TestCreacion:
+    async def test_recepcion_no_puede_agendar_un_procedimiento_de_plan_n3(
+        self,
+        cliente: AsyncClient,
+        api: str,
+        sesion: AsyncSession,
+        usuario: Usuario,
+        clinica: Clinica,
+        sede: Sede,
+        paciente: Paciente,
+        profesional: Profesional,
+        servicio: Servicio,
+        cuerpo_reserva: dict[str, str],
+    ) -> None:
+        cabeceras = await _recepcion(cliente, sesion, usuario, clinica, sede)
+        plan = PlanTratamiento(
+            clinica_id=clinica.id,
+            paciente_id=paciente.id,
+            profesional_id=profesional.id,
+            titulo="Plan sensible",
+            estado="ACEPTADO",
+            moneda="USD",
+            nivel_sensibilidad="N3",
+            aceptado_en=datetime(2026, 10, 1, tzinfo=UTC),
+            aceptacion_medio="DOCUMENTO_FIRMADO",
+            aceptacion_referencia="Constancia sensible",
+            aceptacion_registrada_por=usuario.id,
+            creado_por=usuario.id,
+        )
+        sesion.add(plan)
+        await sesion.flush()
+        procedimiento = ProcedimientoPlan(
+            plan_id=plan.id,
+            fase=1,
+            orden=1,
+            servicio_id=servicio.id,
+            descripcion="Procedimiento sensible",
+            precio="50.00",
+            estado="PENDIENTE",
+            creado_por=usuario.id,
+        )
+        sesion.add(procedimiento)
+        await sesion.flush()
+
+        respuesta = await cliente.post(
+            _ruta(api, "/citas"),
+            headers=cabeceras,
+            json={**cuerpo_reserva, "procedimiento_plan_id": str(procedimiento.id)},
+        )
+
+        assert respuesta.status_code == 404
+        await sesion.refresh(procedimiento)
+        assert procedimiento.cita_id is None
+
     async def test_reservar_procedimiento_lo_vincula_al_plan_en_la_misma_operacion(
         self,
         cliente: AsyncClient,
@@ -1117,6 +1171,122 @@ class TestListado:
         )
 
         assert respuesta.status_code == 422
+
+
+# ===========================================================================
+#  Exportación de informes
+# ===========================================================================
+class TestExportarResumen:
+    async def test_exporta_agregados_locales_sin_identidad_de_paciente(
+        self,
+        cliente: AsyncClient,
+        api: str,
+        sesion: AsyncSession,
+        usuario: Usuario,
+        clinica: Clinica,
+        sede: Sede,
+        paciente: Paciente,
+        cuerpo_reserva: dict[str, str],
+        reloj: RelojFijo,
+    ) -> None:
+        await conceder_permisos(
+            sesion,
+            usuario,
+            clinica,
+            *PERMISOS_RECEPCION,
+            "reporte.exportar",
+            sedes=(sede.id,),
+        )
+        cabeceras = await cabecera_bearer(cliente, usuario, clinica)
+        creada = await cliente.post(_ruta(api, "/citas"), headers=cabeceras, json=cuerpo_reserva)
+        assert creada.status_code == 201, creada.text
+        sede.zona_horaria = "Pacific/Kiritimati"
+        await sesion.flush()
+
+        respuesta = await cliente.get(
+            _ruta(api, "/resumen.csv"),
+            headers=cabeceras,
+            params={
+                "desde": reloj.ahora().isoformat(),
+                "hasta": (reloj.ahora() + timedelta(days=3)).isoformat(),
+                "sede_id": str(sede.id),
+            },
+        )
+
+        assert respuesta.status_code == 200, respuesta.text
+        assert respuesta.headers["content-type"].startswith("text/csv")
+        assert (
+            'attachment; filename="resumen-agenda.csv"' in respuesta.headers["content-disposition"]
+        )
+        contenido = respuesta.content.decode("utf-8-sig")
+        assert contenido.startswith("Fecha local;Estado;Citas\r\n")
+        inicio_local = datetime.fromisoformat(creada.json()["inicio"]).astimezone(
+            ZoneInfo("Pacific/Kiritimati")
+        )
+        assert f"{inicio_local.date()};CONFIRMED;1\r\n" in contenido
+        assert str(paciente.id) not in contenido
+        assert paciente.nombre not in contenido
+
+    async def test_exige_permiso_de_exportacion(
+        self,
+        cliente: AsyncClient,
+        api: str,
+        sesion: AsyncSession,
+        usuario: Usuario,
+        clinica: Clinica,
+        sede: Sede,
+        reloj: RelojFijo,
+    ) -> None:
+        await conceder_permisos(sesion, usuario, clinica, *PERMISOS_RECEPCION, sedes=(sede.id,))
+        cabeceras = await cabecera_bearer(cliente, usuario, clinica)
+
+        respuesta = await cliente.get(
+            _ruta(api, "/resumen.csv"),
+            headers=cabeceras,
+            params={
+                "desde": reloj.ahora().isoformat(),
+                "hasta": (reloj.ahora() + timedelta(days=1)).isoformat(),
+            },
+        )
+
+        assert respuesta.status_code == 403
+
+    async def test_no_exporta_citas_de_otra_sede(
+        self,
+        cliente: AsyncClient,
+        api: str,
+        sesion: AsyncSession,
+        usuario: Usuario,
+        clinica: Clinica,
+        sede: Sede,
+        otra_sede: Sede,
+        cuerpo_reserva: dict[str, str],
+        reloj: RelojFijo,
+    ) -> None:
+        await TestAislamientoPorAmbito._cita_en_sede_ajena(
+            cliente, api, sesion, usuario, clinica, otra_sede, cuerpo_reserva
+        )
+        await conceder_permisos(
+            sesion,
+            usuario,
+            clinica,
+            *PERMISOS_RECEPCION,
+            "reporte.exportar",
+            sedes=(sede.id,),
+        )
+        cabeceras = await cabecera_bearer(cliente, usuario, clinica)
+
+        respuesta = await cliente.get(
+            _ruta(api, "/resumen.csv"),
+            headers=cabeceras,
+            params={
+                "desde": reloj.ahora().isoformat(),
+                "hasta": (reloj.ahora() + timedelta(days=3)).isoformat(),
+            },
+        )
+
+        assert respuesta.status_code == 200, respuesta.text
+        assert respuesta.content.decode("utf-8-sig") == "Fecha local;Estado;Citas\r\n"
 
 
 # ===========================================================================

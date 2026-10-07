@@ -54,7 +54,12 @@ function Test-ApiActualDemo {
             $rutasDemo -contains '/api/v1/historia/adherencia/alertas' -and
             $rutasDemo -contains '/api/v1/conversaciones' -and
             $rutasDemo -contains '/api/v1/conversaciones/pendientes/cuenta' -and
-            $rutasDemo -contains '/api/v1/plataforma/clinicas'
+            $rutasDemo -contains '/api/v1/plataforma/clinicas' -and
+            $rutasDemo -contains '/api/v1/configuracion/agenda/sedes/{sede_id}/horarios' -and
+            $rutasDemo -contains '/api/v1/configuracion/agenda/feriados' -and
+            $rutasDemo -contains '/api/v1/agenda/bloqueos' -and
+            $rutasDemo -contains '/api/v1/agenda/bloqueos/{bloqueo_id}' -and
+            $rutasDemo -contains '/api/v1/agenda/resumen.csv'
         )
     } catch { return $false }
 }

@@ -1,0 +1,51 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 400" fill="none" role="img" aria-labelledby="titulo descripcion">
+  <title id="titulo">Flujos clínicos conectados</title>
+  <desc id="descripcion">Un escudo central conecta agenda, documentos clínicos y mensajes seguros.</desc>
+  <defs>
+    <linearGradient id="escudo" x1="250" y1="84" x2="386" y2="304" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#ECFAF7"/>
+      <stop offset="1" stop-color="#B8E8DE"/>
+    </linearGradient>
+    <linearGradient id="tarjeta" x1="62" y1="100" x2="190" y2="208" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#fff"/>
+      <stop offset="1" stop-color="#E9F6F2"/>
+    </linearGradient>
+    <filter id="sombra" x="0" y="0" width="1" height="1" color-interpolation-filters="sRGB" filterUnits="objectBoundingBox">
+      <feGaussianBlur in="SourceAlpha" stdDeviation="9"/>
+      <feOffset dy="12"/>
+      <feColorMatrix values="0 0 0 0 0.04 0 0 0 0 0.22 0 0 0 0 0.22 0 0 0 .16 0"/>
+      <feBlend in2="SourceGraphic" mode="normal"/>
+    </filter>
+  </defs>
+  <circle cx="322" cy="198" r="166" fill="#DDF3EF" opacity=".36"/>
+  <circle cx="322" cy="198" r="132" stroke="#5AAFA5" stroke-dasharray="2 11" stroke-linecap="round" opacity=".28"/>
+  <path d="M172 157c38-30 57-42 91-48M386 111c37 13 57 29 83 54M173 250c43 23 67 34 105 41M388 294c42-10 60-24 84-48" stroke="#67B9AD" stroke-width="3" stroke-linecap="round" stroke-dasharray="5 9" opacity=".72"/>
+  <circle cx="214" cy="127" r="5" fill="#56A99F"/>
+  <circle cx="430" cy="135" r="5" fill="#56A99F"/>
+  <circle cx="222" cy="276" r="5" fill="#56A99F"/>
+  <circle cx="431" cy="276" r="5" fill="#56A99F"/>
+
+  <g filter="url(#sombra)">
+    <rect x="44" y="111" width="132" height="96" rx="24" fill="url(#tarjeta)" stroke="#B8DAD5" stroke-width="2"/>
+    <rect x="464" y="111" width="132" height="96" rx="24" fill="#F9FCFB" stroke="#C4DDD8" stroke-width="2"/>
+    <rect x="464" y="223" width="132" height="96" rx="24" fill="#F9FCFB" stroke="#C4DDD8" stroke-width="2"/>
+    <rect x="44" y="223" width="132" height="96" rx="24" fill="#F9FCFB" stroke="#C4DDD8" stroke-width="2"/>
+  </g>
+
+  <g stroke="#247E78" stroke-width="4" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="94" y="137" width="34" height="34" rx="7"/>
+    <path d="M94 148h34M102 133v8M120 133v8M102 157h7m8 0h5m-20 7h7"/>
+    <path d="M502 139h55v37h-55zM502 143l27 20 28-20"/>
+    <path d="M500 253h52l11 11v39h-63zM552 253v12h11M511 274h28m-28 9h18"/>
+    <path d="M87 260h47v38H87zM97 272h27m-27 9h18m-18 9h23"/>
+  </g>
+
+  <path d="M320 75c-38 0-68 11-90 25v75c0 65 39 119 90 147 51-28 90-82 90-147v-75c-22-14-52-25-90-25Z" fill="url(#escudo)" stroke="#67B9AD" stroke-width="3"/>
+  <path d="M320 105c-23 0-42 7-57 16v55c0 44 24 83 57 105 33-22 57-61 57-105v-55c-15-9-34-16-57-16Z" fill="#F9FFFD" opacity=".78"/>
+  <path d="M292 181c12-13 23-13 28 0 5-13 16-13 28 0 0 24-28 41-28 41s-28-17-28-41Z" fill="#C8EDE6" stroke="#278A80" stroke-width="3" stroke-linejoin="round"/>
+  <path d="M304 187h10l6-11 8 20 6-9h8" stroke="#247E78" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>
+
+  <circle cx="320" cy="67" r="6" fill="#F2BE5F"/>
+  <circle cx="454" cy="198" r="5" fill="#F2BE5F" opacity=".9"/>
+  <circle cx="190" cy="198" r="5" fill="#F2BE5F" opacity=".9"/>
+</svg>

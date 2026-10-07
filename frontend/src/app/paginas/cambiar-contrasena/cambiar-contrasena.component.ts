@@ -1,4 +1,4 @@
-import { Component, inject, signal } from '@angular/core';
+import { Component, inject, signal, ChangeDetectionStrategy } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 
@@ -24,6 +24,7 @@ import { SesionService } from '../../nucleo/servicios/sesion.service';
       </form>
     </section>
   `,
+  changeDetection: ChangeDetectionStrategy.Eager,
   styles: `
     :host { min-height:70vh; display:grid; place-items:center; }
     .tarjeta { box-sizing:border-box; width:min(100% - 2rem, 480px); padding:2rem; border:1px solid #e4e7ec; border-radius:16px; background:white; }

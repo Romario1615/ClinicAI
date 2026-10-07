@@ -128,6 +128,11 @@ async def _ejecutar(opciones: argparse.Namespace) -> int:
             _escribir("Los catalogos de la base de datos son coherentes con el codigo.")
             return 0
 
+        # --- Escenarios clínicos sintéticos para la cuenta local ---
+        if opciones.solo_historia_clinica:
+            await _cargar_historico_local(fabrica, configuracion)
+            return 0
+
         # --- Catalogos ---
         #
         # Transaccion propia: los catalogos deben quedar aplicados aunque la
@@ -189,6 +194,41 @@ async def _ejecutar(opciones: argparse.Namespace) -> int:
         await motor.dispose()
 
     return codigo_salida
+
+
+async def _cargar_historico_local(
+    fabrica: async_sessionmaker[AsyncSession], configuracion: Configuracion
+) -> None:
+    """Prepara historia sintética para la cuenta profesional que ofrece el acceso local."""
+    if configuracion.entorno not in {Entorno.LOCAL, Entorno.DESARROLLO}:
+        raise RuntimeError(
+            "La carga de historia clínica sintética solo se permite en local/desarrollo."
+        )
+
+    async with fabrica() as sesion, sesion.begin():
+        clinica_id = await sesion.scalar(
+            select(Usuario.clinica_id)
+            .join(UsuarioRol, UsuarioRol.usuario_id == Usuario.id)
+            .join(Rol, Rol.id == UsuarioRol.rol_id)
+            .where(
+                Rol.codigo == "profesional",
+                Rol.es_sistema.is_(True),
+                Rol.clinica_id.is_(None),
+                Usuario.activo.is_(True),
+                Usuario.apellido.contains("[SINTETICO]"),
+            )
+            .order_by(Usuario.correo)
+            .limit(1)
+        )
+        clinica = await sesion.get(Clinica, clinica_id) if clinica_id else None
+        if clinica is None or "[SINTETICO]" not in clinica.nombre:
+            raise RuntimeError(
+                "No se encontró una clínica sintética para el acceso local profesional."
+            )
+        resumen = await cargar_clinico(sesion, clinica_id=clinica.id, reloj=RelojSistema())
+
+    _escribir("Escenarios clínicos sintéticos para el acceso profesional local:")
+    _escribir(resumen.describir())
 
 
 async def _cargar_conocimiento(
@@ -282,6 +322,14 @@ def main(argumentos: list[str] | None = None) -> int:
         "--habilitar-superadministrador-local",
         action="store_true",
         help="Crea o repara la cuenta sintética local del portal de clínicas.",
+    )
+    analizador.add_argument(
+        "--solo-historia-clinica",
+        action="store_true",
+        help=(
+            "Completa los escenarios clínicos sintéticos de la cuenta profesional local, "
+            "sin volver a cargar pacientes ni citas. Solo local/desarrollo."
+        ),
     )
     analizador.add_argument("--pacientes", type=int, default=60, help="Pacientes sinteticos (60).")
     analizador.add_argument("--citas", type=int, default=200, help="Citas sinteticas (200).")

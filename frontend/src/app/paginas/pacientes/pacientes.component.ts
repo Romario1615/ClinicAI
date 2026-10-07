@@ -22,13 +22,10 @@
  * consulta. El backend tampoco los devuelve por este endpoint, y esa es la
  * garantia real; esto solo evita pedirlos.
  *
- * Lo que todavia no hace
- * ----------------------
- * Crear ni editar pacientes: el backend aun no expone escritura (Fase 2). El
- * boton no existe en lugar de existir deshabilitado, para no prometer algo que
- * no esta.
+ * El alta y la edicion administrativa se realizan con `EditorPacienteComponent`
+ * y los permisos se vuelven a comprobar en los endpoints de escritura.
  */
-import { Component, computed, inject, signal } from '@angular/core';
+import { Component, computed, inject, signal, ChangeDetectionStrategy } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import type { Subscription } from 'rxjs';
 
@@ -102,6 +99,7 @@ import { ResumenModuloComponent } from '../../compartido/resumen-modulo.componen
     VentanaFlotanteComponent,
   ],
   templateUrl: './pacientes.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './pacientes.component.scss',
 })
 export class PacientesComponent {

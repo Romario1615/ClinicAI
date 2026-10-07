@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import date
-from typing import Annotated
+from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, File, Form, Path, Query, Response, UploadFile, status
 
@@ -45,6 +45,7 @@ def _salida(imagen: ImagenPaciente) -> ImagenSalida:
         id=imagen.id,
         paciente_id=imagen.paciente_id,
         tipo=imagen.tipo,
+        nivel_sensibilidad=imagen.nivel_sensibilidad,
         piezas=imagen.piezas,
         tomada_en=imagen.tomada_en,
         descripcion=imagen.descripcion,
@@ -116,6 +117,7 @@ async def subir_imagen(
     descripcion: Annotated[str | None, Form(max_length=500)] = None,
     cita_id: Annotated[uuid.UUID | None, Form()] = None,
     procedimiento_id: Annotated[uuid.UUID | None, Form()] = None,
+    nivel_sensibilidad: Annotated[Literal["N2", "N3"], Form()] = "N2",
 ) -> ImagenSalida:
     # El tamaño se acota antes de pasar los bytes al saneador o al antivirus.
     if not tipo.es_clinica:
@@ -132,6 +134,7 @@ async def subir_imagen(
             descripcion=descripcion,
             cita_id=cita_id,
             procedimiento_id=procedimiento_id,
+            nivel_sensibilidad=nivel_sensibilidad,
         ),
         principal=principal,
     )

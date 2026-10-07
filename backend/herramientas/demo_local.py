@@ -30,10 +30,13 @@ def main() -> int:
         motor = create_engine(configuracion.url_base_datos_sincrona)
         try:
             with motor.connect() as conexion:
-                filas = conexion.execute(text(
-                    "SELECT id, nombre FROM clinica WHERE nombre LIKE :marca "
-                    "ORDER BY nombre DESC"
-                ), {"marca": "%[SINTETICO]%"}).all()
+                filas = conexion.execute(
+                    text(
+                        "SELECT id, nombre FROM clinica WHERE nombre LIKE :marca "
+                        "ORDER BY nombre DESC"
+                    ),
+                    {"marca": "%[SINTETICO]%"},
+                ).all()
                 datos["clinicas"] = [{"id": str(f.id), "nombre": f.nombre} for f in filas]
         finally:
             motor.dispose()

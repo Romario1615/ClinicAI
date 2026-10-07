@@ -291,6 +291,27 @@ async def clinica(sesion: AsyncSession, sufijo: str) -> Clinica:
 
 
 @pytest_asyncio.fixture
+async def paciente_ajeno(sesion: AsyncSession, sufijo: str) -> Paciente:
+    """Paciente de otra clínica para regresiones de aislamiento entre tenants."""
+    clinica_ajena = Clinica(
+        nombre=f"Clinica Ajena {sufijo}",
+        identificacion_fiscal=f"PRUEBA-AJENA-{sufijo}",
+        zona_horaria="America/Guayaquil",
+    )
+    sesion.add(clinica_ajena)
+    await sesion.flush()
+    paciente = Paciente(
+        clinica_id=clinica_ajena.id,
+        tipo_documento="SIN_DOCUMENTO",
+        nombre="Paciente",
+        apellido=f"De Otra Clinica {sufijo}",
+    )
+    sesion.add(paciente)
+    await sesion.flush()
+    return paciente
+
+
+@pytest_asyncio.fixture
 async def usuario(sesion: AsyncSession, clinica: Clinica, sufijo: str) -> Usuario:
     registro = Usuario(
         clinica_id=clinica.id,

@@ -368,6 +368,80 @@ class TestRecetaConfirmada:
         ).scalar_one()
         assert total == 1
 
+    async def test_el_contenido_de_una_receta_confirmada_no_se_reescribe(
+        self,
+        sesion: AsyncSession,
+        receta_borrador: Receta,
+        medicamento_pauta_fija: RecetaMedicamento,
+        profesional,  # type: ignore[no-untyped-def]
+    ) -> None:
+        await _confirmar(sesion, receta_borrador, profesional.id)
+        medicamento_pauta_fija.dosis = "2 comprimidos"
+
+        with pytest.raises(DBAPIError, match="no se edita ni se elimina"):
+            await sesion.flush()
+        await sesion.rollback()
+
+    async def test_una_receta_no_se_elimina_en_vez_de_conservar_el_historial(
+        self,
+        sesion: AsyncSession,
+        receta_borrador: Receta,
+        profesional,  # type: ignore[no-untyped-def]
+    ) -> None:
+        await _confirmar(sesion, receta_borrador, profesional.id)
+        await sesion.delete(receta_borrador)
+
+        with pytest.raises(DBAPIError, match="Una receta no se elimina"):
+            await sesion.flush()
+        await sesion.rollback()
+
+    async def test_una_receta_firmada_no_se_puede_reabrir(
+        self,
+        sesion: AsyncSession,
+        receta_borrador: Receta,
+        profesional,  # type: ignore[no-untyped-def]
+    ) -> None:
+        await _confirmar(sesion, receta_borrador, profesional.id)
+        receta_borrador.estado = EstadoReceta.BORRADOR.value
+
+        with pytest.raises(DBAPIError, match="estado_receta_transicion_invalida"):
+            await sesion.flush()
+        await sesion.rollback()
+
+    async def test_la_firma_no_se_registra_antes_de_confirmar(
+        self,
+        sesion: AsyncSession,
+        receta_borrador: Receta,
+        profesional,  # type: ignore[no-untyped-def]
+    ) -> None:
+        receta_borrador.confirmada_en = AHORA
+        receta_borrador.confirmada_por = profesional.id
+
+        with pytest.raises(DBAPIError, match="receta_firma_fuera_de_transicion"):
+            await sesion.flush()
+        await sesion.rollback()
+
+    async def test_no_se_inserta_un_borrador_con_firma_anticipada(
+        self,
+        sesion: AsyncSession,
+        receta_borrador: Receta,
+        profesional,  # type: ignore[no-untyped-def]
+    ) -> None:
+        sesion.add(
+            Receta(
+                clinica_id=receta_borrador.clinica_id,
+                paciente_id=receta_borrador.paciente_id,
+                profesional_id=receta_borrador.profesional_id,
+                estado=EstadoReceta.BORRADOR.value,
+                confirmada_en=AHORA,
+                confirmada_por=profesional.id,
+            )
+        )
+
+        with pytest.raises(IntegrityError, match="borrador_sin_firma"):
+            await sesion.flush()
+        await sesion.rollback()
+
     async def test_confirmar_exige_responsable(
         self, sesion: AsyncSession, receta_borrador: Receta
     ) -> None:
@@ -381,7 +455,17 @@ class TestRecetaConfirmada:
         self, sesion: AsyncSession, receta_borrador: Receta
     ) -> None:
         receta_borrador.estado = EstadoReceta.SUSPENDIDA.value
+        receta_borrador.suspendida_en = AHORA
         with pytest.raises(IntegrityError, match="suspension_exige_motivo"):
+            await sesion.flush()
+        await sesion.rollback()
+
+    async def test_suspender_exige_instante(
+        self, sesion: AsyncSession, receta_borrador: Receta
+    ) -> None:
+        receta_borrador.estado = EstadoReceta.SUSPENDIDA.value
+        receta_borrador.motivo_suspension = "Motivo sintetico de prueba"
+        with pytest.raises(IntegrityError, match="suspension_exige_instante"):
             await sesion.flush()
         await sesion.rollback()
 
@@ -455,24 +539,24 @@ class TestMedicamentoPRN:
             await sesion.flush()
         await sesion.rollback()
 
+    @pytest.mark.parametrize("frecuencia", [0, 200])
     async def test_una_frecuencia_absurda_se_rechaza(
-        self, sesion: AsyncSession, receta_borrador: Receta
+        self, sesion: AsyncSession, receta_borrador: Receta, frecuencia: int
     ) -> None:
         """Cero horas produciria un calendario infinito; 200 no es una pauta."""
-        for frecuencia in (0, 200):
-            sesion.add(
-                RecetaMedicamento(
-                    receta_id=receta_borrador.id,
-                    nombre="Medicamento de ejemplo",
-                    dosis="1 comprimido",
-                    via="ORAL",
-                    cuando_sea_necesario=False,
-                    frecuencia_horas=frecuencia,
-                )
+        sesion.add(
+            RecetaMedicamento(
+                receta_id=receta_borrador.id,
+                nombre="Medicamento de ejemplo",
+                dosis="1 comprimido",
+                via="ORAL",
+                cuando_sea_necesario=False,
+                frecuencia_horas=frecuencia,
             )
-            with pytest.raises(IntegrityError, match="frecuencia_razonable"):
-                await sesion.flush()
-            await sesion.rollback()
+        )
+        with pytest.raises(IntegrityError, match="frecuencia_razonable"):
+            await sesion.flush()
+        await sesion.rollback()
 
 
 # ===========================================================================

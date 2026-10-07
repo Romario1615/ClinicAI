@@ -13,6 +13,7 @@ from datetime import datetime
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, Path, status
+from sqlalchemy import exists, select
 
 from app.modulos.historia.especialidades import exige_modulo
 from app.modulos.odontologia.modelos import PlantillaPlan, PlanTratamiento, ProcedimientoPlan
@@ -47,6 +48,7 @@ def _salida(plan: PlanTratamiento, procedimientos: list[ProcedimientoPlan]) -> P
         estado=plan.estado,
         moneda=plan.moneda,
         observaciones=plan.observaciones,
+        nivel_sensibilidad=plan.nivel_sensibilidad,
         propuesto_en=plan.propuesto_en,
         aceptado_en=plan.aceptado_en,
         aceptacion_medio=plan.aceptacion_medio,
@@ -93,6 +95,19 @@ async def listar_planes(
     paciente_id: Annotated[uuid.UUID, Path()],
 ) -> list[PlanSalida]:
     filas = await ServicioPlanesTratamiento(sesion, reloj).listar(paciente_id, principal=principal)
+    hay_n3_oculto = False
+    if not principal.tiene_permiso("historia_clinica.leer_sensible"):
+        hay_n3_oculto = bool(
+            await sesion.scalar(
+                select(
+                    exists().where(
+                        PlanTratamiento.paciente_id == paciente_id,
+                        PlanTratamiento.clinica_id == principal.clinica_id,
+                        PlanTratamiento.nivel_sensibilidad == "N3",
+                    )
+                )
+            )
+        )
     entradas = [
         construir_entrada(
             accion=AccionAuditada.PLAN_CONSULTADO,
@@ -101,11 +116,24 @@ async def listar_planes(
             entidad_tipo="plan_tratamiento",
             entidad_id=plan.id,
             paciente_id=paciente_id,
-            nivel_sensibilidad=NivelSensibilidad.CLINICO,
+            nivel_sensibilidad=NivelSensibilidad(plan.nivel_sensibilidad),
             estado=plan.estado,
         )
         for plan, _ in filas
     ]
+    if hay_n3_oculto:
+        entradas.append(
+            construir_entrada(
+                accion=AccionAuditada.PLAN_CONSULTADO,
+                principal=principal,
+                ahora=reloj.ahora(),
+                entidad_tipo="paciente",
+                entidad_id=paciente_id,
+                paciente_id=paciente_id,
+                nivel_sensibilidad=NivelSensibilidad.CLINICO_SENSIBLE,
+                planes_sensibles_filtrados=True,
+            )
+        )
     if not entradas:
         entradas.append(
             construir_entrada(
@@ -115,7 +143,11 @@ async def listar_planes(
                 entidad_tipo="paciente",
                 entidad_id=paciente_id,
                 paciente_id=paciente_id,
-                nivel_sensibilidad=NivelSensibilidad.CLINICO,
+                nivel_sensibilidad=(
+                    NivelSensibilidad.CLINICO_SENSIBLE
+                    if hay_n3_oculto
+                    else NivelSensibilidad.CLINICO
+                ),
                 planes_devueltos=0,
             )
         )
@@ -150,7 +182,7 @@ async def crear_plan(
                 entidad_tipo="plan_tratamiento",
                 entidad_id=plan.id,
                 paciente_id=paciente_id,
-                nivel_sensibilidad=NivelSensibilidad.CLINICO,
+                nivel_sensibilidad=NivelSensibilidad(plan.nivel_sensibilidad),
                 procedimientos=len(procedimientos),
             )
         ]
@@ -183,7 +215,7 @@ async def proponer_plan(
                 entidad_tipo="plan_tratamiento",
                 entidad_id=plan.id,
                 paciente_id=plan.paciente_id,
-                nivel_sensibilidad=NivelSensibilidad.CLINICO,
+                nivel_sensibilidad=NivelSensibilidad(plan.nivel_sensibilidad),
                 estado=plan.estado,
             )
         ]
@@ -291,7 +323,7 @@ def _entrada_estado(
         entidad_tipo="plan_tratamiento",
         entidad_id=plan.id,
         paciente_id=plan.paciente_id,
-        nivel_sensibilidad=NivelSensibilidad.CLINICO,
+        nivel_sensibilidad=NivelSensibilidad(plan.nivel_sensibilidad),
         estado=plan.estado,
         **extra,
     )
@@ -375,7 +407,7 @@ async def completar_procedimiento(
             entidad_tipo="procedimiento_plan",
             entidad_id=procedimiento_id,
             paciente_id=plan.paciente_id,
-            nivel_sensibilidad=NivelSensibilidad.CLINICO,
+            nivel_sensibilidad=NivelSensibilidad(plan.nivel_sensibilidad),
             plan_id=str(plan.id),
             estado_plan=plan.estado,
         )
@@ -389,7 +421,7 @@ async def completar_procedimiento(
                 entidad_tipo="odontograma",
                 entidad_id=version.id,
                 paciente_id=plan.paciente_id,
-                nivel_sensibilidad=NivelSensibilidad.CLINICO,
+                nivel_sensibilidad=NivelSensibilidad(version.nivel_sensibilidad),
                 version=version.version,
                 origen_cambio="procedimiento",
             )
@@ -425,7 +457,7 @@ async def atender_control_procedimiento(
                 entidad_tipo="procedimiento_plan",
                 entidad_id=procedimiento_id,
                 paciente_id=plan.paciente_id,
-                nivel_sensibilidad=NivelSensibilidad.CLINICO,
+                nivel_sensibilidad=NivelSensibilidad(plan.nivel_sensibilidad),
                 plan_id=str(plan.id),
             )
         ]
@@ -459,7 +491,7 @@ async def cancelar_procedimiento(
                 entidad_tipo="procedimiento_plan",
                 entidad_id=procedimiento_id,
                 paciente_id=plan.paciente_id,
-                nivel_sensibilidad=NivelSensibilidad.CLINICO,
+                nivel_sensibilidad=NivelSensibilidad(plan.nivel_sensibilidad),
                 motivo=datos.motivo,
                 operacion="procedimiento_cancelado",
                 estado_plan=plan.estado,

@@ -17,6 +17,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from app.ia.embeddings import construir_proveedor_embeddings
 from app.nucleo.bd import GestorBaseDatos
 from app.nucleo.configuracion import Configuracion
 from app.nucleo.registro import configurar_registro, obtener_logger
@@ -55,6 +56,12 @@ async def al_arrancar(ctx: dict[Any, Any]) -> None:
 
     ctx["configuracion"] = configuracion
     ctx["reloj"] = RelojSistema()
+    ctx["embeddings"] = construir_proveedor_embeddings(
+        configuracion.proveedor_embeddings,
+        modelo=configuracion.modelo_embeddings,
+        dimension=configuracion.dimension_embeddings,
+        ruta_cache=str(configuracion.ruta_cache_embeddings),
+    )
     ctx["gestor_bd"] = GestorBaseDatos(
         configuracion.url_base_datos,
         tamano_pool=2,

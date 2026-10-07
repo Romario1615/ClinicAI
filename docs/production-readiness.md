@@ -1,9 +1,14 @@
 # Estado de preparación para producción
 
-> **Última auditoría formal:** 2026‑09‑14. **Actualización de pruebas:** 2026‑10‑05 ·
-> 1510 pruebas en la suite backend completa (3 opcionales de LLM omitidas),
-> 256 casos frontend aprobados y 34 E2E. También pasaron 55 pruebas focalizadas de lista de espera.
-> La cobertura frontend cumple sus umbrales actuales: 87,99 % de líneas y 74,24 % de ramas.
+> **Última auditoría formal:** 2026‑09‑14. **Actualización de pruebas:** 2026‑10‑06 ·
+> La suite backend completa aprobó 1640 pruebas y omitió 3 integraciones de LLM que requieren Anthropic. En la primera corrida apareció una comprobación de semillas con alcance global; se acotó a la clínica de prueba y la repetición completa pasó.
+> Frontend aprobó 377 pruebas
+> aprobados y las 55 pruebas E2E aprobadas en una sola corrida contra una API actualizada.
+> El 2026‑10‑06, 5 pruebas API de asignación cuenta/perfil y 17 de administración de pacientes
+> pasaron; el escenario E2E de equipo se reejecutó contra la API actualizada e incluye ambos
+> registros vinculados.
+> La cobertura frontend cumple sus umbrales actuales: 88,92 % de líneas, 72,17 % de ramas y 81,38 % de funciones.
+> Las pruebas focalizadas del upload PDF aprobaron 39 casos; 9 pruebas focalizadas del resumen local e historial de pagos también pasaron. La última suite backend completa aprobó 1640 pruebas y omitió 3 integraciones externas.
 > La revisión añadió alertas automáticas de adherencia con auditoría y cobertura de worker/roles;
 > los bloqueos de producción de este documento siguen vigentes.
 >
@@ -30,7 +35,7 @@ funcionalidad no existe todavía; **no** significa que esté bien.
 
 | # | Criterio | Estado | Evidencia |
 |---|---|---|---|
-| 1 | No hay errores críticos | **parcial** | 1510 pruebas backend en la suite completa; 256 pruebas frontend y 34 E2E en la validación actual. Tres pruebas de integración con LLM se omitieron al no configurar una API externa. Lint, build, `ruff` y `mypy` pasan; faltan DAST y pruebas de carga representativas recientes |
+| 1 | No hay errores críticos | **parcial** | La suite backend completa registrada aprobó 1640 pruebas y omitió tres integraciones LLM sin Anthropic; después pasaron pruebas focalizadas de análisis local e historial de pagos. Frontend aprobó 442/442, lint y build pasan. Las pruebas focalizadas de conocimiento aprobaron 39 casos. Las 55 pruebas E2E vigentes pasaron contra API actual y PostgreSQL. Faltan DAST y pruebas de carga representativas recientes |
 | 2 | Sin vulnerabilidades críticas o altas pendientes | **parcial** | `pip-audit --strict` → sin vulnerabilidades conocidas; `bandit -r app -ll` sin hallazgos. 44 vulnerabilidades corregidas (ver informe). **Falta DAST y Trivy sobre imágenes construidas** |
 | 3 | No existen secretos en el repositorio | **parcial** | `.env` excluido, `.env.example` sin un valor real, secretos de prueba sintéticos. `gitleaks` **no está instalado localmente**; corre en el pipeline, que nunca se ha ejecutado |
 | 4 | Las reservas concurrentes no generan duplicados | **verificado** | Restricción de exclusión `gist`; prueba de concurrencia real con 50 participantes y `asyncio.Barrier` sobre conexiones separadas |
@@ -40,8 +45,8 @@ funcionalidad no existe todavía; **no** significa que esté bien.
 | 8 | Los permisos impiden accesos indebidos | **verificado** | Permiso + ámbito de 4 dimensiones + relación asistencial, aplicados en el `WHERE`. 404 y no 403 fuera de ámbito. 504 pruebas con marcador `seguridad`. Tres fallos propios del filtro de ámbito encontrados y corregidos |
 | 9 | La historia clínica está protegida | **verificado** | Append‑only por disparador, versionado con autor y motivo, atacado con SQL directo en las pruebas |
 | 10 | Los medicamentos solo usan recetas aprobadas | **verificado** | Disparador `toma_exige_receta_confirmada`; los PRN no generan horarios fijos |
-| 11 | La IA no modifica datos sin autorización | **parcial** | El **bucle del modelo ya existe** y un LLM real invoca las siete herramientas (`app/ia/proveedor_claude.py`, `app/ia/seleccion_llm.py`), verificado contra la API de Anthropic y contra PostgreSQL (`pruebas/integracion/test_agente_modelo_real.py`, 3 pruebas, ejecución manual). Las garantías de [ADR‑0019](decisiones/0019-la-frontera-de-las-herramientas-del-agente.md) se sostienen con el modelo al mando: catálogo cerrado de siete herramientas, ninguna toca contenido clínico; el principal viaja fuera de los argumentos; el ámbito se verifica contra PostgreSQL real; toda invocación —incluida la denegada— queda auditada como `AGENTE_IA`; el límite clínico se evalúa **antes** del bucle, así que no depende del modelo. Una respuesta inservible del modelo —vacía, truncada, rechazada, con dos invocaciones, o un fallo de red— deriva a una persona (18 pruebas unitarias). Lo que falta: **la calidad de la elección del modelo no está medida** (E‑23), y el webhook sigue sin invocar el bucle (ADR‑0017) — hoy solo lo alcanza el endpoint de demostración, restringido al entorno local |
-| 12 | El RAG no filtra información entre pacientes | **verificado** | Los filtros van en el `WHERE` de una consulta única (ADR‑0013), con **21 pruebas de casos negativos** —otra clínica, otra sede, otra especialidad, por encima del nivel— cada una con su prueba de control. La historia clínica individual **no se indexa** en ningún índice vectorial (RF‑M07). Una prueba de arquitectura recorre el AST de `app/` y verifica que no hay otra vía de consulta |
+| 11 | La IA no modifica datos sin autorización | **parcial** | El **bucle del modelo ya existe** y un LLM real invoca el catálogo vigente de ocho herramientas (`app/ia/proveedor_claude.py`, `app/ia/seleccion_llm.py`), verificado previamente contra la API de Anthropic y PostgreSQL (`pruebas/integracion/test_agente_modelo_real.py`, ejecución manual). La herramienta de pagos es solo de lectura. Las garantías de [ADR‑0019](decisiones/0019-la-frontera-de-las-herramientas-del-agente.md) se sostienen con el modelo al mando: catálogo cerrado, ninguna herramienta toca contenido clínico; el principal viaja fuera de los argumentos; el ámbito se verifica contra PostgreSQL real; toda invocación —incluida la denegada— queda auditada como `AGENTE_IA`; el límite clínico se evalúa **antes** del bucle, así que no depende del modelo. Una respuesta inservible del modelo —vacía, truncada, rechazada, con dos invocaciones, o un fallo de red— deriva a una persona (18 pruebas unitarias). Lo que falta: **la calidad de la elección del modelo no está medida** (E‑23), y el webhook sigue sin invocar el bucle (ADR‑0017) — hoy solo lo alcanza el endpoint de demostración, restringido al entorno local |
+| 12 | El RAG no filtra información entre pacientes | **verificado** | Los filtros van en el `WHERE` de una consulta única (ADR‑0013), con **21 pruebas de casos negativos** —otra clínica, otra sede, otra especialidad, por encima del nivel— cada una con su prueba de control. La recuperación exige que el fragmento sea de la versión vigente; la migración `20261006_026` y las pruebas verifican que versiones históricas no reaparecen al aprobar una corrección. La historia clínica individual **no se indexa** en ningún índice vectorial (RF‑M07). Una prueba de arquitectura recorre el AST de `app/` y verifica que no hay otra vía de consulta |
 | 13 | Los documentos vencidos no son recuperados | **verificado** | Vigencia, estado y archivado filtran en el `WHERE`. Probado con el documento vencido, el que aún no entra en vigor, el archivado y el borrador, incluido el caso en que el texto del documento **son las palabras exactas de la consulta** |
 | 14 | Los respaldos se pueden restaurar | **verificado** | Ciclo completo **ejecutado** el 2026‑09‑13 con `infra/scripts/verificar-respaldo.sh`: 11 comprobaciones, 0 fallos. Volcado cifrado no legible en claro, clave incorrecta rechazada, recuentos idénticos uno a uno, `pgvector` 0.8.6 e índice HNSW restaurados, y **las 2 restricciones de exclusión siguen vigentes** — una restauración que las perdiera daría una base que acepta dos pacientes a la misma hora. Lo **no** cubierto se declara en [`backup-and-restore.md`](backup-and-restore.md): sin programación automática, sin retención, sin copia fuera del equipo, sin PITR, sin RTO/RPO medidos |
 | 15 | El sistema soporta las pruebas de carga definidas | **parcial** | Ejecutada el 2026‑09‑14 ([`pruebas-carga/`](../pruebas-carga/README.md)): 2 314 peticiones, **0 errores inesperados**, y lo que de verdad importa — **0 reservas duplicadas** con 8 usuarios virtuales peleando por el mismo turno durante 30 s, que produjeron 37 rechazos correctos con 409. Latencia p95: 88 ms en disponibilidad, 161 ms en reserva. **Lo que estos números no dicen**: corren contra un portátil con una base de 384 KB. Faltan volumen representativo, carga sostenida de horas, el worker bajo carga y la búsqueda RAG |
@@ -49,8 +54,8 @@ funcionalidad no existe todavía; **no** significa que esté bien.
 | 17 | Existe documentación de operación | **parcial** | 24 documentos y 19 ADR. Ya existen `monitoring.md`, `backup-and-restore.md` e `incident-response.md`. Lo que falta no es documentación: **el procedimiento de incidentes no se ha ensayado** y no hay guardia definida |
 | 18 | Existe procedimiento de rollback | **parcial** | El rollback de esquema **sí está verificado** (`upgrade → downgrade -1 → upgrade` en cada migración). El rollback de despliegue está documentado y sin probar |
 | 19 | Existe procedimiento de restauración | **verificado** | Documentado **y ejecutado** ([`backup-and-restore.md`](backup-and-restore.md), sección 3). Restaura sobre una base nueva, nunca sobre la dañada |
-| 20 | Existe monitoreo | **parcial** | [`monitoring.md`](monitoring.md) define qué vigilar y por qué, sobre los eventos que el sistema **ya emite** con `correlacion_id`. **Nada los vigila todavía**: falta recolección, agregación, reglas de alerta y destinatario. Las cuatro señales que deben despertar a alguien están enumeradas |
-| 21 | Pruebas de aceptación con escenarios de clínica | **parcial** | **34 escenarios en verde** contra navegador, frontend, API y PostgreSQL reales ([`pruebas-e2e/`](../pruebas-e2e/README.md)): acceso, permisos, pacientes, historia clínica, medicación, alertas por tomas omitidas, control posterior del procedimiento, bandeja de mensajes derivados, agenda, pagos, RAG, imágenes y lista de espera. Siguen pendientes la reserva por WhatsApp simulado (depende de E‑23), alertas por problemas reportados y aceptación clínica integral |
+| 20 | Existe monitoreo | **parcial** | [`monitoring.md`](monitoring.md) define las señales; `/metrics`, Prometheus local (15 días) y cuatro reglas se probaron con el objetivo Windows/WSL `UP`. El perfil local no entrega avisos: faltan Alertmanager, destinatarios, guardia, señales de auditoría/Redis y despliegue de producción |
+| 21 | Pruebas de aceptación con escenarios de clínica | **parcial** | Hay **55 pruebas** contra navegador, frontend, API y PostgreSQL reales ([`pruebas-e2e/`](../pruebas-e2e/README.md)); todas pasan en una corrida, incluida reserva manual desde Agenda, exportación agregada, asignación del rol Profesional con vínculo de cuenta, edición de sede y axe en 20 rutas. Siguen pendientes la reserva por WhatsApp simulado (depende de E‑23), reglas de prioridad/escalado de reportes clínicos y aceptación clínica integral; el reporte explícito ya crea un aviso persistente y auditado que el equipo autorizado puede marcar como revisado |
 | 22 | Todas las limitaciones documentadas | **hecho** | 24 limitaciones estructurales y 9 restricciones deliberadas en [`known-limitations.md`](known-limitations.md) |
 | 23 | Notificaciones sin datos clínicos | **verificado** | 40 pruebas recorren el catálogo completo de plantillas: ninguna admite ni menciona diagnóstico, medicamento ni motivo de consulta (regla 10, RF‑K07) |
 | 24 | Los eventos del calendario externo no contienen datos clínicos | **verificado** | RF‑I09. `construir_evento` **no acepta** paciente ni servicio, y una prueba inspecciona su firma para que siga siendo así. Comprobado también sobre lo que de verdad sale hacia el proveedor (ADR‑0018) |
@@ -60,7 +65,7 @@ un criterio de funcionamiento sino de documentación).
 
 Se mueven en la auditoría original: el criterio 14 y el 19 pasan a **verificado** con la
 restauración ejecutada; el 20 y el 21 pasan de «no evaluado» a **parcial** — ya existe la
-definición de qué vigilar, aunque nada vigile todavía, y ya hay 34 escenarios E2E, aunque
+definición de qué vigilar, aunque nada vigile todavía, y ya hay 55 pruebas E2E, aunque
 falten los que dependen del agente y la aceptación clínica integral.
 
 El 15 también deja de estar sin evaluar: la prueba de carga se ejecutó. **Ya no queda
@@ -100,7 +105,7 @@ No se declarará el sistema listo hasta que **todas** se cumplan con evidencia:
 5. Restauración de respaldo ejecutada sobre una instancia limpia, con comparación de
    recuentos de filas.
 6. Rollback de versión y de migración ejecutados en preproducción.
-7. Los 34 escenarios de aceptación clínica actuales y los escenarios faltantes en verde.
+7. Las 55 pruebas automatizadas actuales y los escenarios de aceptación clínica faltantes en verde.
 8. **Verificación contra los proveedores reales** de WhatsApp y Google en
    preproducción, no solo contra el sandbox.
 9. **Revisión jurídica completada** y decisiones de la clínica registradas sobre
