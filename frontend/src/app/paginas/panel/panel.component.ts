@@ -29,6 +29,8 @@ import { Component, computed, inject, signal, ChangeDetectionStrategy } from '@a
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 
+import { PerfilPacientesComponent } from './perfil-pacientes.component';
+
 import { ColaTrabajoComponent } from '../../compartido/cola-trabajo.component';
 import { IconoComponent, type NombreIcono } from '../../compartido/icono.component';
 import { TarjetasIndicadoresComponent } from '../../compartido/tarjetas-indicadores.component';
@@ -74,6 +76,7 @@ const DIAS_POR_PERIODO: Record<string, number> = { hoy: 1, '7': 7, '30': 30 };
     IconoComponent,
     TarjetasIndicadoresComponent,
     VentanaFlotanteComponent,
+    PerfilPacientesComponent,
   ],
   template: `
     <div class="cabecera-pagina">
@@ -391,54 +394,7 @@ const DIAS_POR_PERIODO: Record<string, number> = { hoy: 1, '7': 7, '30': 30 };
             }
           </div>
 
-          <section class="tarjeta tarjeta-vidrio demografia" aria-labelledby="demografia-titulo">
-            <header class="ocupacion-agenda__cabecera">
-              <span class="ocupacion-agenda__icono" aria-hidden="true"><app-icono nombre="pacientes" [tamano]="18" /></span>
-              <div>
-                <h3 id="demografia-titulo" class="cifra__titulo">Perfil de pacientes</h3>
-                <p class="campo__ayuda">Personas con cita en el periodo y filtros actuales</p>
-              </div>
-            </header>
-            @if (!r.demografia) {
-              <p class="campo__ayuda demografia__protegida" role="status">Desglose oculto para proteger grupos de menos de 5 pacientes.</p>
-            } @else {
-              <div class="tendencias demografia__rejilla">
-                <section class="tendencia" aria-labelledby="demografia-edades">
-                  <h4 id="demografia-edades" class="cifra__titulo">Edades</h4>
-                  <ul class="tendencia__lista">
-                    @for (celda of r.demografia.edades; track celda.categoria) {
-                      <li class="demografia__fila">
-                        <span>{{ celda.categoria }}</span>
-                        <span class="tendencia__pista" aria-hidden="true">
-                          @if (celda.pacientes !== null && celda.pacientes > 0) {
-                            <span [style.width.%]="anchoDemografico(r.demografia.edades, celda.pacientes)"></span>
-                          }
-                        </span>
-                        <strong class="numerico">{{ celda.suprimida ? 'Protegido' : celda.pacientes }}</strong>
-                      </li>
-                    }
-                  </ul>
-                </section>
-                <section aria-labelledby="demografia-sexos">
-                  <h4 id="demografia-sexos">Sexo registrado</h4>
-                  <ul class="tendencia__lista">
-                    @for (celda of r.demografia.sexos; track celda.categoria) {
-                      <li class="demografia__fila">
-                        <span>{{ celda.categoria }}</span>
-                        <span class="tendencia__pista" aria-hidden="true">
-                          @if (celda.pacientes !== null && celda.pacientes > 0) {
-                            <span [style.width.%]="anchoDemografico(r.demografia.sexos, celda.pacientes)"></span>
-                          }
-                        </span>
-                        <strong class="numerico">{{ celda.suprimida ? 'Protegido' : celda.pacientes }}</strong>
-                      </li>
-                    }
-                  </ul>
-                </section>
-              </div>
-              <p class="campo__ayuda demografia__nota">Datos administrativos agregados. Las celdas pequeñas y una celda adicional se ocultan para que no se calculen a partir de las otras celdas del mismo desglose.</p>
-            }
-          </section>
+          <app-perfil-pacientes [demografia]="r.demografia" />
 
           <section class="tarjeta cohortes-registro" aria-labelledby="cohortes-registro-titulo">
             <h3 id="cohortes-registro-titulo">Cohortes de registro</h3>
@@ -881,10 +837,6 @@ const DIAS_POR_PERIODO: Record<string, number> = { hoy: 1, '7': 7, '30': 30 };
       -webkit-backdrop-filter: blur(14px);
       backdrop-filter: blur(14px);
     }
-
-    .demografia { margin-top: var(--espacio-3); }
-    .demografia__rejilla { margin-top: var(--espacio-3); }
-    .demografia__fila { grid-template-columns: minmax(95px, 1fr) minmax(46px, 1.1fr) minmax(76px, auto); }
 
     .filtros-dashboard .campo { min-width: 0; margin: 0; }
     .filtros-dashboard .campo__control { min-height: 42px; }
@@ -1348,15 +1300,6 @@ export class PanelComponent {
       year: 'numeric',
       timeZone: 'UTC',
     }).format(inicioUtc);
-  }
-
-  protected anchoDemografico(
-    celdas: readonly { pacientes: number | null }[],
-    cantidad: number | null,
-  ): number {
-    if (cantidad === null || cantidad <= 0) return 0;
-    const mayor = Math.max(0, ...celdas.map((celda) => celda.pacientes ?? 0));
-    return mayor ? Math.round((cantidad / mayor) * 100) : 0;
   }
 
   protected etiquetaHora(hora: number): string {

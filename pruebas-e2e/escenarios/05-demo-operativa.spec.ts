@@ -308,14 +308,14 @@ test('la agenda permite reprogramar y cancelar una cita', async ({ page, request
       .getByRole('combobox', { name: 'Profesional', exact: true })
       .selectOption(datos.profesional.id);
     await page.getByLabel('Fecha', { exact: true }).fill(fecha(cita.inicio));
-    // La agenda ya no es una tabla con botones por fila: se pulsa la fila del
-    // dia y las acciones aparecen en el panel de la derecha.
+    // Las acciones de la cita se abren en una ventana lateral con el nombre
+    // del paciente; se selecciona por su nombre accesible.
     const nombre = `${datos.paciente.nombre} ${datos.paciente.apellido}`;
-    const panel = page.locator('.panel');
+    const panel = page.getByRole('dialog', { name: nombre, exact: true });
     await seleccionarCitaEnAgenda(page, nombre);
     await expect(panel).toContainText(nombre);
     await panel.getByRole('button', { name: 'Reprogramar' }).click();
-    const dialogo = page.getByRole('dialog');
+    const dialogo = page.getByRole('dialog', { name: 'Reprogramar cita', exact: true });
     const horario = dialogo.getByRole('combobox', { name: 'Nuevo horario' });
     // El profesional puede no atender al día siguiente. Recorre fechas desde
     // la disponibilidad real de la interfaz hasta encontrar un turno libre.
@@ -379,7 +379,7 @@ test('recepción registra la llegada y asistencia clínica mide la espera y cier
     await page.getByLabel('Fecha', { exact: true }).fill(fecha(cita.inicio));
     const nombre = `${datos.paciente.nombre} ${datos.paciente.apellido}`;
     await seleccionarCitaEnAgenda(page, nombre);
-    const panel = page.locator('.panel');
+    const panel = page.getByRole('dialog', { name: nombre, exact: true });
     await panel.getByRole('button', { name: 'Registrar llegada' }).click();
     await expect(page.getByRole('status').filter({ hasText: 'Llegada registrada' })).toBeVisible();
     const llegada = await datos.leer(`/agenda/citas/${cita.id}`);
@@ -398,7 +398,9 @@ test('recepción registra la llegada y asistencia clínica mide la espera y cier
     await irA(page, 'Panel');
     await expect(page.locator('.rejilla .tarjeta').filter({ hasText: 'Sala de espera' }))
       .toContainText('paciente(s) esperando en el periodo');
-    const ocupacion = page.locator('.ocupacion-agenda');
+    const ocupacion = page.locator('.tarjeta').filter({
+      has: page.getByText('Ocupación de agenda', { exact: true }),
+    });
     await expect(ocupacion).toBeVisible();
     await expect(ocupacion).toContainText(`${resumenPanel.ocupacion_agenda.porcentaje}%`);
     await expect(ocupacion.locator('progress')).toHaveAttribute(
@@ -414,15 +416,15 @@ test('recepción registra la llegada y asistencia clínica mide la espera y cier
     await page.getByRole('combobox', { name: 'Profesional', exact: true }).selectOption(datos.profesional.id);
     await page.getByLabel('Fecha', { exact: true }).fill(fecha(cita.inicio));
     await seleccionarCitaEnAgenda(page, nombre);
-    await expect(page.locator('.panel')).toContainText('Espera registrada');
-    await page.locator('.panel').getByRole('button', { name: 'Iniciar atención' }).click();
+    await expect(panel).toContainText('Espera registrada');
+    await panel.getByRole('button', { name: 'Iniciar atención' }).click();
     await expect(page.getByRole('status').filter({ hasText: 'Atención iniciada' })).toBeVisible();
     const iniciada = await datos.leer(`/agenda/citas/${cita.id}`);
     expect(iniciada.atencion_iniciada_en).toBeTruthy();
 
     // La agenda cierra el panel al recargar después de guardar una transición.
     await seleccionarCitaEnAgenda(page, nombre);
-    await page.locator('.panel').getByRole('button', { name: 'Marcar como atendida' }).click();
+    await panel.getByRole('button', { name: 'Marcar como atendida' }).click();
     await expect(page.getByRole('status').filter({ hasText: 'Cita marcada como atendida' })).toBeVisible();
     const completada = await datos.leer(`/agenda/citas/${cita.id}`);
     expect(completada.completada_en).toBeTruthy();

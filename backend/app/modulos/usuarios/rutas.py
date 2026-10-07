@@ -27,6 +27,7 @@ from fastapi import APIRouter, Depends, Request, Response, status
 from app.modulos.usuarios import administracion
 from app.modulos.usuarios.esquemas import (
     ActualizarEstadoUsuario,
+    EditarDatosUsuario,
     ActualizarRolesUsuario,
     CambioContrasena,
     CrearRolClinica,
@@ -531,6 +532,22 @@ async def cambiar_estado_usuario(
             )
         ]
     )
+    await sesion.commit()
+    return usuario
+
+
+@enrutador_usuarios.put("/{usuario_id}/datos", response_model=UsuarioAdministrado)
+async def editar_datos_usuario(
+    usuario_id: uuid.UUID, datos: EditarDatosUsuario,
+    principal: Annotated[Principal, Depends(exige_permiso("usuario.editar"))],
+    sesion: Sesion, servicio: ServicioAuth, reloj: RelojActual, auditor: Auditor,
+) -> UsuarioAdministrado:
+    usuario = await administracion.editar_datos_usuario(sesion, principal, usuario_id, datos)
+    await servicio.revocar_todas_las_sesiones(usuario_id, motivo=MotivoRevocacion.REVOCACION_ADMINISTRATIVA)
+    await auditor.registrar([construir_entrada(
+        accion=AccionAuditada.USUARIO_MODIFICADO, principal=principal, ahora=reloj.ahora(),
+        entidad_tipo="usuario", entidad_id=usuario_id, sesiones_revocadas=True,
+    )])
     await sesion.commit()
     return usuario
 

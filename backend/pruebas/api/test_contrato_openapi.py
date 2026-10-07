@@ -6,6 +6,8 @@ ruta sin efectos secundarios mediante el transporte ASGI de las pruebas.
 
 from __future__ import annotations
 
+import re
+
 import pytest
 import schemathesis
 from fastapi import FastAPI
@@ -19,12 +21,28 @@ pytestmark = pytest.mark.api
 
 def test_esquema_openapi_completo_es_valido(aplicacion: FastAPI) -> None:
     """Detecta esquemas o referencias que Schemathesis no pueda interpretar."""
+    assert aplicacion.openapi_schema is None, "El arranque no debe generar OpenAPI."
     esquema = schemathesis.openapi.from_dict(aplicacion.openapi())
 
     esquema.validate()
 
     operaciones = list(esquema.get_all_operations())
     assert len(operaciones) >= 100
+
+
+def test_contrato_comun_y_metricas_conservan_todas_las_rutas(aplicacion: FastAPI) -> None:
+    """La generación diferida conserva errores y etiquetas sin IDs reales."""
+    documento = aplicacion.openapi()
+    assert aplicacion.openapi() is documento
+    for ruta, metodos in documento["paths"].items():
+        for operacion in metodos.values():
+            if isinstance(operacion, dict) and "responses" in operacion:
+                error = operacion["responses"]["default"]["content"]["application/json"]["schema"]
+                assert error["required"] == ["codigo", "mensaje"]
+        # El ejemplo reemplaza los parámetros con un valor sintético para
+        # comprobar el prefijo efectivo de cada router sin publicar IDs.
+        ejemplo = re.sub(r"\{[^}]+\}", "123", ruta)
+        assert aplicacion.state.metricas.normalizar_ruta(ejemplo) == ruta
 
 
 async def test_operaciones_cumplen_el_contrato_openapi(

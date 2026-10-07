@@ -144,7 +144,7 @@ test.describe('Historia clinica', () => {
       .locator('app-selector-especialidad [role="group"] button')
       .filter({ hasText: /odontolog/i });
     if (await especialidadOdontologica.count()) await especialidadOdontologica.first().click();
-    await page.getByRole('tab', { name: 'Formulario MSP 033' }).click();
+    await page.getByRole('tab', { name: 'Formulario 033', exact: true }).click();
     await page.getByRole('button', { name: 'Registrar formulario' }).click();
     const editor = page.getByRole('dialog', { name: 'Registrar atención' });
     await expect(editor).toBeVisible();
@@ -284,7 +284,7 @@ test('el profesional completa un plan y atiende su control posterior', async ({ 
   await irA(page, /historia/i);
   await abrir(page, paciente.numero_documento ?? '', /abrir historia/i);
 
-  await page.getByRole('tab', { name: 'Planes de tratamiento' }).click();
+  await page.getByRole('tab', { name: 'Planes', exact: true }).click();
   const planes = page.getByRole('region', { name: 'Planes de tratamiento' });
   await planes.getByRole('button', { name: 'Crear borrador' }).click();
   const editor = page.getByRole('dialog', { name: 'Crear borrador de tratamiento' });
@@ -390,7 +390,7 @@ test('el profesional completa un plan y atiende su control posterior', async ({ 
   try {
     await irA(page, /historia/i);
     await abrir(page, paciente.numero_documento ?? '', /abrir historia/i);
-    await page.getByRole('tab', { name: 'Planes de tratamiento' }).click();
+    await page.getByRole('tab', { name: 'Planes', exact: true }).click();
     const planAgendado = page.locator('article.plan').filter({ hasText: titulo });
     await expect(planAgendado).toContainText('Cita agendada para esta fase');
 
@@ -423,7 +423,7 @@ test('el profesional completa un plan y atiende su control posterior', async ({ 
   await irA(page, /agenda/i);
   await irA(page, /historia/i);
   await abrir(page, paciente.numero_documento ?? '', /abrir historia/i);
-  await page.getByRole('tab', { name: 'Planes de tratamiento' }).click();
+  await page.getByRole('tab', { name: 'Planes', exact: true }).click();
   const planLiberado = page.locator('article.plan').filter({ hasText: titulo });
   await expect(planLiberado).not.toContainText('Cita agendada para esta fase');
   await expect(planLiberado.getByRole('button', { name: 'Agendar esta fase' })).toBeVisible();

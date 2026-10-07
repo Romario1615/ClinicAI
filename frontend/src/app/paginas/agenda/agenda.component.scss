@@ -880,6 +880,12 @@
 
 /* En móvil el selector de vista ocupa su propia fila y se reparte el ancho. */
 @media (max-width: 600px) {
+  .cabecera-agenda__dia {
+    flex-wrap: wrap;
+    min-width: 0;
+    max-width: 100%;
+  }
+
   .selector-vista {
     display: flex;
     width: 100%;

@@ -36,7 +36,7 @@ test.describe('Pacientes', () => {
   });
 
   test('un termino demasiado corto dice que NO se busco', async ({ page }) => {
-    const busqueda = page.getByRole('region', { name: 'Buscar pacientes' });
+    const busqueda = page.getByRole('form', { name: 'Buscar pacientes' });
     await busqueda.getByRole('textbox', { name: /buscar por nombre/i }).fill('a');
     await busqueda.getByRole('button', { name: /^buscar$/i }).click();
 
@@ -48,7 +48,7 @@ test.describe('Pacientes', () => {
   });
 
   test('un termino sin resultados dice que no hay coincidencias', async ({ page }) => {
-    const busqueda = page.getByRole('region', { name: 'Buscar pacientes' });
+    const busqueda = page.getByRole('form', { name: 'Buscar pacientes' });
     await busqueda.getByRole('textbox', { name: /buscar por nombre/i }).fill('zzzzzzzz');
     await busqueda.getByRole('button', { name: /^buscar$/i }).click();
 

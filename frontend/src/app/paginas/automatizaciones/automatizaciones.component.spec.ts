@@ -83,6 +83,9 @@ describe('AutomatizacionesComponent', () => {
     it('auditoría solo ve, sin interruptores', () => {
         montar(['auditoria.leer']);
         expect((fixture.nativeElement as HTMLElement).querySelectorAll('[role=switch]').length).toBe(0);
+        expect(fixture.nativeElement.getAttribute('tabindex')).toBe('0');
+        expect(fixture.nativeElement.getAttribute('role')).toBe('region');
+        expect(fixture.nativeElement.getAttribute('aria-label')).toBe('Automatizaciones de la clínica');
     });
 
     it('presenta la ilustración de marca sin añadir contenido accesible redundante', () => {

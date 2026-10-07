@@ -166,7 +166,7 @@ test('recepción anota, ofrece y resuelve un turno de la lista de espera', async
     await page.getByLabel('Fecha', { exact: true }).fill(fecha(cita.inicio));
     const nombreCita = `${agenda.paciente.nombre} ${agenda.paciente.apellido}`;
     await seleccionarCitaEnAgenda(page, nombreCita);
-    const panel = page.locator('.panel');
+    const panel = page.getByRole('dialog', { name: nombreCita, exact: true });
     await panel.getByRole('button', { name: 'Cancelar la cita' }).click();
     await page.getByLabel('Motivo de la cancelación').fill('Turno liberado para lista de espera sintetica');
     const cancelacion = page.waitForResponse(

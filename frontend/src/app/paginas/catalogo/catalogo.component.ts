@@ -19,6 +19,7 @@ const TIPOS: readonly { readonly valor: TipoConsultorio; readonly etiqueta: stri
 
 @Component({
   selector: 'app-catalogo', standalone: true, imports: [FormsModule, ModulosEspecialidadComponent, VentanaFlotanteComponent],
+  host: { tabindex: '0', role: 'region', 'aria-label': 'Catálogo de la clínica' },
   template: `
     <header class="modulo-cabecera"><div class="modulo-cabecera__texto"><p class="ceja">CONFIGURACIÓN</p><h1>Catálogo de la clínica</h1><p>Sedes, consultorios, servicios y profesionales disponibles para su sesión.</p></div><img class="modulo-cabecera__imagen" src="/images/catalogo-clinica.png" alt="" aria-hidden="true" loading="lazy" /></header>
     @if (error()) { <p class="aviso error" role="alert">{{ error() }}</p><button (click)="cargar()" class="boton">Reintentar</button> }

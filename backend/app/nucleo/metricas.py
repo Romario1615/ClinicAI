@@ -57,7 +57,9 @@ class MetricasAplicacion:
 
     def configurar_rutas(self, rutas: list[str]) -> None:
         """Prepara plantillas de OpenAPI para reemplazar IDs en URL reales."""
-        self._rutas = [(compile_path(ruta)[0], ruta) for ruta in rutas]
+        # Una ruta fija como /citas/series debe prevalecer frente a /citas/{id}.
+        ordenadas = sorted(rutas, key=lambda ruta: ruta.count("{"))
+        self._rutas = [(compile_path(ruta)[0], ruta) for ruta in ordenadas]
 
     def normalizar_ruta(self, ruta_solicitada: str) -> str:
         for expresion, plantilla in self._rutas:

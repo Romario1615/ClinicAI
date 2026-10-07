@@ -1,7 +1,8 @@
 # Pruebas de extremo a extremo
 
-Navegador real, frontend real, API real y PostgreSQL real. Sin dobles de ningún
-tipo.
+Navegador real, frontend real, API real y PostgreSQL real. Los proveedores
+externos funcionan con adaptadores locales durante esta verificación; no se
+envían mensajes ni se realizan llamadas pagadas.
 
 ## Qué se prueba aquí, y qué no
 
@@ -146,7 +147,24 @@ de corridas anteriores ocupando una semana cercana.
 
 ## Estado
 
-La suite contiene **55 pruebas** en 14 archivos. Incluye acceso y autorización por roles, tareas clínicas y administrativas, los recorridos de Agenda, lista de espera, pagos, conocimiento, imágenes, seguridad y axe en las 22 rutas visibles de menú, con navegación por los seis roles. La verificación más reciente aprobó **55/55 en 5,8 minutos**, el 2026‑10‑07, con PostgreSQL local, frontend actual y la API iniciada desde el código actual en el puerto 8000 (`PROVEEDOR_EMBEDDINGS=mock`, límite E2E de 200). Al esperar a la pantalla asentada, axe detectó dos defectos previos que se corrigieron: contraste 4,37:1 en el detalle de los bloques de Agenda y un token de color inexistente en Equipo. La corrida anterior, del 2026‑10‑06, aprobó 55/55 en 4,1 minutos con la API en el puerto 8002. Se corrigieron la carrera inicial de carga en Equipo, dos selectores obsoletos y tres infracciones de accesibilidad: contraste en Conocimiento y Catálogo, y acceso por teclado a la tabla de cargos. El límite normal de desarrollo continúa en 10.
+La suite contiene **63 pruebas en 16 archivos**. Antes de añadir la regresión
+del perfil de pacientes, la ejecución completa del
+2026‑10‑07 aprobó **62/62 en 6,9 minutos**, sin reintentos, con el código
+actual sobre `727c9f5`, Angular en 4200 y una API aislada en 8020. Se creó una
+base temporal en PostgreSQL local, con extensiones, migraciones y semillas
+sintéticas; la API usó IA/embeddings mock, WhatsApp/calendario sandbox y límite
+E2E de 200. Los diez recorridos de axe cubrieron las **22 rutas** del menú para
+los seis roles. Incluye formularios extensos, ventanas, persistencia por API,
+pantallas de trabajo y navegación de pestañas por teclado. El límite normal
+de desarrollo continúa en 10. [Detalle de las correcciones](../docs/verificacion-2026-10-07.md).
+
+Después de esa corrida, la corrección del perfil pasó **2/2 recorridos
+focalizados en 24,8 segundos**: axe del panel y el escenario nuevo de geometría.
+El escenario 16 sustituye solo el desglose demográfico de la respuesta del
+dashboard con valores sintéticos para comprobar textos largos, seis dígitos y
+celdas protegidas. Comprueba límites y solapamientos en siete anchos entre 320
+y 1440 px. La sesión y el resto de la respuesta proceden de la API real; no
+escribe datos ni evalúa cálculos demográficos del backend.
 
 | Archivo | Qué cubre |
 |---|---|
@@ -161,10 +179,15 @@ La suite contiene **55 pruebas** en 14 archivos. Incluye acceso y autorización 
 | `09-lista-espera.spec.ts` | Recepción registra preferencias y una cita previa, libera un turno, confirma el reagendamiento y la siguiente oferta; verifica la llamada manual cuando falta consentimiento; no conecta WhatsApp |
 | `10-equipo.spec.ts` | Administración crea un perfil, le da acceso desde Usuarios y roles con el rol Profesional y el perfil vinculado, edita la ficha y la desactiva; comprueba los cambios en la interfaz |
 | `11-sedes.spec.ts` | Administración actualiza el teléfono de una sede desde Configuración, comprueba que se guarda por API y restaura el valor anterior para no alterar los datos locales |
+| `12-recorrido-y-asistente.spec.ts` | Prolongación de atención, derivación, recorrido y asistente interno con configuración de JEV |
+| `13-revision-riesgo.spec.ts` | Lectura y revisión administrativa de un documento marcado |
+| `14-accesibilidad.spec.ts` | Diez recorridos axe: pantallas, ventanas y los seis roles en las 22 rutas del menú |
+| `15-pantallas-trabajo.spec.ts` | Agenda y Pacientes en escritorio/móvil; acciones y paginación visibles, desplazamiento interno y pestañas clínicas con flechas, Inicio y Fin |
+| `16-panel-demografia.spec.ts` | Perfil de pacientes con valores y etiquetas largas; siete anchos, sin recortes ni solapamientos y sin relleno para celdas protegidas |
 
 ## Lo que falta
 
-La corrida completa más reciente aprobó **55/55 pruebas** el 2026‑10‑07 con la API actual, Angular y PostgreSQL. Gastos y caja y Ayuda solo se cubren por axe y navegación; el alta y anulación de gastos se verifican en pruebas API y de componente, no con un escenario E2E propio. La búsqueda de datos clínicos recorre todas las páginas autorizadas; si falta una historia versionada para el profesional local, la semilla incremental documentada arriba la agrega sin recargar pacientes ni citas. Aún faltan flujos que no corresponden a estos escenarios:
+La corrida completa más reciente aprobó **62/62 pruebas** el 2026‑10‑07 con la API actual, Angular y PostgreSQL. Gastos y caja y Ayuda se cubren por axe y navegación; el alta y anulación de gastos se verifican en pruebas API y de componente. La búsqueda de datos clínicos recorre todas las páginas autorizadas; si falta una historia versionada para el profesional local, la semilla incremental documentada arriba la agrega sin recargar pacientes ni citas. Aún faltan flujos que no corresponden a estos escenarios:
 
 * **Reserva por WhatsApp simulado**, que depende del agente conversacional
   (E‑23) y del webhook, hoy sin conectar a herramientas.

@@ -1,4 +1,5 @@
 import { expect, test } from '../apoyo/prueba';
+import AxeBuilder from '@axe-core/playwright';
 
 import { pacienteConVersionAnterior } from '../apoyo/datos';
 import { acceder, irA } from '../apoyo/sesion';
@@ -11,7 +12,7 @@ test('el profesional carga y vuelve a ver una imagen cifrada del paciente', asyn
   await acceder(page, 'profesional');
   await irA(page, /pacientes/i);
 
-  const busqueda = page.getByRole('region', { name: 'Buscar pacientes' });
+  const busqueda = page.getByRole('form', { name: 'Buscar pacientes' });
   await busqueda.getByRole('textbox', { name: /buscar por nombre/i }).fill(
     paciente.numero_documento ?? '',
   );
@@ -25,15 +26,31 @@ test('el profesional carga y vuelve a ver una imagen cifrada del paciente', asyn
   const ficha = page.locator('.ficha');
   await ficha.getByRole('tab', { name: 'Imágenes' }).click();
   const galeria = ficha.locator('section[aria-label="Imágenes clínicas del paciente"]');
+  await galeria.getByRole('button', { name: 'Cargar imagen clínica', exact: true }).click();
+  const carga = page.getByRole('dialog', { name: 'Cargar imagen clínica', exact: true });
+  await expect(carga).toBeVisible();
+  await carga.evaluate((dialogo) => Promise.all(
+    dialogo.getAnimations({ subtree: true }).map((animacion) => animacion.finished.catch(() => undefined)),
+  ));
+  const accesibilidad = await new AxeBuilder({ page })
+    .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
+    .analyze();
+  expect(accesibilidad.violations.map((incidencia) => incidencia.id)).toEqual([]);
+  for (const width of [390, 320]) {
+    await page.setViewportSize({ width, height: 844 });
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBeTruthy();
+  }
+  await page.setViewportSize({ width: 1280, height: 720 });
   const descripcion = `Control visual E2E ${Date.now()}`;
-  await galeria.getByLabel('Piezas FDI (opcional)').fill('36');
-  await galeria.getByLabel('Descripción (opcional)').fill(descripcion);
-  await galeria.getByLabel(/Archivo JPEG, PNG o WebP/i).setInputFiles({
+  await carga.getByLabel('Piezas FDI (opcional)').fill('36');
+  await carga.getByLabel('Descripción (opcional)').fill(descripcion);
+  await carga.getByLabel(/Archivo JPEG, PNG o WebP/i).setInputFiles({
     name: 'control.png',
     mimeType: 'image/png',
     buffer: Buffer.from(PNG_MINIMO, 'base64'),
   });
-  await galeria.getByRole('button', { name: 'Guardar imagen' }).click();
+  await carga.getByRole('button', { name: 'Guardar imagen', exact: true }).click();
+  await expect(carga).toHaveCount(0);
 
   await expect(galeria.locator('.galeria__exito')).toContainText(/Imagen cargada y cifrada/i);
   const tarjeta = galeria.locator('.galeria__tarjeta').filter({ hasText: descripcion });

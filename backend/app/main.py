@@ -34,6 +34,7 @@ import redis.asyncio as redis_async
 from fastapi import FastAPI, HTTPException, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, Response
+from fastapi.routing import APIRoute, iter_route_contexts
 from prometheus_client import CONTENT_TYPE_LATEST
 
 from app.api.manejadores import registrar_manejadores
@@ -95,6 +96,44 @@ from app.nucleo.reloj import Reloj, RelojSistema
 from app.nucleo.seguridad import CifradorDatos
 
 _logger = obtener_logger(__name__)
+
+# Contrato común de los manejadores HTTP. Se añade al solicitar OpenAPI,
+# conservando también las respuestas 422 que FastAPI genera para cada ruta.
+_RESPUESTA_ERROR: dict[str, Any] = {
+    "description": "Error de autenticación, permisos, validación o negocio.",
+    "content": {
+        "application/json": {
+            "schema": {
+                "type": "object",
+                "required": ["codigo", "mensaje"],
+                "properties": {
+                    "codigo": {"type": "string"},
+                    "mensaje": {"type": "string"},
+                    "detalles": {"type": "object", "additionalProperties": True},
+                    "correlacion_id": {"type": "string"},
+                },
+            }
+        }
+    },
+}
+
+
+def _configurar_contrato_openapi(aplicacion: FastAPI) -> None:
+    construir_openapi = aplicacion.openapi
+
+    def openapi_con_errores() -> dict[str, Any]:
+        if aplicacion.openapi_schema is not None:
+            return aplicacion.openapi_schema
+        documento = construir_openapi()
+        for ruta in documento.get("paths", {}).values():
+            for operacion in ruta.values():
+                if isinstance(operacion, dict) and "responses" in operacion:
+                    operacion["responses"].setdefault("default", _RESPUESTA_ERROR)
+        return documento
+
+    # FastAPI permite personalizar este método para ampliar el documento.
+    aplicacion.openapi = openapi_con_errores  # type: ignore[method-assign]
+
 
 PREFIJO_API = "/api/v1"
 
@@ -262,34 +301,21 @@ def crear_aplicacion(
     registrar_manejadores(aplicacion)
     _registrar_rutas(aplicacion)
 
-    # Todos los manejadores HTTP devuelven el mismo sobre de error. Las rutas
-    # declaran sus respuestas de éxito, pero sin una respuesta `default` los
-    # clientes OpenAPI y Schemathesis consideran inesperado un 401/403/404.
-    documento = aplicacion.openapi()
-    respuesta_error = {
-        "description": "Error de autenticación, permisos, validación o negocio.",
-        "content": {
-            "application/json": {
-                "schema": {
-                    "type": "object",
-                    "required": ["codigo", "mensaje"],
-                    "properties": {
-                        "codigo": {"type": "string"},
-                        "mensaje": {"type": "string"},
-                        "detalles": {"type": "object", "additionalProperties": True},
-                        "correlacion_id": {"type": "string"},
-                    },
-                }
-            }
-        },
-    }
-    for ruta in documento.get("paths", {}).values():
-        for operacion in ruta.values():
-            if isinstance(operacion, dict) and "responses" in operacion:
-                operacion["responses"].setdefault("default", respuesta_error)
-    aplicacion.openapi_schema = documento
+    _configurar_contrato_openapi(aplicacion)
+
     if configuracion.metricas_habilitadas:
-        rutas_metricas = list(aplicacion.openapi()["paths"])
+        # Las métricas necesitan plantillas, no el documento OpenAPI completo.
+        # iter_route_contexts conserva los prefijos de los routers incluidos en
+        # la versión de FastAPI fijada por uv.lock.
+        rutas_metricas = list(
+            dict.fromkeys(
+                contexto.path_format
+                for contexto in iter_route_contexts(aplicacion.routes)
+                if isinstance(contexto.route, APIRoute)
+                and contexto.include_in_schema
+                and contexto.path_format is not None
+            )
+        )
         rutas_metricas.append(configuracion.ruta_metricas)
         aplicacion.state.metricas.configurar_rutas(rutas_metricas)
     return aplicacion

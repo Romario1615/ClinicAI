@@ -45,6 +45,7 @@ const FASES: readonly { clave: string; titulo: string; ayuda: string }[] = [
 
 @Component({
   selector: 'app-automatizaciones',
+  host: { tabindex: '0', role: 'region', 'aria-label': 'Automatizaciones de la clínica' },
   standalone: true,
   imports: [FormsModule, VentanaFlotanteComponent, IconoComponent],
   template: `

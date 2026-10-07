@@ -72,6 +72,25 @@ describe('Formulario033Component', () => {
         expect(fixture.nativeElement.textContent).toContain('Índices CPO–ceo');
         expect(fixture.nativeElement.querySelectorAll('[aria-labelledby="examen-estomatognatico"] select').length).toBe(13);
         expect(fixture.nativeElement.querySelectorAll('[aria-labelledby="salud-bucal"] tbody tr').length).toBe(18);
+        // La primera compilación del formulario extenso bajo cobertura necesita
+        // margen cuando CI comparte CPU con las pruebas API y del navegador.
+    }, 10_000);
+
+    it('identifica cada selector clínico de las tablas por región o pieza', () => {
+        abrir();
+        botonConTexto('Registrar formulario').click();
+        fixture.detectChanges();
+
+        const selectores = Array.from(fixture.nativeElement.querySelectorAll(
+            '[aria-labelledby="examen-estomatognatico"] select, [aria-labelledby="salud-bucal"] tbody select',
+        )) as HTMLSelectElement[];
+        const nombres = selectores.map((selector) => selector.getAttribute('aria-label'));
+        expect(selectores).toHaveLength(67);
+        expect(nombres.every((nombre) => Boolean(nombre?.trim()))).toBe(true);
+        expect(new Set(nombres).size).toBe(selectores.length);
+        expect(nombres).toContain('Placa en pieza 16');
+        expect(nombres).toContain('Cálculo en pieza 16');
+        expect(nombres).toContain('Gingivitis en pieza 16');
     });
 
     it('presenta la captura extensa en una ventana de alto completo con acciones fijas', () => {

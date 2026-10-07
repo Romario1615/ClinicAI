@@ -136,6 +136,14 @@ class ActualizarEstadoUsuario(BaseModel):
     activo: bool
 
 
+class EditarDatosUsuario(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    nombre: str = Field(min_length=1, max_length=100)
+    apellido: str = Field(min_length=1, max_length=100)
+    correo: str = Field(min_length=3, max_length=200, pattern=r"^[^\s@]+@[^\s@]+\.[^\s@]+$")
+
+
 class CrearRolClinica(BaseModel):
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
 

@@ -832,7 +832,12 @@ class TestReprogramacion:
             .scalars()
             .all()
         )
-        reprogramacion = filas[-1]
+        # El reloj fijo da el mismo instante a creación y reprogramación.
+        # SQL no garantiza el orden de filas empatadas: identificar el evento
+        # evita depender de la posición física o de un UUID aleatorio.
+        cambios = [fila for fila in filas if fila.estado_nuevo == EstadoCita.RESCHEDULED.value]
+        assert len(cambios) == 1
+        reprogramacion = cambios[0]
         assert reprogramacion.inicio_anterior == inicio_original
         assert reprogramacion.inicio_nuevo == nuevo_inicio
         assert reprogramacion.motivo == "Cambio solicitado"

@@ -12,6 +12,7 @@ from app.modulos.profesionales.modelos import Profesional
 from app.modulos.usuarios.esquemas import (
     CrearRolClinica,
     CrearUsuarioClinica,
+    EditarDatosUsuario,
     PermisoDisponible,
     ProfesionalDisponible,
     RolDisponible,
@@ -339,6 +340,29 @@ async def cambiar_estado_usuario(
         roles=[],
         ultimo_acceso_en=usuario.ultimo_acceso_en,
     )
+
+
+async def editar_datos_usuario(
+    sesion: AsyncSession, principal: Principal, usuario_id: uuid.UUID, datos: EditarDatosUsuario
+) -> UsuarioAdministrado:
+    usuario = await sesion.scalar(select(Usuario).where(
+        Usuario.id == usuario_id, Usuario.clinica_id == principal.clinica_id
+    ).with_for_update())
+    if usuario is None:
+        raise RecursoNoEncontrado("El usuario no existe.")
+    if await sesion.scalar(select(Rol.id).join(UsuarioRol).where(
+        UsuarioRol.usuario_id == usuario_id, Rol.codigo == "superadministrador"
+    )):
+        raise DatosInvalidos("Las cuentas de plataforma requieren gestión independiente.")
+    correo = datos.correo.lower()
+    if await sesion.scalar(select(Usuario.id).where(
+        func.lower(Usuario.correo) == correo, Usuario.id != usuario_id
+    )):
+        raise ConflictoEstado("Ya existe una cuenta con ese correo.")
+    usuario.nombre, usuario.apellido, usuario.correo = datos.nombre, datos.apellido, correo
+    usuario.actualizado_por = principal.actor_id
+    await sesion.flush()
+    return next(u for u in await listar_usuarios(sesion, principal) if u.id == usuario_id)
 
 
 async def _roles_asignables(

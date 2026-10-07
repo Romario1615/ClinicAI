@@ -218,5 +218,8 @@ describe('CatalogoComponent', () => {
 
         expect(fixture.nativeElement.textContent).not.toContain('Crear consultorio');
         expect(catalogo.consultorios).toHaveBeenCalled();
+        expect(fixture.nativeElement.getAttribute('tabindex')).toBe('0');
+        expect(fixture.nativeElement.getAttribute('role')).toBe('region');
+        expect(fixture.nativeElement.getAttribute('aria-label')).toBe('Catálogo de la clínica');
     });
 });
