@@ -1,7 +1,15 @@
-/* Separacion arriba y abajo. Sin el margen superior, el borde de esta tarjeta
-   quedaba pegado al borde del boton de la cabecera. */
+/* La pantalla reparte el espacio con `gap`: sin márgenes propios. */
+.cabecera-pagina {
+  margin-bottom: 0;
+}
+
 .buscador {
-  margin: var(--espacio-4) 0;
+  flex: 1 1 26rem;
+  min-width: 0;
+}
+
+.buscador .campo {
+  margin: 0;
 }
 
 .pacientes__ilustracion {
@@ -36,8 +44,18 @@
 }
 
 .recuento {
-  margin: 0 0 var(--espacio-3);
+  margin: 0;
   color: var(--texto-suave);
+}
+
+/* Recuento y paginación al pie de la lista, en una sola línea. */
+.pie-lista {
+  display: flex;
+  flex: none;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--espacio-3);
 }
 
 .tipo-doc {
@@ -56,7 +74,6 @@
   display: flex;
   gap: var(--espacio-2);
   justify-content: center;
-  margin-top: var(--espacio-4);
 }
 
 /* ----- Verificación ----- */

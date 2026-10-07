@@ -12,7 +12,9 @@
   grid-template-areas:
     'navegacion cabecera'
     'navegacion contenido';
-  grid-template-columns: calc(var(--ancho-navegacion) + var(--hueco-armazon)) 1fr;
+  /* `minmax(0, 1fr)` y no `1fr`: una tabla ancha no debe poder ensanchar la
+     columna del contenido y sacar la página de la pantalla. */
+  grid-template-columns: calc(var(--ancho-navegacion) + var(--hueco-armazon)) minmax(0, 1fr);
   grid-template-rows: auto 1fr;
   min-height: 100vh;
 }
@@ -509,4 +511,69 @@
   margin: 0;
   color: var(--texto-suave);
   font-size: 0.9rem;
+}
+
+/* ----- Pantalla de trabajo fija (escritorio) -----
+ *
+ * En escritorio el documento no se desplaza: cabecera y menú quedan quietos y
+ * cada sección reparte el alto que hay. Solo desplazan las listas, dentro de
+ * su propio marco; lo que no cabe (formularios, detalles, filtros avanzados)
+ * se abre en una ventana flotante. Las reglas del contenido de cada pantalla
+ * viven en `styles.scss`, sección «Pantalla de trabajo».
+ *
+ * Por debajo de 821 × 600 px no cabe una pantalla de trabajo y se vuelve al
+ * desplazamiento normal: fijar el alto en un teléfono escondería contenido. */
+/* Portátil pequeño o tableta apaisada: el menú cede ancho al contenido. */
+@media (min-width: 821px) and (max-width: 1199px) {
+  .armazon {
+    --ancho-navegacion: 224px;
+  }
+
+  .navegacion {
+    padding-inline: var(--espacio-2);
+  }
+}
+
+/* Pantallas bajas: entradas del menú más compactas (36 px siguen por encima
+   del objetivo táctil mínimo de 24 px de WCAG 2.2) para que quepan más
+   secciones sin desplazar el menú. */
+@media (min-width: 821px) and (max-height: 860px) {
+  .navegacion__enlace {
+    min-height: 36px;
+  }
+
+  .navegacion__marca {
+    padding-bottom: var(--espacio-3);
+  }
+}
+
+@media (min-width: 821px) and (min-height: 600px) {
+  .armazon {
+    height: 100dvh;
+    min-height: 0;
+    grid-template-rows: auto minmax(0, 1fr);
+    overflow: hidden;
+  }
+
+  /* Ya no hace falta que sean pegajosas: no hay nada que se desplace bajo
+     ellas. Quietas, además, no recomponen el vidrio en cada fotograma. */
+  .cabecera {
+    position: relative;
+    top: auto;
+  }
+
+  .navegacion {
+    position: relative;
+    top: auto;
+    height: auto;
+    min-height: 0;
+  }
+
+  .contenido {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    overflow: hidden;
+    padding: var(--espacio-4) var(--espacio-5);
+  }
 }

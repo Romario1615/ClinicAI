@@ -503,6 +503,152 @@ textarea.campo__control {
   grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
 }
 
+/* --- Pantalla de trabajo ---
+ *
+ * Regla de la interfaz: en escritorio una sección cabe en la pantalla. Solo
+ * desplazan las listas, cada una dentro de su marco, y lo que no cabe
+ * (formularios, detalles, filtros avanzados) se abre en una ventana flotante.
+ * Por debajo de 821 × 600 px se vuelve al desplazamiento normal.
+ *
+ * Piezas:
+ *
+ * * `.pantalla`: raíz de la sección (en el host, con `host: { class:
+ *   'pantalla' }`). Columna que ocupa todo el alto disponible.
+ * * `.pantalla__fijo`: lo que conserva su alto (cabecera, indicadores,
+ *   pestañas, filtros).
+ * * `.pantalla__resto`: lo que se reparte el alto sobrante.
+ * * `.pantalla__columnas`: dos o más columnas que llenan el alto
+ *   (`--pantalla-columnas` cambia el reparto).
+ * * `.desplazable`: marco con desplazamiento propio para una lista o tabla.
+ *   Si dentro no hay nada enfocable, lleva `tabindex="0"` y un nombre
+ *   accesible para que el teclado también pueda desplazarlo.
+ *
+ * Red de seguridad: una sección que todavía no reparte su alto desplaza
+ * dentro del área de contenido, nunca el documento entero. */
+.pantalla {
+  display: flex;
+  flex-direction: column;
+  gap: var(--espacio-4);
+}
+
+.pantalla > .modulo-cabecera,
+.pantalla > app-resumen-modulo {
+  margin-bottom: 0;
+}
+
+/* Una ventana flotante se pinta en la capa superior: su anfitrión no debe
+   ocupar un hueco del reparto. `.sin-caja` sirve para los componentes que solo
+   envuelven una ventana (un editor que se abre encima, por ejemplo). */
+.pantalla > app-ventana-flotante,
+.pantalla > .sin-caja {
+  display: contents;
+}
+
+.pantalla__columnas {
+  display: grid;
+  gap: var(--espacio-4);
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.tarjeta--llena {
+  display: flex;
+  flex-direction: column;
+  gap: var(--espacio-3);
+  min-height: 0;
+}
+
+@media (min-width: 821px) and (min-height: 600px) {
+  main.contenido:not(.contenido--suelto) > :not(router-outlet) {
+    flex: 1 1 auto;
+    min-height: 0;
+    /* Margen negativo con relleno: deja ver las sombras y los anillos de
+       foco de los bordes, que el recorte del desplazamiento cortaría. */
+    margin: -6px -8px;
+    padding: 6px 8px;
+    overflow: hidden auto;
+    overscroll-behavior: contain;
+  }
+
+  main.contenido:not(.contenido--suelto) > .pantalla {
+    overflow: hidden;
+  }
+
+  .pantalla {
+    height: 100%;
+    min-height: 0;
+    gap: var(--espacio-3);
+  }
+
+  .pantalla__fijo {
+    flex: none;
+  }
+
+  .pantalla__resto {
+    display: flex;
+    flex: 1 1 0;
+    flex-direction: column;
+    gap: var(--espacio-3);
+    min-height: 0;
+  }
+
+  .pantalla__columnas {
+    flex: 1 1 0;
+    min-height: 0;
+    gap: var(--espacio-3);
+    grid-template-columns: var(--pantalla-columnas, repeat(2, minmax(0, 1fr)));
+    grid-template-rows: minmax(0, 1fr);
+  }
+
+  .pantalla__columnas > * {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+  }
+
+  .tarjeta--llena {
+    flex: 1 1 0;
+  }
+
+  .desplazable {
+    flex: 1 1 0;
+    min-height: 0;
+    overflow: auto;
+    overscroll-behavior: contain;
+    scrollbar-width: thin;
+    scrollbar-color: rgb(16 42 46 / 22%) transparent;
+  }
+
+  /* La cabecera de un módulo es contexto, no contenido: en una pantalla que
+     no se desplaza cada píxel que ocupa se lo quita a la lista. */
+  .pantalla > .modulo-cabecera {
+    padding: var(--espacio-3) var(--espacio-4);
+  }
+
+  .pantalla > .modulo-cabecera h1 {
+    margin-bottom: var(--espacio-1);
+    font-size: 1.45rem;
+  }
+
+  .pantalla > .modulo-cabecera .modulo-cabecera__imagen {
+    width: 72px;
+    height: 72px;
+  }
+
+  .pantalla > .cabecera-pagina {
+    margin-bottom: 0;
+  }
+
+  .pantalla > .cabecera-pagina h1 {
+    margin-bottom: 0;
+    font-size: 1.45rem;
+  }
+
+  .pantalla > .cabecera-pagina .modulo-cabecera__imagen {
+    width: 60px;
+    height: 60px;
+  }
+}
+
 /* --- Tablas --- */
 .tabla-envoltorio {
   /* Las tablas de agenda son anchas; el desbordamiento se acota aquí para

@@ -3,40 +3,19 @@
      iba suelto debajo del titulo, y su borde inferior quedaba a CERO pixeles
      del borde de la tarjeta de busqueda: no se solapaban, pero se tocaban, y
      eso se lee exactamente igual de mal. -->
-<div class="cabecera-pagina">
-  <div>
+<div class="cabecera-pagina pantalla__fijo">
+  <div class="pacientes__titulo">
     <p class="ceja">PACIENTES</p>
     <h1>Pacientes de su ámbito</h1>
   </div>
   <img class="modulo-cabecera__imagen" src="/images/busqueda-pacientes.png" alt="" aria-hidden="true" loading="lazy" />
-  @if (sesion.tienePermiso('paciente.crear')) {
-    <button type="button" class="boton boton--principal" (click)="nuevoPaciente()">
-      Registrar paciente
-    </button>
-  }
-</div>
 
-<app-resumen-modulo modulo="pacientes" />
-
-@if (avisoGuardado()) {
-  <p class="exito" role="status">{{ avisoGuardado() }}</p>
-}
-
-<!-- El formulario de alta y edicion es una ventana flotante: el listado no se
-     mueve al abrirlo. -->
-@if (editando()) {
-  <app-editor-paciente
-    [paciente]="paraEditar()"
-    (cerrar)="editando.set(false)"
-    (guardado)="pacienteGuardado()"
-  />
-}
-
-<section class="tarjeta buscador" aria-label="Buscar pacientes">
-  <form (ngSubmit)="buscar()">
+  <!-- El buscador vive en la cabecera: es lo primero que se usa y así la
+       lista recupera el alto de una tarjeta entera. -->
+  <form class="buscador" aria-label="Buscar pacientes" (ngSubmit)="buscar()">
     <label class="campo">
       <span class="campo__etiqueta">Buscar por nombre, apellido o documento</span>
-      <div class="buscador__fila">
+      <span class="buscador__fila">
         <input
           class="campo__control"
           name="termino"
@@ -48,26 +27,49 @@
         @if (terminoAplicado()) {
           <button class="boton" type="button" (click)="limpiar()">Ver todos</button>
         }
-      </div>
-      <span class="campo__ayuda">
-        Con menos de {{ minimoTermino }} caracteres la búsqueda devolvería media clínica y
-        dejaría de ser una búsqueda, así que el servidor la ignora y lo dice.
       </span>
     </label>
   </form>
-</section>
+
+  @if (sesion.tienePermiso('paciente.crear')) {
+    <button type="button" class="boton boton--principal" (click)="nuevoPaciente()">
+      Registrar paciente
+    </button>
+  }
+</div>
+
+<app-resumen-modulo class="pantalla__fijo" modulo="pacientes" />
+
+@if (avisoGuardado()) {
+  <p class="exito pantalla__fijo" role="status">{{ avisoGuardado() }}</p>
+}
+
+<!-- El formulario de alta y edicion es una ventana flotante: el listado no se
+     mueve al abrirlo. -->
+@if (editando()) {
+  <app-editor-paciente
+    class="sin-caja"
+    [paciente]="paraEditar()"
+    (cerrar)="editando.set(false)"
+    (guardado)="pacienteGuardado()"
+  />
+}
+
 
 <!-- Este aviso es el motivo de que esta pantalla exista conectada al backend.
      Sin él, quien atiende leería «sin coincidencias» y concluiría que el
      paciente no está registrado, cuando en realidad nunca se le buscó. -->
 @if (terminoIgnorado()) {
-  <p class="aviso-termino" role="status">
+  <p class="aviso-termino pantalla__fijo" role="status">
     El término «{{ terminoAplicado() }}» es demasiado corto y
     <strong>la búsqueda no llegó a hacerse</strong>. Escriba al menos
     {{ minimoTermino }} caracteres, o pulse «Ver todos» para volver al listado.
   </p>
 }
 
+<!-- Lo único que crece es la lista: en escritorio la tabla desplaza dentro
+     de su marco y el buscador, el recuento y la paginación quedan a la vista. -->
+<div class="pantalla__resto">
 @if (cargando()) {
   <app-cargando mensaje="Cargando pacientes..." />
 } @else if (error()) {
@@ -117,12 +119,7 @@
     }
   </div>
 } @else {
-  <p class="recuento">
-    Mostrando <strong>{{ desde() + 1 }}–{{ hasta() }}</strong> de
-    <strong>{{ total() }}</strong> pacientes de su ámbito.
-  </p>
-
-  <div class="tabla-envoltorio">
+  <div class="tabla-envoltorio desplazable">
     <table class="tabla">
       <thead>
         <tr>
@@ -165,15 +162,22 @@
     </table>
   </div>
 
-  <nav class="paginacion" aria-label="Paginación de pacientes">
-    <button class="boton" type="button" [disabled]="!hayAnterior()" (click)="anterior()">
-      ← Anteriores
-    </button>
-    <button class="boton" type="button" [disabled]="!haySiguiente()" (click)="siguiente()">
-      Siguientes →
-    </button>
-  </nav>
+  <div class="pie-lista">
+    <p class="recuento">
+      Mostrando <strong>{{ desde() + 1 }}–{{ hasta() }}</strong> de
+      <strong>{{ total() }}</strong> pacientes de su ámbito.
+    </p>
+    <nav class="paginacion" aria-label="Paginación de pacientes">
+      <button class="boton" type="button" [disabled]="!hayAnterior()" (click)="anterior()">
+        ← Anteriores
+      </button>
+      <button class="boton" type="button" [disabled]="!haySiguiente()" (click)="siguiente()">
+        Siguientes →
+      </button>
+    </nav>
+  </div>
 }
+</div>
 
 <!-- ===================== Ficha, en ventana flotante =====================
      Antes se pintaba al final de la tabla: con veinticinco filas, pulsar «Ver

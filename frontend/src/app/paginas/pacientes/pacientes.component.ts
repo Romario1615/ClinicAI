@@ -99,6 +99,7 @@ import { ResumenModuloComponent } from '../../compartido/resumen-modulo.componen
     VentanaFlotanteComponent,
   ],
   templateUrl: './pacientes.component.html',
+  host: { class: 'pantalla' },
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './pacientes.component.scss',
 })

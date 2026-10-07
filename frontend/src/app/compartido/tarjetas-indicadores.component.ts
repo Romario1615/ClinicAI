@@ -51,7 +51,7 @@ export interface Indicador {
       <span class="indicador__valor numerico" [appContador]="item.valor"></span>
       <span class="indicador__etiqueta">{{ item.etiqueta }}</span>
       @if (item.detalle) {
-        <span class="indicador__detalle">{{ item.detalle }}</span>
+        <span class="indicador__detalle" [attr.title]="item.detalle">{{ item.detalle }}</span>
       }
     </ng-template>
   `,
@@ -86,6 +86,25 @@ export interface Indicador {
     .indicador--alerta { background: var(--aviso-fondo); border-color: color-mix(in srgb, var(--aviso) 45%, transparent); }
     .indicador--alerta .indicador__valor { color: var(--aviso); }
     .indicador--bien .indicador__valor { color: var(--exito); }
+
+    /* Pantalla de trabajo (escritorio): ficha apaisada de una sola altura, con
+       la cifra a la izquierda. Ocupa la mitad y deja el alto a la lista. */
+    @media (min-width: 821px) and (min-height: 600px) {
+      .indicadores { grid-template-columns: repeat(auto-fill, minmax(196px, 1fr)); gap: var(--espacio-2); }
+      .indicador {
+        grid-template-columns: auto minmax(0, 1fr);
+        align-content: center;
+        align-items: center;
+        column-gap: var(--espacio-3);
+        row-gap: 0;
+        min-height: 0;
+        padding: var(--espacio-2) var(--espacio-3);
+      }
+      .indicador__valor { grid-row: span 2; font-size: 1.45rem; }
+      .indicador__etiqueta { align-self: end; }
+      .indicador__etiqueta:last-child { grid-row: span 2; align-self: center; }
+      .indicador__detalle { align-self: start; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    }
   `,
 })
 export class TarjetasIndicadoresComponent {
