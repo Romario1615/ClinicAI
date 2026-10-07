@@ -22,7 +22,18 @@
  * exclusión, y el mensaje correcto es «ese turno acaba de ocuparse», no
  * «error inesperado».
  */
-import { Component, computed, inject, signal, ChangeDetectionStrategy } from '@angular/core';
+import {
+  Component,
+  DestroyRef,
+  ElementRef,
+  afterRenderEffect,
+  computed,
+  inject,
+  signal,
+  viewChild,
+  ChangeDetectionStrategy,
+} from '@angular/core';
+import { NgTemplateOutlet } from '@angular/common';
 import { ActivatedRoute } from '@angular/router';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormsModule } from '@angular/forms';
@@ -39,6 +50,7 @@ import { SelectorPacienteComponent } from '../../compartido/selector-paciente.co
 import { InsigniaEstadoComponent } from '../../compartido/insignia-estado.component';
 import { IconoComponent } from '../../compartido/icono.component';
 import { VentanaFlotanteComponent } from '../../compartido/ventana-flotante.component';
+import { PestanasComponent, type OpcionPestana } from '../../compartido/pestanas.component';
 import { ReprogramarCitaComponent } from './reprogramar-cita.component';
 import { AccionesRecorridoComponent } from './acciones-recorrido.component';
 import { ProlongacionesPendientesComponent } from './prolongaciones-pendientes.component';
@@ -155,6 +167,14 @@ const MOTIVOS: Record<string, string> = {
 
 const CLAVE_VISTA = 'agenda.vista';
 
+/**
+ * Ancho de ventana a partir del cual lo pendiente cabe en una columna fija a
+ * la derecha del calendario. Por debajo, el calendario necesita todo el ancho
+ * (siete días o varias columnas de profesionales) y lo pendiente se abre en
+ * una ventana desde la cabecera.
+ */
+const CONSULTA_LATERAL_FIJO = '(min-width: 1200px)';
+
 /** Vista recordada; si no hay o no se puede leer, el calendario del día. */
 function leerVista(): VistaCalendario | 'lista' {
   try {
@@ -170,6 +190,8 @@ function leerVista(): VistaCalendario | 'lista' {
   standalone: true,
   imports: [
     FormsModule,
+    NgTemplateOutlet,
+    PestanasComponent,
     CargandoComponent,
     ErrorComponent,
     VacioComponent,
@@ -185,6 +207,9 @@ function leerVista(): VistaCalendario | 'lista' {
     ProlongacionesPendientesComponent,
   ],
   templateUrl: './agenda.component.html',
+  // Pantalla de trabajo: en escritorio ocupa el alto disponible y solo
+  // desplazan, cada uno en su marco, el calendario y las listas.
+  host: { class: 'pantalla' },
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './agenda.component.scss',
 })
@@ -280,13 +305,17 @@ export class AgendaComponent {
   protected motivoCancelacion = '';
   protected readonly citaAReprogramar = signal<Cita | null>(null);
 
-  // --- Panel contextual ---
+  // --- Lo que se abre encima ---
   //
-  // La columna derecha hace tres trabajos y nunca dos a la vez: la cola de
-  // pendientes mientras no hay nada elegido, el formulario de reserva al
-  // pulsar un hueco, y el detalle al pulsar una cita. Eso es lo que permite
-  // quitar la columna de cinco botones por fila que tenía la tabla.
+  // Pulsar una cita abre su detalle en una ventana lateral y pulsar un hueco
+  // abre la reserva en una ventana centrada. El calendario no se mueve ni
+  // pierde el sitio, y nunca hay dos de estas ventanas abiertas a la vez.
   protected readonly huecoElegido = signal<(FilaDia & { tipo: 'hueco' }) | null>(null);
+  /**
+   * La reserva se abrió con «Nueva cita» y ofrece todas las horas libres del
+   * día, no solo las de un tramo.
+   */
+  protected readonly reservaDelDia = signal(false);
   protected readonly citaSeleccionada = signal<Cita | null>(null);
   /** Ficha lateral abierta, si hay alguna. */
   protected readonly pacienteEnFicha = signal<string | null>(null);
@@ -298,12 +327,29 @@ export class AgendaComponent {
   /** Ofertas de lista de espera que nadie pudo comunicar. */
   protected readonly ofertasSinAvisar = signal<readonly EntradaEspera[]>([]);
 
-  protected readonly panelActivo = computed<'atencion' | 'reservar' | 'cita'>(() => {
-    if (this.huecoElegido()) {
-      return 'reservar';
-    }
-    return this.citaSeleccionada() ? 'cita' : 'atencion';
-  });
+  /**
+   * Dónde se quedó la lista del día. La agenda recarga tras cada acción y la
+   * lista se vuelve a pintar: sin esto, cada confirmación devolvería la vista
+   * a primera hora.
+   */
+  private readonly listaDia = viewChild<ElementRef<HTMLElement>>('listaDia');
+  private posicionLista = { fecha: '', arriba: 0 };
+
+  /** Explica por qué «Nueva cita» no pudo abrir la reserva. */
+  protected readonly avisoAgenda = signal('');
+
+  // --- Columna lateral: lo pendiente y los consultorios ---
+  private readonly consultaLateral =
+    typeof matchMedia === 'function' ? matchMedia(CONSULTA_LATERAL_FIJO) : null;
+  /** Hay ancho para tener lo pendiente siempre a la vista, junto al calendario. */
+  protected readonly lateralFijo = signal(this.consultaLateral?.matches ?? true);
+  /** Ventana con lo pendiente, cuando no hay columna lateral. */
+  protected readonly lateralAbierto = signal(false);
+  protected readonly pestanaLateral = signal('pendientes');
+  protected readonly opcionesLateral = computed<readonly OpcionPestana[]>(() => [
+    { clave: 'pendientes', etiqueta: 'Pendientes', cuenta: this.pendientes().length },
+    { clave: 'consultorios', etiqueta: 'Consultorios' },
+  ]);
 
   /** El día entero en una sola columna: citas y huecos, en orden de reloj. */
   protected readonly secuencia = computed(() =>
@@ -339,6 +385,30 @@ export class AgendaComponent {
       libre: duracionLegible(libres),
       tramosLibres: this.secuencia().filter((fila) => fila.tipo === 'hueco').length,
     };
+  });
+
+  /** El día elegido en palabras, para la reserva (en semana o mes no lo dice el título). */
+  protected readonly fechaDia = computed(() => {
+    const fecha = this.fecha();
+    if (!fecha) {
+      return '';
+    }
+    const texto = formatearFechaLarga(`${fecha}T12:00:00Z`, this.zona());
+    return texto.charAt(0).toUpperCase() + texto.slice(1);
+  });
+
+  /** El día elegido en corto («mié 7 oct»), para el pie y los consultorios. */
+  protected readonly diaCorto = computed(() => {
+    const fecha = this.fecha();
+    if (!fecha) {
+      return '';
+    }
+    return new Intl.DateTimeFormat('es', {
+      weekday: 'short',
+      day: 'numeric',
+      month: 'short',
+      timeZone: 'UTC',
+    }).format(new Date(`${fecha}T12:00:00Z`));
   });
 
   protected readonly nombreSugerido = computed(() => {
@@ -392,7 +462,17 @@ export class AgendaComponent {
         );
       return `Semana del ${corto(desde)} al ${corto(sumarDias(hasta, -1))}`;
     }
-    return formatearFechaLarga(`${fecha}T12:00:00Z`, this.zona());
+    // Sin el año cuando es el año en curso: la cabecera comparte línea con
+    // las flechas y la acción principal, y el año no dice nada nuevo.
+    const mismoAno = fecha.slice(0, 4) === hoyEnZona(this.zona()).slice(0, 4);
+    const texto = new Intl.DateTimeFormat('es', {
+      weekday: 'long',
+      day: 'numeric',
+      month: 'long',
+      ...(mismoAno ? {} : { year: 'numeric' as const }),
+      timeZone: 'UTC',
+    }).format(new Date(`${fecha}T12:00:00Z`));
+    return texto.charAt(0).toUpperCase() + texto.slice(1);
   });
 
   /** Tramos libres del día para pintarlos en el calendario. */
@@ -449,6 +529,25 @@ export class AgendaComponent {
   private readonly recargar = new Subject<void>();
 
   constructor() {
+    const consulta = this.consultaLateral;
+    if (consulta) {
+      // Si la ventana del navegador se ensancha con lo pendiente abierto en
+      // una ventana flotante, se cierra: pasa a verse en la columna fija.
+      const alCambiar = (evento: MediaQueryListEvent): void => {
+        this.lateralFijo.set(evento.matches);
+        if (evento.matches) {
+          this.lateralAbierto.set(false);
+        }
+      };
+      consulta.addEventListener('change', alCambiar);
+      inject(DestroyRef).onDestroy(() => consulta.removeEventListener('change', alCambiar));
+    }
+    afterRenderEffect(() => {
+      const lista = this.listaDia()?.nativeElement;
+      if (lista && this.posicionLista.fecha === this.fecha() && lista.scrollTop === 0) {
+        lista.scrollTop = this.posicionLista.arriba;
+      }
+    });
     this.recargar
       .pipe(
         switchMap(() => this.peticionDelDia()),
@@ -579,6 +678,7 @@ export class AgendaComponent {
     }
     this.cargandoAgenda.set(true);
     this.errorAgenda.set(null);
+    this.avisoAgenda.set('');
     this.cerrarPanel();
     this.cargarOfertasSinAvisar();
     this.cargarConsultorios();
@@ -720,13 +820,14 @@ export class AgendaComponent {
   }
 
   // ======================================================================
-  //  Panel contextual
+  //  Detalle y reserva
   // ======================================================================
   protected abrirHueco(fila: FilaDia): void {
     if (fila.tipo !== 'hueco' || !this.puedeCrear()) {
       return;
     }
     this.citaSeleccionada.set(null);
+    this.reservaDelDia.set(false);
     this.huecoElegido.set(fila);
     this.serieRecurrente = false;
     this.frecuenciaSerie = 'SEMANAL';
@@ -738,6 +839,43 @@ export class AgendaComponent {
     // El tramo es un rango; la reserva necesita un punto. Se preselecciona el
     // primer arranque y se dejan los demás a un clic.
     this.elegirTurno(fila.turnos[0]);
+  }
+
+  /**
+   * «Nueva cita»: la reserva con todas las horas libres del día elegido.
+   *
+   * Es la misma reserva que se abre al pulsar un hueco; solo cambia que se
+   * ofrecen los arranques de todos los tramos libres. Si no se puede ofrecer
+   * ninguno, se dice por qué en lugar de abrir un formulario vacío.
+   */
+  protected nuevaCita(): void {
+    if (!this.puedeCrear()) {
+      return;
+    }
+    if (this.seleccionIncompleta()) {
+      this.avisoAgenda.set(
+        'Elija servicio y profesional en los filtros para ver las horas libres y reservar.',
+      );
+      return;
+    }
+    const huecos = this.huecosDia();
+    const primero = huecos[0];
+    const ultimo = huecos[huecos.length - 1];
+    if (!primero || !ultimo) {
+      this.avisoAgenda.set(
+        `No quedan horas libres el ${this.diaCorto()} con ${this.nombreProfesional(this.profesionalId())}. ` +
+          'Pruebe otro día con las flechas, otro profesional, o anote al paciente en la lista de espera.',
+      );
+      return;
+    }
+    this.avisoAgenda.set('');
+    this.abrirHueco({
+      tipo: 'hueco',
+      inicio: primero.inicio,
+      fin: ultimo.fin,
+      turnos: huecos.flatMap((hueco) => hueco.turnos),
+    });
+    this.reservaDelDia.set(true);
   }
 
   /** Paciente elegido en el buscador de la reserva. */
@@ -757,6 +895,7 @@ export class AgendaComponent {
 
   protected cerrarPanel(): void {
     this.huecoElegido.set(null);
+    this.reservaDelDia.set(false);
     this.citaSeleccionada.set(null);
     this.turnoElegido.set(null);
     this.pacienteId = '';
@@ -778,6 +917,9 @@ export class AgendaComponent {
 
   /** El botón principal de una tarea de la cola. */
   protected atenderTarea(tarea: TareaPendiente): void {
+    // Con lo pendiente en una ventana, se cierra: lo que sigue (un aviso o el
+    // detalle de la cita) tiene que verse.
+    this.lateralAbierto.set(false);
     if (tarea.clase === 'llamar') {
       // La gestión de llamadas vive en la pantalla de lista de espera, que es
       // donde está el botón que marca la oferta como comunicada.
@@ -799,9 +941,17 @@ export class AgendaComponent {
 
   /** Lleva la vista a la primera cita de la tarea, sin ejecutar nada. */
   protected localizarTarea(tarea: TareaPendiente): void {
+    this.lateralAbierto.set(false);
     const primera = this.citas().find((cita) => cita.id === tarea.citas[0]);
     if (primera) {
       this.abrirCita(primera);
+    }
+  }
+
+  protected recordarPosicionLista(): void {
+    const lista = this.listaDia()?.nativeElement;
+    if (lista) {
+      this.posicionLista = { fecha: this.fecha(), arriba: lista.scrollTop };
     }
   }
 
@@ -1087,6 +1237,9 @@ export class AgendaComponent {
   //  Transiciones de estado
   // ======================================================================
   protected pedirCancelacion(cita: Cita): void {
+    // Una ventana cada vez: el detalle se cierra y la confirmación ocupa su
+    // lugar, con el nombre y la hora a la vista.
+    this.citaSeleccionada.set(null);
     this.citaACancelar.set(cita);
     this.motivoCancelacion = '';
   }
@@ -1117,6 +1270,11 @@ export class AgendaComponent {
         this.errorAgenda.set(this.aFallo(fallo));
       },
     });
+  }
+
+  protected abrirReprogramacion(cita: Cita): void {
+    this.citaSeleccionada.set(null);
+    this.citaAReprogramar.set(cita);
   }
 
   protected confirmarCita(cita: Cita): void {

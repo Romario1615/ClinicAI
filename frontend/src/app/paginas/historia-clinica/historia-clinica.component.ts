@@ -64,11 +64,25 @@ import { RecetaEditorComponent } from './receta-editor.component';
 import { OdontogramaComponent } from './odontograma.component';
 import { PlanesTratamientoComponent } from './planes-tratamiento.component';
 import { Formulario033Component } from './formulario-033.component';
+import { PestanasComponent, type OpcionPestana } from '../../compartido/pestanas.component';
 import type { Paciente } from '../../nucleo/modelos/dominio';
 import { formatearFechaLarga, formatearHora } from '../../nucleo/utilidades/fechas';
 
 /** Zona de presentacion. La real viene de la sede; esta es la de la clinica. */
 const ZONA = 'America/Guayaquil';
+
+/**
+ * Por encima de este tamaño la pantalla es de trabajo fija (no se desplaza el
+ * documento). Es la misma consulta que usa la base común en `styles.scss`.
+ */
+const CONSULTA_PANTALLA_FIJA = '(min-width: 821px) and (min-height: 600px)';
+
+const SEVERIDADES: Record<string, string> = {
+  LEVE: 'leve',
+  MODERADA: 'moderada',
+  GRAVE: 'grave',
+  ANAFILAXIA: 'anafilaxia',
+};
 
 /** Como se lee cada estado de receta, y que implica. */
 const ESTADOS_RECETA: Record<string, { texto: string; tono: string; detalle: string }> = {
@@ -115,7 +129,7 @@ type Pestana =
 import { TipoDocumentoPipe } from '../../compartido/tipo-documento.pipe';
 import { ResumenModuloComponent } from '../../compartido/resumen-modulo.component';
 import { IconoComponent } from '../../compartido/icono.component';
-import { ResumenClinicoComponent } from './resumen-clinico.component';
+import { ResumenClinicoComponent, type AlergiaResumen } from './resumen-clinico.component';
 import { IndicacionesPacienteComponent } from './indicaciones-paciente.component';
 import { OperacionesService } from '../../nucleo/servicios/operaciones.service';
 @Component({
@@ -140,8 +154,12 @@ import { OperacionesService } from '../../nucleo/servicios/operaciones.service';
     NotaEditorComponent,
     RecetaEditorComponent,
     SelectorEspecialidadComponent,
+    PestanasComponent,
   ],
   templateUrl: './historia-clinica.component.html',
+  // Pantalla de trabajo: en escritorio la sección ocupa el alto disponible y
+  // solo desplazan las listas, cada una en su marco.
+  host: { class: 'pantalla historia' },
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './historia-clinica.component.scss',
 })
@@ -155,6 +173,8 @@ export class HistoriaClinicaComponent {
   // --- Seleccion de paciente ---
   protected termino = '';
   protected readonly pacientes = signal<readonly Paciente[]>([]);
+  /** Total del ámbito según el servidor; el listado muestra hasta 50. */
+  protected readonly totalPacientes = signal(0);
   protected readonly cargandoPacientes = signal(true);
   protected readonly errorPacientes = signal<FalloApi | null>(null);
   protected readonly paciente = signal<PacienteDetalle | null>(null);
@@ -174,6 +194,17 @@ export class HistoriaClinicaComponent {
   protected readonly avisoAccesoEmergencia = signal('');
   protected readonly errorAccesoEmergencia = signal('');
   private readonly accesosEmergenciaVigentes = new Map<string, number>();
+  /**
+   * Alergias del resumen clínico, para la cabecera del paciente. `null`
+   * mientras no se conocen (o si el rol no ve el resumen): no se dice «sin
+   * alergias» de lo que no se ha consultado.
+   */
+  protected readonly alergias = signal<readonly AlergiaResumen[] | null>(null);
+  protected readonly hayAlergiaGrave = computed(() =>
+    (this.alergias() ?? []).some((a) => a.severidad === 'GRAVE' || a.severidad === 'ANAFILAXIA'),
+  );
+  /** Escritorio con pantalla fija: la foto va compacta en la cabecera. */
+  protected readonly pantallaFija = signal(false);
   private temporizadorAccesoEmergencia: ReturnType<typeof setTimeout> | null = null;
 
   // --- Permisos ---
@@ -219,9 +250,15 @@ export class HistoriaClinicaComponent {
   /** Pestaña visible. Solo se ofrecen las que el rol puede leer. */
   protected readonly pestana = signal<Pestana>('evolucion');
   protected readonly pestanas = computed(() => {
+    // Primero lo clínico común a toda especialidad (evolución, recetas,
+    // indicaciones); después los módulos propios de la especialidad. Si en una
+    // pantalla estrecha la fila no cabe entera, lo que queda al final es lo
+    // menos frecuente, nunca las recetas con borradores pendientes.
     const lista: { clave: Pestana; texto: string }[] = [
       { clave: 'evolucion', texto: 'Evolución' },
+      { clave: 'recetas', texto: 'Recetas' },
     ];
+    if (this.puedeLeerNotas()) lista.push({ clave: 'indicaciones', texto: 'Indicaciones' });
     // Permiso del rol **y** módulo de la especialidad desde la que se revisa.
     // Sin acceso clínico a este paciente, los módulos solo darían «no disponible».
     const modulo = (m: ModuloHistoria) => this.especialidades.tieneModulo(m) && !this.accesoNoDisponible();
@@ -229,21 +266,39 @@ export class HistoriaClinicaComponent {
       lista.push({ clave: 'odontograma', texto: 'Odontograma' });
     }
     if (this.puedeLeerFormulario033() && modulo('odontograma')) {
-      lista.push({ clave: 'formulario033', texto: 'Formulario MSP 033' });
+      lista.push({ clave: 'formulario033', texto: 'Formulario 033' });
     }
     if (this.puedeLeerOdontograma() && modulo('periodoncia')) {
-      lista.push({ clave: 'periodoncia', texto: 'Periodoncia · placa' });
+      lista.push({ clave: 'periodoncia', texto: 'Periodoncia' });
     }
     if (this.sesion.tienePermiso(PERMISOS.imagenClinicaLeer) && modulo('imagenes')) {
-      lista.push({ clave: 'imagenes', texto: 'Imágenes y radiografías' });
+      lista.push({ clave: 'imagenes', texto: 'Imágenes' });
     }
     if (this.puedeLeerPlanes() && modulo('planes')) {
-      lista.push({ clave: 'planes', texto: 'Planes de tratamiento' });
+      lista.push({ clave: 'planes', texto: 'Planes' });
     }
-    lista.push({ clave: 'recetas', texto: 'Recetas' });
-    if (this.puedeLeerNotas()) lista.push({ clave: 'indicaciones', texto: 'Indicaciones al paciente' });
     return lista;
   });
+
+  /**
+   * Opciones para la fila de pestañas. Los nombres son cortos para que las
+   * ocho quepan en una fila de escritorio desde 1280 px de ancho. «Recetas» lleva la cuenta de
+   * borradores: es trabajo pendiente del profesional (sin su confirmación no
+   * hay calendario de tomas).
+   */
+  protected readonly opcionesPestanas = computed<readonly OpcionPestana[]>(() => {
+    const borradores = this.recetas().filter((r) => r.estado === 'BORRADOR').length;
+    return this.pestanas().map((opcion) => ({
+      clave: opcion.clave,
+      etiqueta: opcion.texto,
+      cuenta: opcion.clave === 'recetas' ? borradores : null,
+    }));
+  });
+
+  /** «Evolución» con resumen se reparte en dos columnas: resumen y notas. */
+  protected readonly conResumen = computed(
+    () => this.pestana() === 'evolucion' && this.puedeLeerNotas() && !this.accesoNoDisponible(),
+  );
 
   protected readonly puedeEscribirHistoria = computed(() =>
     this.sesion.tienePermiso(PERMISOS.historiaEscribir),
@@ -338,6 +393,7 @@ export class HistoriaClinicaComponent {
 
   constructor() {
     this.destroyRef.onDestroy(() => this.limpiarTemporizadorAccesoEmergencia());
+    this.vigilarPantallaFija();
     this.cargarPacientes();
     this.especialidades.cargar();
     // «Abrir historia completa» desde la ficha llega con ?paciente=<id>.
@@ -358,6 +414,7 @@ export class HistoriaClinicaComponent {
     this.api.pacientes({ ...filtroBusquedaPaciente(termino), limite: 50 }).subscribe({
       next: (pagina) => {
         this.pacientes.set(pagina.elementos);
+        this.totalPacientes.set(pagina.total);
         this.cargandoPacientes.set(false);
       },
       error: (fallo: FalloApi) => {
@@ -375,6 +432,7 @@ export class HistoriaClinicaComponent {
     this.accesoNoDisponible.set(false);
     this.notas.set([]);
     this.recetas.set([]);
+    this.alergias.set(null);
 
     this.api.paciente(paciente.id).subscribe({
       next: (detalle) => {
@@ -401,6 +459,7 @@ export class HistoriaClinicaComponent {
     this.paciente.set(null);
     this.notas.set([]);
     this.recetas.set([]);
+    this.alergias.set(null);
     this.errorHistoria.set(null);
     this.notasDenegadas.set(false);
     this.accesoNoDisponible.set(false);
@@ -546,6 +605,12 @@ export class HistoriaClinicaComponent {
     this.cargarHistoria();
   }
 
+  /** La fila de pestañas solo ofrece claves válidas; se comprueban igual. */
+  protected elegirPestana(clave: string): void {
+    const opcion = this.pestanas().find((o) => o.clave === clave);
+    if (opcion) this.pestana.set(opcion.clave);
+  }
+
   protected alternarHistorico(): void {
     this.incluirHistorico.update((valor) => !valor);
     this.cargarHistoria();
@@ -598,5 +663,23 @@ export class HistoriaClinicaComponent {
 
   protected nombreCompleto(paciente: PacienteDetalle): string {
     return `${paciente.nombre} ${paciente.apellido}`;
+  }
+
+  protected severidad(valor: string): string {
+    return SEVERIDADES[valor] ?? valor.toLowerCase();
+  }
+
+  /**
+   * Sigue si la ventana es de escritorio con pantalla fija. Sin `matchMedia`
+   * (pruebas sin motor de maquetación) se queda en el modo de documento que
+   * desplaza, que es el que conserva los botones con texto de la foto.
+   */
+  private vigilarPantallaFija(): void {
+    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return;
+    const consulta = window.matchMedia(CONSULTA_PANTALLA_FIJA);
+    this.pantallaFija.set(consulta.matches);
+    const alCambiar = (evento: MediaQueryListEvent) => this.pantallaFija.set(evento.matches);
+    consulta.addEventListener?.('change', alCambiar);
+    this.destroyRef.onDestroy(() => consulta.removeEventListener?.('change', alCambiar));
   }
 }

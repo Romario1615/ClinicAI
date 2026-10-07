@@ -19,6 +19,12 @@
  * no tiene consentimiento para mensajes automáticos. Si nadie llama antes de
  * que venza, el hueco vuelve a la cola y la ausencia cuenta contra él. Eso va
  * arriba y con su plazo, no mezclado entre las demás filas.
+ *
+ * Cabe en la pantalla
+ * -------------------
+ * En escritorio la página no se desplaza: la cabecera, el resumen y los
+ * avisos quedan quietos, la cola desplaza dentro de su marco y la paginación
+ * queda siempre a la vista al pie.
  */
 import { Component, computed, inject, signal, ChangeDetectionStrategy } from '@angular/core';
 import { FormsModule } from '@angular/forms';
@@ -59,6 +65,7 @@ const DIAS_SEMANA = [
 ] as const;
 
 import { ResumenModuloComponent } from '../../compartido/resumen-modulo.component';
+
 @Component({
   selector: 'app-lista-espera',
   standalone: true,
@@ -69,9 +76,12 @@ import { ResumenModuloComponent } from '../../compartido/resumen-modulo.componen
     VentanaFlotanteComponent,
     FichaPacienteComponent,
   ],
+  // Pantalla de trabajo: en escritorio ocupa el alto disponible y solo
+  // desplaza la cola, dentro de su marco.
+  host: { class: 'pantalla' },
   template: `
-    <div class="cabecera-pagina">
-      <div>
+    <div class="cabecera-pagina pantalla__fijo">
+      <div class="cabecera__titulo">
         <p class="ceja">LISTA DE ESPERA</p>
         <h1>Quién espera un hueco</h1>
         <p class="pagina__nota">
@@ -79,7 +89,7 @@ import { ResumenModuloComponent } from '../../compartido/resumen-modulo.componen
         </p>
       </div>
       <img class="modulo-cabecera__imagen" src="/images/lista-espera.png" alt="" aria-hidden="true" loading="lazy" />
-      <div class="acciones">
+      <div class="acciones cabecera__acciones">
         <button type="button" class="boton" (click)="cargar()" [disabled]="cargando()">
           Actualizar
         </button>
@@ -90,36 +100,39 @@ import { ResumenModuloComponent } from '../../compartido/resumen-modulo.componen
       </div>
     </div>
 
-    <app-resumen-modulo modulo="lista_espera" />
+    <app-resumen-modulo class="pantalla__fijo" modulo="lista_espera" />
 
     @if (error()) {
-      <p class="aviso-error" role="alert">{{ error() }}</p>
+      <p class="aviso-error pantalla__fijo" role="alert">{{ error() }}</p>
     }
     @if (aviso()) {
-      <p class="exito" role="status">{{ aviso() }}</p>
+      <p class="exito pantalla__fijo" role="status">{{ aviso() }}</p>
     }
 
     <!-- Lo único de esta pantalla que hay que hacer ahora. -->
     @if (sinAvisar().length > 0 && !soloSinAvisar()) {
-      <div class="aviso-llamar">
-        <p class="llamar__titulo">
-          <app-icono nombre="telefono" [tamano]="18" />
-          <strong>{{ sinAvisar().length }} paciente(s) esperan una llamada.</strong>
-        </p>
-        <p class="llamar__detalle">
-          Tienen un turno reservado del que no se les pudo avisar por mensaje. Si nadie llama
-          antes de que venza, el hueco vuelve a la cola.
-        </p>
-        <div class="acciones">
-          <button type="button" class="boton boton--pequeno" (click)="alternarPendientes(true)">
-            Ver solo esos
-          </button>
+      <div class="aviso-llamar pantalla__fijo">
+        <div class="llamar__texto">
+          <p class="llamar__titulo">
+            <app-icono nombre="telefono" [tamano]="18" />
+            <strong>{{ sinAvisar().length }} paciente(s) esperan una llamada.</strong>
+          </p>
+          <p class="llamar__detalle">
+            Tienen un turno reservado del que no se les pudo avisar por mensaje. Si nadie llama
+            antes de que venza, el hueco vuelve a la cola.
+          </p>
         </div>
+        <button type="button" class="boton boton--pequeno" (click)="alternarPendientes(true)">
+          Ver solo esos
+        </button>
       </div>
     }
 
+    <!-- Lo único que crece es la cola: en escritorio desplaza dentro de su
+         marco y el filtro y la paginación quedan a la vista. -->
+    <section class="pantalla__resto" aria-labelledby="titulo-entradas">
     <div class="barra-lista">
-      <h2 class="barra-lista__titulo">
+      <h2 class="barra-lista__titulo" id="titulo-entradas">
         Entradas <span class="numerico">· {{ total() }}</span>
       </h2>
       <label class="campo campo--en-linea">
@@ -134,7 +147,7 @@ import { ResumenModuloComponent } from '../../compartido/resumen-modulo.componen
     </div>
 
     @if (cargando()) {
-      <p role="status">Consultando lista…</p>
+      <p class="cargando-lista" role="status">Consultando lista…</p>
     } @else if (entradas().length === 0) {
       <div class="tarjeta vacio-espera" role="status">
         <img class="vacio-espera__imagen" src="/images/lista-espera-vacia.svg" alt="" aria-hidden="true" />
@@ -156,7 +169,7 @@ import { ResumenModuloComponent } from '../../compartido/resumen-modulo.componen
         </div>
       </div>
     } @else {
-      <ul class="cola-espera">
+      <ul class="cola-espera desplazable">
         @for (entrada of entradas(); track entrada.id) {
           <li>
             <button
@@ -192,10 +205,10 @@ import { ResumenModuloComponent } from '../../compartido/resumen-modulo.componen
         }
       </ul>
 
-      <div class="acciones paginacion">
+      <nav class="acciones paginacion" aria-label="Paginación de la lista de espera">
         <button
           type="button"
-          class="boton"
+          class="boton boton--pequeno"
           (click)="mover(-1)"
           [disabled]="pagina() === 0 || cargando()"
         >
@@ -207,15 +220,16 @@ import { ResumenModuloComponent } from '../../compartido/resumen-modulo.componen
         </span>
         <button
           type="button"
-          class="boton"
+          class="boton boton--pequeno"
           (click)="mover(1)"
           [disabled]="(pagina() + 1) * 25 >= total() || cargando()"
         >
           Siguiente
           <app-icono nombre="siguiente" [tamano]="16" />
         </button>
-      </div>
+      </nav>
     }
+    </section>
 
     <!-- ============ Alta: ventana flotante ============ -->
     @if (altaAbierta()) {
@@ -470,16 +484,48 @@ import { ResumenModuloComponent } from '../../compartido/resumen-modulo.componen
   `,
   changeDetection: ChangeDetectionStrategy.Eager,
   styles: `
+    /* La pantalla reparte el espacio con «gap»: sin márgenes propios. */
+    .cabecera-pagina,
+    .exito,
+    .aviso-error {
+      margin: 0;
+    }
+
+    .cabecera__titulo {
+      flex: 1 1 20rem;
+      min-width: 0;
+    }
+
+    .cabecera__titulo h1 {
+      margin: 0;
+    }
+
+    .cabecera__titulo .ceja {
+      margin: 0;
+    }
+
     .pagina__nota {
       margin: var(--espacio-1) 0 0;
       color: var(--texto-suave);
     }
 
-    /* --- Aviso de llamada pendiente --- */
+    .cabecera__acciones {
+      justify-content: flex-end;
+    }
+
+    /* --- Aviso de llamada pendiente: texto y acción en una sola franja --- */
     .aviso-llamar {
       display: flex;
-      flex-direction: column;
-      gap: var(--espacio-2);
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: var(--espacio-2) var(--espacio-4);
+      margin: 0;
+    }
+
+    .llamar__texto {
+      flex: 1 1 24rem;
+      min-width: 0;
     }
 
     .llamar__titulo {
@@ -494,14 +540,22 @@ import { ResumenModuloComponent } from '../../compartido/resumen-modulo.componen
       font-size: 0.92rem;
     }
 
+    /* La cola con su barra y su paginación: separadas por «gap» también en
+       teléfono, donde la pantalla no reparte el alto. */
+    .pantalla__resto {
+      display: flex;
+      flex-direction: column;
+      gap: var(--espacio-3);
+    }
+
     /* --- Barra de la lista --- */
     .barra-lista {
       display: flex;
+      flex: none;
       align-items: center;
       justify-content: space-between;
-      gap: var(--espacio-4);
+      gap: var(--espacio-2) var(--espacio-4);
       flex-wrap: wrap;
-      margin: var(--espacio-5) 0 var(--espacio-3);
     }
 
     .barra-lista__titulo {
@@ -509,6 +563,9 @@ import { ResumenModuloComponent } from '../../compartido/resumen-modulo.componen
     }
 
     /* --- La cola --- */
+    /* En escritorio, «desplazable» la hace desplazar dentro de su marco (por
+       eso aquí no se fija «overflow»: lo taparía); en teléfono crece con el
+       documento y solo recorta las esquinas redondeadas. */
     .cola-espera {
       list-style: none;
       margin: 0;
@@ -517,7 +574,16 @@ import { ResumenModuloComponent } from '../../compartido/resumen-modulo.componen
       border-radius: var(--radio);
       background: var(--superficie-elevada);
       box-shadow: var(--sombra-1);
-      overflow: hidden;
+    }
+
+    @media (max-width: 820px), (max-height: 599px) {
+      .cola-espera {
+        overflow: hidden;
+      }
+    }
+
+    .cargando-lista {
+      margin: 0;
     }
 
     .fila-espera {
@@ -580,9 +646,10 @@ import { ResumenModuloComponent } from '../../compartido/resumen-modulo.componen
       flex: 0 0 auto;
     }
 
-    /* --- Paginación --- */
+    /* --- Paginación, al pie y siempre a la vista --- */
     .paginacion {
-      margin-top: var(--espacio-4);
+      flex: none;
+      justify-content: flex-end;
     }
 
     .paginacion__posicion {
@@ -672,6 +739,7 @@ import { ResumenModuloComponent } from '../../compartido/resumen-modulo.componen
     }
 
     .vacio-espera {
+      flex: none;
       display: grid;
       grid-template-columns: minmax(120px, 190px) minmax(0, 1fr);
       align-items: center;

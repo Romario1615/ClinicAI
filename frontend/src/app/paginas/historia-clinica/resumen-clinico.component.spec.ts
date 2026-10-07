@@ -114,14 +114,18 @@ describe('ResumenClinicoComponent', () => {
     fixture.detectChanges();
     http.expectNone(`${BASE}/historia/pacientes/pac-1/anamnesis/plantillas-activas`);
 
-    const boton = (fixture.nativeElement as HTMLElement).querySelector<HTMLButtonElement>('button[aria-expanded]');
-    expect(boton).not.toBeNull();
+    // La anamnesis es un bloque largo: se abre en una ventana flotante y solo
+    // entonces pide plantillas y respuestas.
+    const boton = Array.from((fixture.nativeElement as HTMLElement).querySelectorAll<HTMLButtonElement>('button[aria-haspopup="dialog"]')).find(
+      (candidato) => candidato.textContent?.trim() === 'Anamnesis',
+    );
+    expect(boton).toBeDefined();
     boton!.click();
     fixture.detectChanges();
     http.expectOne(`${BASE}/historia/pacientes/pac-1/anamnesis/plantillas-activas`).flush([]);
     http.expectOne(`${BASE}/historia/pacientes/pac-1/anamnesis/respuestas`).flush([]);
     fixture.detectChanges();
-    expect((fixture.nativeElement as HTMLElement).textContent).toContain('Ocultar formularios de anamnesis');
+    expect((fixture.nativeElement as HTMLElement).querySelector('dialog[aria-label="Anamnesis del paciente"]')).not.toBeNull();
   });
 
   it('sin IA local no ofrece redactar; el 404 no explica por qué no hay acceso', () => {

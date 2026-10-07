@@ -39,16 +39,21 @@ export interface RecetaOpcion {
   standalone: true,
   imports: [DatePipe, FormsModule, VentanaFlotanteComponent],
   template: `
-    <section class="indicaciones" aria-labelledby="titulo-indicaciones">
-      <h3 id="titulo-indicaciones">Indicaciones para el paciente</h3>
-      <p class="ayuda">
-        El paciente recibe por WhatsApp solo un aviso con un enlace seguro: el texto y la medicación
-        se ven tras confirmar su fecha de nacimiento.
-      </p>
-
-      @if (puedeEscribir()) {
-        <button class="boton boton--principal" type="button" (click)="abrirEditor()" aria-haspopup="dialog">Redactar indicaciones</button>
-      }
+    <section class="indicaciones tarjeta" aria-labelledby="titulo-indicaciones">
+      <!-- Acción principal arriba a la derecha; la lista de publicadas es lo
+           único que desplaza. -->
+      <header class="indicaciones__cabecera">
+        <div>
+          <h3 id="titulo-indicaciones">Indicaciones para el paciente</h3>
+          <p class="ayuda">
+            El paciente recibe por WhatsApp solo un aviso con un enlace seguro: el texto y la medicación
+            se ven tras confirmar su fecha de nacimiento.
+          </p>
+        </div>
+        @if (puedeEscribir()) {
+          <button class="boton boton--principal" type="button" (click)="abrirEditor()" aria-haspopup="dialog">Redactar indicaciones</button>
+        }
+      </header>
       @if (editorAbierto()) {
         <app-ventana-flotante
           ceja="Seguimiento clínico"
@@ -107,7 +112,7 @@ export interface RecetaOpcion {
       }
 
       <h4>Publicadas</h4>
-      <ul class="lista">
+      <ul class="lista desplazable">
         @for (i of lista(); track i.id) {
           <li [class.anulada]="!!i.anulada_en">
             <div>
@@ -160,8 +165,12 @@ export interface RecetaOpcion {
   `,
   changeDetection: ChangeDetectionStrategy.Eager,
   styles: `
-    .indicaciones { display: grid; gap: var(--espacio-3); }
-    h3 { margin: 0; } h4 { margin: var(--espacio-2) 0 0; font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--texto-suave); }
+    :host { display: block; min-width: 0; }
+    .indicaciones { display: grid; gap: var(--espacio-3); padding: var(--espacio-3) var(--espacio-4); }
+    .indicaciones__cabecera { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: var(--espacio-2) var(--espacio-4); }
+    .indicaciones__cabecera > div { flex: 1 1 20rem; min-width: 0; }
+    .indicaciones__cabecera .ayuda { margin-top: var(--espacio-1); }
+    h3 { margin: 0; font-size: 1.15rem; } h4 { margin: var(--espacio-1) 0 0; font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--texto-suave); }
     .ayuda { margin: 0; color: var(--texto-suave); font-size: 0.88rem; }
     .formulario { display: grid; gap: var(--espacio-2); padding: var(--espacio-4); border: 1px solid var(--borde); border-radius: var(--radio); background: var(--superficie); }
     .formulario textarea { min-height: 110px; padding: var(--espacio-2) var(--espacio-3); }
@@ -171,8 +180,18 @@ export interface RecetaOpcion {
     .resultado p { margin: 0; }
     .enlace { display: flex; gap: var(--espacio-2); }
     .enlace input { flex: 1; font-size: 0.82rem; }
-    .lista { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--espacio-2); }
-    .lista li { display: flex; justify-content: space-between; gap: var(--espacio-3); padding: var(--espacio-3); border: 1px solid var(--superficie-hundida); border-radius: var(--radio); }
+    .lista { list-style: none; margin: 0; padding: 0; display: grid; align-content: start; gap: var(--espacio-2); min-width: 0; }
+    .lista li { display: flex; justify-content: space-between; gap: var(--espacio-3); padding: var(--espacio-3); border: 1px solid var(--superficie-hundida); border-radius: var(--radio); overflow-wrap: anywhere; }
+    .lista li > div { min-width: 0; }
+    .lista li .boton { flex: none; align-self: flex-start; }
+
+    /* Modo «llena» (pestaña de la historia en escritorio). */
+    @media (min-width: 821px) and (min-height: 600px) {
+      :host(.llena) { display: flex; flex-direction: column; min-height: 0; }
+      :host(.llena) .indicaciones { display: flex; flex: 1 1 0; flex-direction: column; min-height: 0; }
+      :host(.llena) .indicaciones > * { flex: none; }
+      :host(.llena) .indicaciones > .lista { flex: 1 1 0; min-height: 0; padding: 2px; }
+    }
     .lista p { margin: 4px 0; white-space: pre-line; }
     .lista small { color: var(--texto-suave); }
     .anular { display: flex; gap: 6px; align-items: center; }

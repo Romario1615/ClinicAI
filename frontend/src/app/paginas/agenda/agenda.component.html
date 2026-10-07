@@ -1,7 +1,19 @@
+<!-- ---------------------------------------------------------------------------
+     Agenda como pantalla de trabajo.
+
+     En escritorio no se desplaza la página: arriba quedan quietos la fecha, la
+     acción principal y los filtros; debajo, el calendario llena el alto que
+     sobra y desplaza las horas dentro de su marco. A la derecha, si hay ancho,
+     lo pendiente y los consultorios en pestañas. Todo lo que se abre al
+     pulsar (una cita, una reserva, reprogramar, cancelar, la ficha) va en una
+     ventana flotante: el calendario no se mueve y al cerrar sigue donde
+     estaba.
+---------------------------------------------------------------------------- -->
 @if (cargandoCatalogo()) {
-  <app-cargando mensaje="Cargando el catálogo de la clínica..." />
+  <app-cargando class="pantalla__fijo" mensaje="Cargando el catálogo de la clínica..." />
 } @else if (errorCatalogo()) {
   <app-error
+    class="pantalla__fijo"
     titulo="No se pudo cargar el catálogo"
     [mensaje]="errorCatalogo()!.message"
     [codigo]="errorCatalogo()!.codigo"
@@ -10,34 +22,85 @@
   />
 } @else if (sedes().length === 0) {
   <app-vacio
+    class="pantalla__fijo"
     titulo="No hay sedes en su ámbito"
     detalle="Su usuario no tiene ninguna sede asignada, así que no hay agenda que mostrar. Pida al administrador de la clínica que revise su ámbito."
   />
 } @else {
-  <div class="cabecera-agenda">
-    <div>
+  <!-- ================= Cabecera: qué día, cómo moverse y qué hacer ================= -->
+  <div class="cabecera-pagina cabecera-agenda pantalla__fijo">
+    <div class="cabecera-agenda__titulo">
       <p class="ceja">AGENDA</p>
       <h1>{{ fechaLegible() }}</h1>
     </div>
-    <div class="cabecera-agenda__meta">
-      <p class="cabecera-agenda__zona">Horario de <strong>{{ zona() }}</strong></p>
+
+    <!-- Las flechas y la fecha viven junto al título porque cambian lo que el
+         título dice: así se lee de un vistazo qué día se está mirando. -->
+    <div class="cabecera-agenda__dia" role="group" aria-label="Cambiar la fecha mostrada">
+      <button
+        type="button"
+        class="boton boton--pequeno cabecera-agenda__flecha"
+        (click)="cambiarDia(-1)"
+        [attr.aria-label]="vista() === 'semana' ? 'Semana anterior' : vista() === 'mes' ? 'Mes anterior' : 'Día anterior'"
+      >
+        <span aria-hidden="true">←</span>
+      </button>
+      <button type="button" class="boton boton--pequeno" (click)="irAHoy()">Hoy</button>
+      <button
+        type="button"
+        class="boton boton--pequeno cabecera-agenda__flecha"
+        (click)="cambiarDia(1)"
+        [attr.aria-label]="vista() === 'semana' ? 'Semana siguiente' : vista() === 'mes' ? 'Mes siguiente' : 'Día siguiente'"
+      >
+        <span aria-hidden="true">→</span>
+      </button>
+      <label class="cabecera-agenda__fecha">
+        <span class="solo-lectores">Fecha</span>
+        <input
+          class="campo__control"
+          type="date"
+          name="fecha"
+          [ngModel]="fecha()"
+          (ngModelChange)="fecha.set($event); cargarAgenda()"
+        />
+      </label>
+    </div>
+
+    <img class="modulo-cabecera__imagen cabecera-agenda__imagen" src="/images/agenda-turnos.png" alt="" aria-hidden="true" loading="lazy" />
+
+    <div class="cabecera-agenda__acciones">
+      @if (!lateralFijo()) {
+        <!-- Sin ancho para la columna lateral, lo pendiente se abre en una
+             ventana desde aquí. La cifra dice si hay algo esperando. -->
+        <button type="button" class="boton boton--pequeno" (click)="lateralAbierto.set(true)">
+          <app-icono nombre="reloj" [tamano]="16" />
+          Pendientes
+          @if (pendientes().length > 0) {
+            <span class="cuenta numerico" [attr.aria-label]="pendientes().length + ' por atender'">{{ pendientes().length }}</span>
+          }
+        </button>
+      }
       @if (puedeExportarReportes()) {
         <button type="button" class="boton boton--pequeno" [disabled]="exportando()" (click)="exportarResumen()">
           <app-icono nombre="descargar" [tamano]="16" />
           {{ exportando() ? 'Preparando…' : 'Exportar resumen CSV' }}
         </button>
       }
-      @if (errorExportacion()) {
-        <p class="cabecera-agenda__error" role="alert">{{ errorExportacion() }}</p>
+      @if (puedeCrear()) {
+        <button type="button" class="boton boton--principal" (click)="nuevaCita()">
+          <app-icono nombre="mas" [tamano]="17" />
+          Nueva cita
+        </button>
       }
     </div>
-    <img class="modulo-cabecera__imagen" src="/images/agenda-turnos.png" alt="" aria-hidden="true" loading="lazy" />
+    @if (errorExportacion()) {
+      <p class="cabecera-agenda__error" role="alert">{{ errorExportacion() }}</p>
+    }
   </div>
 
-  <!-- Los cuatro filtros en una línea. Antes eran cuatro campos apilados que
-       ocupaban un tercio de la pantalla antes de mostrar nada del día. -->
-  <section class="barra-contexto" aria-label="Filtros de la agenda">
-    <label class="campo campo--linea">
+  <!-- ================= Filtros en una fila compacta, y la vista ================= -->
+  <section class="barra-agenda pantalla__fijo" aria-label="Filtros de la agenda">
+    <label class="campo barra-agenda__campo">
       <span class="campo__etiqueta">Sede</span>
       <select
         class="campo__control"
@@ -51,7 +114,7 @@
       </select>
     </label>
 
-    <label class="campo campo--linea">
+    <label class="campo barra-agenda__campo">
       <span class="campo__etiqueta">Especialidad</span>
       <select
         class="campo__control"
@@ -66,7 +129,7 @@
       </select>
     </label>
 
-    <label class="campo campo--linea">
+    <label class="campo barra-agenda__campo">
       <span class="campo__etiqueta">Servicio</span>
       <select
         class="campo__control"
@@ -83,7 +146,7 @@
       </select>
     </label>
 
-    <label class="campo campo--linea">
+    <label class="campo barra-agenda__campo">
       <span class="campo__etiqueta">Profesional</span>
       <select
         class="campo__control"
@@ -100,74 +163,55 @@
       </select>
     </label>
 
-    <div class="barra-contexto__dia">
-      <button
-        type="button"
-        class="boton boton--pequeno"
-        (click)="cambiarDia(-1)"
-        [attr.aria-label]="vista() === 'semana' ? 'Semana anterior' : vista() === 'mes' ? 'Mes anterior' : 'Día anterior'"
-      >
-        <span aria-hidden="true">←</span>
-      </button>
-      <button type="button" class="boton boton--pequeno" (click)="irAHoy()">Hoy</button>
-      <button
-        type="button"
-        class="boton boton--pequeno"
-        (click)="cambiarDia(1)"
-        [attr.aria-label]="vista() === 'semana' ? 'Semana siguiente' : vista() === 'mes' ? 'Mes siguiente' : 'Día siguiente'"
-      >
-        <span aria-hidden="true">→</span>
-      </button>
-      <label class="campo campo--linea">
-        <span class="solo-lectores">Fecha</span>
-        <input
-          class="campo__control"
-          type="date"
-          name="fecha"
-          [ngModel]="fecha()"
-          (ngModelChange)="fecha.set($event); cargarAgenda()"
-        />
-      </label>
-      <div class="selector-vista" role="group" aria-label="Vista de la agenda">
-        @for (opcion of vistas; track opcion.valor) {
-          <button
-            type="button"
-            class="selector-vista__opcion"
-            [class.selector-vista__opcion--activa]="vista() === opcion.valor"
-            [attr.aria-pressed]="vista() === opcion.valor"
-            (click)="cambiarVista(opcion.valor)"
-          >
-            {{ opcion.etiqueta }}
-          </button>
-        }
-      </div>
+    <div class="selector-vista" role="group" aria-label="Vista de la agenda">
+      @for (opcion of vistas; track opcion.valor) {
+        <button
+          type="button"
+          class="selector-vista__opcion"
+          [class.selector-vista__opcion--activa]="vista() === opcion.valor"
+          [attr.aria-pressed]="vista() === opcion.valor"
+          (click)="cambiarVista(opcion.valor)"
+        >
+          {{ opcion.etiqueta }}
+        </button>
+      }
     </div>
   </section>
 
-  <app-prolongaciones-pendientes #masTiempo [zona]="zona()" (resuelta)="cargarAgenda()" />
+  <!-- ================= Avisos: solo aparecen cuando hay algo que decir ================= -->
+  <app-prolongaciones-pendientes #masTiempo class="sin-caja" [zona]="zona()" (resuelta)="cargarAgenda()" />
 
   @if (pacienteSugerido()) {
-    <p class="aviso-sugerido" role="status">
-      Agendando para <strong>{{ nombreSugerido() }}</strong>. Pulse un hueco libre: el paciente ya
-      queda elegido en la reserva.
+    <p class="aviso-sugerido pantalla__fijo" role="status">
+      <span>
+        Agendando para <strong>{{ nombreSugerido() }}</strong>. Pulse un hueco libre o «Nueva cita»:
+        el paciente ya queda elegido en la reserva.
+      </span>
       <button type="button" class="boton boton--plano boton--pequeno" (click)="pacienteSugerido.set(null)">
         Quitar
       </button>
     </p>
   }
   @if (procedimientoPlanSugerido()) {
-    <p class="aviso-sugerido" role="status">
+    <p class="aviso-sugerido pantalla__fijo" role="status">
       Esta cita quedará vinculada al procedimiento seleccionado en el plan. El detalle clínico
       permanece en la historia del paciente.
     </p>
   }
-
-  @if (mensajeExito()) {
-    <p class="exito" role="status">{{ mensajeExito() }}</p>
+  @if (avisoAgenda()) {
+    <p class="aviso-sugerido pantalla__fijo" role="status">
+      <span>{{ avisoAgenda() }}</span>
+      <button type="button" class="boton boton--plano boton--pequeno" (click)="avisoAgenda.set('')">
+        Entendido
+      </button>
+    </p>
   }
-
+  @if (mensajeExito()) {
+    <p class="exito pantalla__fijo" role="status">{{ mensajeExito() }}</p>
+  }
   @if (errorAgenda(); as fallo) {
     <app-error
+      class="pantalla__fijo"
       [mensaje]="fallo.message"
       [codigo]="fallo.codigo"
       [correlacion]="fallo.correlacionId ?? ''"
@@ -175,135 +219,143 @@
     />
   }
 
-  @if (cargandoAgenda()) {
-    <app-cargando mensaje="Cargando la agenda del día..." />
-  } @else {
-    <!-- Lo que se puede afirmar del día. No hay porcentaje de ocupación: haría
-         falta el horario de atención, que ninguna API expone todavía, y un
-         porcentaje con denominador supuesto es peor que ninguno. -->
-    <div class="resumen-dia">
-      <span class="resumen-dia__cifra">
-        <strong class="numerico">{{ resumenDia().citas }}</strong> citas
-      </span>
-      <span class="resumen-dia__separador" aria-hidden="true"></span>
-      <span class="numerico">{{ resumenDia().ocupado }} de consulta comprometida</span>
-      <span class="resumen-dia__separador" aria-hidden="true"></span>
-      @if (resumenDia().tramosLibres === 0) {
-        <span>sin huecos libres</span>
-      } @else {
-        <span class="numerico">
-          {{ resumenDia().libre }} libre en {{ resumenDia().tramosLibres }} tramo(s)
-        </span>
-      }
-      <label class="campo campo--linea resumen-dia__filtro">
-        <input
-          type="checkbox"
-          name="canceladas"
-          [ngModel]="verCanceladas()"
-          (ngModelChange)="verCanceladas.set($event)"
+  <!-- ================= El día (o la semana, o el mes) y la columna lateral ================= -->
+  <div class="pantalla__columnas agenda__columnas" [class.agenda__columnas--con-lateral]="lateralFijo()">
+    <section
+      class="tarjeta agenda__marco"
+      [attr.aria-label]="vista() === 'lista' ? 'El día, en orden' : 'Calendario de la agenda'"
+      data-aparecer
+    >
+      @if (cargandoAgenda() || (cargandoRango() && (vista() === 'semana' || vista() === 'mes'))) {
+        <app-cargando
+          class="agenda__cargando"
+          [mensaje]="vista() === 'semana' || vista() === 'mes' ? 'Cargando las citas del periodo...' : 'Cargando la agenda del día...'"
         />
-        <span>Ver canceladas</span>
-      </label>
-    </div>
-
-    @if (tableroConsultorios().length > 0 && (vista() === 'dia' || vista() === 'lista')) {
-      <!-- ================= Consultorios ================= -->
-      <!-- Todas las salas de la sede a la vez: quién está en cuál y cuándo se
-           libera. Incluye las citas de todos los profesionales, no solo las
-           del filtro, porque una sala la puede ocupar cualquiera. -->
-      <section class="salas" aria-labelledby="titulo-salas">
-        <div class="salas__cabecera">
-          <h2 id="titulo-salas">Consultorios</h2>
-          <span class="dia__pista">Ocupación de toda la sede este día</span>
-        </div>
-        <div class="salas__rejilla">
-          @for (sala of tableroConsultorios(); track sala.consultorio.id) {
-            <article class="sala" [class.sala--ocupada]="sala.ocupadoAhora">
-              <header class="sala__cabecera">
-                <div>
-                  <h3 class="sala__nombre">{{ sala.consultorio.nombre }}</h3>
-                  <span class="sala__tipo">{{ sala.tipo }}</span>
-                </div>
-                @if (sala.ocupadoAhora; as cita) {
-                  <span class="sala__estado sala__estado--ocupada">
-                    Ocupado hasta {{ hora(cita.fin) }}
-                  </span>
-                } @else {
-                  <span class="sala__estado sala__estado--libre">Libre ahora</span>
-                }
-              </header>
-              <!-- Franja de 07:00 a 21:00 con los bloques ocupados. -->
-              <div class="sala__linea" aria-hidden="true">
-                @for (bloque of sala.bloques; track bloque.cita.id) {
-                  <span
-                    class="sala__bloque"
-                    [class.sala__bloque--hecho]="bloque.cita.estado === 'COMPLETED'"
-                    [style.left.%]="bloque.izquierda"
-                    [style.width.%]="bloque.ancho"
-                    [title]="hora(bloque.cita.inicio) + '–' + hora(bloque.cita.fin)"
-                  ></span>
-                }
-              </div>
-              <p class="sala__pie numerico">
-                {{ sala.citas.length }} cita(s)
-                @if (sala.proxima; as proxima) {
-                  · próxima {{ hora(proxima.inicio) }}
-                }
-              </p>
-            </article>
-          }
-        </div>
-      </section>
-    }
-
-    <div class="columnas">
-      @if (vista() !== 'lista') {
+      } @else if (vista() !== 'lista') {
         <!-- ================= Calendario con leyenda de colores ================= -->
-        <section class="calendario" aria-label="Calendario de la agenda">
-          @if (cargandoRango() && vista() !== 'dia') {
-            <app-cargando mensaje="Cargando las citas del periodo..." />
-          } @else {
-            <app-calendario-agenda
-              [vista]="$any(vista())"
-              [fecha]="fecha()"
-              [zona]="zona()"
-              [citas]="citasCalendario()"
-              [huecos]="huecosDia()"
-              [profesionales]="profesionales()"
-              [profesionalId]="profesionalId()"
-              [citaSeleccionadaId]="citaSeleccionada()?.id ?? null"
-              [puedeReservar]="puedeCrear()"
-              [verCanceladas]="verCanceladas()"
-              [etiquetaPaciente]="etiquetaPaciente"
-              [etiquetaServicio]="etiquetaServicio"
-              (citaElegida)="abrirCita($event)"
-              (huecoElegido)="abrirHueco($event)"
-              (diaElegido)="elegirDia($event)"
-            />
-          }
-        </section>
+        <app-calendario-agenda
+          class="agenda__calendario"
+          [vista]="$any(vista())"
+          [fecha]="fecha()"
+          [zona]="zona()"
+          [citas]="citasCalendario()"
+          [huecos]="huecosDia()"
+          [profesionales]="profesionales()"
+          [profesionalId]="profesionalId()"
+          [citaSeleccionadaId]="citaSeleccionada()?.id ?? null"
+          [puedeReservar]="puedeCrear()"
+          [verCanceladas]="verCanceladas()"
+          [etiquetaPaciente]="etiquetaPaciente"
+          [etiquetaServicio]="etiquetaServicio"
+          (citaElegida)="abrirCita($event)"
+          (huecoElegido)="abrirHueco($event)"
+          (diaElegido)="elegirDia($event)"
+        />
       } @else {
-      <!-- ================= El día, en orden ================= -->
-      <section class="dia" aria-labelledby="titulo-dia">
+        <!-- ================= El día, en orden ================= -->
         <div class="dia__cabecera">
           <h2 id="titulo-dia">El día, en orden</h2>
           @if (!seleccionIncompleta()) {
-            <span class="dia__pista">Un hueco se pulsa para reservarlo</span>
+            <span class="dia__pista">Pulse un hueco para reservarlo</span>
           }
         </div>
 
-        @if (secuencia().length === 0) {
-          <div class="dia__vacio">
-            <img class="dia__ilustracion" src="/images/agenda-turnos.png" alt="" aria-hidden="true" loading="lazy" />
-            @if (seleccionIncompleta()) {
-              <app-vacio
-                titulo="Elija servicio y profesional"
-                detalle="Los huecos libres dependen de la duración del servicio y del horario del profesional: sin ambos no se pueden calcular."
-              />
-            } @else {
-              <app-vacio titulo="Nada en este día">
+        <!-- La columna de horas desplaza dentro de su marco: la cabecera, los
+             filtros y el pie del día quedan siempre a la vista. -->
+        <div
+          #listaDia
+          class="dia__cuerpo desplazable"
+          (scroll)="recordarPosicionLista()"
+          [attr.tabindex]="secuencia().length === 0 ? 0 : null"
+          [attr.role]="secuencia().length === 0 ? 'region' : null"
+          [attr.aria-labelledby]="secuencia().length === 0 ? 'titulo-dia' : null"
+        >
+          @if (secuencia().length === 0) {
+            <div class="dia__vacio">
+              <img class="dia__ilustracion" src="/images/agenda-turnos.png" alt="" aria-hidden="true" loading="lazy" />
+              @if (seleccionIncompleta()) {
+                <app-vacio
+                  titulo="Elija servicio y profesional"
+                  detalle="Los huecos libres dependen de la duración del servicio y del horario del profesional: elija ambos para verlos."
+                />
+              } @else {
+                <app-vacio titulo="Nada en este día">
+                  @if (motivosSinTurno().length > 0) {
+                    <p class="motivos__intro">No se ofrecen huecos este día porque:</p>
+                    <ul class="motivos">
+                      @for (motivo of motivosSinTurno(); track motivo.motivo) {
+                        <li>
+                          <strong class="numerico">{{ motivo.cantidad }}</strong> {{ motivo.motivo }}
+                        </li>
+                      }
+                    </ul>
+                  }
+                </app-vacio>
+              }
+            </div>
+          } @else {
+            <ul class="dia__filas">
+              @for (fila of secuencia(); track fila.inicio + fila.tipo) {
+                <li>
+                  @if (fila.tipo === 'cita') {
+                    <button
+                      type="button"
+                      class="fila-dia"
+                      [class.fila-dia--elegida]="citaSeleccionada()?.id === fila.cita.id"
+                      [class.fila-dia--pasada]="
+                        fila.cita.estado === 'COMPLETED' || fila.cita.estado === 'CANCELLED'
+                      "
+                      (click)="abrirCita(fila.cita)"
+                    >
+                      <span class="fila-dia__hora numerico">{{ hora(fila.cita.inicio) }}</span>
+                      <span
+                        class="fila-dia__barra"
+                        [attr.data-estado]="fila.cita.estado"
+                        aria-hidden="true"
+                      ></span>
+                      <span class="fila-dia__quien">
+                        <span class="fila-dia__paciente">{{
+                          nombrePaciente(fila.cita.paciente_id)
+                        }}</span>
+                        <span class="fila-dia__detalle">
+                          {{ nombreServicio(fila.cita.servicio_id) }} ·
+                          {{ nombreProfesional(fila.cita.profesional_id) }}
+                        </span>
+                      </span>
+                      @if (fila.cita.estado === 'HELD' && fila.cita.expira_en) {
+                        <span class="marca-llamar">caduca {{ hora(fila.cita.expira_en) }}</span>
+                      }
+                      <app-insignia-estado [estado]="fila.cita.estado" />
+                    </button>
+                  } @else {
+                    <button
+                      type="button"
+                      class="fila-dia fila-dia--hueco"
+                      [class.fila-dia--elegida]="huecoElegido()?.inicio === fila.inicio"
+                      [disabled]="!puedeCrear()"
+                      (click)="abrirHueco(fila)"
+                    >
+                      <span class="fila-dia__hora numerico">{{ hora(fila.inicio) }}</span>
+                      <span class="fila-dia__barra" aria-hidden="true"></span>
+                      <span class="hueco">
+                        <span class="hueco__mas" aria-hidden="true">+</span>
+                        <span class="hueco__duracion">{{ duracionHueco(fila) }} libre</span>
+                        <span class="hueco__turnos numerico">
+                          {{ fila.turnos.length }} turno(s) · hasta {{ hora(fila.fin) }}
+                        </span>
+                      </span>
+                    </button>
+                  }
+                </li>
+              }
+            </ul>
+            <!-- Un día con citas pero sin huecos necesita explicarse igual que
+                 un día vacío: si no, quien atiende no sabe si insistir otro día
+                 o llamar por teléfono. -->
+            @if (resumenDia().tramosLibres === 0 && !seleccionIncompleta()) {
+              <div class="dia__cierre">
+                <p class="dia__cierre-titulo">No queda ningún hueco libre este día.</p>
                 @if (motivosSinTurno().length > 0) {
-                  <p class="motivos__intro">Los huecos del día quedaron descartados porque:</p>
                   <ul class="motivos">
                     @for (motivo of motivosSinTurno(); track motivo.motivo) {
                       <li>
@@ -312,449 +364,503 @@
                     }
                   </ul>
                 }
-              </app-vacio>
+                <p class="campo__ayuda">
+                  Pruebe otro día con las flechas, otro profesional, o anote al paciente en la
+                  lista de espera para que reciba el primer hueco que se libere.
+                </p>
+              </div>
             }
-          </div>
-        } @else {
-          <ul class="dia__filas">
-            @for (fila of secuencia(); track fila.inicio + fila.tipo) {
-              <li>
-                @if (fila.tipo === 'cita') {
-                  <button
-                    type="button"
-                    class="fila-dia"
-                    [class.fila-dia--elegida]="citaSeleccionada()?.id === fila.cita.id"
-                    [class.fila-dia--pasada]="
-                      fila.cita.estado === 'COMPLETED' || fila.cita.estado === 'CANCELLED'
-                    "
-                    (click)="abrirCita(fila.cita)"
-                  >
-                    <span class="fila-dia__hora numerico">{{ hora(fila.cita.inicio) }}</span>
-                    <span
-                      class="fila-dia__barra"
-                      [attr.data-estado]="fila.cita.estado"
-                      aria-hidden="true"
-                    ></span>
-                    <span class="fila-dia__quien">
-                      <span class="fila-dia__paciente">{{
-                        nombrePaciente(fila.cita.paciente_id)
-                      }}</span>
-                      <span class="fila-dia__detalle">
-                        {{ nombreServicio(fila.cita.servicio_id) }} ·
-                        {{ nombreProfesional(fila.cita.profesional_id) }}
-                      </span>
-                    </span>
-                    @if (fila.cita.estado === 'HELD' && fila.cita.expira_en) {
-                      <span class="marca-llamar">caduca {{ hora(fila.cita.expira_en) }}</span>
-                    }
-                    <app-insignia-estado [estado]="fila.cita.estado" />
-                  </button>
-                } @else {
-                  <button
-                    type="button"
-                    class="fila-dia fila-dia--hueco"
-                    [class.fila-dia--elegida]="huecoElegido()?.inicio === fila.inicio"
-                    [disabled]="!puedeCrear()"
-                    (click)="abrirHueco(fila)"
-                  >
-                    <span class="fila-dia__hora numerico">{{ hora(fila.inicio) }}</span>
-                    <span class="fila-dia__barra" aria-hidden="true"></span>
-                    <span class="hueco">
-                      <span class="hueco__mas" aria-hidden="true">+</span>
-                      <span class="hueco__duracion">{{ duracionHueco(fila) }} libre</span>
-                      <span class="hueco__turnos numerico">
-                        {{ fila.turnos.length }} turno(s) · hasta {{ hora(fila.fin) }}
-                      </span>
-                    </span>
-                  </button>
-                }
-              </li>
+            @if (!puedeCrear()) {
+              <p class="campo__ayuda dia__nota">Su rol no permite crear citas.</p>
             }
-          </ul>
-          <!-- Un dia con citas pero sin huecos necesita explicarse igual que un
-               dia vacio: si no, quien atiende no sabe si insistir otro dia o
-               llamar por telefono. Antes esto solo salia con la lista vacia. -->
-          @if (resumenDia().tramosLibres === 0 && !seleccionIncompleta()) {
-            <div class="dia__cierre">
-              <p class="dia__cierre-titulo">No queda ningún hueco libre este día.</p>
-              @if (motivosSinTurno().length > 0) {
-                <ul class="motivos">
-                  @for (motivo of motivosSinTurno(); track motivo.motivo) {
-                    <li>
-                      <strong class="numerico">{{ motivo.cantidad }}</strong> {{ motivo.motivo }}
-                    </li>
-                  }
-                </ul>
-              }
-              <p class="campo__ayuda">
-                Pruebe otro día con las flechas, otro profesional, o anote al paciente en la
-                lista de espera para que reciba el primer hueco que se libere.
-              </p>
-            </div>
           }
-          @if (!puedeCrear()) {
-            <p class="campo__ayuda dia__nota">Su rol no permite crear citas.</p>
-          }
-        }
-      </section>
+        </div>
       }
 
-      <!-- ================= Panel contextual ================= -->
-      <aside class="panel" aria-live="polite">
-        @switch (panelActivo()) {
-          @case ('atencion') {
-            <div class="panel__cabecera">
-              <h2>Necesita acción</h2>
-            </div>
-            <div class="panel__cuerpo">
-              <app-cola-trabajo
-                [tareas]="pendientes()"
-                (actuar)="atenderTarea($event)"
-                (localizar)="localizarTarea($event)"
-              />
-              <p class="campo__ayuda panel__pista">
-                Pulse un hueco del día para reservarlo, o una cita para verla y actuar sobre
-                ella.
-              </p>
-            </div>
+      <!-- Pie del día: lo que se puede afirmar sin inventar la capacidad. No
+           hay porcentaje de ocupación: haría falta el horario de atención, que
+           ninguna API expone todavía, y un porcentaje con denominador supuesto
+           es peor que ninguno. -->
+      <div class="agenda__pie">
+        <p class="agenda__resumen">
+          @if (vista() === 'semana' || vista() === 'mes') {
+            <span>{{ diaCorto() }}:</span>
           }
-
-          @case ('reservar') {
-            <p class="sr-only" role="status">Formulario de reserva abierto.</p>
+          <span>
+            <strong class="numerico">{{ resumenDia().citas }}</strong>
+            {{ resumenDia().citas === 1 ? 'cita' : 'citas' }}
+          </span>
+          <span class="agenda__separador" aria-hidden="true">·</span>
+          <span class="numerico">{{ resumenDia().ocupado }} reservados</span>
+          <span class="agenda__separador" aria-hidden="true">·</span>
+          @if (resumenDia().tramosLibres === 0) {
+            <span>sin huecos libres</span>
+          } @else {
+            <span class="numerico">
+              {{ resumenDia().libre }} libre en {{ resumenDia().tramosLibres }} tramo(s)
+            </span>
           }
+          <span class="agenda__separador" aria-hidden="true">·</span>
+          <span>Horario de <strong>{{ zona() }}</strong></span>
+        </p>
+        <label class="campo--en-linea agenda__canceladas">
+          <input
+            type="checkbox"
+            name="canceladas"
+            [ngModel]="verCanceladas()"
+            (ngModelChange)="verCanceladas.set($event)"
+          />
+          <span>Ver canceladas</span>
+        </label>
+      </div>
+    </section>
 
-          @case ('cita') {
-            @if (citaSeleccionada(); as cita) {
-              <div class="panel__cabecera panel__cabecera--accion">
-                <h2>Cita</h2>
-                <button type="button" class="boton boton--plano boton--pequeno" (click)="cerrarPanel()">
-                  Cerrar
-                </button>
-              </div>
-              <div class="panel__cuerpo">
-                <p class="panel__titular numerico">
-                  {{ hora(cita.inicio) }}–{{ hora(cita.fin) }}
-                  <app-insignia-estado [estado]="cita.estado" />
-                </p>
-                <button type="button" class="panel__paciente" (click)="abrirFicha(cita.paciente_id)">
-                  {{ nombrePaciente(cita.paciente_id) }}
-                  <span class="panel__paciente-pista">ver ficha</span>
-                </button>
-                <p class="panel__subtitulo">
-                  {{ nombreServicio(cita.servicio_id) }} ·
-                  {{ nombreProfesional(cita.profesional_id) }}
-                </p>
-                <p class="panel__subtitulo">{{ nombreConsultorio(cita.consultorio_id) }}</p>
-
-                @if (cita.estado === 'HELD' && cita.expira_en) {
-                  <p class="aviso-llamar">
-                    <strong>Turno apartado sin confirmar.</strong>
-                    Caduca a las {{ hora(cita.expira_en) }}; al vencer, el hueco vuelve a la
-                    agenda.
-                  </p>
-                }
-                @if (cita.estado === 'CANCELLED' && cita.motivo_cancelacion) {
-                  <p class="campo__ayuda">Motivo registrado: {{ cita.motivo_cancelacion }}</p>
-                }
-
-                <dl class="panel__datos">
-                  <div>
-                    <dt>Origen</dt>
-                    <dd>{{ cita.origen }}</dd>
-                  </div>
-                  <div>
-                    <dt>Duración</dt>
-                    <dd class="numerico">{{ cita.duracion_minutos }} min</dd>
-                  </div>
-                  @if (cita.confirmada_en) {
-                    <div>
-                      <dt>Confirmada</dt>
-                      <dd class="numerico">{{ hora(cita.confirmada_en) }}</dd>
-                    </div>
-                  }
-                  @if (cita.llegada_en) {
-                    <div>
-                      <dt>Llegada</dt>
-                      <dd class="numerico">{{ hora(cita.llegada_en) }}</dd>
-                    </div>
-                    <div>
-                      <dt>Espera registrada</dt>
-                      <dd>{{ minutosEspera(cita) }} min</dd>
-                    </div>
-                  }
-                  @if (cita.atencion_iniciada_en) {
-                    <div>
-                      <dt>Atención iniciada</dt>
-                      <dd class="numerico">{{ hora(cita.atencion_iniciada_en) }}</dd>
-                    </div>
-                  }
-                  @if (cita.completada_en) {
-                    <div>
-                      <dt>Atención finalizada</dt>
-                      <dd class="numerico">{{ hora(cita.completada_en) }}</dd>
-                    </div>
-                  }
-                </dl>
-
-                <div class="panel__acciones">
-                  @if (accionesDe(cita).confirmar) {
-                    <button
-                      type="button"
-                      class="boton boton--principal"
-                      (click)="confirmarCita(cita)"
-                    >
-                      Confirmar
-                    </button>
-                  }
-                  @if (accionesDe(cita).registrarLlegada) {
-                    <button type="button" class="boton boton--principal" (click)="registrarLlegada(cita)">
-                      Registrar llegada
-                    </button>
-                  }
-                  @if (accionesDe(cita).iniciarAtencion) {
-                    <button type="button" class="boton boton--principal" (click)="iniciarAtencion(cita)">
-                      Iniciar atención
-                    </button>
-                  }
-                  @if (accionesDe(cita).completar) {
-                    <button
-                      type="button"
-                      class="boton boton--principal"
-                      (click)="completarCita(cita)"
-                    >
-                      Marcar como atendida
-                    </button>
-                  }
-                  <app-acciones-recorrido
-                    [cita]="cita"
-                    [consultorios]="consultorios()"
-                    [zona]="zona()"
-                    (cambio)="mensajeExito.set($event); cargarAgenda(); masTiempo.cargar()"
-                  />
-                  <div class="fila">
-                    @if (accionesDe(cita).reprogramar) {
-                      <button type="button" class="boton" (click)="citaAReprogramar.set(cita)">
-                        Reprogramar
-                      </button>
-                    }
-                    @if (accionesDe(cita).inasistencia) {
-                      <button type="button" class="boton" (click)="marcarInasistencia(cita)">
-                        No asistió
-                      </button>
-                    }
-                  </div>
-                  @if (accionesDe(cita).cancelar) {
-                    <button
-                      type="button"
-                      class="boton boton--peligro"
-                      (click)="pedirCancelacion(cita)"
-                    >
-                      Cancelar la cita
-                    </button>
-                    <p class="campo__ayuda">
-                      Cancelar pide un motivo: es lo que permite explicar después por qué no se
-                      atendió a este paciente.
-                    </p>
-                  }
-                </div>
-              </div>
-            }
-          }
-        }
+    @if (lateralFijo()) {
+      <aside class="tarjeta lateral" aria-label="Pendientes y consultorios" data-aparecer>
+        <ng-container *ngTemplateOutlet="contenidoLateral; context: { $implicit: 'agenda-lateral' }" />
       </aside>
+    }
+  </div>
 
-      @if (huecoElegido(); as hueco) {
-        <app-ventana-flotante
-          ceja="AGENDA · RESERVA"
-          titulo="Reservar cita"
-          forma="centrada"
-          [anchoMaximo]="820"
-          [altoCompleto]="true"
-          [cierraAlPulsarFuera]="false"
-          (cerrar)="cancelarReserva()"
+  <!-- ================= Lo pendiente y los consultorios =================
+       Una sola plantilla para la columna lateral y para la ventana que la
+       sustituye cuando no hay ancho: así nunca muestran cosas distintas. -->
+  <ng-template #contenidoLateral let-grupo>
+    @if (tableroConsultorios().length > 0) {
+      <app-pestanas
+        [grupo]="grupo"
+        etiqueta="Pendientes y consultorios"
+        [opciones]="opcionesLateral()"
+        [(activa)]="pestanaLateral"
+      />
+    } @else {
+      <h2 class="lateral__titulo">Necesita acción</h2>
+    }
+
+    @if (pestanaLateral() === 'pendientes' || tableroConsultorios().length === 0) {
+      <section
+        class="lateral__panel"
+        [attr.role]="tableroConsultorios().length > 0 ? 'tabpanel' : null"
+        [attr.id]="tableroConsultorios().length > 0 ? grupo + '-panel-pendientes' : null"
+        [attr.aria-labelledby]="tableroConsultorios().length > 0 ? grupo + '-pestana-pendientes' : null"
+        [attr.aria-label]="tableroConsultorios().length > 0 ? null : 'Necesita acción'"
+      >
+        <div
+          class="lateral__cuerpo desplazable"
+          [attr.tabindex]="pendientes().length === 0 ? 0 : null"
+          [attr.role]="pendientes().length === 0 ? 'region' : null"
+          [attr.aria-label]="pendientes().length === 0 ? 'Tareas pendientes' : null"
         >
-          <form
-            id="formulario-reserva-serie"
-            class="reserva__formulario"
-            (ngSubmit)="confirmarReserva()"
-          >
-            <div class="reserva__contexto">
-              <p class="panel__titular numerico">
-                {{ duracionHueco(hueco) }} libre desde las {{ hora(hueco.inicio) }}
-              </p>
-              <p class="panel__subtitulo">
-                {{ nombreServicio(servicioId()) }} con {{ nombreProfesional(profesionalId()) }}
-              </p>
-            </div>
-
-            <fieldset class="arranques">
-              <legend class="campo__etiqueta">Hora de inicio</legend>
-              <div class="arranques__lista">
-                @for (turno of hueco.turnos; track turno.inicio) {
-                  <button
-                    type="button"
-                    class="boton boton--pequeno numerico"
-                    [class.arranques__elegido]="turnoElegido()?.inicio === turno.inicio"
-                    (click)="elegirTurno(turno)"
-                  >
-                    {{ hora(turno.inicio) }}
-                  </button>
-                }
-              </div>
-            </fieldset>
-
-            @if (turnoElegido(); as turno) {
-              <p class="campo__ayuda">
-                {{ turno.duracion_minutos }} min de consulta
-                @if (turno.minutos_preparacion > 0) {
-                  <span>(+{{ turno.minutos_preparacion }} min de preparación)</span>
-                }
-                · termina a las {{ hora(turno.fin_consulta) }}
-              </p>
-            }
-
-            @if (consultorios().length > 0 && turnoElegido()) {
-              <fieldset class="selector-sala">
-                <legend class="campo__etiqueta">Consultorio</legend>
-                <div class="selector-sala__lista">
-                  <button
-                    type="button"
-                    class="selector-sala__opcion"
-                    [attr.aria-pressed]="consultorioId() === ''"
-                    (click)="elegirConsultorio('')"
-                  >
-                    <strong>Sin asignar</strong>
-                    <span>Se decide al llegar</span>
-                  </button>
-                  @for (sala of consultorios(); track sala.id) {
-                    @let choque = choqueConsultorio(sala.id);
-                    <button
-                      type="button"
-                      class="selector-sala__opcion"
-                      [class.selector-sala__opcion--ocupada]="choque"
-                      [attr.aria-pressed]="consultorioId() === sala.id"
-                      [disabled]="choque !== null"
-                      (click)="elegirConsultorio(sala.id)"
-                    >
-                      <strong>{{ sala.nombre }}</strong>
-                      @if (choque) {
-                        <span class="numerico">Ocupado {{ hora(choque.inicio) }}–{{ hora(choque.fin) }}</span>
-                      } @else {
-                        <span>Libre</span>
-                      }
-                    </button>
+          <app-cola-trabajo
+            [tareas]="pendientes()"
+            (actuar)="atenderTarea($event)"
+            (localizar)="localizarTarea($event)"
+          />
+          <p class="campo__ayuda lateral__pista">
+            Pulse un hueco libre para reservarlo, o una cita para verla y actuar sobre ella.
+          </p>
+        </div>
+      </section>
+    } @else {
+      <!-- Todas las salas de la sede a la vez: quién está en cuál y cuándo se
+           libera. Incluye las citas de todos los profesionales, no solo las
+           del filtro, porque una sala la puede ocupar cualquiera. -->
+      <section
+        class="lateral__panel"
+        role="tabpanel"
+        [id]="grupo + '-panel-consultorios'"
+        [attr.aria-labelledby]="grupo + '-pestana-consultorios'"
+      >
+        <div class="lateral__cuerpo desplazable" tabindex="0" role="region" aria-label="Ocupación de los consultorios">
+          <p class="dia__pista">Ocupación de toda la sede el {{ diaCorto() }}</p>
+          <div class="salas__rejilla">
+            @for (sala of tableroConsultorios(); track sala.consultorio.id) {
+              <article class="sala" [class.sala--ocupada]="sala.ocupadoAhora">
+                <header class="sala__cabecera">
+                  <div>
+                    <h3 class="sala__nombre">{{ sala.consultorio.nombre }}</h3>
+                    <span class="sala__tipo">{{ sala.tipo }}</span>
+                  </div>
+                  @if (sala.ocupadoAhora; as cita) {
+                    <span class="sala__estado sala__estado--ocupada">
+                      Ocupado hasta {{ hora(cita.fin) }}
+                    </span>
+                  } @else {
+                    <span class="sala__estado sala__estado--libre">Libre ahora</span>
+                  }
+                </header>
+                <!-- Franja de 07:00 a 21:00 con los bloques ocupados. -->
+                <div class="sala__linea" aria-hidden="true">
+                  @for (bloque of sala.bloques; track bloque.cita.id) {
+                    <span
+                      class="sala__bloque"
+                      [class.sala__bloque--hecho]="bloque.cita.estado === 'COMPLETED'"
+                      [style.left.%]="bloque.izquierda"
+                      [style.width.%]="bloque.ancho"
+                      [title]="hora(bloque.cita.inicio) + '–' + hora(bloque.cita.fin)"
+                    ></span>
                   }
                 </div>
-              </fieldset>
-            }
-
-            <div class="campo">
-              <span class="campo__etiqueta">Paciente <span class="obligatorio">*</span></span>
-              @if (pacienteId) {
-                <p class="reserva__paciente">
-                  <strong>{{ nombrePaciente(pacienteId) }}</strong>
-                  @if (!procedimientoPlanSugerido()) {
-                    <button type="button" class="boton boton--plano boton--pequeno" (click)="pacienteId = ''">
-                      Cambiar
-                    </button>
+                <p class="sala__pie numerico">
+                  {{ sala.citas.length }} cita(s)
+                  @if (sala.proxima; as proxima) {
+                    · próxima {{ hora(proxima.inicio) }}
                   }
                 </p>
-              } @else {
-                <app-selector-paciente (seleccion)="elegirPacienteReserva($event)" />
-              }
-              @if (!pacienteId) {
-                <span class="campo__ayuda">Busque y elija al paciente para confirmar.</span>
-              }
-            </div>
-
-            <section class="reserva__recurrencia" aria-labelledby="etiqueta-recurrencia">
-              <label class="interruptor">
-                <input
-                  type="checkbox"
-                  name="serie-recurrente"
-                  [(ngModel)]="serieRecurrente"
-                  [disabled]="!!procedimientoPlanSugerido()"
-                />
-                <span>
-                  <strong id="etiqueta-recurrencia">Repetir esta cita</strong>
-                  <small>Se conserva el día y la hora local de la sede.</small>
-                </span>
-              </label>
-              @if (procedimientoPlanSugerido()) {
-                <p class="campo__ayuda">
-                  Las citas vinculadas a un procedimiento de plan dental se reservan individualmente.
-                </p>
-              }
-              @if (serieRecurrente) {
-                <div class="reserva__recurrencia-campos">
-                  <label class="campo">
-                    <span class="campo__etiqueta">Frecuencia</span>
-                    <select class="campo__control" name="frecuencia-serie" [(ngModel)]="frecuenciaSerie">
-                      <option value="SEMANAL">Cada semana</option>
-                      <option value="QUINCENAL">Cada dos semanas</option>
-                      <option value="MENSUAL">Cada mes</option>
-                    </select>
-                  </label>
-                  <label class="campo">
-                    <span class="campo__etiqueta">Cantidad de citas</span>
-                    <input
-                      class="campo__control numerico"
-                      type="number"
-                      name="cantidad-serie"
-                      min="2"
-                      [max]="maximoCitasSerie"
-                      required
-                      [(ngModel)]="cantidadSerie"
-                    />
-                    <span class="campo__ayuda">Incluye la fecha elegida · máximo {{ maximoCitasSerie }}.</span>
-                  </label>
-                </div>
-                <p class="campo__ayuda">
-                  Se comprobará cada fecha antes de guardar. Si una no está libre, no se creará ninguna.
-                </p>
-              }
-            </section>
-
-            <label class="campo">
-              <span class="campo__etiqueta">Notas de recepción (opcional)</span>
-              <textarea
-                class="campo__control"
-                name="notas"
-                maxlength="2000"
-                [(ngModel)]="notas"
-              ></textarea>
-              <span class="campo__ayuda">
-                Texto administrativo. No escriba aquí información clínica: la ve el personal que gestiona la agenda.
-              </span>
-            </label>
-
-            @if (serieRecurrente && !cantidadSerieValida) {
-              <p class="reserva__error" role="alert">Indique una cantidad entre 2 y {{ maximoCitasSerie }}.</p>
+              </article>
             }
-            @if (errorReserva()) {
-              <p class="reserva__error" role="alert">{{ mensajeErrorReserva() }}</p>
-            }
-          </form>
-          <div pie class="reserva__pie">
-            <button type="button" class="boton" (click)="cancelarReserva()">Descartar</button>
-            <button
-              type="submit"
-              form="formulario-reserva-serie"
-              class="boton boton--principal"
-              [disabled]="!pacienteId || reservando() || (serieRecurrente && !cantidadSerieValida)"
-            >
-              @if (reservando()) {
-                Guardando…
-              } @else if (serieRecurrente) {
-                Crear serie de {{ cantidadSerie }} citas
-              } @else {
-                Confirmar cita
-              }
-            </button>
           </div>
-        </app-ventana-flotante>
-      }
-    </div>
+        </div>
+      </section>
+    }
+  </ng-template>
+
+  @if (!lateralFijo() && lateralAbierto()) {
+    <app-ventana-flotante
+      ceja="Agenda"
+      titulo="Pendientes y consultorios"
+      forma="lateral"
+      [anchoMaximo]="440"
+      (cerrar)="lateralAbierto.set(false)"
+    >
+      <div class="lateral lateral--ventana">
+        <ng-container *ngTemplateOutlet="contenidoLateral; context: { $implicit: 'agenda-ventana' }" />
+      </div>
+    </app-ventana-flotante>
+  }
+
+  <!-- ================= Detalle de una cita, en ventana lateral =================
+       Lateral y no centrada: deja ver el calendario, que es el contexto de lo
+       que se decide (qué viene después, si la sala está libre). -->
+  @if (citaSeleccionada(); as cita) {
+    <app-ventana-flotante
+      ceja="Cita"
+      [titulo]="nombrePaciente(cita.paciente_id)"
+      forma="lateral"
+      [anchoMaximo]="460"
+      (cerrar)="cerrarPanel()"
+    >
+      <div class="detalle-cita">
+        <p class="panel__titular numerico">
+          <span>{{ hora(cita.inicio) }}–{{ hora(cita.fin) }}</span>
+          <app-insignia-estado [estado]="cita.estado" />
+        </p>
+        <p class="panel__subtitulo">
+          {{ nombreServicio(cita.servicio_id) }} ·
+          {{ nombreProfesional(cita.profesional_id) }}
+        </p>
+        <p class="panel__subtitulo">{{ nombreConsultorio(cita.consultorio_id) }}</p>
+        <button type="button" class="boton boton--pequeno detalle-cita__ficha" (click)="abrirFicha(cita.paciente_id)">
+          Ver ficha del paciente
+        </button>
+
+        @if (cita.estado === 'HELD' && cita.expira_en) {
+          <p class="aviso-llamar">
+            <strong>Turno apartado sin confirmar.</strong>
+            Caduca a las {{ hora(cita.expira_en) }}; al vencer, el hueco vuelve a la
+            agenda.
+          </p>
+        }
+        @if (cita.estado === 'CANCELLED' && cita.motivo_cancelacion) {
+          <p class="campo__ayuda">Motivo registrado: {{ cita.motivo_cancelacion }}</p>
+        }
+
+        <dl class="panel__datos">
+          <div>
+            <dt>Origen</dt>
+            <dd>{{ cita.origen }}</dd>
+          </div>
+          <div>
+            <dt>Duración</dt>
+            <dd class="numerico">{{ cita.duracion_minutos }} min</dd>
+          </div>
+          @if (cita.confirmada_en) {
+            <div>
+              <dt>Confirmada</dt>
+              <dd class="numerico">{{ hora(cita.confirmada_en) }}</dd>
+            </div>
+          }
+          @if (cita.llegada_en) {
+            <div>
+              <dt>Llegada</dt>
+              <dd class="numerico">{{ hora(cita.llegada_en) }}</dd>
+            </div>
+            <div>
+              <dt>Espera registrada</dt>
+              <dd>{{ minutosEspera(cita) }} min</dd>
+            </div>
+          }
+          @if (cita.atencion_iniciada_en) {
+            <div>
+              <dt>Atención iniciada</dt>
+              <dd class="numerico">{{ hora(cita.atencion_iniciada_en) }}</dd>
+            </div>
+          }
+          @if (cita.completada_en) {
+            <div>
+              <dt>Atención finalizada</dt>
+              <dd class="numerico">{{ hora(cita.completada_en) }}</dd>
+            </div>
+          }
+        </dl>
+
+        <div class="panel__acciones">
+          @if (accionesDe(cita).confirmar) {
+            <button type="button" class="boton boton--principal" (click)="confirmarCita(cita)">
+              Confirmar
+            </button>
+          }
+          @if (accionesDe(cita).registrarLlegada) {
+            <button type="button" class="boton boton--principal" (click)="registrarLlegada(cita)">
+              Registrar llegada
+            </button>
+          }
+          @if (accionesDe(cita).iniciarAtencion) {
+            <button type="button" class="boton boton--principal" (click)="iniciarAtencion(cita)">
+              Iniciar atención
+            </button>
+          }
+          @if (accionesDe(cita).completar) {
+            <button type="button" class="boton boton--principal" (click)="completarCita(cita)">
+              Marcar como atendida
+            </button>
+          }
+          <app-acciones-recorrido
+            [cita]="cita"
+            [consultorios]="consultorios()"
+            [zona]="zona()"
+            (cambio)="mensajeExito.set($event); cargarAgenda(); masTiempo.cargar()"
+          />
+          @if (accionesDe(cita).reprogramar || accionesDe(cita).inasistencia) {
+            <div class="fila">
+              @if (accionesDe(cita).reprogramar) {
+                <button type="button" class="boton" (click)="abrirReprogramacion(cita)">
+                  Reprogramar
+                </button>
+              }
+              @if (accionesDe(cita).inasistencia) {
+                <button type="button" class="boton" (click)="marcarInasistencia(cita)">
+                  No asistió
+                </button>
+              }
+            </div>
+          }
+          @if (accionesDe(cita).cancelar) {
+            <!-- Lo irreversible va separado y abajo: no se pulsa por inercia. -->
+            <div class="detalle-cita__cancelar">
+              <button type="button" class="boton boton--peligro" (click)="pedirCancelacion(cita)">
+                Cancelar la cita
+              </button>
+              <p class="campo__ayuda">
+                Se le pedirá un motivo: es lo que permite explicar después por qué no se
+                atendió a este paciente.
+              </p>
+            </div>
+          }
+        </div>
+      </div>
+    </app-ventana-flotante>
+  }
+
+  <!-- ================= Nueva cita o serie, en ventana centrada ================= -->
+  @if (huecoElegido(); as hueco) {
+    <app-ventana-flotante
+      ceja="AGENDA · RESERVA"
+      titulo="Reservar cita"
+      forma="centrada"
+      [anchoMaximo]="820"
+      [altoCompleto]="true"
+      [cierraAlPulsarFuera]="false"
+      (cerrar)="cancelarReserva()"
+    >
+      <form
+        id="formulario-reserva-serie"
+        class="reserva__formulario"
+        (ngSubmit)="confirmarReserva()"
+      >
+        <div class="reserva__contexto">
+          <p class="reserva__fecha">{{ fechaDia() }}</p>
+          @if (reservaDelDia()) {
+            <p class="panel__titular numerico">
+              {{ hueco.turnos.length }} {{ hueco.turnos.length === 1 ? 'hora libre' : 'horas libres' }} este día
+            </p>
+          } @else {
+            <p class="panel__titular numerico">
+              {{ duracionHueco(hueco) }} libre desde las {{ hora(hueco.inicio) }}
+            </p>
+          }
+          <p class="panel__subtitulo">
+            {{ nombreServicio(servicioId()) }} con {{ nombreProfesional(profesionalId()) }}
+          </p>
+        </div>
+
+        <fieldset class="arranques">
+          <legend class="campo__etiqueta">Hora de inicio</legend>
+          <div class="arranques__lista">
+            @for (turno of hueco.turnos; track turno.inicio) {
+              <button
+                type="button"
+                class="boton boton--pequeno numerico"
+                [class.arranques__elegido]="turnoElegido()?.inicio === turno.inicio"
+                [attr.aria-pressed]="turnoElegido()?.inicio === turno.inicio"
+                (click)="elegirTurno(turno)"
+              >
+                {{ hora(turno.inicio) }}
+              </button>
+            }
+          </div>
+        </fieldset>
+
+        @if (turnoElegido(); as turno) {
+          <p class="campo__ayuda">
+            {{ turno.duracion_minutos }} min de consulta
+            @if (turno.minutos_preparacion > 0) {
+              <span>(+{{ turno.minutos_preparacion }} min de preparación)</span>
+            }
+            · termina a las {{ hora(turno.fin_consulta) }}
+          </p>
+        }
+
+        @if (consultorios().length > 0 && turnoElegido()) {
+          <fieldset class="selector-sala">
+            <legend class="campo__etiqueta">Consultorio</legend>
+            <div class="selector-sala__lista">
+              <button
+                type="button"
+                class="selector-sala__opcion"
+                [attr.aria-pressed]="consultorioId() === ''"
+                (click)="elegirConsultorio('')"
+              >
+                <strong>Sin asignar</strong>
+                <span>Se decide al llegar</span>
+              </button>
+              @for (sala of consultorios(); track sala.id) {
+                @let choque = choqueConsultorio(sala.id);
+                <button
+                  type="button"
+                  class="selector-sala__opcion"
+                  [class.selector-sala__opcion--ocupada]="choque"
+                  [attr.aria-pressed]="consultorioId() === sala.id"
+                  [disabled]="choque !== null"
+                  (click)="elegirConsultorio(sala.id)"
+                >
+                  <strong>{{ sala.nombre }}</strong>
+                  @if (choque) {
+                    <span class="numerico">Ocupado {{ hora(choque.inicio) }}–{{ hora(choque.fin) }}</span>
+                  } @else {
+                    <span>Libre</span>
+                  }
+                </button>
+              }
+            </div>
+          </fieldset>
+        }
+
+        <div class="campo">
+          <span class="campo__etiqueta">Paciente <span class="obligatorio">*</span></span>
+          @if (pacienteId) {
+            <p class="reserva__paciente">
+              <strong>{{ nombrePaciente(pacienteId) }}</strong>
+              @if (!procedimientoPlanSugerido()) {
+                <button type="button" class="boton boton--plano boton--pequeno" (click)="pacienteId = ''">
+                  Cambiar
+                </button>
+              }
+            </p>
+          } @else {
+            <app-selector-paciente (seleccion)="elegirPacienteReserva($event)" />
+          }
+          @if (!pacienteId) {
+            <span class="campo__ayuda">Busque y elija al paciente para confirmar.</span>
+          }
+        </div>
+
+        <section class="reserva__recurrencia" aria-labelledby="etiqueta-recurrencia">
+          <label class="interruptor">
+            <input
+              type="checkbox"
+              name="serie-recurrente"
+              [(ngModel)]="serieRecurrente"
+              [disabled]="!!procedimientoPlanSugerido()"
+            />
+            <span>
+              <strong id="etiqueta-recurrencia">Repetir esta cita</strong>
+              <small>Se conserva el día y la hora local de la sede.</small>
+            </span>
+          </label>
+          @if (procedimientoPlanSugerido()) {
+            <p class="campo__ayuda">
+              Las citas vinculadas a un procedimiento de plan dental se reservan individualmente.
+            </p>
+          }
+          @if (serieRecurrente) {
+            <div class="reserva__recurrencia-campos">
+              <label class="campo">
+                <span class="campo__etiqueta">Frecuencia</span>
+                <select class="campo__control" name="frecuencia-serie" [(ngModel)]="frecuenciaSerie">
+                  <option value="SEMANAL">Cada semana</option>
+                  <option value="QUINCENAL">Cada dos semanas</option>
+                  <option value="MENSUAL">Cada mes</option>
+                </select>
+              </label>
+              <label class="campo">
+                <span class="campo__etiqueta">Cantidad de citas</span>
+                <input
+                  class="campo__control numerico"
+                  type="number"
+                  name="cantidad-serie"
+                  min="2"
+                  [max]="maximoCitasSerie"
+                  required
+                  [(ngModel)]="cantidadSerie"
+                />
+                <span class="campo__ayuda">Incluye la fecha elegida · máximo {{ maximoCitasSerie }}.</span>
+              </label>
+            </div>
+            <p class="campo__ayuda">
+              Se comprobará cada fecha antes de guardar. Si una no está libre, no se creará ninguna.
+            </p>
+          }
+        </section>
+
+        <label class="campo">
+          <span class="campo__etiqueta">Notas de recepción (opcional)</span>
+          <textarea
+            class="campo__control"
+            name="notas"
+            maxlength="2000"
+            [(ngModel)]="notas"
+          ></textarea>
+          <span class="campo__ayuda">
+            Texto administrativo. No escriba aquí información clínica: la ve el personal que gestiona la agenda.
+          </span>
+        </label>
+
+        @if (serieRecurrente && !cantidadSerieValida) {
+          <p class="reserva__error" role="alert">Indique una cantidad entre 2 y {{ maximoCitasSerie }}.</p>
+        }
+        @if (errorReserva()) {
+          <p class="reserva__error" role="alert">{{ mensajeErrorReserva() }}</p>
+        }
+      </form>
+      <div pie class="reserva__pie">
+        <button type="button" class="boton" (click)="cancelarReserva()">Descartar</button>
+        <button
+          type="submit"
+          form="formulario-reserva-serie"
+          class="boton boton--principal"
+          [disabled]="!pacienteId || reservando() || (serieRecurrente && !cantidadSerieValida)"
+        >
+          @if (reservando()) {
+            Guardando…
+          } @else if (serieRecurrente) {
+            Crear serie de {{ cantidadSerie }} citas
+          } @else {
+            Confirmar cita
+          }
+        </button>
+      </div>
+    </app-ventana-flotante>
   }
 
   <!-- La ficha se abre en una ventana flotante: la agenda no se mueve, no
@@ -801,7 +907,8 @@
         </span>
       </label>
 
-      <div class="fila">
+      <div pie class="acciones acciones--final dialogo__pie">
+        <button type="button" class="boton" (click)="descartarCancelacion()">Volver</button>
         <button
           type="button"
           class="boton boton--peligro"
@@ -810,12 +917,12 @@
         >
           Cancelar la cita
         </button>
-        <button type="button" class="boton" (click)="descartarCancelacion()">Volver</button>
       </div>
     </app-ventana-flotante>
   }
   @if (citaAReprogramar(); as cita) {
     <app-reprogramar-cita
+      class="sin-caja"
       [cita]="cita"
       [zona]="zona()"
       [consultorios]="consultorios()"

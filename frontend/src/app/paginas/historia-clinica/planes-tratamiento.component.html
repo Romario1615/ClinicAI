@@ -16,7 +16,9 @@
     }
   </div>
 
-  @if (error()) {
+  <!-- Con una ventana abierta el error se muestra dentro de ella: detrás del
+       velo no lo vería nadie. -->
+  @if (error() && !accion() && !mostrarFormulario()) {
     <p class="aviso-error" role="alert">{{ error() }}</p>
   }
   @if (exito()) {
@@ -127,6 +129,9 @@
         </label>
       }
       </form>
+      @if (error()) {
+        <p class="aviso-error" role="alert">{{ error() }}</p>
+      }
       <div pie class="acciones-plan">
         <button class="boton" type="button" [disabled]="guardando()" (click)="cerrarFormulario()">Descartar</button>
         @if (nivelSensibilidad !== 'N3') {
@@ -151,7 +156,7 @@
       <p>Los planes se guardan como borradores y requieren revisión profesional antes de proponerlos.</p>
     </div>
   } @else {
-    <div class="lista-planes">
+    <div class="lista-planes desplazable">
       @for (plan of planes(); track plan.id) {
         <article class="tarjeta plan">
           <header class="plan__cabecera">
@@ -272,9 +277,20 @@
             </div>
           }
 
+          <!-- Confirmar una acción del plan es una decisión: se pide en una
+               ventana centrada, dentro del propio plan, y la lista no se mueve. -->
           @if (accionEnPlan(plan); as abierta) {
-            @if (abierta) {
-              <form class="accion-plan" (ngSubmit)="confirmarAccion()">
+            <app-ventana-flotante
+              ceja="Plan de tratamiento"
+              [titulo]="tituloAccion(abierta)"
+              forma="centrada"
+              [anchoMaximo]="560"
+              [cierraAlPulsarFuera]="false"
+              [cierraConEscape]="!guardando()"
+              (cerrar)="cerrarAccion()"
+            >
+              <form [id]="'accion-plan-' + plan.id" class="accion-plan" (ngSubmit)="confirmarAccion()">
+                <p class="accion-plan__plan">{{ plan.titulo }}</p>
                 @switch (abierta.tipo) {
                   @case ('aceptar') {
                     <p class="accion-plan__aviso">
@@ -329,14 +345,17 @@
                     </label>
                   }
                 }
-                <div class="acciones acciones--final">
-                  <button class="boton" type="button" (click)="cerrarAccion()">Volver</button>
-                  <button class="boton boton--principal" type="submit" [disabled]="guardando()">
-                    {{ guardando() ? 'Guardando…' : 'Confirmar' }}
-                  </button>
-                </div>
+                @if (error()) {
+                  <p class="aviso-error" role="alert">{{ error() }}</p>
+                }
               </form>
-            }
+              <div pie class="acciones acciones--final">
+                <button class="boton" type="button" [disabled]="guardando()" (click)="cerrarAccion()">Volver</button>
+                <button class="boton boton--principal" type="submit" [attr.form]="'accion-plan-' + plan.id" [disabled]="guardando()">
+                  {{ guardando() ? 'Guardando…' : 'Confirmar' }}
+                </button>
+              </div>
+            </app-ventana-flotante>
           }
         </article>
       }
@@ -349,8 +368,18 @@
   @if (presupuestoError()) {
     <p class="aviso-error" role="alert">{{ presupuestoError() }}</p>
   }
+  <!-- Vista previa del presupuesto: ventana amplia encima de la lista. La
+       impresión (estilos globales) saca de la ventana solo el documento. -->
   @if (presupuestoSeleccionado(); as presupuesto) {
-    <section class="tarjeta presupuesto-imprimible" aria-labelledby="titulo-presupuesto">
+    <app-ventana-flotante
+      ceja="Planificación dental"
+      titulo="Presupuesto de tratamiento"
+      forma="centrada"
+      [anchoMaximo]="900"
+      [altoCompleto]="true"
+      (cerrar)="cerrarPresupuesto()"
+    >
+    <section class="presupuesto-imprimible" aria-labelledby="titulo-presupuesto">
       <div class="presupuesto-imprimible__acciones">
         <p class="ayuda-presupuesto">Vista previa generada desde el plan guardado.</p>
         <div class="acciones">
@@ -411,6 +440,7 @@
         impuestos aplicables y condiciones de pago.
       </p>
     </section>
+    </app-ventana-flotante>
   }
 
   <p class="nota-flujo">

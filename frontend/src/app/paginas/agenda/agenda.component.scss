@@ -11,17 +11,28 @@
  *  La segunda decisión: no hay columna de acciones.
  *  -----------------------------------------------
  *  Cinco botones por fila multiplicados por diez filas eran cincuenta objetos
- *  pulsables compitiendo. Ahora se pulsa la fila y las acciones aparecen en el
- *  panel derecho, una sola vez y con sitio para explicar lo que hacen.
+ *  pulsables compitiendo. Ahora se pulsa la cita y las acciones aparecen en
+ *  una ventana lateral, una sola vez y con sitio para explicar lo que hacen.
  * ------------------------------------------------------------------------- */
 
+/* ---------------------------------------------------------------------------
+ *  Pantalla de trabajo
+ *
+ *  En escritorio la agenda cabe entera: cabecera y filtros quietos arriba, y el
+ *  calendario (o la lista del día) se reparte el alto que sobra y desplaza las
+ *  horas dentro de su marco. Los márgenes los pone el `gap` de `.pantalla`.
+ * ------------------------------------------------------------------------- */
+
+.exito,
+.aviso-sugerido {
+  margin: 0;
+}
+
+/* --- Cabecera: el día, cómo moverse y la acción principal --- */
 .cabecera-agenda {
-  display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: var(--espacio-4);
-  flex-wrap: wrap;
-  margin-bottom: var(--espacio-4);
+  align-items: center;
+  gap: var(--espacio-2) var(--espacio-4);
+  margin-bottom: 0;
 
   h1 {
     margin: 0;
@@ -32,17 +43,56 @@
   }
 }
 
-.cabecera-agenda__zona {
-  margin: 0;
-  color: var(--texto-suave);
-  font-size: 0.9rem;
+.cabecera-agenda__titulo {
+  flex: 0 1 auto;
+  min-width: 0;
 }
 
-.cabecera-agenda__meta {
+.cabecera-agenda__dia {
   display: flex;
+  flex: none;
   align-items: center;
-  gap: var(--espacio-3);
+  gap: var(--espacio-2);
+}
+
+.cabecera-agenda__flecha {
+  min-width: 36px;
+  padding: 0;
+  font-size: 1rem;
+}
+
+.cabecera-agenda__fecha {
+  display: block;
+
+  .campo__control {
+    width: auto;
+    min-height: 34px;
+    padding: 0 var(--espacio-2);
+  }
+}
+
+/* Crece hasta el borde derecho: en la misma línea que la fecha o, si no cabe,
+   en la siguiente, la acción principal queda siempre arriba a la derecha. */
+.cabecera-agenda__acciones {
+  display: flex;
+  flex: 1 1 auto;
   flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--espacio-2);
+  min-width: 0;
+}
+
+/* La ilustración solo donde sobra ancho: en un portátil, cada píxel de la
+   cabecera es una hora menos de calendario a la vista. */
+.cabecera-agenda__imagen {
+  display: none;
+}
+
+@media (min-width: 1500px) {
+  .cabecera-agenda__imagen {
+    display: block;
+  }
 }
 
 .cabecera-agenda__error {
@@ -52,109 +102,77 @@
   font-size: 0.82rem;
 }
 
-/* --- Barra de contexto: los filtros en una línea --- */
-.barra-contexto {
+/* Cifra de lo pendiente en el botón: texto, no solo un punto de color. */
+.cuenta {
+  min-width: 20px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: #f6c766;
+  color: #3d2800;
+  font-size: 0.72rem;
+  font-weight: 800;
+  line-height: 20px;
+  text-align: center;
+}
+
+/* --- Filtros en una fila compacta, con la vista al final --- */
+.barra-agenda {
   display: flex;
+  flex-wrap: wrap;
   align-items: flex-end;
-  gap: var(--espacio-3);
-  flex-wrap: wrap;
-  padding: var(--espacio-3);
-  margin-bottom: var(--espacio-3);
-  border: 1px solid var(--borde);
-  border-radius: var(--radio);
-  background: var(--superficie-elevada);
-  box-shadow: var(--sombra-1);
+  gap: var(--espacio-2) var(--espacio-3);
+  padding: var(--espacio-2) var(--espacio-3);
+  border: 1px solid var(--vidrio-borde);
+  border-radius: var(--radio-vidrio);
+  background: var(--vidrio-especular), var(--vidrio-cuerpo);
+  box-shadow: var(--vidrio-canto), var(--sombra-1);
 }
 
-.barra-contexto__dia {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-end;
-  gap: var(--espacio-2);
-  margin-left: auto;
-
-  .campo--linea {
-    flex: 0 0 auto;
-    min-width: 150px;
-  }
-}
-
-/* --- Resumen del día --- */
-.resumen-dia {
-  display: flex;
-  align-items: center;
-  gap: var(--espacio-4);
-  flex-wrap: wrap;
-  padding: var(--espacio-3) var(--espacio-4);
-  margin-bottom: var(--espacio-4);
-  border: 1px solid var(--borde);
-  border-radius: var(--radio);
-  background: var(--superficie-elevada);
-  color: var(--texto-suave);
-  font-size: 0.9rem;
-}
-
-.resumen-dia__cifra strong {
-  font-size: 1.3rem;
-  color: var(--texto);
-}
-
-.resumen-dia__separador {
-  width: 1px;
-  height: 24px;
-  background: var(--borde);
-}
-
-.resumen-dia__filtro {
-  margin-left: auto;
-  display: flex;
-  align-items: center;
-  gap: var(--espacio-2);
-  flex: 0 0 auto;
+.barra-agenda__campo {
+  flex: 1 1 150px;
   min-width: 0;
-  cursor: pointer;
-}
+  margin: 0;
 
-/* --- Dos columnas: el día y el panel --- */
-.columnas {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 392px;
-  gap: var(--espacio-5);
-  align-items: stretch;
-  /* Llena lo que queda de ventana: la cabecera, la barra de filtros y el
-     resumen ocupan unos 260 px, y el resto es del dia. Sin esto, un dia con
-     dos citas dejaba media pantalla en blanco y parecia que no habia cargado. */
-  min-height: calc(100vh - 290px);
-}
+  .campo__etiqueta {
+    margin-bottom: 2px;
+    font-size: 0.78rem;
+  }
 
-@media (max-width: 1100px) {
-  .columnas {
-    grid-template-columns: 1fr;
+  .campo__control {
+    min-height: 36px;
+    padding: 0 var(--espacio-2);
+    text-overflow: ellipsis;
   }
 }
 
-/* --- Selector de vista --- */
+/* --- Selector de vista: la misma cápsula de vidrio que las pestañas --- */
 .selector-vista {
   display: inline-flex;
-  padding: 2px;
-  border: 1px solid var(--borde);
+  flex: none;
+  gap: 2px;
+  margin-left: auto;
+  padding: 3px;
+  border: 1px solid var(--vidrio-borde);
   border-radius: 999px;
-  background: var(--superficie);
+  background: var(--vidrio-especular), var(--vidrio-cuerpo);
+  box-shadow: var(--vidrio-canto);
 }
 
 .selector-vista__opcion {
-  min-height: 32px;
+  min-height: 30px;
   padding: 0 14px;
   border: 0;
   border-radius: 999px;
   background: transparent;
   color: var(--texto-suave);
-  font-weight: 600;
+  font-weight: 650;
   font-size: 0.85rem;
   cursor: pointer;
+  transition: background-color 160ms ease, color 160ms ease;
 }
 
 .selector-vista__opcion:hover {
+  background: rgb(220 240 238 / 70%);
   color: var(--texto);
 }
 
@@ -163,35 +181,132 @@
   outline-offset: 1px;
 }
 
-.selector-vista__opcion--activa {
-  background: var(--acento);
+.selector-vista__opcion--activa,
+.selector-vista__opcion--activa:hover {
+  background: linear-gradient(180deg, var(--acento), var(--acento-fuerte));
   color: var(--acento-texto, #fff);
 }
 
-.calendario {
-  min-width: 0;
+@media (prefers-reduced-motion: reduce) {
+  .selector-vista__opcion {
+    transition: none;
+  }
 }
 
-/* --- El día --- */
-.dia {
+/* --- El calendario (o la lista) y la columna lateral --- */
+.agenda__columnas {
+  --pantalla-columnas: minmax(0, 1fr);
+}
+
+.agenda__columnas--con-lateral {
+  --pantalla-columnas: minmax(0, 1fr) clamp(300px, 30%, 380px);
+}
+
+.agenda__marco {
   display: flex;
   flex-direction: column;
-  min-height: 0;
-  border: 1px solid var(--borde);
-  border-radius: var(--radio);
-  background: var(--superficie-elevada);
-  box-shadow: var(--sombra-1);
-  overflow: hidden;
+  gap: var(--espacio-2);
+  min-width: 0;
+  padding: var(--espacio-3);
 }
 
-.dia__cabecera {
+.agenda__cargando {
+  display: block;
+  margin: auto;
+}
+
+/* Pie del día: el resumen y el interruptor de canceladas, en una línea. */
+.agenda__pie {
   display: flex;
+  flex: none;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
+  gap: var(--espacio-1) var(--espacio-3);
+  padding-top: var(--espacio-2);
+  border-top: 1px solid var(--borde);
+  color: var(--texto-suave);
+  font-size: 0.85rem;
+}
+
+.agenda__resumen {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0 6px;
+  min-width: 0;
+  margin: 0;
+
+  strong {
+    color: var(--texto);
+  }
+}
+
+.agenda__separador {
+  color: var(--texto-tenue);
+}
+
+.agenda__canceladas {
+  flex: none;
+  min-height: 24px;
+}
+
+/* --- Columna lateral: lo pendiente y los consultorios --- */
+.lateral {
+  display: flex;
+  flex-direction: column;
   gap: var(--espacio-3);
-  padding: var(--espacio-3) var(--espacio-4);
-  border-bottom: 1px solid var(--borde);
-  background: var(--superficie-hundida);
+  min-width: 0;
+  padding: var(--espacio-3);
+}
+
+/* Dentro de una ventana flotante ya hay vidrio y el cuerpo de la ventana ya
+   desplaza: sin segunda tarjeta ni segundo marco desplazable (con un alto sin
+   definir, el marco se quedaría en cero). */
+.lateral--ventana {
+  padding: 0;
+
+  .lateral__cuerpo {
+    flex: none;
+    min-height: auto;
+    overflow: visible;
+  }
+}
+
+.lateral__titulo {
+  margin: 0;
+  font-size: 0.85rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--texto-suave);
+}
+
+.lateral__panel {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.lateral__cuerpo {
+  display: flex;
+  flex-direction: column;
+  gap: var(--espacio-3);
+}
+
+.lateral__pista {
+  margin: 0;
+}
+
+/* --- La lista del día --- */
+.dia__cabecera {
+  display: flex;
+  flex: none;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--espacio-1) var(--espacio-3);
 
   h2 {
     margin: 0;
@@ -208,6 +323,14 @@
   font-size: 0.82rem;
 }
 
+/* El marco de la lista: en escritorio desplaza dentro (`.desplazable`); en
+   teléfono crece con el documento. */
+.dia__cuerpo {
+  border: 1px solid var(--borde);
+  border-radius: var(--radio);
+  background: var(--superficie-elevada);
+}
+
 .dia__vacio {
   padding: var(--espacio-4);
   text-align: center;
@@ -215,8 +338,8 @@
 
 .dia__ilustracion {
   display: block;
-  width: 124px;
-  height: 124px;
+  width: 96px;
+  height: 96px;
   margin: 0 auto var(--espacio-2);
   object-fit: contain;
 }
@@ -225,11 +348,6 @@
   list-style: none;
   margin: 0;
   padding: 0;
-  flex: 1 1 auto;
-  min-height: 0;
-  /* La columna de horas se desplaza sola: la cabecera «El día, en orden» y el
-     panel de la derecha se quedan fijos. */
-  overflow-y: auto;
 }
 
 .dia__nota {
@@ -364,74 +482,36 @@
   font-size: 0.85rem;
 }
 
-/* --- Panel contextual --- */
-.panel {
-  position: sticky;
-  top: 80px;
-  align-self: start;
-  max-height: calc(100vh - 290px);
+/* --- Detalle de una cita (ventana lateral) --- */
+.detalle-cita {
   display: flex;
   flex-direction: column;
-  border: 1px solid var(--borde);
-  border-radius: var(--radio);
-  background: var(--superficie-elevada);
-  box-shadow: var(--sombra-1);
-  overflow: hidden;
-}
-
-@media (max-width: 1100px) {
-  .columnas {
-    min-height: 0;
-  }
-
-  .panel {
-    position: static;
-    max-height: none;
-  }
-
-  .dia__filas {
-    overflow-y: visible;
-  }
-}
-
-.panel__cabecera {
-  display: flex;
-  align-items: center;
   gap: var(--espacio-3);
-  padding: var(--espacio-3) var(--espacio-4);
-  border-bottom: 1px solid var(--borde);
-  background: var(--superficie-hundida);
 
-  h2 {
+  .aviso-llamar {
     margin: 0;
-    font-size: 0.85rem;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
-    color: var(--texto-suave);
-  }
-
-  .boton {
-    margin-left: auto;
   }
 }
 
-.panel__cabecera--accion {
-  background: var(--acento-suave);
+.detalle-cita__ficha {
+  align-self: flex-start;
+}
 
-  h2 {
-    color: var(--acento-fuerte);
+/* Lo irreversible va separado y abajo: no se pulsa por inercia. */
+.detalle-cita__cancelar {
+  display: grid;
+  gap: var(--espacio-2);
+  margin-top: var(--espacio-2);
+  padding-top: var(--espacio-3);
+  border-top: 1px solid var(--borde);
+
+  .campo__ayuda {
+    margin: 0;
   }
 }
 
-.panel__cuerpo {
+.dialogo__pie {
   flex: 1 1 auto;
-  min-height: 0;
-  overflow-y: auto;
-  padding: var(--espacio-4);
-  display: flex;
-  flex-direction: column;
-  gap: var(--espacio-3);
 }
 
 .reserva__formulario {
@@ -449,6 +529,14 @@
   box-shadow: var(--cristal-sombra), inset 0 1px 0 rgb(255 255 255 / 84%);
   -webkit-backdrop-filter: saturate(145%) blur(var(--cristal-desenfoque));
   backdrop-filter: saturate(145%) blur(var(--cristal-desenfoque));
+}
+
+.reserva__fecha {
+  margin: 0 0 2px;
+  color: var(--acento-fuerte);
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
 }
 
 .reserva__recurrencia {
@@ -530,36 +618,6 @@
   margin: 0;
   color: var(--texto-suave);
   font-size: 0.9rem;
-}
-
-.panel__pista {
-  margin: 0;
-}
-
-/* El nombre del paciente es pulsable: abre la ficha sin salir de la agenda. */
-.panel__paciente {
-  display: flex;
-  align-items: baseline;
-  gap: var(--espacio-2);
-  padding: 0;
-  border: 0;
-  background: transparent;
-  color: var(--acento);
-  font-size: 1.05rem;
-  font-weight: 650;
-  text-align: left;
-  cursor: pointer;
-
-  &:hover {
-    color: var(--acento-fuerte);
-    text-decoration: underline;
-  }
-}
-
-.panel__paciente-pista {
-  color: var(--texto-tenue);
-  font-size: 0.8rem;
-  font-weight: 550;
 }
 
 .panel__datos {
@@ -666,27 +724,10 @@
   margin-bottom: var(--espacio-2);
 }
 
-/* ----- Tablero de consultorios ----- */
-.salas {
-  position: relative;
-  margin-bottom: var(--espacio-5);
-}
-
-.salas__cabecera {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: var(--espacio-3);
-  margin-bottom: var(--espacio-3);
-}
-
-.salas__cabecera h2 {
-  margin: 0;
-}
-
+/* ----- Tablero de consultorios (pestaña de la columna lateral) ----- */
 .salas__rejilla {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
   gap: var(--espacio-3);
 }
 
@@ -768,7 +809,7 @@
 
 /* ----- Selector de consultorio en la reserva ----- */
 .selector-sala {
-  margin: 0 0 var(--espacio-4);
+  margin: 0;
   padding: 0;
   border: 0;
 }
@@ -817,8 +858,9 @@
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: var(--espacio-2);
-  padding: var(--espacio-3) var(--espacio-4);
+  justify-content: space-between;
+  gap: var(--espacio-2) var(--espacio-3);
+  padding: var(--espacio-2) var(--espacio-4);
   border-left: 4px solid var(--acento);
   border-radius: var(--radio);
   background: var(--acento-suave);

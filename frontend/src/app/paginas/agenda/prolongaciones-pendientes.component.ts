@@ -24,8 +24,11 @@ import { VentanaFlotanteComponent } from '../../compartido/ventana-flotante.comp
   standalone: true,
   imports: [FormsModule, VentanaFlotanteComponent],
   template: `
+    <!-- En la agenda este componente no ocupa caja propia («sin-caja»): el
+         aviso es directamente una pieza fija de la pantalla y, sin
+         peticiones, no deja ni un hueco vacío. -->
     @if (puedeResolver() && peticiones().length > 0) {
-      <section class="pendientes" aria-labelledby="titulo-mas-tiempo">
+      <section class="pendientes pantalla__fijo" aria-labelledby="titulo-mas-tiempo">
         <h2 id="titulo-mas-tiempo">Peticiones de más tiempo</h2>
         <ul>
           @for (p of peticiones(); track p.cita_id) {
@@ -87,12 +90,13 @@ import { VentanaFlotanteComponent } from '../../compartido/ventana-flotante.comp
   `,
   changeDetection: ChangeDetectionStrategy.Eager,
   styles: `
-    .pendientes { margin-bottom: var(--espacio-4); padding: var(--espacio-3) var(--espacio-4);
+    .pendientes { margin: 0; padding: var(--espacio-2) var(--espacio-4);
       border: 1px solid var(--aviso-borde, var(--borde)); border-left: 4px solid var(--aviso, #c98a1b);
       border-radius: var(--radio); background: var(--superficie); }
-    .pendientes h2 { margin: 0 0 var(--espacio-2); font-size: 1rem; }
-    .pendientes ul { display: grid; gap: var(--espacio-2); margin: 0; padding: 0; list-style: none; }
-    .pendientes__fila { display: flex; align-items: center; justify-content: space-between; gap: var(--espacio-3); }
+    .pendientes h2 { margin: 0 0 var(--espacio-1); font-size: 0.95rem; }
+    .pendientes ul { display: grid; gap: var(--espacio-1); margin: 0; padding: 0; list-style: none; }
+    .pendientes__fila { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--espacio-1) var(--espacio-3); }
+    .pendientes__fila > span { flex: 1 1 18rem; min-width: 0; }
     .afectada { display: grid; gap: var(--espacio-2); margin: 0 0 var(--espacio-3); padding: var(--espacio-3);
       border: 1px solid var(--borde); border-radius: var(--radio); }
     .afectada legend { padding: 0 var(--espacio-1); font-weight: 600; }

@@ -1,6 +1,7 @@
 :host { display: block; }
 
 .formulario-033 { display: grid; gap: var(--espacio-4); }
+.registros { display: grid; align-content: start; gap: var(--espacio-3); min-width: 0; }
 .encabezado, .registro__cabecera, .bloque__titulo, .acciones { display: flex; align-items: center; justify-content: space-between; gap: var(--espacio-3); }
 .encabezado { padding: var(--espacio-4) var(--espacio-5); border: 1px solid var(--borde); border-radius: var(--radio); background: linear-gradient(115deg, #f3faf7, #fff 62%, #edf8f4); }
 .encabezado h2, .registro h3 { margin: 0 0 var(--espacio-1); }
@@ -67,4 +68,16 @@ textarea.campo__control { min-height: 74px; resize: vertical; }
   .registro__acciones, .acciones > div { width: 100%; }
   .registro__acciones .boton, .acciones > div .boton { flex: 1; }
   .encabezado > .boton { align-self: flex-start; }
+}
+
+/* Modo «llena» (pestaña de la historia en escritorio): el encabezado queda
+   fijo y solo la lista de atenciones desplaza. */
+@media (min-width: 821px) and (min-height: 600px) {
+  :host(.llena) { display: flex; flex-direction: column; min-height: 0; }
+  :host(.llena) .formulario-033 { display: flex; flex: 1 1 0; flex-direction: column; gap: var(--espacio-3); min-height: 0; }
+  :host(.llena) .formulario-033 > * { flex: none; margin: 0; }
+  :host(.llena) .formulario-033 > .registros { flex: 1 1 0; min-height: 0; padding: 2px; }
+  :host(.llena) .encabezado { padding: var(--espacio-3) var(--espacio-4); }
+  :host(.llena) .encabezado h2 { font-size: 1.15rem; }
+  :host(.llena) .encabezado p:last-child { font-size: .88rem; }
 }

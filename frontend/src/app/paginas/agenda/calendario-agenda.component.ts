@@ -18,8 +18,28 @@
  * decide qué hacer (abrir el panel de la cita, reservar, cambiar de día).
  *
  * Todas las horas se calculan en la zona de la sede, nunca en la del equipo.
+ *
+ * Cómo ocupa la pantalla
+ * ----------------------
+ * En escritorio llena el alto que le da la agenda y desplaza dentro: las
+ * horas (y, si no caben, los días o los profesionales) se mueven en su marco
+ * con la cabecera de columnas y la columna de horas pegadas. La leyenda solo
+ * enumera los estados que hay en pantalla: nueve muestras para dos citas eran
+ * dos líneas de alto robadas a las horas.
  */
-import { Component, computed, input, output, ChangeDetectionStrategy } from '@angular/core';
+import {
+  Component,
+  DestroyRef,
+  ElementRef,
+  afterRenderEffect,
+  computed,
+  inject,
+  input,
+  output,
+  signal,
+  viewChild,
+  ChangeDetectionStrategy,
+} from '@angular/core';
 
 import type { Cita, Profesional } from '../../nucleo/modelos/dominio';
 import type { FilaDia } from '../../nucleo/utilidades/secuencia-dia';
@@ -103,6 +123,17 @@ export function rangoVista(vista: VistaCalendario, fecha: string): { desde: stri
 }
 
 const NOMBRES_DIA = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
+
+/**
+ * Dónde se quedó el marco de horas, por vista y fecha.
+ *
+ * La agenda vuelve a pintar el calendario cada vez que recarga (después de
+ * confirmar, cancelar o reservar). Sin esta memoria, quien trabajaba a las
+ * 17:00 volvería a ver las 07:00 tras cada acción y tendría que buscar otra
+ * vez su sitio. Vive fuera del componente a propósito: el componente se
+ * destruye y se crea de nuevo en cada recarga.
+ */
+const POSICIONES = new Map<string, number>();
 const ALTO_HORA = 56;
 const MINUTO = ALTO_HORA / 60;
 
@@ -135,14 +166,16 @@ interface Columna {
   standalone: true,
   imports: [FotoPersonaComponent],
   template: `
-    <div class="leyenda" aria-label="Leyenda de colores">
-      @for (item of leyenda; track item.estado) {
-        <span class="leyenda__item"><i [class]="'muestra estado--' + item.estado"></i>{{ item.etiqueta }}</span>
-      }
-      @if (vista() === 'dia' && huecos().length) {
-        <span class="leyenda__item"><i class="muestra estado--LIBRE"></i>Libre para reservar</span>
-      }
-    </div>
+    @if (leyendaVisible().length > 0 || (vista() === 'dia' && huecos().length)) {
+      <div class="leyenda" role="group" aria-label="Leyenda de colores">
+        @for (item of leyendaVisible(); track item.estado) {
+          <span class="leyenda__item"><i [class]="'muestra estado--' + item.estado"></i>{{ item.etiqueta }}</span>
+        }
+        @if (vista() === 'dia' && huecos().length) {
+          <span class="leyenda__item"><i class="muestra estado--LIBRE"></i>Libre para reservar</span>
+        }
+      </div>
+    }
 
     @if (vista() === 'mes') {
       <div class="mes" role="grid" aria-label="Calendario del mes">
@@ -151,7 +184,7 @@ interface Columna {
             <span role="columnheader">{{ nombre }}</span>
           }
         </div>
-        <div class="mes__rejilla">
+        <div class="mes__rejilla" #rejillaMes>
           @for (dia of diasMes(); track dia.fecha) {
             <button
               type="button"
@@ -163,21 +196,39 @@ interface Columna {
               [attr.aria-label]="dia.etiqueta"
               (click)="diaElegido.emit(dia.fecha)"
             >
-              <span class="mes__numero numerico">{{ dia.numero }}</span>
-              @for (cita of dia.citas.slice(0, 3); track cita.id) {
+              <span class="mes__cabeza">
+                <span class="mes__numero numerico">{{ dia.numero }}</span>
+                @if (dia.citas.length > 0 && chipsPorDia() === 0) {
+                  <span class="mes__cuenta numerico">
+                    {{ dia.citas.length }}<span class="mes__cuenta-texto">&nbsp;{{ dia.citas.length === 1 ? 'cita' : 'citas' }}</span>
+                  </span>
+                }
+              </span>
+              @for (cita of dia.citas.slice(0, chipsPorDia()); track cita.id) {
                 <span [class]="'chip estado--' + estado(cita)">
                   <span class="numerico">{{ dia.horas.get(cita.id) }}</span> {{ etiquetaPaciente()(cita.paciente_id) }}
                 </span>
               }
-              @if (dia.citas.length > 3) {
-                <span class="mes__mas">+{{ dia.citas.length - 3 }} más</span>
+              @if (chipsPorDia() > 0 && dia.citas.length > chipsPorDia()) {
+                <span class="mes__mas">+{{ dia.citas.length - chipsPorDia() }} más</span>
               }
             </button>
           }
         </div>
       </div>
     } @else {
-      <div class="tiempo" [style.--columnas]="columnas().length" [style.--ancho-min]="vista() === 'semana' ? '96px' : '160px'">
+      <!-- Si no hay ninguna cita ni hueco que pulsar, el marco desplazable
+           necesita su propio foco para que el teclado también lo recorra. -->
+      <div
+        #marco
+        class="tiempo"
+        (scroll)="recordarPosicion()"
+        [style.--columnas]="columnas().length"
+        [style.--ancho-min]="vista() === 'semana' ? '84px' : '160px'"
+        [attr.tabindex]="vacio() && vista() === 'dia' ? 0 : null"
+        [attr.role]="vacio() && vista() === 'dia' ? 'region' : null"
+        [attr.aria-label]="vacio() && vista() === 'dia' ? 'Horas del día' : null"
+      >
         <div class="tiempo__esquina"></div>
         @for (col of columnas(); track col.clave) {
           <div class="tiempo__titulo" [class.tiempo__titulo--hoy]="col.hoy">
@@ -186,9 +237,9 @@ interface Columna {
                 <strong>{{ col.titulo }}</strong> <span class="numerico">{{ col.subtitulo }}</span>
               </button>
             } @else {
-              <span class="tiempo__profesional">
+              <span class="tiempo__profesional" [attr.title]="col.titulo">
                 <app-foto-persona [profesionalId]="col.clave" [nombre]="col.titulo" [tamano]="30" />
-                <span>
+                <span class="tiempo__nombre">
                   <strong>{{ col.titulo }}</strong>
                   <span>{{ col.subtitulo }}</span>
                 </span>
@@ -241,7 +292,10 @@ interface Columna {
   changeDetection: ChangeDetectionStrategy.Eager,
   styles: `
     :host {
-      display: block;
+      display: flex;
+      flex-direction: column;
+      gap: var(--espacio-2);
+      min-width: 0;
       --c-pending: #f4c95d;
       --c-held: #f59e42;
       --c-confirmed: #2a9d8f;
@@ -256,9 +310,9 @@ interface Columna {
 
     .leyenda {
       display: flex;
+      flex: none;
       flex-wrap: wrap;
-      gap: var(--espacio-2) var(--espacio-3);
-      margin-bottom: var(--espacio-3);
+      gap: var(--espacio-1) var(--espacio-3);
       font-size: 0.78rem;
       color: var(--texto-suave);
     }
@@ -280,14 +334,20 @@ interface Columna {
     .muestra.estado--HELD, .muestra.estado--LIBRE { border-style: dashed; }
 
     /* ---- Rejilla de día y semana ---- */
+    /* Marco con desplazamiento propio en los dos ejes: la fila de títulos
+       queda pegada arriba y la columna de horas pegada a la izquierda. */
     .tiempo {
       display: grid;
       grid-template-columns: 56px repeat(var(--columnas), minmax(var(--ancho-min, 140px), 1fr));
-      overflow-x: auto;
+      align-content: start;
+      overflow: auto;
+      overscroll-behavior: contain;
+      scrollbar-width: thin;
       border: 1px solid var(--borde);
       border-radius: var(--radio);
       background: var(--superficie-elevada);
     }
+    .tiempo:focus-visible { outline: 3px solid var(--acento); outline-offset: 2px; }
     .tiempo__esquina, .tiempo__titulo {
       position: sticky;
       top: 0;
@@ -295,6 +355,7 @@ interface Columna {
       background: var(--superficie);
       border-bottom: 1px solid var(--borde);
     }
+    .tiempo__esquina { left: 0; z-index: 4; }
     .tiempo__titulo {
       display: grid;
       gap: 2px;
@@ -304,14 +365,16 @@ interface Columna {
       font-size: 0.85rem;
     }
     .tiempo__titulo span { color: var(--texto-suave); font-size: 0.75rem; }
-    .tiempo__profesional { display: inline-flex; align-items: center; gap: 8px; justify-content: center; text-align: left; }
-    .tiempo__profesional > span { display: grid; }
+    .tiempo__profesional { display: inline-flex; align-items: center; gap: 8px; justify-content: center; min-width: 0; max-width: 100%; text-align: left; }
+    .tiempo__nombre { display: grid; min-width: 0; }
+    /* Un nombre largo se acorta con puntos suspensivos; completo en el título. */
+    .tiempo__nombre > * { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .tiempo__profesional strong { color: var(--texto); font-size: 0.85rem; }
     .tiempo__titulo--hoy { background: var(--acento-suave); color: var(--acento-fuerte); }
     .tiempo__dia { display: inline-flex; gap: 4px; align-items: baseline; border: 0; background: transparent; color: inherit; font: inherit; cursor: pointer; border-radius: 6px; padding: 2px; }
     .tiempo__dia:hover { background: var(--superficie-hundida); }
     .tiempo__dia:focus-visible { outline: 3px solid var(--acento); }
-    .tiempo__horas { position: relative; }
+    .tiempo__horas { position: sticky; left: 0; z-index: 2; background: var(--superficie-elevada); }
     .tiempo__horas span {
       position: absolute;
       right: 6px;
@@ -320,7 +383,9 @@ interface Columna {
       color: var(--texto-tenue);
     }
     .tiempo__horas span:first-child { transform: none; }
-    .tiempo__columna { position: relative; border-left: 1px solid var(--borde); }
+    /* Cada columna aísla sus capas: una cita elegida (z-index 3) no puede
+       pintarse encima de la fila de títulos pegada al desplazar. */
+    .tiempo__columna { position: relative; isolation: isolate; border-left: 1px solid var(--borde); }
     .tiempo__columna--hoy { background: color-mix(in srgb, var(--acento) 4%, transparent); }
     .tiempo__linea { position: absolute; left: 0; right: 0; border-top: 1px solid var(--superficie-hundida); }
     .tiempo__ahora { position: absolute; left: 0; right: 0; z-index: 1; pointer-events: none; border-top: 2px solid var(--peligro); }
@@ -371,11 +436,11 @@ interface Columna {
        distingue por el peso, no por el color. */
     .bloque__detalle { color: var(--texto); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
 
-    .vacio { margin: var(--espacio-3) 0 0; color: var(--texto-suave); text-align: center; }
+    .vacio { flex: none; margin: 0; color: var(--texto-suave); text-align: center; }
 
     /* ---- Mes ---- */
-    .mes { border: 1px solid var(--borde); border-radius: var(--radio); overflow: hidden; background: var(--superficie-elevada); }
-    .mes__cabecera { display: grid; grid-template-columns: repeat(7, 1fr); background: var(--superficie); border-bottom: 1px solid var(--borde); }
+    .mes { display: flex; flex-direction: column; min-height: 0; border: 1px solid var(--borde); border-radius: var(--radio); overflow: hidden; background: var(--superficie-elevada); }
+    .mes__cabecera { display: grid; flex: none; grid-template-columns: repeat(7, minmax(0, 1fr)); background: var(--superficie); border-bottom: 1px solid var(--borde); }
     .mes__cabecera span { padding: var(--espacio-2); text-align: center; font-size: 0.78rem; font-weight: 700; color: var(--texto-suave); }
     .mes__rejilla { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); }
     .mes__dia {
@@ -397,7 +462,19 @@ interface Columna {
     .mes__dia:focus-visible { outline: 3px solid var(--acento); outline-offset: -3px; }
     .mes__dia--fuera { color: var(--texto-tenue); background: color-mix(in srgb, var(--superficie-hundida) 40%, transparent); }
     .mes__dia--elegido { box-shadow: inset 0 0 0 2px var(--acento); }
+    .mes__cabeza { display: flex; flex: none; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 2px 4px; min-height: 24px; }
     .mes__numero { font-weight: 700; font-size: 0.85rem; }
+    /* Sin sitio para nombres, la cifra del día: dice lo mismo que el mes de un
+       vistazo y el clic abre el día con el detalle. */
+    .mes__cuenta {
+      padding: 1px 6px;
+      border-radius: 999px;
+      background: var(--acento-suave);
+      color: var(--acento-fuerte);
+      font-size: 0.7rem;
+      font-weight: 700;
+      white-space: nowrap;
+    }
     .mes__dia--hoy .mes__numero {
       display: inline-grid;
       place-items: center;
@@ -409,6 +486,7 @@ interface Columna {
     }
     .chip {
       display: block;
+      flex: none;
       padding: 1px 6px;
       border-radius: 4px;
       border: 1px solid var(--c-linea);
@@ -419,18 +497,35 @@ interface Columna {
       text-overflow: ellipsis;
     }
     .chip.estado--CANCELLED { text-decoration: line-through; color: var(--texto-suave); }
-    .mes__mas { font-size: 0.7rem; color: var(--texto-suave); font-weight: 600; }
+    .mes__mas { flex: none; font-size: 0.7rem; color: var(--texto-suave); font-weight: 600; }
+
+    /* Escritorio: el calendario llena el alto que le deja la agenda. Las
+       horas desplazan dentro; las seis semanas del mes se reparten el alto y
+       solo desplazan si no caben con un mínimo legible. */
+    @media (min-width: 821px) and (min-height: 600px) {
+      :host { flex: 1 1 0; min-height: 0; }
+      .tiempo { flex: 1 1 0; min-height: 0; }
+      .mes { flex: 1 1 0; }
+      .mes__rejilla {
+        flex: 1 1 0;
+        min-height: 0;
+        overflow-y: auto;
+        overscroll-behavior: contain;
+        scrollbar-width: thin;
+        grid-auto-rows: minmax(44px, 1fr);
+      }
+      .mes__dia { min-height: 0; }
+    }
+
+    /* Teléfono y tableta vertical: el documento desplaza, pero las horas
+       siguen en su marco para no perder la fila de profesionales de vista. */
+    @media (max-width: 820px), (max-height: 599px) {
+      .tiempo { max-height: 72vh; }
+    }
 
     @media (max-width: 720px) {
       .mes__dia { min-height: 72px; }
-      .chip { display: none; }
-      .mes__dia:has(.chip)::after {
-        content: '';
-        width: 6px;
-        height: 6px;
-        border-radius: 50%;
-        background: var(--acento);
-      }
+      .mes__cuenta-texto { display: none; }
     }
   `,
 })
@@ -454,8 +549,97 @@ export class CalendarioAgendaComponent {
   readonly huecoElegido = output<FilaDia & { tipo: 'hueco' }>();
   readonly diaElegido = output<string>();
 
-  protected readonly leyenda = LEYENDA;
   protected readonly nombresDia = NOMBRES_DIA;
+
+  private readonly marco = viewChild<ElementRef<HTMLElement>>('marco');
+  private readonly rejillaMes = viewChild<ElementRef<HTMLElement>>('rejillaMes');
+  /**
+   * Cuántas citas caben con nombre en una celda del mes. En escritorio las
+   * seis semanas se reparten el alto disponible: en un portátil no caben tres
+   * nombres por día, y tres nombres aplastados no se leen. Con menos sitio se
+   * muestran menos, y sin sitio para ninguno, la cifra del día.
+   */
+  protected readonly chipsPorDia = signal(3);
+  private observador: ResizeObserver | null = null;
+  private observada: HTMLElement | null = null;
+  /** Vista y fecha ya colocadas en el marco: solo se coloca al cambiar. */
+  private colocada = '';
+
+  constructor() {
+    // Tras pintar una vista o un día nuevos, el marco de horas se coloca donde
+    // se dejó o, la primera vez, cerca de lo que importa.
+    afterRenderEffect(() => {
+      const elemento = this.marco()?.nativeElement;
+      const clave = `${this.vista()}|${this.fecha()}`;
+      if (!elemento || clave === this.colocada) return;
+      this.colocada = clave;
+      elemento.scrollTop = POSICIONES.get(clave) ?? this.posicionInicial(elemento);
+    });
+    // El mes vuelve a calcular cuántos nombres caben cuando cambia su tamaño.
+    afterRenderEffect(() => {
+      const rejilla = this.rejillaMes()?.nativeElement ?? null;
+      if (rejilla === this.observada) return;
+      this.observador?.disconnect();
+      this.observada = rejilla;
+      if (!rejilla || typeof ResizeObserver !== 'function') return;
+      this.observador = new ResizeObserver(() => this.ajustarChips(rejilla));
+      this.observador.observe(rejilla);
+    });
+    inject(DestroyRef).onDestroy(() => this.observador?.disconnect());
+  }
+
+  /**
+   * Alto de una celda menos su relleno (12), la cabecera con el número (24) y
+   * la línea «+N más» (20); cada nombre ocupa 24. En escritorio el alto lo
+   * fija la rejilla y no depende del contenido; fuera de él la celda crece
+   * con lo que lleva, así que se toma su alto mínimo para no entrar en bucle.
+   */
+  private ajustarChips(rejilla: HTMLElement): void {
+    const dia = rejilla.querySelector<HTMLElement>('.mes__dia');
+    if (!dia) return;
+    const escritorio =
+      typeof matchMedia === 'function' && matchMedia('(min-width: 821px) and (min-height: 600px)').matches;
+    const alto = escritorio ? dia.clientHeight : parseFloat(getComputedStyle(dia).minHeight) || 104;
+    this.chipsPorDia.set(Math.max(0, Math.min(3, Math.floor((alto - 12 - 24 - 20) / 24))));
+  }
+
+  protected recordarPosicion(): void {
+    const elemento = this.marco()?.nativeElement;
+    if (elemento && this.colocada) POSICIONES.set(this.colocada, elemento.scrollTop);
+  }
+
+  /**
+   * Primera posición del marco: una hora antes de ahora si se ve el día de
+   * hoy; si no, un poco antes de la primera cita o hueco; si no hay nada, las
+   * 08:00.
+   *
+   * La fila de títulos va pegada arriba y tapa lo que pasa por debajo. Para
+   * que ninguna cita quede medio escondida bajo ella al abrir, si alguna cruza
+   * esa franja se sube hasta el principio de esa cita.
+   */
+  private posicionInicial(elemento: HTMLElement): number {
+    const { desde } = this.franja();
+    const bloques = this.columnas().flatMap((col) => col.bloques);
+    const conHoy = this.columnas().some((col) => col.hoy);
+    let objetivo: number;
+    const ahora = this.ahora();
+    if (conHoy && ahora !== null) {
+      objetivo = ahora - ALTO_HORA;
+    } else if (bloques.length > 0) {
+      objetivo = Math.min(...bloques.map((b) => b.arriba)) - ALTO_HORA / 2;
+    } else {
+      objetivo = (8 * 60 - desde) * MINUTO;
+    }
+    // A la hora en punto: la columna de horas empieza con su etiqueta entera.
+    let arriba = Math.max(0, Math.floor(objetivo / ALTO_HORA) * ALTO_HORA);
+    const alto = (elemento.querySelector('.tiempo__titulo') as HTMLElement | null)?.offsetHeight ?? 0;
+    for (;;) {
+      const tapada = bloques.filter((b) => b.arriba < arriba && b.arriba + b.alto > arriba - alto);
+      if (tapada.length === 0) break;
+      arriba = Math.max(0, Math.min(...tapada.map((b) => b.arriba)) - 1);
+    }
+    return arriba;
+  }
 
   private readonly hoy = computed(() => hoyEnZona(this.zona()));
 
@@ -545,6 +729,21 @@ export class CalendarioAgendaComponent {
   });
 
   protected readonly vacio = computed(() => this.columnas().every((col) => col.bloques.length === 0));
+
+  /** Solo los estados que se ven en pantalla, en el orden de la leyenda completa. */
+  protected readonly leyendaVisible = computed(() => {
+    const presentes = new Set<string>();
+    if (this.vista() === 'mes') {
+      for (const dia of this.diasMes()) {
+        for (const cita of dia.citas) presentes.add(estadoVisual(cita));
+      }
+    } else {
+      for (const columna of this.columnas()) {
+        for (const bloque of columna.bloques) presentes.add(bloque.estado);
+      }
+    }
+    return LEYENDA.filter((item) => presentes.has(item.estado));
+  });
 
   protected readonly diasMes = computed(() => {
     const fecha = this.fecha();

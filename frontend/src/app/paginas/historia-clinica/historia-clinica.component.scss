@@ -1,7 +1,11 @@
+/* ======================================================================
+ *  Listado: cabecera con buscador
+ * ====================================================================== */
 .modulo-cabecera--historia {
   position: relative;
   overflow: hidden;
   min-height: 172px;
+  flex-wrap: wrap;
   background-color: #edf6f3;
   background-image:
     linear-gradient(90deg, rgb(245 250 248 / 99%) 0%, rgb(245 250 248 / 94%) 35%, rgb(245 250 248 / 52%) 58%, rgb(245 250 248 / 4%) 100%),
@@ -15,6 +19,7 @@
 .modulo-cabecera--historia .modulo-cabecera__texto {
   position: relative;
   z-index: 1;
+  flex: 1 1 18rem;
 }
 
 .ceja--icono {
@@ -43,18 +48,37 @@
   .modulo-cabecera--historia { animation: none; }
 }
 
+/* El buscador va sobre la ilustración: un panel de vidrio casi opaco
+   mantiene el contraste del texto sin depender de la imagen de fondo. */
 .buscador {
-  margin-bottom: var(--espacio-4);
+  position: relative;
+  z-index: 1;
+  flex: 1 1 24rem;
+  min-width: 0;
+  max-width: 34rem;
+  padding: var(--espacio-3);
+  border: 1px solid var(--vidrio-borde);
+  border-radius: var(--radio);
+  background: rgb(255 255 255 / 88%);
+  box-shadow: var(--vidrio-canto);
+}
+
+.buscador .campo {
+  margin: 0;
 }
 
 .buscador__fila {
   display: flex;
   gap: var(--espacio-2);
-  flex-wrap: wrap;
 }
 
 .buscador__fila .campo__control {
-  flex: 1 1 20rem;
+  flex: 1 1 12rem;
+  min-width: 0;
+}
+
+.buscador__fila .boton {
+  flex: none;
 }
 
 .acciones {
@@ -62,37 +86,168 @@
   white-space: nowrap;
 }
 
-/* ----- Cabecera del paciente ----- */
-.cabecera-paciente {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: var(--espacio-3);
-  margin-bottom: var(--espacio-5);
+.recuento {
+  flex: none;
+  margin: 0;
+  color: var(--texto-suave);
+  font-size: 0.9rem;
 }
 
-.cabecera-paciente h2 {
+/* Los avisos globales traen margen inferior; aquí separa el `gap`. */
+.pantalla__fijo.exito {
   margin: 0;
 }
 
+/* ======================================================================
+ *  Cabecera del paciente
+ * ====================================================================== */
+.cabecera-paciente {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--espacio-3) var(--espacio-4);
+  padding: var(--espacio-3) var(--espacio-4);
+  border: 1px solid var(--vidrio-borde);
+  border-radius: var(--radio-vidrio);
+  background: var(--vidrio-reflejo), var(--vidrio-especular), var(--vidrio-cuerpo);
+  box-shadow: var(--vidrio-canto), var(--vidrio-sombra);
+}
+
+.cabecera-paciente__identidad {
+  flex: 1 1 16rem;
+  min-width: 0;
+}
+
+/* El h1 de la página es el nombre del módulo; visualmente es la ceja que
+   encabeza el nombre del paciente. */
+.cabecera-paciente__modulo {
+  margin: 0;
+  color: var(--acento);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.cabecera-paciente h2 {
+  margin: 2px 0 0;
+  font-size: 1.3rem;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+
 .cabecera-paciente__sub {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--espacio-1) var(--espacio-3);
   margin: var(--espacio-1) 0 0;
   color: var(--texto-suave);
+  font-size: 0.88rem;
+}
+
+.cabecera-paciente__documento {
   font-family: var(--fuente-mono);
-  font-size: 0.9rem;
+}
+
+/* Alergias: dato del resumen, con texto y no solo con color. */
+.cabecera-paciente__alergias {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px 6px;
+  padding: 2px var(--espacio-2);
+  border: 1px solid var(--borde);
+  border-radius: 999px;
+  background: var(--superficie);
+  color: var(--texto);
+}
+
+.cabecera-paciente__alergias--grave {
+  border-color: color-mix(in srgb, var(--peligro) 45%, transparent);
+  background: var(--peligro-fondo);
+  color: var(--peligro);
+}
+
+.cabecera-paciente__volver {
+  flex: none;
+}
+
+/* ======================================================================
+ *  Panel de pestañas
+ * ====================================================================== */
+.historia__especialidad {
+  display: block;
+}
+
+/* Las piezas que solo envuelven una ventana flotante no ocupan hueco. */
+app-nota-editor,
+app-receta-editor {
+  display: contents;
+}
+
+.historia__resumen[hidden] {
+  display: none !important;
+}
+
+.historia__panel {
+  min-width: 0;
+}
+
+.historia__panel.pantalla__columnas {
+  --pantalla-columnas: minmax(0, 1fr) minmax(0, 1.35fr);
+}
+
+.historia__imagenes {
+  min-width: 0;
+}
+
+/* Bloque de notas o de recetas: tarjeta con cabecera y lista. */
+.bloque-historia {
+  display: flex;
+  flex-direction: column;
+  gap: var(--espacio-3);
+  min-width: 0;
+  padding: var(--espacio-3) var(--espacio-4);
+}
+
+.bloque-historia > .exito {
+  margin: 0;
 }
 
 .seccion__cabecera {
   display: flex;
-  justify-content: space-between;
-  align-items: baseline;
-  gap: var(--espacio-3);
+  flex: none;
   flex-wrap: wrap;
-  margin: var(--espacio-6) 0 var(--espacio-3);
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--espacio-2) var(--espacio-3);
 }
 
 .seccion__cabecera h2 {
   margin: 0;
+  font-size: 1.15rem;
+}
+
+.seccion__cabecera .acciones {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--espacio-2);
+  white-space: normal;
+}
+
+.lista-historia {
+  display: grid;
+  align-content: start;
+  gap: var(--espacio-3);
+  min-width: 0;
+  /* Hueco para el anillo de foco y la sombra de las tarjetas. */
+  padding: 2px;
+}
+
+/* Recetas: en pantallas anchas, dos o tres por fila. */
+.lista-historia--rejilla {
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 22rem), 1fr));
 }
 
 /* Falta de permiso: es el control funcionando, no una avería. Tono neutro, no
@@ -111,6 +266,10 @@
   color: var(--texto-suave);
 }
 
+.sin-acceso .campo {
+  margin: var(--espacio-3) 0;
+}
+
 .sin-acceso code {
   font-family: var(--fuente-mono);
   font-size: 0.88em;
@@ -118,14 +277,14 @@
 
 /* ----- Notas ----- */
 .nota {
-  margin-bottom: var(--espacio-3);
+  padding: var(--espacio-4);
 }
 
 .nota__cabecera {
   display: flex;
   justify-content: space-between;
   align-items: baseline;
-  gap: var(--espacio-3);
+  gap: var(--espacio-1) var(--espacio-3);
   flex-wrap: wrap;
   margin-bottom: var(--espacio-3);
 }
@@ -158,6 +317,10 @@
   font-size: 0.9rem;
 }
 
+.nota__corregir {
+  margin-top: var(--espacio-3);
+}
+
 .soap {
   display: grid;
   gap: var(--espacio-3);
@@ -175,10 +338,11 @@
 .soap dd {
   margin: var(--espacio-1) 0 0;
   white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 
 .versiones {
-  margin-top: var(--espacio-4);
+  margin-top: var(--espacio-3);
   padding-top: var(--espacio-3);
   border-top: 1px solid var(--borde);
 }
@@ -205,16 +369,23 @@
 
 /* ----- Recetas ----- */
 .receta {
-  margin-bottom: var(--espacio-3);
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--espacio-3);
+  padding: var(--espacio-4);
+}
+
+.receta > .boton {
+  align-self: flex-start;
 }
 
 .receta__cabecera {
   display: flex;
   justify-content: space-between;
   align-items: baseline;
-  gap: var(--espacio-3);
+  gap: var(--espacio-1) var(--espacio-3);
   flex-wrap: wrap;
-  margin-bottom: var(--espacio-3);
 }
 
 .receta__meta {
@@ -224,7 +395,7 @@
 }
 
 .receta__nota {
-  margin: 0 0 var(--espacio-3);
+  margin: 0;
   padding: var(--espacio-2) var(--espacio-3);
   border-left: 3px solid var(--borde);
   color: var(--texto-suave);
@@ -238,7 +409,8 @@
 }
 
 .receta__indicaciones {
-  margin: 0 0 var(--espacio-3);
+  margin: 0;
+  overflow-wrap: anywhere;
 }
 
 .estado {
@@ -277,6 +449,7 @@
   padding: var(--espacio-3);
   border: 1px solid var(--borde);
   border-radius: var(--radio-2);
+  overflow-wrap: anywhere;
 }
 
 /* El PRN se distingue visualmente además de por el texto: presentarlo igual
@@ -322,61 +495,62 @@
   font-size: 0.9rem;
 }
 
-.pie {
-  margin-top: var(--espacio-6);
-  padding-top: var(--espacio-4);
-  border-top: 1px solid var(--borde);
-  color: var(--texto-suave);
-  font-size: 0.9rem;
-}
-
-/* ----- Pestañas de la historia ----- */
-.pestanas {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-  margin: var(--espacio-4) 0;
-  padding: 4px;
-  border-radius: 999px;
-  background: var(--superficie-hundida);
-  width: fit-content;
-  max-width: 100%;
-}
-
-.pestanas__opcion {
-  min-height: 38px;
-  padding: 0 var(--espacio-4);
-  border: 0;
-  border-radius: 999px;
-  background: transparent;
-  color: var(--texto-suave);
-  font-weight: 600;
-  cursor: pointer;
-}
-
-.pestanas__opcion[aria-selected='true'] {
-  background: var(--superficie-elevada);
-  color: var(--acento-fuerte);
-  box-shadow: var(--sombra-1);
-}
-
-.cabecera-paciente__identidad {
-  flex: 1 1 auto;
-  min-width: 0;
-}
-
 @media (max-width: 600px) {
-  .cabecera-paciente {
-    flex-wrap: wrap;
-  }
-
-  .cabecera-paciente > .boton {
+  .cabecera-paciente__volver {
     margin-left: auto;
   }
+
+  .buscador__fila {
+    flex-wrap: wrap;
+  }
 }
 
-// Barra «Revisando como»: separada de la cabecera y de las pestañas.
-.historia__especialidad {
-  display: block;
-  margin-bottom: var(--espacio-3);
+/* ======================================================================
+ *  Pantalla de trabajo (escritorio): nada desplaza salvo las listas
+ * ====================================================================== */
+@media (min-width: 821px) and (min-height: 600px) {
+  /* La ilustración deja de imponer alto: la cabecera mide lo que su texto y
+     el buscador necesitan. */
+  .modulo-cabecera--historia {
+    min-height: 0;
+    align-items: center;
+  }
+
+  .modulo-cabecera--historia .modulo-cabecera__texto p:last-child {
+    font-size: 0.9rem;
+  }
+
+  .buscador {
+    padding: var(--espacio-2) var(--espacio-3);
+  }
+
+  .cabecera-paciente {
+    padding: var(--espacio-2) var(--espacio-4);
+  }
+
+  .cabecera-paciente h2 {
+    font-size: 1.15rem;
+  }
+
+  /* Las piezas de cada pestaña llenan el panel. */
+  .historia__panel > .llena,
+  .historia__panel > .bloque-historia,
+  .historia__panel > .historia__imagenes {
+    flex: 1 1 0;
+    min-height: 0;
+  }
+
+  .historia__panel.pantalla__columnas > .bloque-historia,
+  .historia__panel.pantalla__columnas > .llena {
+    flex: initial;
+  }
+
+  .bloque-historia > .desplazable {
+    margin: 0 calc(-1 * var(--espacio-2));
+    padding: 2px var(--espacio-2);
+  }
+
+  .historia__imagenes {
+    padding: var(--espacio-1);
+  }
 }

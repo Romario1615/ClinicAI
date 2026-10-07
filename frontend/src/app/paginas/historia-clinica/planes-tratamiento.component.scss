@@ -3,6 +3,46 @@
   margin: var(--espacio-6) 0;
 }
 
+/* Modo «llena» (pestaña de la historia en escritorio): cabecera y avisos
+   fijos, la lista de planes desplaza en su marco. */
+@media (min-width: 821px) and (min-height: 600px) {
+  :host(.llena) {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    margin: 0;
+  }
+
+  :host(.llena) .planes {
+    display: flex;
+    flex: 1 1 0;
+    flex-direction: column;
+    gap: var(--espacio-3);
+    min-height: 0;
+  }
+
+  :host(.llena) .planes > * {
+    flex: none;
+    margin: 0;
+  }
+
+  :host(.llena) .planes > .lista-planes {
+    flex: 1 1 0;
+    min-height: 0;
+    padding: 2px;
+  }
+
+  :host(.llena) .cabecera-planes h2 {
+    margin-bottom: var(--espacio-1);
+    font-size: 1.15rem;
+  }
+
+  :host(.llena) .cabecera-planes p {
+    margin: 0;
+    font-size: 0.88rem;
+  }
+}
+
 .planes {
   display: grid;
   gap: var(--espacio-4);
@@ -202,14 +242,22 @@ p {
 }
 
 .accion-plan {
-  margin-top: var(--espacio-3);
-  padding: var(--espacio-4);
-  border: 1px solid var(--borde);
-  border-radius: var(--radio);
-  background: var(--superficie);
+  display: grid;
+  gap: var(--espacio-3);
+}
+
+.accion-plan .campo {
+  margin: 0;
+}
+
+.accion-plan__plan {
+  margin: 0;
+  font-weight: 650;
+  overflow-wrap: anywhere;
 }
 
 .accion-plan__aviso {
+  margin: 0;
   padding: var(--espacio-3);
   border-left: 3px solid var(--aviso);
   background: var(--aviso-fondo);
@@ -228,7 +276,7 @@ p {
 
 .boton--presupuesto { justify-self: start; }
 .ayuda-presupuesto { margin: 0; color: var(--texto-suave); }
-.presupuesto-imprimible { display: grid; gap: var(--espacio-5); margin-top: var(--espacio-5); padding: clamp(1.25rem, 3vw, 2rem); border-color: var(--borde-fuerte); }
+.presupuesto-imprimible { display: grid; gap: var(--espacio-5); padding: clamp(.25rem, 2vw, 1rem); }
 .presupuesto-imprimible__acciones { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: var(--espacio-3); padding-bottom: var(--espacio-3); border-bottom: 1px solid var(--borde); }
 .presupuesto__cabecera { display: flex; align-items: center; gap: var(--espacio-4); padding-bottom: var(--espacio-4); border-bottom: 2px solid var(--acento); }
 .presupuesto__cabecera img { flex: 0 0 auto; }

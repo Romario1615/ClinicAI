@@ -24,6 +24,9 @@ import { VentanaFlotanteComponent } from './ventana-flotante.component';
         [forma]="forma()"
         [cierraAlPulsarFuera]="cierraFuera()"
         [cierraConEscape]="cierraEscape()"
+        [ocupada]="ocupada()"
+        [cambiosSinGuardar]="sinGuardar()"
+        [error]="error()"
         (cerrar)="abierta.set(false)"
       >
         <button type="button" id="primero">Uno</button>
@@ -40,6 +43,28 @@ class AnfitrionComponent {
     readonly forma = signal<'lateral' | 'centrada'>('lateral');
     readonly cierraFuera = signal(true);
     readonly cierraEscape = signal(true);
+    readonly ocupada = signal(false);
+    readonly sinGuardar = signal(false);
+    readonly error = signal<string | null>(null);
+}
+
+/** El botón que abre desaparece mientras la ventana está abierta. */
+@Component({
+    standalone: true,
+    imports: [VentanaFlotanteComponent],
+    changeDetection: ChangeDetectionStrategy.Eager,
+    template: `
+    @if (!abierta()) {
+      <button type="button" class="disparador" (click)="abierta.set(true)">Nueva nota</button>
+    } @else {
+      <app-ventana-flotante titulo="Nota" (cerrar)="abierta.set(false)">
+        <button type="button">Dentro</button>
+      </app-ventana-flotante>
+    }
+  `,
+})
+class DisparadorQueDesapareceComponent {
+    readonly abierta = signal(false);
 }
 
 describe('VentanaFlotanteComponent', () => {
@@ -180,6 +205,104 @@ describe('VentanaFlotanteComponent', () => {
         expect(fixture.componentInstance.abierta()).toBe(true);
         fixture.componentInstance.abierta.set(false);
         fixture.detectChanges();
+    });
+
+    it('mientras está ocupada no se cierra ni con Escape, ni con la X, ni por el fondo', () => {
+        fixture.componentInstance.ocupada.set(true);
+        abrir();
+        const cerrar = elemento().querySelector<HTMLButtonElement>('.ventana__cerrar')!;
+        expect(cerrar.disabled).toBe(true);
+
+        elemento().querySelector('[role="dialog"]')?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+        elemento().querySelector<HTMLElement>('.capa')?.click();
+        fixture.detectChanges();
+        expect(fixture.componentInstance.abierta()).toBe(true);
+
+        fixture.componentInstance.ocupada.set(false);
+        fixture.detectChanges();
+        expect(cerrar.disabled).toBe(false);
+        cerrar.click();
+        fixture.detectChanges();
+        expect(fixture.componentInstance.abierta()).toBe(false);
+    });
+
+    it('con cambios sin guardar pide confirmación antes de descartar', async () => {
+        fixture.componentInstance.sinGuardar.set(true);
+        abrir();
+
+        elemento().querySelector('[role="dialog"]')?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+        fixture.detectChanges();
+        expect(fixture.componentInstance.abierta()).toBe(true);
+        const aviso = elemento().querySelector('[role="alertdialog"]');
+        expect(aviso?.textContent).toContain('Hay cambios sin guardar');
+        await new Promise((resolver) => setTimeout(resolver));
+        expect(document.activeElement?.textContent?.trim()).toBe('Seguir editando');
+
+        // Escape con la confirmación a la vista equivale a seguir editando.
+        elemento().querySelector('[role="dialog"]')?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+        fixture.detectChanges();
+        expect(elemento().querySelector('[role="alertdialog"]')).toBeNull();
+        expect(fixture.componentInstance.abierta()).toBe(true);
+
+        elemento().querySelector<HTMLButtonElement>('.ventana__cerrar')!.click();
+        fixture.detectChanges();
+        Array.from(elemento().querySelectorAll<HTMLButtonElement>('[role="alertdialog"] button'))
+            .find((boton) => boton.textContent?.includes('Descartar'))!
+            .click();
+        fixture.detectChanges();
+        expect(fixture.componentInstance.abierta()).toBe(false);
+    });
+
+    it('muestra el error dentro de la ventana, anunciado', () => {
+        fixture.componentInstance.error.set('No se pudo guardar la nota.');
+        abrir();
+
+        const alerta = elemento().querySelector('dialog [role="alert"]');
+        expect(alerta?.textContent).toContain('No se pudo guardar la nota.');
+        fixture.componentInstance.abierta.set(false);
+        fixture.detectChanges();
+    });
+
+    it('si el navegador la cierra por su cuenta durante un guardado, vuelve a abrirla', () => {
+        fixture.componentInstance.ocupada.set(true);
+        abrir();
+        const dialogo = elemento().querySelector<HTMLDialogElement>('dialog')!;
+
+        dialogo.removeAttribute('open');
+        dialogo.dispatchEvent(new Event('close'));
+        fixture.detectChanges();
+
+        expect(fixture.componentInstance.abierta()).toBe(true);
+        expect(dialogo.hasAttribute('open')).toBe(true);
+        fixture.componentInstance.abierta.set(false);
+        fixture.detectChanges();
+    });
+
+    it('si el navegador la cierra por su cuenta sin nada que proteger, avisa a quien la abrió', () => {
+        abrir();
+
+        elemento().querySelector('dialog')!.dispatchEvent(new Event('close'));
+        fixture.detectChanges();
+
+        expect(fixture.componentInstance.abierta()).toBe(false);
+    });
+
+    it('devuelve el foco al botón que la abrió aunque haya desaparecido y vuelto', async () => {
+        const anfitrion = TestBed.createComponent(DisparadorQueDesapareceComponent);
+        anfitrion.detectChanges();
+        const raiz = anfitrion.nativeElement as HTMLElement;
+        const disparador = raiz.querySelector<HTMLButtonElement>('.disparador')!;
+        disparador.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));
+        disparador.click();
+        anfitrion.detectChanges();
+
+        anfitrion.componentInstance.abierta.set(false);
+        anfitrion.detectChanges();
+        await new Promise((resolver) => setTimeout(resolver));
+
+        const nuevo = raiz.querySelector<HTMLButtonElement>('.disparador');
+        expect(nuevo).not.toBe(disparador);
+        expect(document.activeElement).toBe(nuevo);
     });
 
     it('tabular en medio de la ventana no la secuestra', () => {

@@ -267,6 +267,22 @@ export class PlanesTratamientoComponent {
     this.accion.set(null);
   }
 
+  /** Título de la ventana de confirmación: dice qué se va a registrar. */
+  protected tituloAccion(accion: AccionAbierta): string {
+    switch (accion.tipo) {
+      case 'aceptar':
+        return 'Registrar aceptación firmada';
+      case 'cancelar-plan':
+        return 'Cancelar plan';
+      case 'completar':
+        return `Completar: ${accion.procedimiento.descripcion}`;
+      case 'atender-control':
+        return 'Registrar control realizado';
+      case 'cancelar-procedimiento':
+        return `Cancelar: ${accion.procedimiento.descripcion}`;
+    }
+  }
+
   /** Hallazgos que tienen sentido para un procedimiento concreto. */
   protected hallazgosDe(procedimiento: ProcedimientoPlan): readonly {
     valor: HallazgoResultante;

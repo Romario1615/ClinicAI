@@ -3,9 +3,10 @@
  *
  * Cada pieza se dibuja con sus cinco caras clicables. Se elige un hallazgo en
  * la paleta («pincel») y se pinta sobre la cara o la pieza; con «Seleccionar»
- * solo se abre la pieza. Al abrir una pieza aparecen su ficha de registro
- * (hallazgos, nota) y su historial: cambios por versión, procedimientos del
- * plan y fotos.
+ * solo se abre la pieza. Al abrir una pieza se abre, en una ventana lateral,
+ * su ficha de registro (hallazgos, nota) y su historial: cambios por versión,
+ * procedimientos del plan y fotos. Con un pincel activo el clic pinta y no
+ * abre nada: abrir una ventana a cada pincelada impediría pintar seguido.
  *
  * Nada se guarda al pintar: los cambios quedan en un borrador y se guardan
  * juntos como una versión nueva, con motivo obligatorio. Las versiones son
@@ -31,6 +32,7 @@ import { PERMISOS } from '../../nucleo/servicios/configuracion';
 import { SesionService } from '../../nucleo/servicios/sesion.service';
 import { HistorialPiezaComponent } from './historial-pieza.component';
 import { IconoComponent } from '../../compartido/icono.component';
+import { VentanaFlotanteComponent } from '../../compartido/ventana-flotante.component';
 import {
   CARAS,
   GRUPOS_FDI,
@@ -72,7 +74,7 @@ const ES_HALLAZGO_PIEZA = new Set<string>(HALLAZGOS_PIEZA.map((h) => h.codigo));
 @Component({
   selector: 'app-odontograma',
   standalone: true,
-  imports: [FormsModule, DatePipe, NgTemplateOutlet, HistorialPiezaComponent, IconoComponent],
+  imports: [FormsModule, DatePipe, NgTemplateOutlet, HistorialPiezaComponent, IconoComponent, VentanaFlotanteComponent],
   templateUrl: './odontograma.component.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './odontograma.component.scss',
@@ -91,6 +93,8 @@ export class OdontogramaComponent {
   protected readonly versiones = signal<readonly Odontograma[]>([]);
   protected readonly planes = signal<readonly PlanTratamiento[]>([]);
   protected readonly seleccionada = signal<number | null>(null);
+  /** La ficha de la pieza seleccionada está abierta en su ventana. */
+  protected readonly fichaPieza = signal(false);
   protected readonly herramienta = signal<Herramienta>('SELECCIONAR');
   protected readonly cargando = signal(true);
   protected readonly guardando = signal(false);
@@ -99,6 +103,10 @@ export class OdontogramaComponent {
   protected readonly error = signal<FalloApi | string | null>(null);
   protected readonly aviso = signal('');
   protected readonly borrador = signal<Record<string, EstadoPiezaOdontograma>>({});
+  /** Hay algo que dibujar: terminó la carga y no falló sin datos previos. */
+  protected readonly listo = computed(
+    () => !this.cargando() && !(this.error() !== null && !this.actual() && this.versiones().length === 0),
+  );
   protected readonly errorTexto = computed(() => {
     const error = this.error();
     return error instanceof Error ? error.message : error ?? '';
@@ -175,12 +183,19 @@ export class OdontogramaComponent {
     this.nivelSensibilidad.set(elegida.nivel_sensibilidad);
     this.denticion.set(elegida.denticion);
     this.borrador.set(this.clonarPiezas(elegida.piezas));
-    this.seleccionada.set(null);
+    this.cerrarFicha();
     this.motivo.set('');
   }
 
+  /** Selecciona una pieza y abre su ficha. */
   protected elegirPieza(codigo: number): void {
     this.seleccionada.set(codigo);
+    this.fichaPieza.set(true);
+  }
+
+  protected cerrarFicha(): void {
+    this.fichaPieza.set(false);
+    this.seleccionada.set(null);
   }
 
   protected elegirHerramienta(herramienta: Herramienta): void {
@@ -194,7 +209,10 @@ export class OdontogramaComponent {
   protected clicRegion(codigo: number, region: Region): void {
     this.seleccionada.set(codigo);
     const herramienta = this.herramienta();
-    if (herramienta === 'SELECCIONAR' || !this.puedeGuardar()) return;
+    if (herramienta === 'SELECCIONAR' || !this.puedeGuardar()) {
+      this.fichaPieza.set(true);
+      return;
+    }
     const estado = this.borrador()[String(codigo)] ?? PIEZA_VACIA;
 
     if (ES_HALLAZGO_PIEZA.has(herramienta)) {
@@ -236,9 +254,11 @@ export class OdontogramaComponent {
   protected clicPieza(codigo: number): void {
     this.seleccionada.set(codigo);
     const herramienta = this.herramienta();
-    if (ES_HALLAZGO_PIEZA.has(herramienta) && this.puedeGuardar()) {
+    if (herramienta === 'SELECCIONAR' || !this.puedeGuardar()) {
+      this.fichaPieza.set(true);
+    } else if (ES_HALLAZGO_PIEZA.has(herramienta)) {
       this.aplicarHallazgoPieza(codigo, herramienta as HallazgoPieza);
-    } else if (herramienta === 'BORRAR' && this.puedeGuardar()) {
+    } else if (herramienta === 'BORRAR') {
       const estado = this.borrador()[String(codigo)] ?? PIEZA_VACIA;
       this.actualizarPiezaDe(codigo, { ...estado, pieza: null });
     }
@@ -258,7 +278,7 @@ export class OdontogramaComponent {
     if (valor !== 'PERMANENTE' && valor !== 'TEMPORAL' && valor !== 'MIXTA') return;
     if (this.actual()) return;
     this.denticion.set(valor);
-    this.seleccionada.set(null);
+    this.cerrarFicha();
   }
 
   protected cambiarHallazgoPieza(valor: string): void {

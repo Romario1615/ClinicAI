@@ -22,96 +22,100 @@
     </div>
   }
 
-  @if (!seleccionado()) {
-    @for (formulario of formularios(); track formulario.raiz_id) {
-      <article class="tarjeta registro">
-        <div class="registro__cabecera">
-          <div>
-            <h3>Atención del {{ formulario.creado_en | date:'mediumDate' }}</h3>
-            <p>Versión {{ formulario.version }} · {{ formulario.contexto_identidad['sede'] }} · {{ formulario.contexto_identidad['profesional'] }}</p>
+  <!-- La lista de atenciones desplaza dentro de su marco; el detalle
+       completo y las versiones se despliegan dentro de cada registro. -->
+  @if (!seleccionado() && formularios().length) {
+    <div class="registros desplazable">
+      @for (formulario of formularios(); track formulario.raiz_id) {
+        <article class="tarjeta registro">
+          <div class="registro__cabecera">
+            <div>
+              <h3>Atención del {{ formulario.creado_en | date:'mediumDate' }}</h3>
+              <p>Versión {{ formulario.version }} · {{ formulario.contexto_identidad['sede'] }} · {{ formulario.contexto_identidad['profesional'] }}</p>
+            </div>
+            <div class="registro__acciones">
+              <button class="boton boton--plano boton--pequeno" type="button" [disabled]="exportando() === formulario.raiz_id" (click)="exportar(formulario)">
+                {{ exportando() === formulario.raiz_id ? 'Preparando…' : 'Imprimir / guardar PDF' }}
+              </button>
+              <button class="boton boton--plano boton--pequeno" type="button" (click)="verVersiones(formulario)">
+                {{ raizHistorial() === formulario.raiz_id ? 'Ocultar historial' : 'Ver historial' }}
+              </button>
+              @if (puedeEditar()) { <button class="boton boton--pequeno" type="button" (click)="corregir(formulario)">Crear corrección</button> }
+            </div>
           </div>
-          <div class="registro__acciones">
-            <button class="boton boton--plano boton--pequeno" type="button" [disabled]="exportando() === formulario.raiz_id" (click)="exportar(formulario)">
-              {{ exportando() === formulario.raiz_id ? 'Preparando…' : 'Imprimir / guardar PDF' }}
-            </button>
-            <button class="boton boton--plano boton--pequeno" type="button" (click)="verVersiones(formulario)">
-              {{ raizHistorial() === formulario.raiz_id ? 'Ocultar historial' : 'Ver historial' }}
-            </button>
-            @if (puedeEditar()) { <button class="boton boton--pequeno" type="button" (click)="corregir(formulario)">Crear corrección</button> }
-          </div>
-        </div>
-        <p class="registro__motivo"><strong>Motivo de consulta:</strong> {{ formulario.datos.motivo_consulta }}</p>
-        <details class="detalle-completo">
-          <summary>Ver contenido completo del formulario</summary>
-          <div class="detalle-completo__cuerpo">
-            <section>
-              <h4>Identificación congelada al registrar</h4>
-              <p>{{ formulario.contexto_identidad['nombres'] }} {{ formulario.contexto_identidad['apellidos'] }} · {{ formulario.contexto_identidad['tipo_documento'] }} {{ formulario.contexto_identidad['historia_clinica'] }}</p>
-              <p>Edad registrada: {{ formulario.contexto_identidad['edad'] ?? 'No disponible' }} {{ formulario.contexto_identidad['unidad_edad'] ?? '' }} · Registro profesional: {{ formulario.contexto_identidad['registro_profesional'] ?? 'No informado' }}</p>
-            </section>
-            <section>
-              <h4>Atención</h4>
-              <p><strong>Embarazo:</strong> {{ presencia(formulario.datos.embarazada) }}</p>
-              <p><strong>Motivo:</strong> {{ formulario.datos.motivo_consulta }}</p>
-              <p><strong>Problema actual:</strong> {{ formulario.datos.enfermedad_actual || 'Sin registro' }}</p>
-            </section>
-            <section>
-              <h4>Fuentes vinculadas</h4>
-              @if (formulario.cita_id || formulario.nota_id || formulario.odontograma_id || formulario.registro_placa_id) {
-                <ul class="fuentes__lista">
-                  @if (formulario.cita_id) { <li>Cita · <code>{{ formulario.cita_id }}</code></li> }
-                  @if (formulario.nota_id) { <li>Nota clínica · <code>{{ formulario.nota_id }}</code></li> }
-                  @if (formulario.odontograma_id) { <li>Odontograma · <code>{{ formulario.odontograma_id }}</code></li> }
-                  @if (formulario.registro_placa_id) { <li>Índice de placa · <code>{{ formulario.registro_placa_id }}</code></li> }
-                </ul>
-              } @else { <p>Sin registros relacionados.</p> }
-            </section>
-            <section>
-              <h4>Antecedentes personales y familiares</h4>
-              @for (antecedente of formulario.datos.antecedentes_personales; track antecedente.codigo) {
-                <p><strong>{{ etiqueta(antecedente.codigo) }}:</strong> {{ presencia(antecedente.presente) }}@if (antecedente.detalle) { · {{ antecedente.detalle }} }</p>
+          <p class="registro__motivo"><strong>Motivo de consulta:</strong> {{ formulario.datos.motivo_consulta }}</p>
+          <details class="detalle-completo">
+            <summary>Ver contenido completo del formulario</summary>
+            <div class="detalle-completo__cuerpo">
+              <section>
+                <h4>Identificación congelada al registrar</h4>
+                <p>{{ formulario.contexto_identidad['nombres'] }} {{ formulario.contexto_identidad['apellidos'] }} · {{ formulario.contexto_identidad['tipo_documento'] }} {{ formulario.contexto_identidad['historia_clinica'] }}</p>
+                <p>Edad registrada: {{ formulario.contexto_identidad['edad'] ?? 'No disponible' }} {{ formulario.contexto_identidad['unidad_edad'] ?? '' }} · Registro profesional: {{ formulario.contexto_identidad['registro_profesional'] ?? 'No informado' }}</p>
+              </section>
+              <section>
+                <h4>Atención</h4>
+                <p><strong>Embarazo:</strong> {{ presencia(formulario.datos.embarazada) }}</p>
+                <p><strong>Motivo:</strong> {{ formulario.datos.motivo_consulta }}</p>
+                <p><strong>Problema actual:</strong> {{ formulario.datos.enfermedad_actual || 'Sin registro' }}</p>
+              </section>
+              <section>
+                <h4>Fuentes vinculadas</h4>
+                @if (formulario.cita_id || formulario.nota_id || formulario.odontograma_id || formulario.registro_placa_id) {
+                  <ul class="fuentes__lista">
+                    @if (formulario.cita_id) { <li>Cita · <code>{{ formulario.cita_id }}</code></li> }
+                    @if (formulario.nota_id) { <li>Nota clínica · <code>{{ formulario.nota_id }}</code></li> }
+                    @if (formulario.odontograma_id) { <li>Odontograma · <code>{{ formulario.odontograma_id }}</code></li> }
+                    @if (formulario.registro_placa_id) { <li>Índice de placa · <code>{{ formulario.registro_placa_id }}</code></li> }
+                  </ul>
+                } @else { <p>Sin registros relacionados.</p> }
+              </section>
+              <section>
+                <h4>Antecedentes personales y familiares</h4>
+                @for (antecedente of formulario.datos.antecedentes_personales; track antecedente.codigo) {
+                  <p><strong>{{ etiqueta(antecedente.codigo) }}:</strong> {{ presencia(antecedente.presente) }}@if (antecedente.detalle) { · {{ antecedente.detalle }} }</p>
+                }
+                @for (antecedente of formulario.datos.antecedentes_familiares; track antecedente.codigo) {
+                  <p><strong>Familiar · {{ etiqueta(antecedente.codigo) }}:</strong> {{ presencia(antecedente.presente) }}@if (antecedente.detalle) { · {{ antecedente.detalle }} }</p>
+                }
+              </section>
+              <section>
+                <h4>Constantes vitales</h4>
+                <p>Temperatura: {{ formulario.datos.constantes_vitales.temperatura_c ?? '—' }} °C · Pulso: {{ formulario.datos.constantes_vitales.pulso_minuto ?? '—' }}/min · Respiración: {{ formulario.datos.constantes_vitales.frecuencia_respiratoria_minuto ?? '—' }}/min</p>
+                <p>Presión arterial: {{ formulario.datos.constantes_vitales.presion_sistolica_mmhg ?? '—' }}/{{ formulario.datos.constantes_vitales.presion_diastolica_mmhg ?? '—' }} mmHg</p>
+              </section>
+              <section>
+                <h4>Examen estomatognático</h4>
+                @for (hallazgo of formulario.datos.examen_estomatognatico; track hallazgo.region) {
+                  <p><strong>{{ etiqueta(hallazgo.region) }}:</strong> {{ etiqueta(hallazgo.hallazgo) }}@if (hallazgo.detalle) { · {{ hallazgo.detalle }} }@if (hallazgo.grado) { · grado {{ hallazgo.grado }} }</p>
+                }
+              </section>
+              <section>
+                <h4>Salud bucal e índices</h4>
+                <p>Periodontal: {{ formulario.datos.indicadores_salud_bucal.enfermedad_periodontal || 'Sin registro' }} · Oclusión: {{ formulario.datos.indicadores_salud_bucal.oclusion || 'Sin registro' }} · Fluorosis: {{ formulario.datos.indicadores_salud_bucal.fluorosis || 'Sin registro' }}</p>
+                <p><strong>Índices CPO–ceo:</strong> @for (indice of formulario.datos.indices_cpo_ceo | keyvalue; track indice.key) { {{ etiqueta(indice.key) }} {{ indice.value ?? '—' }}@if (!$last) { · } }</p>
+                <div class="tabla-envoltorio"><table class="tabla"><thead><tr><th scope="col">Pieza</th><th scope="col">Placa</th><th scope="col">Cálculo</th><th scope="col">Gingivitis</th></tr></thead><tbody>@for (sitio of formulario.datos.indicadores_salud_bucal.sitios; track sitio.pieza) { <tr><th scope="row">{{ sitio.pieza }}</th><td>{{ sitio.placa ?? 'Sin evaluar' }}</td><td>{{ sitio.calculo ?? 'Sin evaluar' }}</td><td>{{ presencia(sitio.gingivitis) }}</td></tr> }</tbody></table></div>
+              </section>
+              @if (formulario.datos.examenes_complementarios.length) {
+                <section><h4>Exámenes complementarios</h4>@for (examen of formulario.datos.examenes_complementarios; track $index) { <p><strong>{{ etiqueta(examen.tipo) }}:</strong> {{ examen.descripcion }}@if (examen.resultado) { · {{ examen.resultado }} }</p> }</section>
               }
-              @for (antecedente of formulario.datos.antecedentes_familiares; track antecedente.codigo) {
-                <p><strong>Familiar · {{ etiqueta(antecedente.codigo) }}:</strong> {{ presencia(antecedente.presente) }}@if (antecedente.detalle) { · {{ antecedente.detalle }} }</p>
+              @if (formulario.datos.diagnosticos.length) {
+                <section><h4>Diagnósticos</h4>@for (diagnostico of formulario.datos.diagnosticos; track $index) { <p><strong>{{ etiqueta(diagnostico.tipo) }}:</strong> {{ diagnostico.descripcion }}@if (diagnostico.codigo_cie) { · CIE {{ diagnostico.codigo_cie }} }</p> }</section>
               }
-            </section>
-            <section>
-              <h4>Constantes vitales</h4>
-              <p>Temperatura: {{ formulario.datos.constantes_vitales.temperatura_c ?? '—' }} °C · Pulso: {{ formulario.datos.constantes_vitales.pulso_minuto ?? '—' }}/min · Respiración: {{ formulario.datos.constantes_vitales.frecuencia_respiratoria_minuto ?? '—' }}/min</p>
-              <p>Presión arterial: {{ formulario.datos.constantes_vitales.presion_sistolica_mmhg ?? '—' }}/{{ formulario.datos.constantes_vitales.presion_diastolica_mmhg ?? '—' }} mmHg</p>
-            </section>
-            <section>
-              <h4>Examen estomatognático</h4>
-              @for (hallazgo of formulario.datos.examen_estomatognatico; track hallazgo.region) {
-                <p><strong>{{ etiqueta(hallazgo.region) }}:</strong> {{ etiqueta(hallazgo.hallazgo) }}@if (hallazgo.detalle) { · {{ hallazgo.detalle }} }@if (hallazgo.grado) { · grado {{ hallazgo.grado }} }</p>
+              @if (formulario.datos.sesiones_tratamiento.length) {
+                <section><h4>Sesiones de tratamiento</h4>@for (sesion of formulario.datos.sesiones_tratamiento; track $index) { <p><strong>Sesión {{ sesion.numero }} · {{ sesion.fecha | date:'mediumDate' }}</strong>@if (sesion.procedimiento) { · {{ sesion.procedimiento }} }@if (sesion.diagnostico_complicaciones) { · {{ sesion.diagnostico_complicaciones }} }@if (sesion.prescripciones) { · {{ sesion.prescripciones }} }@if (sesion.proxima_cita) { · Próxima cita: {{ sesion.proxima_cita | date:'mediumDate' }} }@if (sesion.alta) { · Alta }</p> }</section>
               }
-            </section>
-            <section>
-              <h4>Salud bucal e índices</h4>
-              <p>Periodontal: {{ formulario.datos.indicadores_salud_bucal.enfermedad_periodontal || 'Sin registro' }} · Oclusión: {{ formulario.datos.indicadores_salud_bucal.oclusion || 'Sin registro' }} · Fluorosis: {{ formulario.datos.indicadores_salud_bucal.fluorosis || 'Sin registro' }}</p>
-              <p><strong>Índices CPO–ceo:</strong> @for (indice of formulario.datos.indices_cpo_ceo | keyvalue; track indice.key) { {{ etiqueta(indice.key) }} {{ indice.value ?? '—' }}@if (!$last) { · } }</p>
-              <div class="tabla-envoltorio"><table class="tabla"><thead><tr><th scope="col">Pieza</th><th scope="col">Placa</th><th scope="col">Cálculo</th><th scope="col">Gingivitis</th></tr></thead><tbody>@for (sitio of formulario.datos.indicadores_salud_bucal.sitios; track sitio.pieza) { <tr><th scope="row">{{ sitio.pieza }}</th><td>{{ sitio.placa ?? 'Sin evaluar' }}</td><td>{{ sitio.calculo ?? 'Sin evaluar' }}</td><td>{{ presencia(sitio.gingivitis) }}</td></tr> }</tbody></table></div>
-            </section>
-            @if (formulario.datos.examenes_complementarios.length) {
-              <section><h4>Exámenes complementarios</h4>@for (examen of formulario.datos.examenes_complementarios; track $index) { <p><strong>{{ etiqueta(examen.tipo) }}:</strong> {{ examen.descripcion }}@if (examen.resultado) { · {{ examen.resultado }} }</p> }</section>
-            }
-            @if (formulario.datos.diagnosticos.length) {
-              <section><h4>Diagnósticos</h4>@for (diagnostico of formulario.datos.diagnosticos; track $index) { <p><strong>{{ etiqueta(diagnostico.tipo) }}:</strong> {{ diagnostico.descripcion }}@if (diagnostico.codigo_cie) { · CIE {{ diagnostico.codigo_cie }} }</p> }</section>
-            }
-            @if (formulario.datos.sesiones_tratamiento.length) {
-              <section><h4>Sesiones de tratamiento</h4>@for (sesion of formulario.datos.sesiones_tratamiento; track $index) { <p><strong>Sesión {{ sesion.numero }} · {{ sesion.fecha | date:'mediumDate' }}</strong>@if (sesion.procedimiento) { · {{ sesion.procedimiento }} }@if (sesion.diagnostico_complicaciones) { · {{ sesion.diagnostico_complicaciones }} }@if (sesion.prescripciones) { · {{ sesion.prescripciones }} }@if (sesion.proxima_cita) { · Próxima cita: {{ sesion.proxima_cita | date:'mediumDate' }} }@if (sesion.alta) { · Alta }</p> }</section>
-            }
-          </div>
-        </details>
-        @if (raizHistorial() === formulario.raiz_id) {
-          <ol class="versiones" aria-label="Versiones del formulario">
-            @for (version of versiones(); track version.id) {
-              <li><strong>Versión {{ version.version }}</strong> · {{ version.creado_en | date:'medium' }}@if (version.motivo_modificacion) { <span> · {{ version.motivo_modificacion }}</span> }@if (version.vigente) { <span class="vigente">Vigente</span> }</li>
-            }
-          </ol>
-        }
-      </article>
-    }
+            </div>
+          </details>
+          @if (raizHistorial() === formulario.raiz_id) {
+            <ol class="versiones" aria-label="Versiones del formulario">
+              @for (version of versiones(); track version.id) {
+                <li><strong>Versión {{ version.version }}</strong> · {{ version.creado_en | date:'medium' }}@if (version.motivo_modificacion) { <span> · {{ version.motivo_modificacion }}</span> }@if (version.vigente) { <span class="vigente">Vigente</span> }</li>
+              }
+            </ol>
+          }
+        </article>
+      }
+    </div>
   }
 
   @if (seleccionado() || creando()) {
