@@ -201,7 +201,7 @@ async def test_administracion_configura_los_modulos_de_cada_especialidad(
     assert vista.status_code == 200
     por_id = {e["id"]: e["modulos"] for e in vista.json()["especialidades"]}
     assert por_id[str(especialidad.id)] == ["odontograma", "periodoncia", "planes", "imagenes"]
-    assert por_id[str(dermatologia.id)] == ["imagenes"]
+    assert por_id[str(dermatologia.id)] == ["faciograma", "imagenes"]
 
     invalido = await cliente.put(
         ruta, headers=cabeceras, json={"modulos": ["recetas"], "motivo": "Modulo inexistente"}

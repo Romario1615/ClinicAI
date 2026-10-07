@@ -49,6 +49,7 @@ from app.modulos.conversaciones.modelos import (
     IntencionEntrante,
     MensajeEntrante,
 )
+from app.modulos.documentos.modelos import EntregaDocumento, RegistroPaciente
 from app.modulos.gastos.modelos import Gasto
 from app.modulos.historia.modelos import (
     AlertaAdherencia,
@@ -181,6 +182,7 @@ __all__ = [
     "Diagnostico",
     "DocumentoPaciente",
     "EntradaListaEspera",
+    "EntregaDocumento",
     "Especialidad",
     "EstadoCampana",
     "EstadoCita",
@@ -241,6 +243,7 @@ __all__ = [
     "Receta",
     "RecetaMedicamento",
     "Recordatorio",
+    "RegistroPaciente",
     "RegistroPlaca",
     "RelacionAsistencial",
     "RespuestaAnamnesis",

@@ -10,6 +10,7 @@
  */
 import { Component, computed, inject, signal, ChangeDetectionStrategy } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { ActivatedRoute } from '@angular/router';
 
 import { SelectorPacienteComponent } from '../../compartido/selector-paciente.component';
 import { VentanaFlotanteComponent } from '../../compartido/ventana-flotante.component';
@@ -396,12 +397,17 @@ export class PagosComponent {
   private clave = crypto.randomUUID();
   private cuerpoAnterior = '';
   private consultaCargo = 0;
+  protected readonly citaContexto = inject(ActivatedRoute, { optional: true })?.snapshot.queryParamMap.get('cita') ?? null;
 
   protected abrirRegistro(): void {
     if (!this.puedeRegistrarPago()) return;
     this.error.set('');
     this.aviso.set('');
     this.formularioAbonoAbierto.set(true);
+    if (this.citaContexto) this.agenda.cita(this.citaContexto).subscribe({
+      next: cita => { this.citas.set([cita]); this.citaId = cita.id; this.seleccionarCita(cita.id); },
+      error: fallo => this.error.set(fallo.message),
+    });
   }
 
   protected cerrarRegistro(): void {
@@ -440,6 +446,7 @@ export class PagosComponent {
     this.cargando.set(true);
     this.error.set('');
     const parametros: Record<string, string | number> = { limite: 25, desplazamiento: this.pagina() * 25 };
+    if (this.citaContexto) parametros['cita_id'] = this.citaContexto;
     if (this.estadoFiltro()) parametros['estado'] = this.estadoFiltro();
     this.api.leer<Pagina<PagoListado>>('/pagos/', parametros).subscribe({
       next: (p) => {
@@ -490,6 +497,7 @@ export class PagosComponent {
       limite: 25,
       desplazamiento: this.paginaCargos() * 25,
       vencidos: this.soloVencidos(),
+      ...(this.citaContexto ? { cita_id: this.citaContexto } : {}),
     }).subscribe({
       next: (pagina) => {
         this.cargos.set(pagina.elementos);

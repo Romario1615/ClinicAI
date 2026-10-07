@@ -6,7 +6,9 @@ test('el perfil de pacientes contiene textos y barras sin solaparlos en escritor
   // Solo se sustituye el desglose agregado para reproducir los extremos de
   // presentación; los permisos y el resto del dashboard usan la API real.
   await page.route('**/api/v1/dashboard/**', async (ruta) => {
-    const respuesta = await ruta.fetch();
+    const origen = 'http://127.0.0.1:8000/api/v1';
+    const api = process.env.URL_API ?? origen;
+    const respuesta = await ruta.fetch({ url: ruta.request().url().replace(origen, api) });
     expect(respuesta.ok()).toBeTruthy();
     const resumen = await respuesta.json();
     await ruta.fulfill({ response: respuesta, json: {

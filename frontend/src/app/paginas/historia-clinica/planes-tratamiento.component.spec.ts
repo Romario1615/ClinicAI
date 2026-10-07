@@ -9,6 +9,7 @@
 import { TestBed, type ComponentFixture } from '@angular/core/testing';
 import { HttpTestingController } from '@angular/common/http/testing';
 import { Router } from '@angular/router';
+import { SesionService } from '../../nucleo/servicios/sesion.service';
 
 import { PlanesTratamientoComponent } from './planes-tratamiento.component';
 import type { PlanTratamiento, ProcedimientoPlan } from '../../nucleo/servicios/api.service';
@@ -85,6 +86,59 @@ describe('PlanesTratamientoComponent', () => {
     it('muestra el vacío cuando no hay planes', () => {
         montar([]);
         expect(texto()).toContain('Sin planes de tratamiento');
+    });
+
+    it('el presupuesto excluye procedimientos cancelados y suma centavos', () => {
+        montar([]);
+        const p = plan({ procedimientos: [procedimiento({ precio: '0.10' }), procedimiento({ id: 'dos', precio: '0.20' }), procedimiento({ id: 'tres', precio: '99.00', estado: 'CANCELADO' })] });
+        expect(c.procedimientosPresupuesto(p)).toHaveLength(2);
+        expect(c.totalPresupuesto(p)).toBe('0.30');
+    });
+
+    it('exige elegir sede entre varias autorizadas y conserva la ventana durante el PDF', () => {
+        iniciarSesionCon(['historia_clinica.escribir']);
+        const sesion = TestBed.inject(SesionService);
+        const identidad = sesion.identidad()!;
+        sesion.establecerIdentidad({ ...identidad, ambito: { ...identidad.ambito, todas_las_sedes: false, sedes: ['s-1', 's-2'] } });
+        const p = plan({ estado: 'PROPUESTO' });
+        montar([p]);
+        c.prepararPresupuesto(p);
+        http.expectOne(`${BASE}/catalogo/sedes`).flush([
+            { id: 's-1', nombre: 'Sede uno', zona_horaria: 'America/Guayaquil' },
+            { id: 's-2', nombre: 'Sede dos', zona_horaria: 'America/Guayaquil' },
+            { id: 'ajena', nombre: 'Ajena', zona_horaria: 'America/Guayaquil' },
+        ]);
+        http.expectOne(`${BASE}/catalogo/clinica`).flush({ nombre: 'Clínica', zona_horaria: 'America/Guayaquil' });
+        expect(c.sedesPresupuesto()).toHaveLength(2);
+        c.generarPdf();
+        http.expectNone(`${BASE}/historia/planes/plan-1/presupuesto-documento`);
+        expect(c.presupuestoError()).toContain('Seleccione la sede');
+        c.sedePresupuesto = 's-2';
+        c.generarPdf();
+        const solicitud = http.expectOne(`${BASE}/historia/planes/plan-1/presupuesto-documento`);
+        expect(solicitud.request.body.sede_id).toBe('s-2');
+        expect(solicitud.request.body.clave_idempotencia).toBeTruthy();
+        c.cerrarPresupuesto();
+        expect(c.presupuestoSeleccionado()).not.toBeNull();
+        solicitud.flush({ id: 'documento-1' });
+        http.expectOne(`${BASE}/historia/pacientes/pac-1/registros/documento-1/pdf`).flush(null, { status: 404, statusText: 'No disponible' });
+        expect(c.generandoPdf()).toBe(false);
+        expect(c.documentoGenerado()).toBe('documento-1');
+        c.cerrarPresupuesto();
+        expect(c.presupuestoSeleccionado()).toBeNull();
+    });
+
+    it('mantiene la vista previa e informa si falla la carga de sedes', () => {
+        iniciarSesionCon([]);
+        const sesion = TestBed.inject(SesionService);
+        const identidad = sesion.identidad()!;
+        sesion.establecerIdentidad({ ...identidad, ambito: { ...identidad.ambito, todas_las_sedes: false, sedes: ['s-1', 's-2'] } });
+        const p = plan({ estado: 'PROPUESTO' });
+        montar([p]); c.prepararPresupuesto(p);
+        http.expectOne(`${BASE}/catalogo/sedes`).flush(null, { status: 403, statusText: 'Denegado' });
+        http.expectOne(`${BASE}/catalogo/clinica`).flush({ nombre: 'Clínica', zona_horaria: 'America/Guayaquil' });
+        expect(c.presupuestoError()).toContain('sedes autorizadas');
+        expect(c.cargandoSedesPresupuesto()).toBe(false);
     });
 
     it('prepara e imprime un presupuesto con los datos del plan y de la clínica', () => {

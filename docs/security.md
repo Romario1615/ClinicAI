@@ -7,6 +7,33 @@
 
 ---
 
+## Documentos y faciograma
+
+La ampliación del 2026-10-07 reutiliza permisos existentes; no concede lectura
+clínica a recepción ni administración. [ADR-0022](decisiones/0022-crud-faciograma-y-documentos-privados.md).
+
+| Operación API (prefijo `/api/v1`) | Control y ámbito |
+|---|---|
+| `GET /plataforma/clinicas/{id}/datos` | Superadministración + lectura de clínica |
+| `PUT /plataforma/clinicas/{id}/datos`, `/{id}/estado` | Superadministración + escritura de clínica; baja reversible y revocación de sesiones |
+| `PUT /plataforma/clinicas/usuarios/{id}/datos`, `/{id}/estado` | Superadministración + permiso de edición/baja de usuario; cuentas de plataforma protegidas |
+| `PUT /usuarios/{id}/datos` | Edición de usuario; SQL limitado a su clínica; revoca sesiones sin alterar roles/vínculo |
+| `GET /pacientes/{id}/contextos-atencion` | Lectura de agenda y ámbito del paciente/citas |
+| `GET /historia/faciograma/zonas` | Lectura de historia; catálogo sin datos de pacientes |
+| `GET /historia/pacientes/{id}/registros` y `/{registro}/pdf` | Lectura clínica, relación asistencial, clínica, sede, especialidad, módulos y sensibilidad; lectura auditada |
+| `POST /historia/pacientes/{id}/registros`, `/{registro}/anulacion` | Escritura clínica; mismo ámbito; versión sucesora/anulación solo por el autor, con motivo |
+| `POST /historia/planes/{id}/presupuesto-documento` | Escritura clínica, lectura autorizada del plan y módulo activo; cita/sede validadas |
+| `POST /historia/pacientes/{id}/registros/{registro}/whatsapp` | Lectura/escritura clínica, versión vigente N2 no facial, destinatario confirmado y consentimiento específico |
+| `POST /publico/documentos/{token}/acceso` | Token aleatorio y verificación de identidad, vigencia, clínica activa, cinco errores máximos y límite por IP; sin sesión de personal |
+
+Los enlaces caducan en 1–30 días. El aviso de WhatsApp no contiene información
+clínica. El worker verifica de nuevo vigencia y consentimiento antes de enviar;
+la revocación de consentimiento no retira un enlace ya entregado. Corregir o
+anular el registro invalida sus enlaces anteriores. Descargas con `no-store`,
+`nosniff` y política de referrer restrictiva. Tokens almacenados como hash más
+copia cifrada; no se imprimen en logs. N3 y faciogramas no admiten enlace público.
+Los PDFs conservan trazabilidad, pero no incorporan firma certificada.
+
 ## 1. Clasificación de la información
 
 | Nivel | Contenido | Quién accede |

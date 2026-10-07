@@ -17,7 +17,7 @@ import { SesionService } from './sesion.service';
 /** Permisos con los que `GET /historia/especialidades` responde. */
 const PERMISOS_REVISION = ['historia_clinica.leer', 'odontograma.leer', 'plan_tratamiento.leer', 'imagen_clinica.leer'];
 
-export type ModuloHistoria = 'odontograma' | 'periodoncia' | 'planes' | 'imagenes';
+export type ModuloHistoria = 'odontograma' | 'periodoncia' | 'planes' | 'imagenes' | 'faciograma';
 
 export interface EspecialidadHistoria {
   readonly id: string;

@@ -14,9 +14,9 @@ from sqlalchemy import delete, func, select, update
 from sqlalchemy.exc import IntegrityError
 
 from app.modulos.organizacion.modelos import Clinica, Sede
+from app.modulos.profesionales.modelos import Profesional
 from app.modulos.usuarios import administracion
 from app.modulos.usuarios.esquemas import EditarDatosUsuario
-from app.modulos.profesionales.modelos import Profesional
 from app.modulos.usuarios.modelos import (
     AmbitoAsignacion,
     MotivoRevocacion,
@@ -512,7 +512,9 @@ async def actualizar_asignacion_plataforma(
     clinica = await _clinica_activa(sesion, datos.clinica_id)
     await _validar_sedes_plataforma(sesion, clinica.id, datos.sedes_ids)
     roles, permisos = await _roles_globales(sesion, clinica.id, datos.roles, datos.profesional_id)
-    profesional = await _profesional_global(sesion, clinica.id, datos.profesional_id, roles)
+    profesional = await _profesional_global(
+        sesion, clinica.id, datos.profesional_id, roles, usuario_id=usuario.id
+    )
     if profesional:
         asignado = await sesion.scalar(
             select(Profesional.id).where(
@@ -951,24 +953,34 @@ def _exigir_superadministrador(principal: Principal) -> None:
 
 
 async def _clinica_existente(sesion: Sesion, clinica_id: uuid.UUID) -> Clinica:
-    fila = await sesion.scalar(select(Clinica).where(
-        Clinica.id == clinica_id, Clinica.anulado_en.is_(None)
-    ).with_for_update())
+    fila = await sesion.scalar(
+        select(Clinica)
+        .where(Clinica.id == clinica_id, Clinica.anulado_en.is_(None))
+        .with_for_update()
+    )
     if fila is None:
         raise DatosInvalidos("La clínica seleccionada no existe.")
     return fila
 
 
 @enrutador.get("/{clinica_id}/datos", response_model=DatosClinicaPlataforma)
-async def datos_clinica(clinica_id: uuid.UUID, sesion: Sesion, principal: PuedeListarClinicas) -> DatosClinicaPlataforma:
+async def datos_clinica(
+    clinica_id: uuid.UUID, sesion: Sesion, principal: PuedeListarClinicas
+) -> DatosClinicaPlataforma:
     _exigir_superadministrador(principal)
     fila = await _clinica_existente(sesion, clinica_id)
     return DatosClinicaPlataforma.model_validate(fila, from_attributes=True)
 
 
 @enrutador.put("/{clinica_id}/datos", response_model=DatosClinicaPlataforma)
-async def editar_clinica(clinica_id: uuid.UUID, datos: DatosClinicaPlataforma, sesion: Sesion,
-                        principal: PuedeCrearClinicas, reloj: RelojActual, auditor: Auditor) -> DatosClinicaPlataforma:
+async def editar_clinica(
+    clinica_id: uuid.UUID,
+    datos: DatosClinicaPlataforma,
+    sesion: Sesion,
+    principal: PuedeCrearClinicas,
+    reloj: RelojActual,
+    auditor: Auditor,
+) -> DatosClinicaPlataforma:
     _exigir_superadministrador(principal)
     fila = await _clinica_existente(sesion, clinica_id)
     for clave, valor in datos.model_dump().items():
@@ -978,75 +990,163 @@ async def editar_clinica(clinica_id: uuid.UUID, datos: DatosClinicaPlataforma, s
         await sesion.flush()
     except IntegrityError as exc:
         raise ConflictoEstado("La identificación fiscal ya está registrada.") from exc
-    await auditor.registrar([construir_entrada(accion=AccionAuditada.CLINICA_MODIFICADA,
-        principal=replace(principal, clinica_id=clinica_id), ahora=reloj.ahora(),
-        entidad_tipo="clinica", entidad_id=clinica_id, plataforma_global=True)])
+    await auditor.registrar(
+        [
+            construir_entrada(
+                accion=AccionAuditada.CLINICA_MODIFICADA,
+                principal=replace(principal, clinica_id=clinica_id),
+                ahora=reloj.ahora(),
+                entidad_tipo="clinica",
+                entidad_id=clinica_id,
+                plataforma_global=True,
+            )
+        ]
+    )
     await sesion.commit()
     return DatosClinicaPlataforma.model_validate(fila, from_attributes=True)
 
 
 @enrutador.put("/{clinica_id}/estado", response_model=EstadoPlataforma)
-async def estado_clinica(clinica_id: uuid.UUID, datos: EstadoPlataforma, sesion: Sesion,
-                        principal: PuedeCrearClinicas, reloj: RelojActual, auditor: Auditor) -> EstadoPlataforma:
+async def estado_clinica(
+    clinica_id: uuid.UUID,
+    datos: EstadoPlataforma,
+    sesion: Sesion,
+    principal: PuedeCrearClinicas,
+    reloj: RelojActual,
+    auditor: Auditor,
+) -> EstadoPlataforma:
     _exigir_superadministrador(principal)
     fila = await _clinica_existente(sesion, clinica_id)
-    if not datos.activo and await sesion.scalar(select(Usuario.id).join(UsuarioRol).join(Rol).where(
-        Usuario.clinica_id == clinica_id, Usuario.activo.is_(True), Rol.codigo == "superadministrador"
-    ).limit(1)):
+    if not datos.activo and await sesion.scalar(
+        select(Usuario.id)
+        .join(UsuarioRol)
+        .join(Rol)
+        .where(
+            Usuario.clinica_id == clinica_id,
+            Usuario.activo.is_(True),
+            Rol.codigo == "superadministrador",
+        )
+        .limit(1)
+    ):
         raise DatosInvalidos("No puede desactivar la organización que administra la plataforma.")
     fila.activa = datos.activo
     fila.actualizado_por = principal.actor_id
     if not datos.activo:
-        await sesion.execute(update(SesionAuth).where(
-            SesionAuth.usuario_id.in_(select(Usuario.id).where(Usuario.clinica_id == clinica_id)),
-            SesionAuth.revocada_en.is_(None)
-        ).values(revocada_en=reloj.ahora(), motivo_revocacion=MotivoRevocacion.REVOCACION_ADMINISTRATIVA.value))
-    await auditor.registrar([construir_entrada(accion=AccionAuditada.CLINICA_MODIFICADA,
-        principal=replace(principal, clinica_id=clinica_id), ahora=reloj.ahora(),
-        entidad_tipo="clinica", entidad_id=clinica_id, activa=datos.activo, motivo=datos.motivo,
-        plataforma_global=True)])
+        await sesion.execute(
+            update(SesionAuth)
+            .where(
+                SesionAuth.usuario_id.in_(
+                    select(Usuario.id).where(Usuario.clinica_id == clinica_id)
+                ),
+                SesionAuth.revocada_en.is_(None),
+            )
+            .values(
+                revocada_en=reloj.ahora(),
+                motivo_revocacion=MotivoRevocacion.REVOCACION_ADMINISTRATIVA.value,
+            )
+        )
+    await auditor.registrar(
+        [
+            construir_entrada(
+                accion=AccionAuditada.CLINICA_MODIFICADA,
+                principal=replace(principal, clinica_id=clinica_id),
+                ahora=reloj.ahora(),
+                entidad_tipo="clinica",
+                entidad_id=clinica_id,
+                activa=datos.activo,
+                motivo=datos.motivo,
+                plataforma_global=True,
+            )
+        ]
+    )
     await sesion.commit()
     return datos
 
 
 @enrutador.put("/usuarios/{usuario_id}/datos", response_model=UsuarioPlataforma)
-async def editar_usuario_global(usuario_id: uuid.UUID, datos: EditarDatosUsuario, sesion: Sesion,
-                               principal: PuedeCrearClinicas, reloj: RelojActual, auditor: Auditor) -> UsuarioPlataforma:
+async def editar_usuario_global(
+    usuario_id: uuid.UUID,
+    datos: EditarDatosUsuario,
+    sesion: Sesion,
+    principal: PuedeCrearClinicas,
+    reloj: RelojActual,
+    auditor: Auditor,
+) -> UsuarioPlataforma:
     _exigir_superadministrador(principal)
     usuario = await sesion.get(Usuario, usuario_id)
     if usuario is None:
         raise DatosInvalidos("La cuenta no existe.")
     actor = replace(principal, clinica_id=usuario.clinica_id)
     await administracion.editar_datos_usuario(sesion, actor, usuario_id, datos)
-    await sesion.execute(update(SesionAuth).where(SesionAuth.usuario_id == usuario_id,
-        SesionAuth.revocada_en.is_(None)).values(revocada_en=reloj.ahora(),
-        motivo_revocacion=MotivoRevocacion.REVOCACION_ADMINISTRATIVA.value))
-    await auditor.registrar([construir_entrada(accion=AccionAuditada.USUARIO_MODIFICADO,
-        principal=actor, ahora=reloj.ahora(), entidad_tipo="usuario", entidad_id=usuario_id,
-        plataforma_global=True, sesiones_revocadas=True)])
+    await sesion.execute(
+        update(SesionAuth)
+        .where(SesionAuth.usuario_id == usuario_id, SesionAuth.revocada_en.is_(None))
+        .values(
+            revocada_en=reloj.ahora(),
+            motivo_revocacion=MotivoRevocacion.REVOCACION_ADMINISTRATIVA.value,
+        )
+    )
+    await auditor.registrar(
+        [
+            construir_entrada(
+                accion=AccionAuditada.USUARIO_MODIFICADO,
+                principal=actor,
+                ahora=reloj.ahora(),
+                entidad_tipo="usuario",
+                entidad_id=usuario_id,
+                plataforma_global=True,
+                sesiones_revocadas=True,
+            )
+        ]
+    )
     await sesion.commit()
     return await _usuario_respuesta(sesion, usuario_id)
 
 
 @enrutador.put("/usuarios/{usuario_id}/estado", response_model=UsuarioPlataforma)
-async def estado_usuario_global(usuario_id: uuid.UUID, datos: EstadoPlataforma, sesion: Sesion,
-                               principal: PuedeCrearClinicas, reloj: RelojActual, auditor: Auditor) -> UsuarioPlataforma:
+async def estado_usuario_global(
+    usuario_id: uuid.UUID,
+    datos: EstadoPlataforma,
+    sesion: Sesion,
+    principal: PuedeCrearClinicas,
+    reloj: RelojActual,
+    auditor: Auditor,
+) -> UsuarioPlataforma:
     _exigir_superadministrador(principal)
     usuario = await sesion.get(Usuario, usuario_id)
     if usuario is None:
         raise DatosInvalidos("La cuenta no existe.")
-    if await sesion.scalar(select(Rol.id).join(UsuarioRol).where(
-        UsuarioRol.usuario_id == usuario_id, Rol.codigo == "superadministrador")):
+    if await sesion.scalar(
+        select(Rol.id)
+        .join(UsuarioRol)
+        .where(UsuarioRol.usuario_id == usuario_id, Rol.codigo == "superadministrador")
+    ):
         raise DatosInvalidos("No puede desactivar cuentas de plataforma desde esta pantalla.")
     actor = replace(principal, clinica_id=usuario.clinica_id)
     await administracion.cambiar_estado_usuario(sesion, actor, usuario_id, datos.activo)
     if not datos.activo:
-        await sesion.execute(update(SesionAuth).where(SesionAuth.usuario_id == usuario_id,
-            SesionAuth.revocada_en.is_(None)).values(revocada_en=reloj.ahora(),
-            motivo_revocacion=MotivoRevocacion.USUARIO_DESACTIVADO.value))
-    await auditor.registrar([construir_entrada(accion=AccionAuditada.USUARIO_MODIFICADO,
-        principal=actor, ahora=reloj.ahora(), entidad_tipo="usuario", entidad_id=usuario_id,
-        activo=datos.activo, motivo=datos.motivo, plataforma_global=True)])
+        await sesion.execute(
+            update(SesionAuth)
+            .where(SesionAuth.usuario_id == usuario_id, SesionAuth.revocada_en.is_(None))
+            .values(
+                revocada_en=reloj.ahora(),
+                motivo_revocacion=MotivoRevocacion.USUARIO_DESACTIVADO.value,
+            )
+        )
+    await auditor.registrar(
+        [
+            construir_entrada(
+                accion=AccionAuditada.USUARIO_MODIFICADO,
+                principal=actor,
+                ahora=reloj.ahora(),
+                entidad_tipo="usuario",
+                entidad_id=usuario_id,
+                activo=datos.activo,
+                motivo=datos.motivo,
+                plataforma_global=True,
+            )
+        ]
+    )
     await sesion.commit()
     return await _usuario_respuesta(sesion, usuario_id)
 

@@ -54,6 +54,7 @@ class TipoConsentimiento(StrEnum):
     # Ofertas y campanas. Separado de COMUNICACION_WHATSAPP a proposito:
     # aceptar recordatorios de cita no es aceptar publicidad.
     PROMOCIONES = "PROMOCIONES"
+    DOCUMENTOS_WHATSAPP = "DOCUMENTOS_WHATSAPP"
 
 
 class EstadoEscaneoAntivirus(StrEnum):
@@ -247,7 +248,7 @@ class Consentimiento(Base, MezclaIdentificador, MezclaAuditoria):
     __table_args__ = (
         CheckConstraint(
             "tipo IN ('TRATAMIENTO_DATOS', 'COMUNICACION_WHATSAPP', "
-            "'RECORDATORIOS_MEDICACION', 'COMPARTIR_CON_TERCEROS', 'PROMOCIONES')",
+            "'RECORDATORIOS_MEDICACION', 'COMPARTIR_CON_TERCEROS', 'PROMOCIONES', 'DOCUMENTOS_WHATSAPP')",
             name="tipo_valido",
         ),
         CheckConstraint(

@@ -136,11 +136,14 @@ class RepositorioPagos:
         limite: int,
         desplazamiento: int,
         estado: str | None = None,
+        cita_id: uuid.UUID | None = None,
     ) -> tuple[list[tuple[Pago, str, datetime, Decimal | None, Decimal, Decimal]], int]:
         """Pagos con el nombre del paciente y la fecha de la cita, dentro del ámbito."""
         consulta = self.consulta(principal)
         if estado is not None:
             consulta = consulta.where(Pago.estado == estado)
+        if cita_id is not None:
+            consulta = consulta.where(Pago.cita_id == cita_id)
         total = int(
             (
                 await self.sesion.execute(select(func.count()).select_from(consulta.subquery()))

@@ -129,6 +129,19 @@ _RECEPCION = ManualSistema(
     ),
     secciones=(
         _s(
+            "recepcion.atencion-documentos",
+            "Preparar la atención y autorizar el canal documental",
+            "/pacientes",
+            "Mantener el contexto administrativo y el consentimiento específico de entrega.",
+            (
+                "Abra la ficha, entre en Atención y seleccione la cita para comprobar sede, servicio y especialista.",
+                "En Contacto y consentimientos, registre Documentos por WhatsApp únicamente si el paciente lo autoriza y compruebe su teléfono.",
+                "Use Pagos de esta cita para consultar sus cargos; el presupuesto lo emite el profesional en su acceso clínico.",
+            ),
+            ("Recepción no consulta el mapa facial ni emite recetas o documentos clínicos.",),
+            requiere=("paciente.leer_administrativo", "paciente.editar", "agenda.leer"),
+        ),
+        _s(
             "recepcion.turno",
             "Empezar el turno desde el Panel",
             "/panel",
@@ -338,6 +351,57 @@ _PROFESIONAL = ManualSistema(
         "La firma electrónica con validez jurídica todavía no está implementada.",
     ),
     secciones=(
+        _s(
+            "profesional.ficha-integral",
+            "Trabajar desde la atención de origen",
+            "/pacientes",
+            "Reunir la atención clínica en la ficha conservando sede y especialidad.",
+            (
+                "Abra la ficha del paciente desde su cita o desde Pacientes y elija Atención.",
+                "Seleccione la cita de referencia: sus notas nuevas y documentos conservarán esa cita y sede.",
+                "Use las secciones habilitadas para su especialidad: evolución, piezas dentales, imágenes, planes y recetas.",
+            ),
+            (
+                "Cambiar de cita recarga el espacio clínico; una especialidad no asignada permanece restringida.",
+            ),
+            requiere=("historia_clinica.leer", "agenda.leer"),
+        ),
+        _s(
+            "profesional.facial",
+            "Registrar y versionar el faciograma",
+            "/historia-clinica",
+            "Documentar evaluación y seguimiento estético sobre un rostro frontal.",
+            (
+                "Con el paciente abierto, entre en Faciograma si administración habilitó ese módulo para su especialidad.",
+                "Pulse Nuevo registro facial y seleccione una zona en el rostro o en la lista; indique observación, estado y procedimiento realizado por usted.",
+                "Agregue las zonas, indique el motivo y guarde; Editar crea una nueva versión y Anular conserva el historial.",
+                "Descargue el PDF para obtener las observaciones y una página con el mapa de las 23 zonas.",
+            ),
+            (
+                "El gráfico documenta zonas; no indica puntos de inyección ni propone tratamientos.",
+                "El autor modifica sus registros; el contenido N3 requiere permiso sensible.",
+            ),
+            requiere=("historia_clinica.leer", "historia_clinica.escribir"),
+        ),
+        _s(
+            "profesional.emision-documental",
+            "Emitir PDFs y solicitar entrega privada",
+            "/historia-clinica",
+            "Preparar presupuestos, cotizaciones y copias de recetas confirmadas.",
+            (
+                "En Documentos, pulse Crear documento y complete conceptos, cantidades, precios, moneda y vigencia del presupuesto o cotización.",
+                "Para una receta, seleccione Receta confirmada; su pauta y firmante se copian del registro confirmado, sin editar medicamentos en el documento.",
+                "Guarde la versión y use Descargar PDF; desde Planes también puede guardar un presupuesto y descargar su archivo.",
+                "Antes de Enviar por WhatsApp, revise teléfono y consentimiento Documentos por WhatsApp; confirme el destinatario en la ventana.",
+                "Consulte la entrega en Mensajes: sandbox registra una simulación; con proveedor configurado, el paciente recibe un enlace privado con vigencia de siete días.",
+            ),
+            (
+                "El enlace exige fecha de nacimiento registrada o cuatro caracteres del documento si falta esa fecha; caduca y se bloquea tras cinco fallos.",
+                "Editar o anular invalida los enlaces anteriores. Los registros faciales y documentos N3 se entregan presencialmente.",
+                "El PDF no sustituye una factura ni incorpora firma electrónica certificada.",
+            ),
+            requiere=("historia_clinica.leer", "historia_clinica.escribir", "receta.leer"),
+        ),
         _s(
             "profesional.jornada",
             "Su jornada en la Agenda",
@@ -557,6 +621,20 @@ _ASISTENTE = ManualSistema(
     ),
     secciones=(
         _s(
+            "asistente.contexto",
+            "Comprobar la atención asignada antes del seguimiento",
+            "/pacientes",
+            "Identificar la cita correcta antes de acompañar una indicación confirmada.",
+            (
+                "En la ficha, use Atención y compruebe el especialista y la sede de la cita elegida.",
+                "Revise Recetas con su permiso de lectura; para corregir una pauta o emitir su PDF solicite intervención del profesional firmante.",
+            ),
+            (
+                "Asistencia no puede editar el faciograma, presupuestos clínicos ni las dosis de una receta.",
+            ),
+            requiere=("paciente.leer_administrativo", "agenda.leer", "receta.leer"),
+        ),
+        _s(
             "asistente.recorrido",
             "Acompañar el recorrido del paciente",
             "/agenda",
@@ -691,6 +769,36 @@ _ADMINISTRADOR = ManualSistema(
         "Guardar una credencial no demuestra que el servicio externo esté conectado.",
     ),
     secciones=(
+        _s(
+            "administracion.crud-cuentas",
+            "Actualizar identidad y retirar acceso del personal",
+            "/usuarios",
+            "Mantener las cuentas locales sin perder su historial de actividad.",
+            (
+                "Busque la persona en Usuarios y use Editar datos para corregir nombre, apellido o correo.",
+                "Para una baja utilice Desactivar; Reactivar restaura el acceso con sus roles existentes.",
+                "Revise la asignación de roles y el perfil profesional cuando cambie una función; editar la cuenta revoca sus sesiones abiertas.",
+            ),
+            (
+                "Una cuenta de otra clínica o de superadministración no es editable desde esta pantalla.",
+            ),
+            requiere=("usuario.leer", "usuario.editar", "usuario.desactivar"),
+        ),
+        _s(
+            "administracion.estetica",
+            "Habilitar el módulo de seguimiento facial",
+            "/catalogo",
+            "Asignar herramientas clínicas a la especialidad estética correspondiente.",
+            (
+                "En Catálogo, abra Módulos de historia de la especialidad y habilite Faciograma.",
+                "Vincule al especialista con su perfil y roles; configure las sedes que puede atender.",
+                "En Automatizaciones revise el flujo de documentos y en Integraciones configure WhatsApp cuando disponga de una cuenta del proveedor.",
+            ),
+            (
+                "La activación del módulo no concede por sí misma acceso a pacientes ni permisos de escritura clínica.",
+            ),
+            requiere=("especialidad.gestionar", "configuracion.escribir"),
+        ),
         _s(
             "administracion.perfil",
             "Perfil de la clínica",
@@ -952,6 +1060,20 @@ _AUDITOR = ManualSistema(
     ),
     secciones=(
         _s(
+            "auditoria.trazabilidad-registros",
+            "Revisar bajas y emisiones documentales",
+            "/usuarios",
+            "Comprobar accesos administrativos y solicitar trazabilidad sin consultar contenido clínico.",
+            (
+                "En Usuarios, contraste las cuentas inactivas y los roles conservados con las bajas autorizadas por la clínica.",
+                "Solicite al responsable el informe de auditoría de creación, anulación y entrega documental para contrastar autores y fechas sin incluir contenido de la historia.",
+            ),
+            (
+                "La descarga clínica de PDFs y el gráfico facial no se habilitan para el rol auditor.",
+            ),
+            requiere=("auditoria.leer",),
+        ),
+        _s(
             "auditoria.emergencias",
             "Verificar los accesos de emergencia",
             "/seguridad",
@@ -1073,6 +1195,23 @@ _SUPERADMINISTRADOR = ManualSistema(
         "El acceso local de demostración no es un procedimiento para cuentas de producción.",
     ),
     secciones=(
+        _s(
+            "plataforma.crud",
+            "Editar organizaciones y gestionar bajas de cuentas",
+            "/plataforma/clinicas",
+            "Completar el mantenimiento global conservando referencias e historial.",
+            (
+                "En Organizaciones registradas, use Editar clínica para ajustar perfil, contacto, zona horaria, moneda e identificación fiscal.",
+                "Desactivar clínica corta sus sesiones e impide nuevos ingresos; Reactivar clínica vuelve a permitir el acceso a sus cuentas activas.",
+                "En Accesos del personal, Editar usuario actualiza su identidad; Desactivar usuario retira su acceso y Reactivar usuario lo restablece.",
+                "Clínica y módulos permite reasignar organización, perfil profesional, roles y sedes; guardar sustituye los accesos anteriores.",
+            ),
+            (
+                "La organización de superadministración y sus cuentas están protegidas frente a estas bajas.",
+                "Ninguna baja elimina citas, historias, pagos ni autorías anteriores.",
+            ),
+            rol="superadministrador",
+        ),
         _s(
             "plataforma.alta",
             "Registrar una clínica",

@@ -223,6 +223,9 @@ export class AgendaComponent {
    * tratamiento con una fase por agendar). Solo rellena el formulario de
    * reserva: el hueco lo sigue eligiendo quien agenda.
    */
+  private readonly ruta = inject(ActivatedRoute);
+  private citaSolicitada = this.ruta.snapshot.queryParamMap.get('cita');
+  private solicitudCitaContexto = 0;
   protected readonly pacienteSugerido = signal<string | null>(
     inject(ActivatedRoute).snapshot.queryParamMap.get('paciente'),
   );
@@ -529,6 +532,15 @@ export class AgendaComponent {
   private readonly recargar = new Subject<void>();
 
   constructor() {
+    this.ruta.queryParamMap.pipe(takeUntilDestroyed()).subscribe(parametros => {
+      const cita = parametros.get('cita');
+      if (cita === this.citaSolicitada) return;
+      this.citaSolicitada = cita;
+      this.solicitudCitaContexto++;
+      this.pacienteSugerido.set(parametros.get('paciente'));
+      this.procedimientoPlanSugerido.set(parametros.get('procedimiento_plan'));
+      if (!this.cargandoCatalogo() && cita) this.cargarCitaContexto(cita);
+    });
     const consulta = this.consultaLateral;
     if (consulta) {
       // Si la ventana del navegador se ensancha con lo pendiente abierto en
@@ -664,10 +676,31 @@ export class AgendaComponent {
 
         this.cargandoCatalogo.set(false);
         this.cargarAgenda();
+        if (this.citaSolicitada) this.cargarCitaContexto(this.citaSolicitada);
       },
       error: (fallo: unknown) => {
         this.cargandoCatalogo.set(false);
         this.errorCatalogo.set(this.aFallo(fallo));
+      },
+    });
+  }
+
+  private cargarCitaContexto(id: string): void {
+    const solicitud = ++this.solicitudCitaContexto;
+    this.api.cita(id).subscribe({
+      next: cita => {
+        if (solicitud !== this.solicitudCitaContexto) return;
+        this.sedeId.set(cita.sede_id); this.profesionalId.set(cita.profesional_id);
+        this.servicioId.set(cita.servicio_id);
+        this.especialidadId.set(this.profesionales().find(p => p.id === cita.profesional_id)?.especialidad_id ?? '');
+        const partes = new Intl.DateTimeFormat('en-CA', { timeZone: this.zona(), year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(new Date(cita.inicio));
+        const parte = (tipo: string) => partes.find(p => p.type === tipo)?.value;
+        this.fecha.set(`${parte('year')}-${parte('month')}-${parte('day')}`);
+        this.cerrarFicha();
+        this.cargarAgenda(); this.abrirCita(cita);
+      },
+      error: fallo => {
+        if (solicitud === this.solicitudCitaContexto) this.errorAgenda.set(this.aFallo(fallo));
       },
     });
   }
@@ -907,7 +940,9 @@ export class AgendaComponent {
     this.errorReserva.set(null);
   }
 
-  protected abrirFicha(pacienteId: string): void {
+  protected readonly citaEnFicha = signal<string | null>(null);
+  protected abrirFicha(pacienteId: string, citaId: string | null = null): void {
+    this.citaEnFicha.set(citaId);
     this.pacienteEnFicha.set(pacienteId);
   }
 

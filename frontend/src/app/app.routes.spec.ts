@@ -85,7 +85,7 @@ const MATRIZ_RUTAS: readonly (readonly [string, readonly string[]])[] = [
  * y la consola de plataforma (que exige superadministración, probada aparte).
  */
 const RUTAS_SIN_PERMISO_DE_MODULO = new Set([
-  'acceso', 'cambiar-contrasena', 'panel', 'ayuda', 'indicaciones/:token', 'sin-permiso', 'plataforma/clinicas', '', '**',
+  'acceso', 'cambiar-contrasena', 'panel', 'ayuda', 'indicaciones/:token', 'documentos/:token', 'sin-permiso', 'plataforma/clinicas', '', '**',
 ]);
 
 const PERMISOS_POR_RUTA = MATRIZ_RUTAS.flatMap(([path, permisos]) =>

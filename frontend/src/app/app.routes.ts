@@ -269,6 +269,11 @@ export const routes: Routes = [
       ),
   },
   {
+    path: 'documentos/:token',
+    title: 'Su documento privado · ClinicAI',
+    loadComponent: () => import('./paginas/publico/documentos-publicos.component').then(m => m.DocumentosPublicosComponent),
+  },
+  {
     path: 'sin-permiso',
     canActivate: [guardiaAutenticacion],
     title: 'Sin acceso · ClinicAI',

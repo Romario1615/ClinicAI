@@ -335,6 +335,15 @@ PLANTILLAS: dict[TipoMensajeOutbox, Plantilla] = {
 }
 
 
+PLANTILLAS[TipoMensajeOutbox.DOCUMENTO_DISPONIBLE] = Plantilla(
+    tipo=TipoMensajeOutbox.DOCUMENTO_DISPONIBLE,
+    nombre_meta="clinicai_documento_disponible",
+    texto="Hola {nombre}. {clinica} tiene un documento disponible para usted. "
+    "Consúltelo de forma privada en {enlace}. El acceso caduca en {dias} días.",
+    variables_permitidas=frozenset({"nombre", "clinica", "enlace", "dias"}),
+)
+
+
 def obtener(tipo: TipoMensajeOutbox) -> Plantilla:
     """Plantilla de un tipo de mensaje.
 

@@ -27,7 +27,7 @@
  * pueden sustituir por una versión firmada que conserva el historial y
  * cancela las tomas futuras de la pauta anterior.
  */
-import { Component, DestroyRef, computed, inject, signal, ChangeDetectionStrategy } from '@angular/core';
+import { Component, DestroyRef, computed, inject, input, OnInit, signal, ChangeDetectionStrategy } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute } from '@angular/router';
 import { forkJoin, of } from 'rxjs';
@@ -124,7 +124,9 @@ type Pestana =
   | 'imagenes'
   | 'planes'
   | 'recetas'
-  | 'indicaciones';
+  | 'indicaciones'
+  | 'faciograma'
+  | 'documentos';
 
 import { TipoDocumentoPipe } from '../../compartido/tipo-documento.pipe';
 import { ResumenModuloComponent } from '../../compartido/resumen-modulo.component';
@@ -132,10 +134,12 @@ import { IconoComponent } from '../../compartido/icono.component';
 import { ResumenClinicoComponent, type AlergiaResumen } from './resumen-clinico.component';
 import { IndicacionesPacienteComponent } from './indicaciones-paciente.component';
 import { OperacionesService } from '../../nucleo/servicios/operaciones.service';
+import { RegistrosPacienteComponent } from '../../compartido/registros-paciente.component';
 @Component({
   selector: 'app-historia-clinica',
   standalone: true,
   imports: [
+    RegistrosPacienteComponent,
     ResumenModuloComponent,
     IconoComponent,
     ResumenClinicoComponent,
@@ -163,7 +167,12 @@ import { OperacionesService } from '../../nucleo/servicios/operaciones.service';
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './historia-clinica.component.scss',
 })
-export class HistoriaClinicaComponent {
+export class HistoriaClinicaComponent implements OnInit {
+  readonly pacienteInicial = input<string | null>(null);
+  readonly citaContexto = input<string | null>(null);
+  readonly sedeContexto = input<string | null>(null);
+  readonly embebida = input(false);
+  private readonly ruta = inject(ActivatedRoute, { optional: true });
   private readonly destroyRef = inject(DestroyRef);
   private readonly api = inject(ApiService);
   private readonly operaciones = inject(OperacionesService);
@@ -259,6 +268,8 @@ export class HistoriaClinicaComponent {
       { clave: 'recetas', texto: 'Recetas' },
     ];
     if (this.puedeLeerNotas()) lista.push({ clave: 'indicaciones', texto: 'Indicaciones' });
+    if (this.puedeLeerNotas() && !this.accesoNoDisponible()) lista.push({ clave: 'documentos', texto: 'Documentos' });
+    if (this.puedeLeerNotas() && !this.accesoNoDisponible() && this.especialidades.tieneModulo('faciograma')) lista.push({ clave: 'faciograma', texto: 'Faciograma' });
     // Permiso del rol **y** módulo de la especialidad desde la que se revisa.
     // Sin acceso clínico a este paciente, los módulos solo darían «no disponible».
     const modulo = (m: ModuloHistoria) => this.especialidades.tieneModulo(m) && !this.accesoNoDisponible();
@@ -394,10 +405,13 @@ export class HistoriaClinicaComponent {
   constructor() {
     this.destroyRef.onDestroy(() => this.limpiarTemporizadorAccesoEmergencia());
     this.vigilarPantallaFija();
-    this.cargarPacientes();
+  }
+
+  ngOnInit(): void {
+    if (!this.embebida()) this.cargarPacientes();
     this.especialidades.cargar();
     // «Abrir historia completa» desde la ficha llega con ?paciente=<id>.
-    const pacienteId = inject(ActivatedRoute).snapshot.queryParamMap.get('paciente');
+    const pacienteId = this.pacienteInicial() ?? this.ruta?.snapshot.queryParamMap.get('paciente');
     if (pacienteId) {
       this.abrir({ id: pacienteId } as Paciente);
     }

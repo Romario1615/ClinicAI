@@ -89,6 +89,53 @@ el índice 14 y el límite local de acceso es 200 por minuto. No se cambió `.en
 
 ## Comandos principales
 
+## CRUD, faciograma y documentos
+
+Ampliación posterior a la corrección del Panel, sobre `claude/friendly-gates-o240sb`.
+Se añadieron edición y baja reversible de clínicas/cuentas, ficha de atención
+según cita/sede/especialidad, faciograma de 23 zonas, registros versionados,
+PDFs y entrega mediante enlace privado por WhatsApp. La plantilla conserva la
+privacidad; los envíos se prueban con sandbox, sin credenciales externas.
+La receta PDF conserva su origen confirmado y no permite editar la pauta.
+
+La revisión en navegador detectó una carrera en el editor de clínicas: se podía
+escribir antes de terminar la carga y el GET reemplazaba lo escrito. Se corrigió
+deshabilitando campos durante carga/guardado. Elegir una cita de especialidad
+ajena bloquea correctamente la atención clínica. Se corrigieron selectores de
+pruebas y se actualizaron dos expectativas antiguas al incorporar el cuarto
+consentimiento y el módulo facial por omisión en dermatología.
+
+El PDF facial añade una página con mapa vectorial y leyenda. Los presupuestos
+excluyen procedimientos cancelados; el editor selecciona sede cuando el ámbito
+incluye varias sedes limitadas. El listado filtra módulos antes de paginar.
+Las instrucciones de Ayuda son propias de cada rol y no amplían sus permisos.
+
+Pruebas añadidas: `test_crud_administrativo_api.py`,
+`test_registros_paciente_api.py`, `test_pdf_documentos.py`, cinco componentes
+frontend y `17-registros-y-documentos.spec.ts`. El ciclo de migración `031`
+pasó en la BD temporal con reversión a `030` y `alembic check`; también está
+aplicado en la BD local. Los logs de esta revisión quedan en
+`tmp/qa-20261007/*registros*.log` (excluidos de Git).
+
+```powershell
+cd backend
+.venv/Scripts/python.exe -m pytest pruebas/api/test_crud_administrativo_api.py pruebas/api/test_registros_paciente_api.py pruebas/unitarias/test_pdf_documentos.py -q --no-cov
+.venv/Scripts/python.exe -m pytest -q --cov=app --cov-report=term
+cd ../frontend
+npm run test:ci
+npm run lint
+npm run build
+cd ../pruebas-e2e
+$env:PLAYWRIGHT_BROWSERS_PATH='D:/playwright-browsers'
+$env:URL_API='http://127.0.0.1:8020/api/v1'
+npx playwright test
+```
+
+Playwright requiere API/BD temporales preparadas y solo datos sintéticos.
+Los resultados finales de esta ampliación se añaden al terminar la regresión.
+
+## Comandos de la revisión anterior
+
 ```powershell
 cd frontend
 npm run test:ci

@@ -38,6 +38,9 @@ from app.mensajeria.adaptadores import (
 )
 from app.mensajeria.destinatarios import DestinatarioNoResoluble, ResolutorContacto
 from app.modulos.automatizaciones import servicios as automatizaciones
+from app.modulos.documentos.modelos import EntregaDocumento, RegistroPaciente
+from app.modulos.historia.modelos import Receta
+from app.modulos.organizacion.modelos import Clinica
 from app.modulos.outbox.modelos import (
     CanalOutbox,
     EstadoOutbox,
@@ -46,6 +49,7 @@ from app.modulos.outbox.modelos import (
     TipoMensajeOutbox,
 )
 from app.modulos.pacientes.modelos import Consentimiento, Paciente, TipoConsentimiento
+from app.modulos.postconsulta.modelos import MAXIMO_INTENTOS
 from app.nucleo.bd import ejecutar_escritura
 from app.nucleo.errores import ConsentimientoRequerido
 from app.nucleo.registro import obtener_logger
@@ -79,6 +83,7 @@ TIPOS_PROACTIVOS_A_PACIENTE: frozenset[TipoMensajeOutbox] = frozenset(
         TipoMensajeOutbox.PROMOCION,
         TipoMensajeOutbox.SEGUIMIENTO_TRATAMIENTO,
         TipoMensajeOutbox.INDICACIONES_DISPONIBLES,
+        TipoMensajeOutbox.DOCUMENTO_DISPONIBLE,
     }
 )
 
@@ -86,6 +91,7 @@ TIPOS_PROACTIVOS_A_PACIENTE: frozenset[TipoMensajeOutbox] = frozenset(
 # uno propio: aceptar recordatorios de cita no es aceptar que le escriban
 # sobre su medicacion.
 CONSENTIMIENTO_POR_TIPO: dict[TipoMensajeOutbox, TipoConsentimiento] = {
+    TipoMensajeOutbox.DOCUMENTO_DISPONIBLE: TipoConsentimiento.DOCUMENTOS_WHATSAPP,
     TipoMensajeOutbox.TOMA_RECORDATORIO: TipoConsentimiento.RECORDATORIOS_MEDICACION,
     TipoMensajeOutbox.TOMA_SEGUIMIENTO: TipoConsentimiento.RECORDATORIOS_MEDICACION,
     # Publicidad exige su consentimiento propio, no el de recordatorios.
@@ -346,10 +352,52 @@ class ServicioOutbox:
         await self._sesion.commit()
         return resumen
 
+    async def _documento_vigente_para_entrega(self, mensaje: OutboxMensaje) -> bool:
+        if mensaje.tipo != TipoMensajeOutbox.DOCUMENTO_DISPONIBLE.value:
+            return True
+        entrega = await self._sesion.get(EntregaDocumento, mensaje.entidad_origen_id)
+        registro = (
+            await self._sesion.get(RegistroPaciente, entrega.registro_id) if entrega else None
+        )
+        valido = bool(
+            entrega
+            and registro
+            and entrega.intentos_fallidos < MAXIMO_INTENTOS
+            and not entrega.anulada
+            and entrega.expira_en > self._reloj.ahora()
+            and registro.vigente
+            and not registro.anulado
+        )
+        if valido and registro is not None:
+            valido = bool(
+                await self._sesion.scalar(
+                    select(Clinica.id).where(
+                        Clinica.id == registro.clinica_id,
+                        Clinica.activa.is_(True),
+                        Clinica.anulado_en.is_(None),
+                    )
+                )
+            )
+        if valido and registro is not None and registro.tipo == "RECETA":
+            valido = bool(
+                await self._sesion.scalar(
+                    select(Receta.id).where(
+                        Receta.id == uuid.UUID(str(registro.contenido["receta_id"])),
+                        Receta.estado == "CONFIRMADA",
+                    )
+                )
+            )
+        return valido
+
     async def _entregar(self, mensaje: OutboxMensaje, resumen: ResumenProceso) -> ResumenProceso:
-        if not await self._consentimiento_vigente_para_entrega(mensaje):
+        documento_valido = await self._documento_vigente_para_entrega(mensaje)
+        if not documento_valido or not await self._consentimiento_vigente_para_entrega(mensaje):
             mensaje.estado = EstadoOutbox.DESCARTADO.value
-            mensaje.ultimo_error = "Consentimiento revocado o ausente antes de la entrega."
+            mensaje.ultimo_error = (
+                "Consentimiento revocado o ausente antes de la entrega."
+                if documento_valido
+                else "El documento ya no está vigente o el acceso caducó."
+            )
             mensaje.actualizado_en = self._reloj.ahora()
             logger.info(
                 "outbox.descartado_sin_consentimiento",

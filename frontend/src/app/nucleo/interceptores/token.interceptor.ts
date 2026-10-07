@@ -23,7 +23,7 @@ import { AutenticacionService } from '../servicios/autenticacion.service';
 import { SesionService } from '../servicios/sesion.service';
 
 /** Rutas que se autorizan por su cuerpo y no por la cabecera. */
-const RUTAS_SIN_TOKEN = ['/autenticacion/sesion', '/autenticacion/refresco', '/autenticacion/cierre'];
+const RUTAS_SIN_TOKEN = ['/autenticacion/sesion', '/autenticacion/refresco', '/autenticacion/cierre', '/publico/'];
 
 export const tokenInterceptor: HttpInterceptorFn = (peticion, siguiente) => {
   const sesion = inject(SesionService);

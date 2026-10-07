@@ -133,7 +133,7 @@
         }
       </p>
     </div>
-    <button class="boton cabecera-paciente__volver" type="button" (click)="cerrar()">Volver al listado</button>
+    @if (!embebida()) { <button class="boton cabecera-paciente__volver" type="button" (click)="cerrar()">Volver al listado</button> }
   </header>
 
   @if (avisoAccesoEmergencia()) {
@@ -155,7 +155,11 @@
       />
     </div>
   } @else {
-    <app-selector-especialidad class="historia__especialidad pantalla__fijo" (cambio)="cambiarEspecialidad()" />
+    @if (embebida() && citaContexto()) {
+      <p class="pantalla__fijo">Especialidad de la cita: {{ especialidades.elegida()?.nombre }}</p>
+    } @else {
+      <app-selector-especialidad class="historia__especialidad pantalla__fijo" (cambio)="cambiarEspecialidad()" />
+    }
     <app-pestanas
       class="pantalla__fijo"
       grupo="historia"
@@ -187,6 +191,12 @@
       }
 
       @switch (pestana()) {
+        @case ('faciograma') {
+          <div class="desplazable" tabindex="0" role="region" aria-label="Seguimiento facial"><app-registros-paciente [pacienteId]="paciente()!.id" [facial]="true" [citaId]="citaContexto()" [sedeId]="sedeContexto()" /></div>
+        }
+        @case ('documentos') {
+          <div class="desplazable" tabindex="0" role="region" aria-label="Documentos del paciente"><app-registros-paciente [pacienteId]="paciente()!.id" [citaId]="citaContexto()" [sedeId]="sedeContexto()" /></div>
+        }
         @case ('odontograma') {
           <app-odontograma class="llena" [pacienteId]="paciente()!.id" />
         }
@@ -209,6 +219,8 @@
         }
         @case ('planes') {
           <app-planes-tratamiento
+            [citaContexto]="citaContexto()"
+            [sedeContexto]="sedeContexto()"
             class="llena"
             [pacienteId]="paciente()!.id"
             [nombrePaciente]="paciente()!.nombre + ' ' + paciente()!.apellido"
@@ -237,6 +249,7 @@
             <!-- El editor es una ventana flotante: la lista no se mueve. -->
             @if (editando() !== undefined) {
               <app-nota-editor
+                [citaId]="citaContexto()"
                 [pacienteId]="paciente()!.id"
                 [base]="editando() ?? null"
                 (guardada)="alGuardarNota()"

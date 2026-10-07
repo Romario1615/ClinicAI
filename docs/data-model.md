@@ -562,6 +562,31 @@ El flujo de caja no es una tabla: se calcula de `pago` (`CONFIRMED`) y `gasto` (
 
 ---
 
+## Registros y entregas de documentos
+
+Migración `20261007_031`, [ADR-0022](decisiones/0022-crud-faciograma-y-documentos-privados.md).
+
+- **`registro_paciente`:** clínica, paciente, autor profesional, especialidad,
+  sede/cita opcionales, tipo (`FACIOGRAMA`, `PRESUPUESTO`, `COTIZACION`, `RECETA`),
+  raíz, versión, vigencia, sensibilidad N2/N3, título, contenido JSONB, motivo de
+  corrección/anulación y auditoría. El contenido guarda una instantánea de los
+  datos de emisor y destinatario. Índices por contexto y una sola versión vigente
+  por raíz. Disparadores impiden `DELETE` y cambios de contenido por `UPDATE`;
+  permiten retirar la vigencia e insertar la versión sucesora, con identidad de
+  cadena y sensibilidad preservadas. No se implementa borrado clínico.
+- **`entrega_documento`:** registro, hash del token, token cifrado para reintentos,
+  caducidad, intentos fallidos, anulación, outbox e idempotencia. El enlace deja
+  de funcionar si la versión deja de estar vigente o se anula; una receta
+  suspendida o una clínica desactivada también bloquean el acceso.
+- **`consentimiento_paciente`:** incorpora `DOCUMENTOS_WHATSAPP` con texto
+  versionado; no se reutiliza el consentimiento de citas o publicidad.
+- **`outbox_mensaje`:** incorpora `DOCUMENTO_DISPONIBLE`. Su carga contiene el
+  aviso genérico y el enlace, sin partidas, zonas ni medicamentos.
+
+Las partidas se calculan con Decimal y redondeo de dos decimales por subtotal.
+La receta conserva referencia al origen confirmado; el faciograma guarda códigos
+del catálogo de 23 zonas y observaciones introducidas por el profesional.
+
 ## 13. Outbox, métricas y predicciones
 
 **`outbox_mensaje`** — según [ADR‑0008](decisiones/0008-outbox-transaccional.md):

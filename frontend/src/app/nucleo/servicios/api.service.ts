@@ -517,6 +517,7 @@ export interface Nota {
 
 /** Nota nueva. El autor no se envía: lo fija el servidor desde la sesión. */
 export interface NotaNueva {
+  readonly cita_id?: string | null;
   readonly paciente_id: string;
   readonly tipo: 'EVOLUCION' | 'ENFERMERIA' | 'INTERCONSULTA' | 'PROCEDIMIENTO';
   readonly nivel_sensibilidad: 'N2' | 'N3';

@@ -55,6 +55,13 @@ class TextoConsentimiento:
 
 
 TEXTOS: dict[TipoConsentimiento, TextoConsentimiento] = {
+    TipoConsentimiento.DOCUMENTOS_WHATSAPP: TextoConsentimiento(
+        "2026-10-v1",
+        "Documentos por WhatsApp",
+        "Acepto recibir avisos genéricos por WhatsApp con enlaces temporales para consultar "
+        "mis presupuestos, cotizaciones y recetas. Para abrir el PDF debo verificar mi identidad. "
+        "Puedo revocar este permiso en la clínica o responder BAJA en cualquier momento.",
+    ),
     TipoConsentimiento.COMUNICACION_WHATSAPP: TextoConsentimiento(
         "2026-10-v1",
         "Avisos de citas por WhatsApp",

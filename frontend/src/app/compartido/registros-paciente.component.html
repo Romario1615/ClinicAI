@@ -1,0 +1,80 @@
+<header class="cabecera"><div><p class="ceja">{{ facial() ? 'ESTÉTICA · SEGUIMIENTO CLÍNICO' : 'DOCUMENTOS DEL PACIENTE' }}</p><h3>{{ facial() ? 'Faciograma' : 'Presupuestos, cotizaciones y recetas' }}</h3><p>{{ especialidades.elegida()?.nombre }} · {{ citaId() ? 'Atención vinculada a una cita' : 'Atención sin cita asociada' }}</p></div>
+  <div class="acciones"><button class="boton boton--pequeno" type="button" (click)="historico.set(!historico()); cargar()">{{ historico() ? 'Ver vigentes' : 'Ver historial' }}</button>@if (puedeEscribir()) { <button class="boton boton--principal" type="button" (click)="editar()">{{ facial() ? 'Nuevo registro facial' : 'Crear documento' }}</button> }</div>
+</header>
+@if (error() && !editor() && !anularRegistro() && !enviarRegistro()) { <p role="alert" class="error">{{ error() }} <button class="boton" type="button" (click)="cargar()">Reintentar</button></p> }
+@if (aviso()) { <p role="status" class="aviso">{{ aviso() }}</p> }
+@if (cargando()) { <p role="status">Cargando registros…</p> }
+<div class="contenido" [class.contenido--facial]="facial()">
+  @if (facial()) { <app-mapa-facial [puntos]="puntos()" [zonas]="seleccionado()?.contenido?.zonas ?? []" [seleccion]="detalleZona()" (elegir)="detalleZona.set($event)" /> }
+  <div class="registros">
+    @if (!cargando() && !listado().length && !error()) { <div class="vacio"><h4>{{ facial() ? 'Empiece el seguimiento facial' : 'Todavía no hay documentos' }}</h4><p>{{ facial() ? 'Seleccione las zonas del rostro y registre la evaluación del profesional.' : 'Prepare un presupuesto o cotización, o genere el PDF de una receta confirmada.' }}</p></div> }
+    @for (registro of listado(); track registro.id) {
+      <article class="registro" [class.registro--seleccionado]="seleccionado()?.id === registro.id">
+        <div class="cabecera"><div><h4>{{ registro.titulo }}</h4><span>{{ registro.tipo }} · v{{ registro.version }} · {{ registro.anulado ? 'Anulado' : registro.vigente ? 'Vigente' : 'Histórico' }}</span><p>{{ registro.creado_en | date:'dd/MM/yyyy HH:mm' }} · {{ registro.contenido.profesional }}</p><small>{{ registro.contenido.sede || 'Sin sede asociada' }} · {{ registro.nivel_sensibilidad }}</small></div></div>
+        @if (facial()) {
+          <button class="boton boton--pequeno" type="button" (click)="seleccionado.set(registro)">Ver en el mapa</button>
+          <ul class="zonas">@for (zona of registro.contenido.zonas; track zona.zona) { <li [class.destacada]="detalleZona() === zona.zona"><strong>{{ nombreZona(zona.zona) }} · {{ zona.estado }}</strong><span>{{ zona.observacion }}</span>@if (zona.procedimiento) { <span>{{ zona.procedimiento }}</span> }</li> }</ul>
+        } @else if (registro.tipo === 'RECETA') {
+          <ul class="zonas">@for (m of registro.contenido.medicamentos ?? []; track $index) { <li><strong>{{ m.nombre }}</strong><span>{{ m.dosis }} · {{ m.via }} · {{ m.cuando_sea_necesario ? 'Cuando sea necesario' : 'Cada ' + m.frecuencia_horas + ' horas' }}</span></li> }</ul>
+        } @else {
+          <ul class="zonas">@for (partida of registro.contenido.partidas; track $index) { <li><span>{{ partida.descripcion }}</span><strong>{{ partida.cantidad }} × {{ partida.precio_unitario }} {{ registro.contenido.moneda }}</strong></li> }</ul>
+          <p class="total">Total: {{ total(registro.contenido.partidas) | number:'1.2-2' }} {{ registro.contenido.moneda }}</p>
+        }
+        @if (registro.contenido.observaciones) { <p class="observaciones">{{ registro.contenido.observaciones }}</p> }
+        <small>Motivo: {{ registro.motivo }}</small>
+        <div class="acciones"><button class="boton boton--pequeno" type="button" (click)="descargar(registro)" [disabled]="ocupado()">Descargar PDF</button>
+          @if (puedeEscribir() && propia(registro) && registro.vigente && !registro.anulado) {
+            @if (registro.tipo !== 'RECETA') { <button class="boton boton--pequeno" type="button" (click)="editar(registro)">Editar</button> }
+            <button class="boton boton--pequeno" type="button" (click)="pedirAnulacion(registro)">Anular</button>
+          }
+          @if (puedeEscribir() && !facial() && registro.vigente && !registro.anulado && registro.nivel_sensibilidad !== 'N3') { <button class="boton boton--principal boton--pequeno" type="button" (click)="pedirEnvio(registro)">Enviar por WhatsApp</button> }
+        </div>
+      </article>
+    }
+    @if (hayMas()) { <button class="boton" type="button" [disabled]="cargando()" (click)="cargar(true)">Cargar más registros</button> }
+  </div>
+</div>
+@if (editor()) {
+  <app-ventana-flotante ceja="Registro con historial" [titulo]="facial() ? 'Editar registro facial' : 'Preparar documento'" forma="centrada" [anchoMaximo]="1040" [altoCompleto]="true" [cierraAlPulsarFuera]="false" [ocupada]="ocupado()" (cerrar)="cerrarEditor()">
+    <form id="registro-paciente" #formulario="ngForm" (ngSubmit)="guardar()">
+      @if (error()) { <p role="alert" class="error">{{ error() }}</p> }
+      <div class="campos"><label class="campo">Título<input class="campo__control" name="titulo" [(ngModel)]="titulo" required minlength="3" maxlength="200" /></label>
+        <label class="campo">Sede<select class="campo__control" name="sede" aria-label="Sede del registro" [(ngModel)]="sedeElegida"><option value="">{{ citaId() ? 'Usar sede de la cita' : 'Sin cita asociada' }}</option>@for (sede of sedes(); track sede.id) { <option [value]="sede.id">{{ sede.nombre }}</option> }</select></label>
+      </div>
+      @if (facial()) {
+        <div class="contenido contenido--facial"><app-mapa-facial [puntos]="puntos()" [zonas]="zonas" [seleccion]="zonaElegida" (elegir)="elegirZona($event)" />
+          <section><h4>Zonas del rostro</h4><label class="campo">Zona<select class="campo__control" name="zona" [ngModel]="zonaElegida" (ngModelChange)="elegirZona($event)"><option value="">Seleccione en el mapa o en esta lista</option>@for (p of puntos(); track p.codigo) { <option [value]="p.codigo">{{ p.nombre }}</option> }</select></label>
+            @if (zonaElegida) {
+              <label class="campo">Estado<select class="campo__control" name="estadoZona" aria-label="Estado de la zona" [(ngModel)]="zonaEstado"><option value="OBSERVACION">Observación</option><option value="PLANIFICADO">Planificado</option><option value="REALIZADO">Realizado</option></select></label>
+              <label class="campo">Observación de la zona<textarea class="campo__control" name="observacionZona" [(ngModel)]="zonaObservacion" maxlength="1500"></textarea></label>
+              <label class="campo">Procedimiento registrado por el especialista<input class="campo__control" name="procedimiento" [(ngModel)]="zonaProcedimiento" maxlength="500" /></label>
+              <button class="boton" type="button" (click)="registrarZona()" [disabled]="!zonaObservacion.trim()">Agregar al registro</button>
+            }
+            <ul class="zonas">@for (z of zonas; track z.zona) { <li><button class="boton boton--plano" type="button" (click)="elegirZona(z.zona)">{{ nombreZona(z.zona) }} · {{ z.estado }}</button><span>{{ z.observacion }}</span><button class="boton boton--pequeno" type="button" (click)="quitarZona(z.zona)" [attr.aria-label]="'Quitar ' + nombreZona(z.zona)">Quitar zona</button></li> }</ul>
+          </section>
+        </div>
+      } @else {
+        <label class="campo">Tipo de documento<select class="campo__control" name="tipo" aria-label="Tipo de documento" [(ngModel)]="tipo" [disabled]="esEdicion()"><option value="PRESUPUESTO">Presupuesto</option><option value="COTIZACION">Cotización</option>@if (recetas().length) { <option value="RECETA">Receta confirmada</option> }</select></label>
+        @if (tipo === 'RECETA') {
+          <label class="campo">Receta confirmada<select class="campo__control" name="receta" aria-label="Receta confirmada" [(ngModel)]="recetaId" required><option value="">Seleccione una receta</option>@for (r of recetas(); track r.id) { <option [value]="r.id">{{ r.confirmada_en | date:'dd/MM/yyyy HH:mm' }} · {{ r.medicamentos.length }} medicamento(s)</option> }</select></label><p>El PDF usa la pauta y el firmante de la receta confirmada. Para cambiarla, cree una nueva versión desde Recetas.</p>
+        } @else {
+          <div class="partidas">@for (partida of partidas; track $index; let i = $index) { <div class="partida">
+            <label class="campo">Concepto {{ i + 1 }}<input class="campo__control" [name]="'descripcion' + i" [attr.name]="'descripcion' + i" [(ngModel)]="partida.descripcion" required maxlength="300" /></label>
+            <label class="campo">Cantidad {{ i + 1 }}<input class="campo__control" type="number" [name]="'cantidad' + i" [attr.name]="'cantidad' + i" [(ngModel)]="partida.cantidad" min="0.01" max="9999" step="0.01" required /></label>
+            <label class="campo">Precio unitario {{ i + 1 }}<input class="campo__control" type="number" [name]="'precio' + i" [attr.name]="'precio' + i" [(ngModel)]="partida.precio_unitario" min="0" max="999999" step="0.01" required /></label>
+            <button class="boton" type="button" [attr.aria-label]="'Quitar concepto ' + (i + 1)" (click)="quitarPartida(i)">Quitar</button>
+          </div> }</div>
+          <button class="boton" type="button" (click)="agregarPartida()" [disabled]="partidas.length >= 100">Agregar concepto</button>
+          <div class="campos"><label class="campo">Moneda<input class="campo__control" name="moneda" [(ngModel)]="moneda" required pattern="[A-Z]{3}" maxlength="3" /></label><label class="campo">Válido hasta<input class="campo__control" type="date" name="validez" [(ngModel)]="validoHasta" /></label></div>
+          <p class="total">Total: {{ total() | number:'1.2-2' }} {{ moneda }}</p><p>No es una factura ni registra un pago.</p>
+        }
+      }
+      @if (tipo !== 'RECETA') { <label class="campo">Observaciones generales<textarea class="campo__control" name="observaciones" [(ngModel)]="observaciones" maxlength="4000"></textarea></label> }
+      @if (sesion.tienePermiso('historia_clinica.leer_sensible')) { <label class="check"><input type="checkbox" name="sensible" [(ngModel)]="sensible" />Información sensible N3 (entrega presencial)</label> }
+      <label class="campo">Motivo del registro o modificación<textarea class="campo__control" name="motivo" [(ngModel)]="motivo" required minlength="5" maxlength="500"></textarea></label>
+    </form>
+    <div pie class="acciones"><button class="boton" type="button" (click)="cerrarEditor()" [disabled]="ocupado()">Cancelar</button><button class="boton boton--principal" type="submit" form="registro-paciente" [disabled]="ocupado() || formulario.invalid || (!facial() && tipo !== 'RECETA' && partidas.length === 0)">{{ ocupado() ? 'Guardando…' : 'Guardar versión' }}</button></div>
+  </app-ventana-flotante>
+}
+@if (anularRegistro(); as r) { <app-ventana-flotante ceja="Conservar historial" titulo="Anular registro" forma="centrada" [anchoMaximo]="560" [ocupada]="ocupado()" (cerrar)="!ocupado() && anularRegistro.set(null)"><p>{{ r.titulo }} · versión {{ r.version }}. Se conserva el contenido anterior y se invalidan sus enlaces.</p>@if (error()) { <p role="alert">{{ error() }}</p> }<label class="campo">Motivo de anulación<textarea class="campo__control" [(ngModel)]="motivo" minlength="5" maxlength="500"></textarea></label><div pie class="acciones"><button class="boton" type="button" (click)="anularRegistro.set(null)" [disabled]="ocupado()">Cancelar</button><button class="boton boton--peligro" type="button" (click)="anular()" [disabled]="ocupado() || motivo.trim().length < 5">Anular registro</button></div></app-ventana-flotante> }
+@if (enviarRegistro(); as r) { <app-ventana-flotante ceja="Entrega privada al paciente" titulo="Enviar documento por WhatsApp" forma="centrada" [anchoMaximo]="560" [ocupada]="ocupado()" (cerrar)="!ocupado() && enviarRegistro.set(null)"><p>{{ r.titulo }} · {{ r.contenido.paciente }}</p><p>El aviso incluye un enlace que caduca en 7 días. El paciente verifica su identidad para descargar el PDF.</p><p>Se requiere el consentimiento «Documentos por WhatsApp» de Contacto y consentimientos.</p>@if (error()) { <p role="alert">{{ error() }}</p> }<label class="check"><input type="checkbox" [(ngModel)]="confirmoDestinatario" />He comprobado el destinatario y su teléfono en la ficha.</label><div pie class="acciones"><button class="boton" type="button" (click)="enviarRegistro.set(null)" [disabled]="ocupado()">Cancelar</button><button class="boton boton--principal" type="button" (click)="enviar()" [disabled]="ocupado() || !confirmoDestinatario">Solicitar envío</button></div></app-ventana-flotante> }

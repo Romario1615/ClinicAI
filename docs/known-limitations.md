@@ -62,7 +62,7 @@ Estas no desaparecen al terminar las fases. Son propiedades del alcance acordado
 | E‑28 | **La generación de imágenes de promociones funciona en sandbox** | Sin `IMAGENES_API_KEY` | El adaptador real usa una API compatible con `/images/generations` (OpenAI u otra compatible) y **no se ha ejecutado contra el proveedor**. El sandbox dibuja un PNG local. La imagen siempre la aprueba una persona antes de enviarse |
 | E‑29 | **Jev (TypeSafe AI) no está verificado contra el proveedor** | Acceso anticipado sin clave en este entorno | El cliente sigue la documentación pública de `POST /v1/systemone`; las pruebas usan un transporte simulado. Por defecto se usa `PROVEEDOR_DECISIONES=reglas`. Con `jev`, el **texto del mensaje** (sin identificadores) sale a TypeSafe AI: hace falta el acuerdo de encargo antes de usarlo con datos reales. Ante fallo o latencia cae a reglas. Los umbrales (0,35 clínico, 0,85 intención) no están calibrados con conversaciones reales |
 | E‑30 | **Las promociones por WhatsApp requieren plantillas de marketing aprobadas por Meta** | Sin cuenta Business real (E‑1) | El envío usa la plantilla `promocion_clinica` (cabecera de imagen + parámetros `nombre`, `texto_promocion` en ese orden) y sube la imagen a la Media API una vez por campaña. Nada de esto se ha probado contra Meta. Las cuotas y la categoría de marketing pueden limitar la entrega |
-| E‑31 | **Los textos de consentimiento de comunicación son provisionales** | Falta revisión legal (E‑2) | El consentimiento se registra en la ficha (pestaña Contacto): se muestra el texto completo, se confirma la lectura y se guarda versión y hash SHA‑256 del texto exacto. Los tres textos (avisos de citas, recordatorios de tomas, promociones) son borradores operativos. El alta a publicidad **no** se ofrece por chat: el canal no verifica identidad suficiente. `BAJA` y `BAJA PROMOCIONES` sí funcionan por WhatsApp |
+| E‑31 | **Los textos de consentimiento de comunicación son provisionales** | Falta revisión legal (E‑2) | El consentimiento se registra en Contacto con texto completo, lectura confirmada, versión y hash SHA‑256. Citas, tomas, promociones y documentos por WhatsApp tienen consentimientos separados y textos operativos pendientes de revisión. El alta a publicidad no se ofrece por chat. `BAJA` también revoca documentos pendientes de envío; no retira enlaces ya entregados. |
 | E‑32 | **La aceptación del plan de tratamiento es un registro de un documento en papel** | Falta identidad verificada del paciente | El profesional registra medio y referencia del documento firmado (y opcionalmente su escaneo). No es firma electrónica. Validez legal: E‑2 |
 | E‑33 | **Imágenes clínicas: sin miniaturas, sin DICOM, sin antivirus operativo en desarrollo** | Pillow fuera del árbol a propósito (E‑12); clamd ausente | La galería descarga la imagen completa. DICOM no se acepta todavía. Sin `ANTIVIRUS_HABILITADO` la carga se registra `NO_DISPONIBLE` en desarrollo y **se rechaza en producción** |
 | E‑34 | **El seguimiento de tratamientos por chat no lee el plan** | Deliberado (CLAUDE.md, reglas 4, 5 y 10) | La IA no accede al plan ni al odontograma (N2). Al cerrar una fase con otras pendientes se encola, sin IA, un recordatorio genérico para agendar; en el chat, la pregunta por el tratamiento se etiqueta y deriva al personal |
@@ -74,6 +74,23 @@ Estas no desaparecen al terminar las fases. Son propiedades del alcance acordado
 | E‑40 | **Un fallo controlado del proveedor de embeddings requiere reintento manual** | No se reintenta en bucle un proveedor que ya falló | El worker recoge automáticamente hasta 10 trabajos `PENDIENTE` cada minuto. Si la vectorización falla, el trabajo pasa a `FALLIDA`, conserva temporalmente la fuente y evita reintentos continuos; tras corregir el proveedor, una persona reenvía el mismo contenido para reintentar la misma versión. Al completar, la fuente temporal se elimina |
 
 ---
+
+## Documentos y faciograma (2026-10-07)
+
+- El faciograma es un registro manual de 23 zonas orientativas; no proporciona
+  decisiones clínicas, dosis ni puntos de aplicación. No cubre un protocolo
+  completo de cada tratamiento estético.
+- Los PDFs no tienen firma electrónica certificada y presupuestos/cotizaciones
+  no sustituyen facturación fiscal. La validez operativa requiere revisión E-2.
+- WhatsApp real y aprobación de la plantilla de documentos no se han probado
+  sin credenciales. Sandbox no equivale a entrega al paciente.
+- No se comparten por enlace público documentos N3 ni faciogramas. Se descargan
+  desde la sesión clínica autorizada.
+- No hay revocación individual de enlaces desde la interfaz. Versionar/anular
+  invalida los enlaces de la versión; revocar consentimiento detiene nuevos
+  envíos. Un enlace ya entregado conserva su plazo si el registro sigue vigente.
+- El selector de atención muestra hasta las 100 citas más recientes autorizadas
+  del paciente. Las citas anteriores se consultan desde Agenda.
 
 ## 3. Limitaciones del entorno de desarrollo
 

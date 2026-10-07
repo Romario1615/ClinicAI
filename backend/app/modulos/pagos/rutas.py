@@ -110,9 +110,10 @@ async def listar(
     limite: Annotated[int, Query(ge=1, le=100)] = 25,
     desplazamiento: Annotated[int, Query(ge=0)] = 0,
     estado: Annotated[EstadoPago | None, Query()] = None,
+    cita_id: Annotated[uuid.UUID | None, Query()] = None,
 ) -> PaginaPagos:
     filas, total = await RepositorioPagos(sesion).listar_detallado(
-        principal, limite, desplazamiento, estado
+        principal, limite, desplazamiento, estado, cita_id
     )
     return PaginaPagos(
         elementos=[

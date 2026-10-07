@@ -30,6 +30,7 @@ import { SesionService } from '../../nucleo/servicios/sesion.service';
 import { IndicadoresService } from '../../nucleo/servicios/indicadores.service';
 import { ResumenModuloComponent } from '../../compartido/resumen-modulo.component';
 import { VentanaFlotanteComponent } from '../../compartido/ventana-flotante.component';
+import { EditorRegistroComponent } from '../../compartido/editor-registro.component';
 import { FotoPersonaComponent } from '../../compartido/foto-persona.component';
 import { MatrizAccesosComponent } from './matriz-accesos.component';
 import { IconoComponent, type NombreIcono } from '../../compartido/icono.component';
@@ -93,6 +94,7 @@ const CATEGORIAS: Record<string, string> = {
   selector: 'app-usuarios',
   standalone: true,
   imports: [
+    EditorRegistroComponent,
     FormsModule,
     DatePipe,
     NgTemplateOutlet,
@@ -211,6 +213,9 @@ const CATEGORIAS: Record<string, string> = {
                         {{ usuario.ultimo_acceso_en ? (usuario.ultimo_acceso_en | date: 'dd/MM/yy HH:mm') : 'Nunca' }}
                       </td>
                       <td class="acciones">
+                        @if (sesion.tienePermiso('usuario.editar')) {
+                          <button class="boton boton--pequeno" type="button" (click)="datosUsuario.set(usuario)">Editar datos</button>
+                        }
                         @if (puedeAsignar()) {
                           <button class="boton boton--pequeno" type="button" (click)="abrir({ tipo: 'accesos', usuario })">
                             Gestionar accesos
@@ -264,6 +269,9 @@ const CATEGORIAS: Record<string, string> = {
       }
     }
 
+    @if (datosUsuario(); as u) {
+      <app-editor-registro tipo="usuario" [ruta]="'/usuarios/' + u.id" [inicial]="u" titulo="Editar usuario" (cerrar)="datosUsuario.set(null)" (guardado)="datosUsuario.set(null); cargar()" />
+    }
     <!-- ======================== Ventanas ======================== -->
     @if (ventana(); as v) {
       @switch (v.tipo) {
@@ -553,6 +561,7 @@ export class UsuariosComponent {
   ];
   protected readonly pestana = signal<Pestana>('personal');
   protected readonly ventana = signal<Ventana | null>(null);
+  protected readonly datosUsuario = signal<UsuarioClinica | null>(null);
 
   protected readonly usuarios = signal<UsuarioClinica[]>([]);
   protected readonly roles = signal<RolClinica[]>([]);

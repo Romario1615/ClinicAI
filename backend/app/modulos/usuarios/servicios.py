@@ -36,6 +36,7 @@ from datetime import datetime, timedelta
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.modulos.organizacion.modelos import Clinica
 from app.modulos.profesionales.modelos import Profesional
 from app.modulos.usuarios.modelos import (
     AmbitoAsignacion,
@@ -495,7 +496,7 @@ class ServicioAutenticacion:
         usuario = (
             await self._sesion.execute(select(Usuario).where(Usuario.id == fila.usuario_id))
         ).scalar_one_or_none()
-        if usuario is None or not usuario.activo:
+        if usuario is None or not usuario.activo or not await self._clinica_habilitada(usuario):
             await self._revocar_familia(
                 fila.familia, motivo=MotivoRevocacion.USUARIO_DESACTIVADO, ahora=ahora
             )
@@ -630,7 +631,7 @@ class ServicioAutenticacion:
             await self._sesion.execute(select(Usuario).where(Usuario.id == contenido.usuario_id))
         ).scalar_one_or_none()
 
-        if usuario is None or not usuario.activo:
+        if usuario is None or not usuario.activo or not await self._clinica_habilitada(usuario):
             raise TokenRevocado("La cuenta ya no esta activa.")
 
         # Revocar solo el refresco deja vivo su token de acceso durante hasta
@@ -921,6 +922,8 @@ class ServicioAutenticacion:
         agente_usuario: str | None,
         sesion_anterior_id: uuid.UUID | None,
     ) -> ParTokens:
+        if not await self._clinica_habilitada(usuario):
+            raise CredencialesInvalidas("La clínica no tiene acceso habilitado.")
         token_acceso, _ = crear_token_acceso(
             clave_secreta=self._clave,
             algoritmo=self._algoritmo,
@@ -1001,6 +1004,17 @@ class ServicioAutenticacion:
                 ip=ip,
                 agente_usuario=agente_usuario,
                 ocurrido_en=ahora,
+            )
+        )
+
+    async def _clinica_habilitada(self, usuario: Usuario) -> bool:
+        return bool(
+            await self._sesion.scalar(
+                select(Clinica.id).where(
+                    Clinica.id == usuario.clinica_id,
+                    Clinica.activa.is_(True),
+                    Clinica.anulado_en.is_(None),
+                )
             )
         )
 

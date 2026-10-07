@@ -1,6 +1,6 @@
 # Integración con WhatsApp Business Cloud API
 
-> **Última actualización:** 2026‑09‑12 · Fase 4.
+> **Última actualización:** 2026‑10‑07 · Fase 4 y documentos privados.
 >
 > **El camino real no está verificado.** Todo lo descrito aquí se ha ejecutado contra el
 > adaptador sandbox y contra PostgreSQL real; **ni un solo mensaje ha salido hacia Meta**,
@@ -8,6 +8,25 @@
 > [limitación E‑1](known-limitations.md).
 
 ---
+
+## Documentos del paciente
+
+**Ficha → Atención y documentos → Documentos → Enviar por WhatsApp** encola
+`DOCUMENTO_DISPONIBLE` con la plantilla `clinicai_documento_disponible`: nombre,
+clínica, enlace y días de vigencia. No incluye tratamientos ni medicación.
+Requiere consentimiento vigente `DOCUMENTOS_WHATSAPP` y confirmar destinatario.
+
+El destinatario abre `/documentos/{token}`, verifica nacimiento (o los cuatro
+últimos caracteres de identificación si no consta nacimiento) y descarga el
+PDF. Caduca en 1–30 días; cinco errores bloquean el enlace. Una versión nueva,
+anulación, suspensión de la receta o clínica desactivada lo invalidan.
+El worker vuelve a validar vigencia y consentimiento antes de entregar.
+
+Configurar WhatsApp de cada clínica desde Integraciones y activar el flujo de
+documentos desde Automatizaciones. La interfaz distingue sandbox de cola del
+proveedor configurado. **Meta y la aprobación de esta plantilla siguen pendientes
+de verificación real** (E-1). No se ha enviado ningún mensaje real en estas pruebas.
+Consultar [ADR-0022](decisiones/0022-crud-faciograma-y-documentos-privados.md).
 
 ## 1. Lo único que se usa, y por qué
 

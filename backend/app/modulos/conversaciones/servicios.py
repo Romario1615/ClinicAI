@@ -803,6 +803,7 @@ class ServicioConversaciones:
             TipoConsentimiento.COMUNICACION_WHATSAPP,
             TipoConsentimiento.RECORDATORIOS_MEDICACION,
             TipoConsentimiento.PROMOCIONES,
+            TipoConsentimiento.DOCUMENTOS_WHATSAPP,
         ),
     ) -> int:
         """Revoca los consentimientos de comunicacion de ese numero.

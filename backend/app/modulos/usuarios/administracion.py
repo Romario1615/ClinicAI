@@ -6,6 +6,7 @@ import uuid
 from collections import defaultdict
 
 from sqlalchemy import false, func, or_, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modulos.profesionales.modelos import Profesional
@@ -345,23 +346,30 @@ async def cambiar_estado_usuario(
 async def editar_datos_usuario(
     sesion: AsyncSession, principal: Principal, usuario_id: uuid.UUID, datos: EditarDatosUsuario
 ) -> UsuarioAdministrado:
-    usuario = await sesion.scalar(select(Usuario).where(
-        Usuario.id == usuario_id, Usuario.clinica_id == principal.clinica_id
-    ).with_for_update())
+    usuario = await sesion.scalar(
+        select(Usuario)
+        .where(Usuario.id == usuario_id, Usuario.clinica_id == principal.clinica_id)
+        .with_for_update()
+    )
     if usuario is None:
         raise RecursoNoEncontrado("El usuario no existe.")
-    if await sesion.scalar(select(Rol.id).join(UsuarioRol).where(
-        UsuarioRol.usuario_id == usuario_id, Rol.codigo == "superadministrador"
-    )):
+    if await sesion.scalar(
+        select(Rol.id)
+        .join(UsuarioRol)
+        .where(UsuarioRol.usuario_id == usuario_id, Rol.codigo == "superadministrador")
+    ):
         raise DatosInvalidos("Las cuentas de plataforma requieren gestión independiente.")
     correo = datos.correo.lower()
-    if await sesion.scalar(select(Usuario.id).where(
-        func.lower(Usuario.correo) == correo, Usuario.id != usuario_id
-    )):
+    if await sesion.scalar(
+        select(Usuario.id).where(func.lower(Usuario.correo) == correo, Usuario.id != usuario_id)
+    ):
         raise ConflictoEstado("Ya existe una cuenta con ese correo.")
     usuario.nombre, usuario.apellido, usuario.correo = datos.nombre, datos.apellido, correo
     usuario.actualizado_por = principal.actor_id
-    await sesion.flush()
+    try:
+        await sesion.flush()
+    except IntegrityError as error:
+        raise ConflictoEstado("Ya existe una cuenta con ese correo.") from error
     return next(u for u in await listar_usuarios(sesion, principal) if u.id == usuario_id)
 
 

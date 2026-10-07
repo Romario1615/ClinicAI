@@ -550,7 +550,7 @@
           {{ nombreProfesional(cita.profesional_id) }}
         </p>
         <p class="panel__subtitulo">{{ nombreConsultorio(cita.consultorio_id) }}</p>
-        <button type="button" class="boton boton--pequeno detalle-cita__ficha" (click)="abrirFicha(cita.paciente_id)">
+        <button type="button" class="boton boton--pequeno detalle-cita__ficha" (click)="abrirFicha(cita.paciente_id, cita.id)">
           Ver ficha del paciente
         </button>
 
@@ -874,7 +874,7 @@
       [altoCompleto]="true"
       (cerrar)="cerrarFicha()"
     >
-      <app-ficha-paciente [pacienteId]="pacienteId" [zona]="zona()" [sinCabecera]="true" />
+      <app-ficha-paciente [pacienteId]="pacienteId" [citaInicial]="citaEnFicha()" [zona]="zona()" [sinCabecera]="true" />
     </app-ventana-flotante>
   }
 

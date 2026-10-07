@@ -54,8 +54,9 @@ from app.nucleo.errores import DatosInvalidos, PermisoDenegado, RecursoNoEncontr
 
 CLAVE = "modulos_historia"
 
-Modulo = Literal["odontograma", "periodoncia", "planes", "imagenes"]
+Modulo = Literal["odontograma", "periodoncia", "planes", "imagenes", "faciograma"]
 MODULOS: dict[str, tuple[str, str]] = {
+    "faciograma": ("Faciograma", "Mapa facial con observaciones, zonas y seguimiento de estética."),
     "odontograma": ("Odontograma", "Estado por pieza y superficie, con historial por diente."),
     "periodoncia": ("Periodoncia · placa", "Índice de placa y controles periodontales."),
     "planes": ("Planes de tratamiento", "Presupuesto por fases y seguimiento del tratamiento."),
@@ -71,10 +72,12 @@ def _sin_tildes(texto: str) -> str:
 
 
 def modulos_por_omision(especialidad: Especialidad) -> tuple[str, ...]:
-    """Sin configuración, odontología trae los módulos dentales y el resto solo imágenes."""
+    """Módulos iniciales dentales, faciales para estética/dermatología y generales."""
     codigo = (especialidad.codigo or "").upper()
     if codigo.startswith("ODO") or "odont" in _sin_tildes(especialidad.nombre):
         return DENTALES
+    if any(p in _sin_tildes(especialidad.nombre) for p in ("estetic", "dermat", "plastica")):
+        return ("faciograma", "imagenes")
     return GENERALES
 
 

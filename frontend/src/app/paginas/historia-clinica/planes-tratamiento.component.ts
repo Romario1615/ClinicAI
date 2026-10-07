@@ -6,8 +6,10 @@ import { PERMISOS } from '../../nucleo/servicios/configuracion';
 import { SesionService } from '../../nucleo/servicios/sesion.service';
 import { Router } from '@angular/router';
 import { FormsModule } from '@angular/forms';
+import type { Sede } from '../../nucleo/modelos/dominio';
 
 import { ApiService } from '../../nucleo/servicios/api.service';
+import { RegistrosPacienteService, guardarPdf } from '../../nucleo/servicios/registros-paciente.service';
 import { CatalogoService, type ClinicaCatalogo } from '../../nucleo/servicios/catalogo.service';
 import type {
   HallazgoResultante,
@@ -51,6 +53,15 @@ type AccionAbierta =
 })
 export class PlanesTratamientoComponent {
   private readonly api = inject(ApiService);
+  private readonly documentos = inject(RegistrosPacienteService);
+  protected readonly generandoPdf = signal(false);
+  protected readonly documentoGenerado = signal<string | null>(null);
+  protected readonly sedesPresupuesto = signal<readonly Sede[]>([]);
+  protected readonly cargandoSedesPresupuesto = signal(false);
+  protected sedePresupuesto = '';
+  readonly citaContexto = input<string | null>(null);
+  readonly sedeContexto = input<string | null>(null);
+  private claveDocumento = crypto.randomUUID();
   private readonly catalogo = inject(CatalogoService);
   private readonly router = inject(Router);
   private readonly sesion = inject(SesionService);
@@ -488,6 +499,15 @@ export class PlanesTratamientoComponent {
       .toFixed(2);
   }
 
+  protected procedimientosPresupuesto(plan: PlanTratamiento): readonly ProcedimientoPlan[] {
+    return plan.procedimientos.filter(item => item.estado !== 'CANCELADO');
+  }
+
+  protected totalPresupuesto(plan: PlanTratamiento): string {
+    return (this.procedimientosPresupuesto(plan)
+      .reduce((suma, item) => suma + Math.round(Number(item.precio) * 100), 0) / 100).toFixed(2);
+  }
+
   protected fechaPresupuesto(fecha: string | null, zona: string): string {
     if (!fecha || Number.isNaN(Date.parse(fecha))) return 'Sin fecha registrada';
     return new Intl.DateTimeFormat('es-EC', {
@@ -500,11 +520,32 @@ export class PlanesTratamientoComponent {
 
   /** Carga solo datos públicos de la clínica para imprimir una copia del plan propuesto. */
   protected prepararPresupuesto(plan: PlanTratamiento): void {
-    if (plan.estado !== 'PROPUESTO' && plan.estado !== 'ACEPTADO') return;
+    if (this.generandoPdf() || (plan.estado !== 'PROPUESTO' && plan.estado !== 'ACEPTADO')) return;
     const solicitud = ++this.solicitudPresupuesto;
     this.presupuestoSeleccionado.set(null);
+    this.documentoGenerado.set(null);
+    this.claveDocumento = crypto.randomUUID();
+    const ambito = this.sesion.identidad()?.ambito;
+    this.sedePresupuesto = this.sedeContexto() ?? (ambito?.sedes.length === 1 ? ambito.sedes[0] : '');
+    this.sedesPresupuesto.set([]);
+    this.cargandoSedesPresupuesto.set(false);
     this.presupuestoError.set('');
     this.presupuestoCargando.set(true);
+    if (!this.sedeContexto() && ambito && !ambito.todas_las_sedes && ambito.sedes.length > 1) {
+      this.cargandoSedesPresupuesto.set(true);
+      this.catalogo.sedes().subscribe({
+        next: sedes => {
+          if (solicitud !== this.solicitudPresupuesto) return;
+          this.sedesPresupuesto.set(sedes.filter(s => ambito.sedes.includes(s.id)));
+          this.cargandoSedesPresupuesto.set(false);
+        },
+        error: () => {
+          if (solicitud !== this.solicitudPresupuesto) return;
+          this.cargandoSedesPresupuesto.set(false);
+          this.presupuestoError.set('No se pudieron cargar las sedes autorizadas. Vuelva a abrir el presupuesto.');
+        },
+      });
+    }
     this.catalogo.clinica().subscribe({
       next: (clinica) => {
         if (solicitud !== this.solicitudPresupuesto) return;
@@ -529,7 +570,30 @@ export class PlanesTratamientoComponent {
     }
   }
 
+  protected generarPdf(): void {
+    const plan = this.presupuestoSeleccionado()?.plan;
+    if (!plan || this.generandoPdf() || this.cargandoSedesPresupuesto()) return;
+    const ambito = this.sesion.identidad()?.ambito;
+    const sede = this.sedeContexto() ?? (this.sedePresupuesto || null);
+    if (!sede && ambito && !ambito.todas_las_sedes) {
+      this.presupuestoError.set('Seleccione la sede de atención para guardar el presupuesto.');
+      return;
+    }
+    this.generandoPdf.set(true); this.presupuestoError.set('');
+    this.documentos.desdePlan(plan.id, this.claveDocumento, sede, this.citaContexto()).subscribe({
+      next: registro => {
+        this.documentoGenerado.set(registro.id);
+        this.documentos.pdf(this.pacienteId(), registro.id).subscribe({
+          next: pdf => { guardarPdf(pdf, 'ClinicAI-presupuesto.pdf'); this.generandoPdf.set(false); },
+          error: error => { this.generandoPdf.set(false); this.presupuestoError.set(error.message); },
+        });
+      },
+      error: error => { this.generandoPdf.set(false); this.presupuestoError.set(error.message); },
+    });
+  }
+
   protected cerrarPresupuesto(): void {
+    if (this.generandoPdf()) return;
     this.solicitudPresupuesto += 1;
     this.presupuestoCargando.set(false);
     this.presupuestoError.set('');

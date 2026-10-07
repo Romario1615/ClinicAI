@@ -63,6 +63,8 @@ import { IconoComponent } from './icono.component';
 import { TipoDocumentoPipe } from './tipo-documento.pipe';
 import { MENSAJE_SIN_ACCESO_CLINICO, mensajeFalloClinico } from '../nucleo/utilidades/acceso-clinico';
 import { OperacionesService } from '../nucleo/servicios/operaciones.service';
+import { AtencionPacienteComponent } from './atencion-paciente.component';
+import { EditorPacienteComponent } from '../paginas/pacientes/editor-paciente.component';
 
 /** Traducción del nivel de verificación, con lo que implica para quien atiende. */
 const VERIFICACION: Record<string, { etiqueta: string; consecuencia: string; alerta: boolean }> = {
@@ -98,7 +100,8 @@ type Pestana =
   | 'historia'
   | 'odontograma'
   | 'planes'
-  | 'imagenes';
+  | 'imagenes'
+  | 'atencion';
 
 /** Estados de receta en palabras de quien atiende. */
 const ESTADO_RECETA: Record<string, string> = {
@@ -119,6 +122,8 @@ const DETALLE_CLINICO: Partial<Record<Pestana, string>> = {
   selector: 'app-ficha-paciente',
   standalone: true,
   imports: [
+    AtencionPacienteComponent,
+    EditorPacienteComponent,
     InsigniaEstadoComponent,
     IconoComponent,
     GaleriaImagenesComponent,
@@ -182,6 +187,7 @@ const DETALLE_CLINICO: Partial<Record<Pestana, string>> = {
               </dd>
             </div>
           </dl>
+          @if (puedeEditarFoto()) { <button class="boton boton--pequeno" type="button" (click)="editandoDatos.set(true)">Editar datos del paciente</button> }
         }
         @if (!sinCabecera()) {
           <button
@@ -223,6 +229,7 @@ const DETALLE_CLINICO: Partial<Record<Pestana, string>> = {
 
           <div class="ficha__cuerpo" role="tabpanel">
             @switch (pestana()) {
+              @case ('atencion') { <app-atencion-paciente [pacienteId]="pacienteId()" [citaInicial]="citaInicial()" /> }
               @case ('resumen') {
                 <div class="ficha__rejilla">
                   <section class="ficha__bloque">
@@ -411,6 +418,9 @@ const DETALLE_CLINICO: Partial<Record<Pestana, string>> = {
         }
       </section>
     </div>
+    @if (editandoDatos() && paciente(); as p) {
+      <app-editor-paciente [paciente]="p" (cerrar)="editandoDatos.set(false)" (guardado)="editandoDatos.set(false); recargarDatos()" />
+    }
   `,
   changeDetection: ChangeDetectionStrategy.Eager,
   styles: `
@@ -800,6 +810,8 @@ export class FichaPacienteComponent implements OnInit {
   private readonly operaciones = inject(OperacionesService);
 
   readonly pacienteId = input.required<string>();
+  readonly citaInicial = input<string | null>(null);
+  protected readonly editandoDatos = signal(false);
   /**
    * Cierto cuando va dentro de una ventana flotante, que ya pone su título
    * (el nombre) y su botón de cerrar.
@@ -827,6 +839,7 @@ export class FichaPacienteComponent implements OnInit {
       { clave: 'contacto', etiqueta: 'Contacto y consentimientos' },
     ];
     // Por dónde pasó en la clínica: dato administrativo, lo ve quien ve la agenda.
+    if (this.sesion.tieneAlgunPermiso('agenda.leer', 'historia_clinica.leer', 'receta.leer')) lista.push({ clave: 'atencion', etiqueta: 'Atención y documentos' });
     if (this.sesion.tienePermiso('agenda.leer')) {
       lista.push({ clave: 'recorrido', etiqueta: 'Recorrido' });
     }
@@ -1001,6 +1014,7 @@ export class FichaPacienteComponent implements OnInit {
    * destruye y se vuelve a crear al cambiar de paciente.
    */
   ngOnInit(): void {
+    if (this.citaInicial()) this.pestana.set('atencion');
     this.especialidades.cargar();
     this.cargar();
     this.consultarAccesoClinico();
@@ -1034,6 +1048,7 @@ export class FichaPacienteComponent implements OnInit {
     if (this.clinicoCargado) this.cargarClinico();
   }
 
+  protected recargarDatos(): void { this.cargar(); }
   private cargar(): void {
     const id = this.pacienteId();
     this.cargando.set(true);

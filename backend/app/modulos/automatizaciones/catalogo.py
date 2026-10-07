@@ -262,6 +262,21 @@ FLUJOS: tuple[Flujo, ...] = (
     ),
 )
 
+FLUJOS += (
+    Flujo(
+        codigo="documentos",
+        nombre="Entrega de documentos",
+        fase=Fase.MENSAJES,
+        disparador="El profesional solicita compartir un PDF con el paciente.",
+        accion="Aviso genérico con enlace privado y temporal; el PDF exige verificación.",
+        canal="WhatsApp",
+        quien_ve=("Profesional",),
+        quien_interviene=("Profesional",),
+        tipos=(TipoMensajeOutbox.DOCUMENTO_DISPONIBLE,),
+        nota="Exige consentimiento específico para documentos. No comparte N3 ni mapas faciales.",
+    ),
+)
+
 POR_CODIGO: dict[str, Flujo] = {flujo.codigo: flujo for flujo in FLUJOS}
 
 FLUJO_POR_TIPO: dict[TipoMensajeOutbox, Flujo] = {

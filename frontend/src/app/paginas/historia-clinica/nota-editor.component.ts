@@ -118,6 +118,7 @@ export class NotaEditorComponent implements OnInit {
   private readonly sesion = inject(SesionService);
 
   readonly pacienteId = input.required<string>();
+  readonly citaId = input<string | null>(null);
   /** Nota a corregir. Sin ella, el editor crea una nota nueva. */
   readonly base = input<Nota | null>(null);
   readonly guardada = output<Nota>();
@@ -169,6 +170,7 @@ export class NotaEditorComponent implements OnInit {
     );
     const datos: NotaNueva = {
       paciente_id: this.pacienteId(),
+      ...(this.citaId() ? { cita_id: this.citaId() } : {}),
       tipo: this.tipo,
       nivel_sensibilidad: this.nivelSensibilidad,
       motivo_consulta: texto(this.motivoConsulta),

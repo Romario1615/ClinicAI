@@ -7,6 +7,29 @@ auditoría.
 
 > **Estado actual:** las fases 0 y 0b están documentadas; las fases funcionales 1 a 9 siguen en desarrollo y verificación. La lista de espera permite reagendar, encadenar turnos con un límite y resolver aceptaciones concurrentes; rollback y diez respuestas HTTP simultáneas ya están probados contra PostgreSQL. La fase 10 de preparación para producción no está cerrada.
 
+## Gestión de registros, faciograma y documentos (2026-10-07)
+
+Cambios sobre `claude/friendly-gates-o240sb`:
+
+- **Superadministrador → Clínicas:** crear, consultar, editar datos y desactivar/reactivar clínicas; editar y desactivar/reactivar cuentas desde la plataforma. Las cuentas de superadministración están protegidas.
+- **Administrador → Usuarios y roles:** alta, consulta, edición de identidad, asignación de roles/ámbitos y baja/reactivación. Editar identidad o dar de baja revoca sesiones; una clínica desactivada no permite iniciar sesión.
+- **Profesional → Pacientes → Ver ficha → Atención y documentos:** seleccionar la cita para trabajar con su sede y especialidad; acceder a la historia completa y abrir Agenda/Pagos según permisos. La identidad del paciente se edita desde la ficha.
+- **Faciograma:** mapa interactivo de 23 zonas, uso con teclado, observaciones, estados y procedimiento manual. Edición mediante nuevas versiones, anulación con motivo, historial y PDF con mapa gráfico. Habilitar desde **Catálogo → Módulos de historia por especialidad**. Estética, dermatología y cirugía plástica lo incluyen por omisión.
+- **Documentos:** presupuestos y cotizaciones con partidas, cantidades, precios, moneda y vigencia; PDF de recetas confirmadas conservando firmante y pauta. Los planes propuestos/aceptados generan un presupuesto guardado y descargable. Formularios en ventanas de vidrio líquido.
+- **WhatsApp:** confirmar el destinatario y registrar antes el consentimiento **Documentos por WhatsApp** desde Contacto. El aviso contiene un enlace privado, con caducidad y verificación de identidad; una corrección/anulación invalida el anterior. Sin credenciales se muestra **sandbox**, no una entrega real. No se envían faciogramas ni documentos N3 por enlace público.
+- **Ayuda:** instrucciones diferentes por rol, filtradas por los permisos efectivos, ampliadas con estas operaciones.
+
+La migración `20261007_031` crea registros y entregas de documentos y amplía el
+consentimiento. Aplicar `alembic upgrade head` antes de iniciar backend/worker.
+Los registros clínicos se corrigen o anulan conservando el historial; la baja
+administrativa conserva las referencias. Los PDFs no son facturas ni documentos
+con firma electrónica certificada. Detalles: [ADR-0022](docs/decisiones/0022-crud-faciograma-y-documentos-privados.md),
+[modelo](docs/data-model.md#registros-y-entregas-de-documentos), [controles](docs/security.md#documentos-y-faciograma)
+y [verificación](docs/verificacion-2026-10-07.md#crud-faciograma-y-documentos).
+
+Las cifras siguientes conservan ejecuciones anteriores; la verificación de esta
+ampliación se registra en la sección específica del informe.
+
 > **Corrección de «Perfil de pacientes» (2026-10-07):** la tarjeta del Panel ahora coloca categoría y valor en una fila y la barra debajo; las etiquetas largas se ajustan y «Protegido» tiene el ancho que necesita. Edades y sexo usan encabezados y separaciones consistentes. Se extrajo `PerfilPacientesComponent` con estilos propios para mantener el panel dentro del presupuesto de estilos. La suite frontend actual pasa **609/609 en 84 archivos**: cobertura 86,13 % sentencias, 72,88 % ramas, 81,60 % funciones y 88,32 % líneas. Lint y build pasan sin avisos de presupuesto; paquete inicial 462,85 kB. **2/2 recorridos focalizados** de Chromium pasan, incluido axe del panel y un escenario nuevo que comprueba límites y solapamientos a 1440, 1280, 1024, 821, 768, 390 y 320 px con etiquetas largas, cifras de seis dígitos y celdas protegidas. El nuevo escenario sustituye únicamente la demografía agregada para reproducir esos casos; no escribe pacientes ni prueba los cálculos del backend. La corrida completa E2E de 62/62 registrada abajo corresponde a la revisión anterior a esta corrección; ahora hay 63 escenarios. [Detalle y comandos](docs/verificacion-2026-10-07.md#corrección-posterior-del-perfil-de-pacientes).
 
 > **Rama activa y verificación del trabajo actualizado (2026-10-07):** se continúa en `claude/friendly-gates-o240sb`, sobre `727c9f5`. Frontend: **605/605 pruebas**, cobertura de 86,12 % sentencias, 72,88 % ramas, 81,60 % funciones y 88,31 % líneas; lint y build pasan, con **462,85 kB** iniciales. Chromium: **62/62 escenarios en 6,9 minutos**, seis roles y axe en las **22 rutas** del menú, contra una API y una base temporal separadas. Se corrigieron el ancho móvil de la fecha de Agenda, los nombres accesibles del Formulario 033 y el desplazamiento por teclado de Catálogo y Automatizaciones. Las pruebas siguen las ventanas y pestañas nuevas, incluida la carga de imágenes. Backend: **1855 aprobadas y 3 omitidas** (Anthropic real), **87,89 % de cobertura**, en 19 min 39 s. El contrato y las métricas pasan también en su revisión focalizada 8/8; se corrigió el orden indeterminado de la prueba del historial de reprogramación. OpenAPI se genera al solicitarlo, con contrato idéntico al anterior; las métricas conservan los prefijos de rutas y priorizan rutas fijas. Ruff, formato, mypy y Bandit con umbral CI pasan. Los seis roles entran, abren su manual propio y cierran sesión también en los servicios de desarrollo 4200/8000. Migraciones `029`/`030` verificadas también en una base vacía con reversión y `alembic check`. [Informe de cambios, pruebas y comandos](docs/verificacion-2026-10-07.md). [Acceso local](http://localhost:4200/acceso). No se añadieron claves ni llamadas a proveedores externos.

@@ -285,7 +285,7 @@ describe('FichaPacienteComponent con permisos clínicos', () => {
         const claves = c.pestanas().map((p: {
             clave: string;
         }) => p.clave);
-        expect(claves).toEqual(['resumen', 'citas', 'contacto', 'historia', 'odontograma', 'planes']);
+        expect(claves).toEqual(['resumen', 'citas', 'contacto', 'atencion', 'historia', 'odontograma', 'planes']);
         expect((fixture.nativeElement as HTMLElement).textContent).toContain('Información clínica');
         expect((fixture.nativeElement as HTMLElement).textContent).not.toContain('su rol no los alcanza');
 
@@ -322,7 +322,7 @@ describe('FichaPacienteComponent con permisos clínicos', () => {
         c.accesoClinico.set(false);
         expect(c.pestanas().map((p: {
             clave: string;
-        }) => p.clave)).toEqual(['resumen', 'citas', 'contacto', 'historia']);
+        }) => p.clave)).toEqual(['resumen', 'citas', 'contacto', 'atencion', 'historia']);
         c.elegir('historia');
         http.expectNone((r) => r.url.endsWith('/notas'));
         http.expectOne(`${BASE}/historia/pacientes/pac-1/recetas`).flush([]);
@@ -347,7 +347,7 @@ describe('FichaPacienteComponent con permisos clínicos', () => {
         // Sin odontograma ni planes en dermatología; la pestaña abierta se cierra.
         expect(c.pestanas().map((p: {
             clave: string;
-        }) => p.clave)).toEqual(['resumen', 'citas', 'contacto', 'historia']);
+        }) => p.clave)).toEqual(['resumen', 'citas', 'contacto', 'atencion', 'historia']);
         expect(c.pestana()).toBe('resumen');
 
         c.elegir('historia');

@@ -377,16 +377,29 @@
       forma="centrada"
       [anchoMaximo]="900"
       [altoCompleto]="true"
+      [ocupada]="generandoPdf()"
       (cerrar)="cerrarPresupuesto()"
     >
     <section class="presupuesto-imprimible" aria-labelledby="titulo-presupuesto">
       <div class="presupuesto-imprimible__acciones">
         <p class="ayuda-presupuesto">Vista previa generada desde el plan guardado.</p>
         <div class="acciones">
-          <button class="boton" type="button" (click)="cerrarPresupuesto()">Cerrar</button>
+          <button class="boton" type="button" (click)="cerrarPresupuesto()" [disabled]="generandoPdf()">Cerrar</button>
           <button class="boton boton--principal" type="button" (click)="imprimirPresupuesto()">Imprimir o guardar en PDF</button>
+          @if (puedeEditar()) { <button class="boton" type="button" (click)="generarPdf()" [disabled]="generandoPdf() || cargandoSedesPresupuesto()">{{ generandoPdf() ? 'Generando…' : 'Guardar presupuesto y descargar PDF' }}</button> }
         </div>
       </div>
+      @if (cargandoSedesPresupuesto()) { <p role="status">Cargando sedes autorizadas…</p> }
+      @if (sedesPresupuesto().length) {
+        <label class="campo">Sede de atención
+          <select aria-label="Sede del presupuesto" [(ngModel)]="sedePresupuesto" [disabled]="generandoPdf()">
+            <option value="">Seleccione la sede</option>
+            @for (sede of sedesPresupuesto(); track sede.id) { <option [value]="sede.id">{{ sede.nombre }}</option> }
+          </select>
+        </label>
+      }
+      @if (presupuestoError()) { <p role="alert">{{ presupuestoError() }}</p> }
+      @if (documentoGenerado()) { <p role="status">Presupuesto guardado. Puede enviarlo por WhatsApp desde Atención y documentos → Documentos.</p> }
       <header class="presupuesto__cabecera">
         <img src="/images/clinicai-simbolo.svg" alt="" aria-hidden="true" width="44" height="44" />
         <div>
@@ -414,7 +427,7 @@
             <tr><th>Fase</th><th>Procedimiento</th><th>Detalle dental</th><th>Importe</th></tr>
           </thead>
           <tbody>
-            @for (item of presupuesto.plan.procedimientos; track item.id) {
+            @for (item of procedimientosPresupuesto(presupuesto.plan); track item.id) {
               <tr>
                 <td>{{ item.fase }}</td>
                 <td>{{ item.descripcion }}</td>
@@ -427,7 +440,7 @@
             }
           </tbody>
           <tfoot>
-            <tr><th colspan="3">Total del plan</th><th>{{ dinero(totalPlan(presupuesto.plan)) }}</th></tr>
+            <tr><th colspan="3">Total del presupuesto</th><th>{{ dinero(totalPresupuesto(presupuesto.plan)) }}</th></tr>
           </tfoot>
         </table>
       </div>

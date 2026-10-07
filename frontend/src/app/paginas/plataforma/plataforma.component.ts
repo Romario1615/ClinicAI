@@ -2,6 +2,7 @@ import { Component, OnInit, inject, signal, ChangeDetectionStrategy } from '@ang
 import { FormsModule } from '@angular/forms';
 
 import { VentanaFlotanteComponent } from '../../compartido/ventana-flotante.component';
+import { EditorRegistroComponent } from '../../compartido/editor-registro.component';
 import {
   ApiService,
   FalloApi,
@@ -19,7 +20,7 @@ import {
 @Component({
   selector: 'app-plataforma',
   standalone: true,
-  imports: [FormsModule, VentanaFlotanteComponent],
+  imports: [FormsModule, VentanaFlotanteComponent, EditorRegistroComponent],
   template: `
     <header class="encabezado">
       <div><p class="sobretitulo">Administración global</p><h1>Clínicas</h1>
@@ -43,6 +44,8 @@ import {
             <span>{{ clinica.cantidad_sedes }} sedes · {{ clinica.cantidad_usuarios }} cuentas</span>
           </div>
           <div class="acciones-clinica"><span class="etiqueta">{{ clinica.activa ? 'Activa' : 'Inactiva' }}</span>
+            <button class="boton boton--pequeno" type="button" (click)="registro.set({ tipo: 'clinica', fila: clinica, estado: null })">Editar clínica</button>
+            <button class="boton boton--pequeno" type="button" (click)="registro.set({ tipo: 'clinica', fila: clinica, estado: !clinica.activa })">{{ clinica.activa ? 'Desactivar clínica' : 'Reactivar clínica' }}</button>
             @if (clinica.activa) { <button class="boton boton--pequeno" type="button" (click)="alternarSedes(clinica)">{{ clinicaSedesId() === clinica.id ? 'Cerrar sedes' : 'Gestionar sedes' }}</button> }
           </div>
         </article>
@@ -103,12 +106,17 @@ import {
             @if (!usuario.roles.includes('Superadministrador')) { <span>{{ resumenSedes(usuario) }}</span> }
           </div>
           @if (!usuario.roles.includes('Superadministrador')) {
+            <button class="boton boton--pequeno" type="button" (click)="registro.set({ tipo: 'usuario', fila: usuario, estado: null })">Editar usuario</button>
+            <button class="boton boton--pequeno" type="button" (click)="registro.set({ tipo: 'usuario', fila: usuario, estado: !usuario.activo })">{{ usuario.activo ? 'Desactivar usuario' : 'Reactivar usuario' }}</button>
             <button class="boton boton--pequeno" type="button" (click)="editarAsignacion(usuario)">Clínica y módulos</button>
           }
         </article>
       }
     </section>
 
+    @if (registro(); as r) {
+      <app-editor-registro [tipo]="r.tipo" [ruta]="'/plataforma/clinicas/' + (r.tipo === 'usuario' ? 'usuarios/' : '') + r.fila.id" [inicial]="r.fila" [estado]="r.estado" [titulo]="(r.estado === null ? 'Editar ' : r.estado ? 'Reactivar ' : 'Desactivar ') + r.fila.nombre" (cerrar)="registro.set(null)" (guardado)="registro.set(null); cargar(); cargarUsuarios()" />
+    }
     @if (usuarioEditando(); as usuario) {
       <app-ventana-flotante ceja="Acceso a la clínica y módulos" [titulo]="usuario.nombre + ' ' + usuario.apellido" forma="centrada" [anchoMaximo]="720" [altoCompleto]="true" [cierraAlPulsarFuera]="false" (cerrar)="cerrarEdicionAsignacion()">
         <p>Guardar cambios revoca sesiones abiertas, reemplaza los roles y actualiza las sedes habilitadas.</p>
@@ -256,6 +264,7 @@ import {
 })
 export class PlataformaComponent implements OnInit {
   private readonly api = inject(ApiService);
+  protected readonly registro = signal<{ tipo: 'clinica' | 'usuario'; fila: ClinicaPlataforma | UsuarioPlataforma; estado: boolean | null } | null>(null);
   protected readonly clinicas = signal<readonly ClinicaPlataforma[]>([]);
   protected readonly cargando = signal(false);
   protected readonly ocupado = signal(false);

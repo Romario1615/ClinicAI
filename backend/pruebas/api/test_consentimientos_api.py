@@ -67,6 +67,7 @@ async def test_otorgar_revocar_y_volver_a_otorgar(
         "COMUNICACION_WHATSAPP",
         "RECORDATORIOS_MEDICACION",
         "PROMOCIONES",
+        "DOCUMENTOS_WHATSAPP",
     }
 
     sin_confirmar = await cliente.post(
