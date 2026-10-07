@@ -25,9 +25,12 @@ el competidor deshizo su transaccion, y su coste es una operacion mas.
 from __future__ import annotations
 
 import uuid
-from dataclasses import dataclass
-from datetime import datetime, timedelta
+from calendar import monthrange
+from dataclasses import dataclass, replace
+from datetime import UTC, date, datetime, time, timedelta
+from itertools import pairwise
 from typing import Final
+from zoneinfo import ZoneInfo
 
 from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
@@ -43,6 +46,7 @@ from app.modulos.agenda.modelos import (
     TRANSICIONES_PERMITIDAS,
     Cita,
     CitaHistorial,
+    ClaveIdempotencia,
     EstadoCita,
     OrigenCita,
 )
@@ -85,6 +89,10 @@ MAX_REINTENTOS: Final = 1
 # disponibilidad de los proximos cinco anos" recorreria 1800 dias proyectando
 # franjas, y seria un vector de agotamiento de CPU trivial de explotar.
 DIAS_MAXIMOS_CONSULTA: Final = 90
+MAX_DIAS_BLOQUE_SERIE: Final = 80
+MIN_CITAS_SERIE: Final = 2
+MAX_CITAS_SERIE: Final = 53
+MAX_CITAS_MENSUALES: Final = 13
 
 
 @dataclass(frozen=True, slots=True)
@@ -101,6 +109,7 @@ class SolicitudReserva:
     clave_idempotencia: str | None = None
     notas_recepcion: str | None = None
     procedimiento_plan_id: uuid.UUID | None = None
+    serie_recurrente_id: uuid.UUID | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -117,6 +126,60 @@ class ResultadoOperacion:
     auditoria: tuple[EntradaAuditoria, ...] = ()
     # Se reutiliza un reintento previo en lugar de crear una cita nueva.
     era_reintento: bool = False
+
+
+@dataclass(frozen=True, slots=True)
+class ResultadoSerieOperacion:
+    """Citas confirmadas en una única serie transaccional."""
+
+    serie_id: uuid.UUID | None
+    citas: tuple[Cita, ...] = ()
+    auditoria: tuple[EntradaAuditoria, ...] = ()
+    operacion: ClaveIdempotencia | None = None
+    respuesta_repetida: dict[str, object] | None = None
+
+
+def generar_instantes_serie(
+    inicio: datetime, zona: str, frecuencia: str, cantidad: int
+) -> tuple[datetime, ...]:
+    """Conserva el mismo día y hora locales, incluso al cruzar el cambio horario."""
+    if inicio.tzinfo is None or inicio.utcoffset() is None:
+        raise ValueError("El inicio de la serie debe incluir zona horaria.")
+    if frecuencia not in {"SEMANAL", "QUINCENAL", "MENSUAL"}:
+        raise ReglaNegocioViolada("La frecuencia de la serie no es válida.")
+    if not MIN_CITAS_SERIE <= cantidad <= MAX_CITAS_SERIE or (
+        frecuencia == "MENSUAL" and cantidad > MAX_CITAS_MENSUALES
+    ):
+        raise ReglaNegocioViolada("La serie no puede superar un año de citas.")
+
+    tz = ZoneInfo(zona)
+    base = inicio.astimezone(tz)
+    instantes: list[datetime] = []
+    for indice in range(cantidad):
+        if frecuencia == "MENSUAL":
+            mes_absoluto = base.year * 12 + base.month - 1 + indice
+            ano, mes_cero = divmod(mes_absoluto, 12)
+            mes = mes_cero + 1
+            dia = min(base.day, monthrange(ano, mes)[1])
+            fecha_local = date(ano, mes, dia)
+        else:
+            semanas = 1 if frecuencia == "SEMANAL" else 2
+            fecha_local = base.date() + timedelta(days=7 * semanas * indice)
+
+        local = datetime.combine(
+            fecha_local,
+            base.timetz().replace(tzinfo=None),
+            tzinfo=tz,
+        ).replace(fold=base.fold)
+        utc = local.astimezone(UTC)
+        vuelta = utc.astimezone(tz)
+        if vuelta.replace(tzinfo=None) != local.replace(tzinfo=None):
+            raise ReglaNegocioViolada(
+                "Una cita de la serie cae en una hora local inexistente por el cambio horario."
+            )
+        instantes.append(utc)
+
+    return tuple(instantes)
 
 
 class ServicioAgenda:
@@ -156,6 +219,7 @@ class ServicioAgenda:
         hasta: datetime,
         consultorio_id: uuid.UUID | None = None,
         registrar_descartes: bool = False,
+        _permiso_verificado: bool = False,
     ) -> ResultadoDisponibilidad:
         """Calcula los turnos libres.
 
@@ -163,7 +227,7 @@ class ServicioAgenda:
         profesional revela su carga de trabajo y sus ausencias, que no es
         informacion publica dentro de la clinica.
         """
-        if not principal.tiene_permiso("agenda.leer"):
+        if not _permiso_verificado and not principal.tiene_permiso("agenda.leer"):
             raise PermisoDenegado("No tiene permiso para consultar la agenda.")
 
         if (hasta - desde) > timedelta(days=DIAS_MAXIMOS_CONSULTA):
@@ -279,6 +343,158 @@ class ServicioAgenda:
             accion=AccionAuditada.CITA_CREADA,
         )
 
+    async def crear_serie_confirmada(
+        self,
+        solicitud: SolicitudReserva,
+        *,
+        principal: Principal,
+        frecuencia: str,
+        cantidad: int,
+        clave_idempotencia: str | None = None,
+    ) -> ResultadoSerieOperacion:
+        """Confirma una serie recurrente completa o no guarda ninguna cita.
+
+        Se valida cada horario contra las reglas y ocupaciones reales antes de
+        escribir. PostgreSQL vuelve a arbitrar las carreras mediante la misma
+        restricción de exclusión que protege una reserva individual.
+        """
+        if not principal.tiene_permiso("cita.crear"):
+            raise PermisoDenegado("No tiene permiso para crear citas.")
+        if principal.clinica_id is None:
+            raise PermisoDenegado("El principal no tiene clínica asignada.")
+        if solicitud.procedimiento_plan_id is not None:
+            raise ReglaNegocioViolada(
+                "Los procedimientos de un plan dental se reservan individualmente."
+            )
+
+        cuerpo = {
+            "paciente_id": str(solicitud.paciente_id),
+            "profesional_id": str(solicitud.profesional_id),
+            "servicio_id": str(solicitud.servicio_id),
+            "sede_id": str(solicitud.sede_id),
+            "consultorio_id": str(solicitud.consultorio_id) if solicitud.consultorio_id else None,
+            "inicio": solicitud.inicio.isoformat(),
+            "notas_recepcion": solicitud.notas_recepcion,
+            "frecuencia": frecuencia,
+            "cantidad": cantidad,
+        }
+        operacion = None
+        if clave_idempotencia:
+            operacion = await iniciar_operacion(
+                self._sesion,
+                principal,
+                self._reloj,
+                "agenda.serie_citas",
+                clave_idempotencia,
+                cuerpo,
+            )
+            if operacion.respuesta is not None:
+                return ResultadoSerieOperacion(
+                    serie_id=None,
+                    operacion=operacion,
+                    respuesta_repetida=operacion.respuesta,
+                )
+
+        instantes = await self._validar_serie_disponible(
+            solicitud,
+            principal=principal,
+            frecuencia=frecuencia,
+            cantidad=cantidad,
+        )
+
+        serie_id = uuid.uuid4()
+        citas: list[Cita] = []
+        auditorias: list[EntradaAuditoria] = []
+        for instante in instantes:
+            individual = replace(
+                solicitud,
+                inicio=instante,
+                origen=OrigenCita.RECURRENTE,
+                clave_idempotencia=None,
+                serie_recurrente_id=serie_id,
+            )
+            resultado = await self._crear_cita(
+                individual,
+                principal=principal,
+                estado=EstadoCita.CONFIRMED,
+                expira_en=None,
+                accion=AccionAuditada.CITA_CREADA,
+            )
+            citas.append(resultado.cita)
+            auditorias.extend(resultado.auditoria)
+
+        return ResultadoSerieOperacion(
+            serie_id=serie_id,
+            citas=tuple(citas),
+            auditoria=tuple(auditorias),
+            operacion=operacion,
+        )
+
+    async def _validar_serie_disponible(
+        self,
+        solicitud: SolicitudReserva,
+        *,
+        principal: Principal,
+        frecuencia: str,
+        cantidad: int,
+    ) -> tuple[datetime, ...]:
+        """Valida ámbito, recursos, autotraslapes y huecos antes de escribir."""
+        if not principal.ambito.cubre_sede(solicitud.sede_id):
+            raise RecursoNoEncontrado("La sede solicitada no existe.")
+        sede = await self._repo.obtener_sede(solicitud.sede_id)
+        if sede is None:
+            raise RecursoNoEncontrado("La sede solicitada no existe.")
+        zona = await self._repo.obtener_zona_horaria(solicitud.sede_id)
+        instantes = generar_instantes_serie(solicitud.inicio, zona, frecuencia, cantidad)
+
+        servicio = await self._repo.obtener_servicio(solicitud.servicio_id)
+        profesional = await self._repo.obtener_profesional(solicitud.profesional_id)
+        if servicio is None or profesional is None:
+            raise RecursoNoEncontrado("El profesional o servicio solicitado no existe.")
+        duracion_bloque = servicio.duracion_minutos + max(
+            servicio.minutos_preparacion,
+            profesional.minutos_preparacion_propio,
+        )
+        if any(
+            siguiente < anterior + timedelta(minutes=duracion_bloque)
+            for anterior, siguiente in pairwise(instantes)
+        ):
+            raise ReglaNegocioViolada("La frecuencia elegida se solapa con la duración de la cita.")
+
+        tz = ZoneInfo(zona)
+        bloques: list[list[datetime]] = []
+        for instante in instantes:
+            if not bloques or instante - bloques[-1][0] > timedelta(days=MAX_DIAS_BLOQUE_SERIE):
+                bloques.append([])
+            bloques[-1].append(instante)
+
+        for bloque in bloques:
+            primero_local = bloque[0].astimezone(tz)
+            ultimo_local = bloque[-1].astimezone(tz)
+            desde_local = datetime.combine(primero_local.date(), time.min, tzinfo=tz)
+            hasta_local = datetime.combine(
+                ultimo_local.date() + timedelta(days=1), time.min, tzinfo=tz
+            )
+            disponibilidad = await self.consultar_disponibilidad(
+                principal=principal,
+                profesional_id=solicitud.profesional_id,
+                servicio_id=solicitud.servicio_id,
+                sede_id=solicitud.sede_id,
+                desde=desde_local,
+                hasta=hasta_local,
+                consultorio_id=solicitud.consultorio_id,
+                _permiso_verificado=True,
+            )
+            disponibles = {turno.inicio.astimezone(UTC) for turno in disponibilidad.turnos}
+            for instante in bloque:
+                if instante not in disponibles:
+                    local = instante.astimezone(tz)
+                    raise TurnoNoDisponible(
+                        "No se puede crear la serie: el horario "
+                        f"{local:%d/%m/%Y %H:%M} no está disponible."
+                    )
+        return instantes
+
     async def _crear_cita(
         self,
         solicitud: SolicitudReserva,
@@ -350,6 +566,7 @@ class ServicioAgenda:
             estado=estado.value,
             expira_en=expira_en,
             origen=solicitud.origen.value,
+            serie_recurrente_id=solicitud.serie_recurrente_id,
             clave_idempotencia=solicitud.clave_idempotencia,
             notas_recepcion=solicitud.notas_recepcion,
             creado_por=principal.actor_id,

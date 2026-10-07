@@ -4,6 +4,7 @@ import { FormsModule } from '@angular/forms';
 import { FalloApi } from '../../nucleo/servicios/api.service';
 import { OperacionesService } from '../../nucleo/servicios/operaciones.service';
 import { IconoComponent } from '../../compartido/icono.component';
+import { VentanaFlotanteComponent } from '../../compartido/ventana-flotante.component';
 
 type TipoPregunta = 'texto' | 'texto_largo' | 'booleano' | 'seleccion' | 'seleccion_multiple';
 type Sensibilidad = 'N2' | 'N3';
@@ -35,7 +36,7 @@ interface PreguntaEditor extends PreguntaPlantilla {
 @Component({
   selector: 'app-anamnesis-configuracion',
   standalone: true,
-  imports: [FormsModule, IconoComponent],
+  imports: [FormsModule, IconoComponent, VentanaFlotanteComponent],
   template: `
     <section class="anamnesis-admin" aria-labelledby="titulo-anamnesis-admin">
       <header class="anamnesis-admin__cabecera">
@@ -54,7 +55,7 @@ interface PreguntaEditor extends PreguntaPlantilla {
         <p>Estas son plantillas configurables de la clínica. No representan el Formulario MSP 033 oficial.</p>
       </aside>
       @if (aviso()) { <p class="mensaje mensaje--bien" role="status">{{ aviso() }}</p> }
-      @if (error()) { <p class="mensaje mensaje--error" role="alert">{{ error() }}</p> }
+      @if (error() && !editando()) { <p class="mensaje mensaje--error" role="alert">{{ error() }}</p> }
 
       <div class="anamnesis-admin__rejilla">
         <section class="tarjeta historial-plantillas" aria-label="Versiones de plantillas">
@@ -81,8 +82,10 @@ interface PreguntaEditor extends PreguntaPlantilla {
           @if (!editando()) {
             <div class="editor-vacio"><span><app-icono nombre="documento-verificado" [tamano]="28" /></span><h3>Diseña una plantilla</h3><p>Agrega preguntas y publica la versión cuando esté lista para capturar respuestas.</p></div>
           } @else {
-            <form (ngSubmit)="guardar()">
+            <app-ventana-flotante ceja="Diseñador de anamnesis" [titulo]="idEditando() ? 'Editar preguntas' : 'Crear plantilla de anamnesis'" forma="centrada" [anchoMaximo]="900" [altoCompleto]="true" [cierraAlPulsarFuera]="false" (cerrar)="cancelarEdicion()">
+            <form id="formulario-plantilla-anamnesis" (ngSubmit)="guardar()">
               <div class="seccion__titulo"><div><p class="ceja">{{ idEditando() ? 'VERSIÓN EN BORRADOR' : 'NUEVA PLANTILLA' }}</p><h3>{{ idEditando() ? 'Editar preguntas' : 'Datos de la plantilla' }}</h3></div></div>
+              <div class="datos-plantilla">
               <label class="campo"><span class="campo__etiqueta">Nombre</span><input class="campo__control" name="nombre" [(ngModel)]="nombre" maxlength="100" minlength="3" required /></label>
               <label class="campo"><span class="campo__etiqueta">Sensibilidad de todas las respuestas</span>
                 <select class="campo__control" name="sensibilidad" [(ngModel)]="sensibilidad">
@@ -90,6 +93,7 @@ interface PreguntaEditor extends PreguntaPlantilla {
                 </select>
                 <small class="campo__ayuda">N3 solo se captura y consulta con el permiso historia_clinica.leer_sensible.</small>
               </label>
+              </div>
 
               <div class="preguntas-cabecera"><h4>Preguntas <span>{{ preguntas.length }}/40</span></h4><button class="boton boton--pequeno" type="button" (click)="agregarPregunta()" [disabled]="preguntas.length >= 40">Agregar pregunta</button></div>
               <div class="preguntas-lista">
@@ -112,12 +116,14 @@ interface PreguntaEditor extends PreguntaPlantilla {
                   </fieldset>
                 }
               </div>
-              <div class="acciones acciones--final">
-                <button class="boton" type="button" (click)="cancelarEdicion()">Cancelar</button>
-                <button class="boton boton--principal" type="submit" [disabled]="guardando() || !preguntas.length">{{ guardando() ? 'Guardando…' : 'Guardar borrador' }}</button>
-              </div>
-              @if (idEditando()) { <button class="boton publicar" type="button" (click)="publicar()" [disabled]="guardando()">Publicar esta versión</button> }
             </form>
+            @if (error()) { <p class="mensaje mensaje--error" role="alert">{{ error() }}</p> }
+            <div pie class="acciones acciones--final">
+              <button class="boton" type="button" (click)="cancelarEdicion()" [disabled]="guardando()">Cancelar</button>
+              @if (idEditando()) { <button class="boton" type="button" (click)="publicar()" [disabled]="guardando()">Publicar versión</button> }
+              <button class="boton boton--principal" type="submit" form="formulario-plantilla-anamnesis" [disabled]="guardando() || !preguntas.length">{{ guardando() ? 'Guardando…' : 'Guardar borrador' }}</button>
+            </div>
+            </app-ventana-flotante>
           }
         </section>
       </div>
@@ -145,21 +151,22 @@ interface PreguntaEditor extends PreguntaPlantilla {
     .lista-plantillas small { color:var(--texto-suave); }
     .version { display:inline-flex; width:max-content; padding:1px 7px; border-radius:999px; background:var(--acento-suave); color:var(--acento-fuerte); font-size:.72rem; font-weight:700; }
     .vacio { color:var(--texto-suave); }
-    .editor-vacio { display:grid; justify-items:center; gap:var(--espacio-2); padding:var(--espacio-7) var(--espacio-4); text-align:center; color:var(--texto-suave); }
+    .editor-plantilla { display:grid; min-height:260px; place-items:center; }
+    .editor-vacio { display:grid; justify-items:center; gap:var(--espacio-2); max-width:480px; padding:var(--espacio-7) var(--espacio-4); text-align:center; color:var(--texto-suave); }
     .editor-vacio span { display:grid; width:58px; height:58px; place-items:center; border-radius:18px; background:var(--acento-suave); color:var(--acento); }
     .editor-vacio h3,.editor-vacio p { margin:0; }
+    .datos-plantilla { display:grid; grid-template-columns:1fr 1fr; gap:var(--espacio-3); }
     .preguntas-cabecera { display:flex; align-items:center; justify-content:space-between; gap:var(--espacio-3); margin:var(--espacio-4) 0 var(--espacio-3); }
     .preguntas-cabecera h4 { margin:0; }
     .preguntas-cabecera h4 span { color:var(--texto-tenue); font-weight:500; }
     .preguntas-lista { display:grid; gap:var(--espacio-3); }
-    .pregunta-editor { min-width:0; margin:0; padding:var(--espacio-3); border:1px solid var(--borde); border-radius:var(--radio); }
+    .pregunta-editor { min-width:0; margin:0; padding:var(--espacio-3); border:1px solid var(--borde); border-radius:var(--radio); background:color-mix(in srgb,var(--superficie) 78%,transparent); }
     .pregunta-editor legend { padding:0 var(--espacio-2); color:var(--acento-fuerte); font-weight:700; }
     .pregunta-editor__fila { display:flex; align-items:end; gap:var(--espacio-3); }
     .pregunta-editor__fila .campo { flex:1 1 200px; min-width:0; }
     .requerida { display:flex; align-items:center; gap:var(--espacio-2); min-height:44px; padding-bottom:var(--espacio-4); white-space:nowrap; }
-    .publicar { width:100%; margin-top:var(--espacio-3); border-color:var(--acento); color:var(--acento-fuerte); }
     @media(max-width:900px) { .anamnesis-admin__rejilla { grid-template-columns:1fr; } }
-    @media(max-width:560px) { .anamnesis-admin__cabecera { flex-direction:column; } .pregunta-editor__fila { align-items:start; flex-wrap:wrap; } }
+    @media(max-width:560px) { .anamnesis-admin__cabecera { flex-direction:column; } .pregunta-editor__fila { align-items:start; flex-wrap:wrap; } .datos-plantilla { grid-template-columns:1fr; } }
   `,
 })
 export class AnamnesisConfiguracionComponent implements OnInit {

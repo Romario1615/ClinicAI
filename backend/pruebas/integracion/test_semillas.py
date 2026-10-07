@@ -22,6 +22,9 @@ import pytest
 import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.ia.embeddings import EmbeddingsSimulado
+from app.modulos.conocimiento.modelos import KnowledgeDocument
+from app.modulos.historia.modelos import Receta
 from app.modulos.pacientes.modelos import Paciente
 from app.modulos.usuarios.modelos import (
     AmbitoAsignacion,
@@ -44,6 +47,7 @@ from app.semillas.catalogos import (
     verificar_coherencia,
 )
 from app.semillas.clinico import cargar_clinico
+from app.semillas.conocimiento import cargar_conocimiento
 from app.semillas.sinteticos import (
     DOMINIO_PRUEBAS,
     MARCA_SINTETICO,
@@ -279,6 +283,76 @@ class TestDatosSinteticos:
         assert cargado.servicios == 8
         assert cargado.profesionales == 8
         assert cargado.pacientes == 12
+
+    async def test_carga_predeterminada_completa_60_pacientes_200_citas_y_contenido(
+        self, sesion: AsyncSession
+    ) -> None:
+        """El comando por defecto deja un escenario útil de extremo a extremo.
+
+        Además del catálogo y la agenda, la carga real incluye conocimiento
+        marcado como sintético e historias con recetas; probar solo cantidades
+        reducidas había dejado sin verificar la configuración que usa el sitio.
+        """
+        configuracion = Configuracion(_env_file=None, entorno="local")
+        await cargar_catalogos(sesion)
+        await sesion.flush()
+
+        resumen = await cargar_datos_sinteticos(
+            sesion,
+            configuracion,
+            semilla=920015,
+            reloj=RelojFijo(INSTANTE_REFERENCIA),
+        )
+
+        assert resumen.clinica_id is not None
+        assert (resumen.sedes, resumen.especialidades, resumen.profesionales) == (2, 4, 8)
+        assert resumen.pacientes == 60
+        assert resumen.citas == 200
+
+        nombres = (
+            await sesion.execute(
+                sa.text("SELECT nombre FROM clinica WHERE id = :clinica"),
+                {"clinica": resumen.clinica_id},
+            )
+        ).scalar_one()
+        assert MARCA_SINTETICO in nombres
+
+        autor_id = await sesion.scalar(
+            sa.select(Usuario.id)
+            .where(Usuario.clinica_id == resumen.clinica_id)
+            .order_by(Usuario.creado_en)
+            .limit(1)
+        )
+        assert autor_id is not None
+        conocimiento = await cargar_conocimiento(
+            sesion,
+            clinica_id=resumen.clinica_id,
+            embeddings=EmbeddingsSimulado(),
+            ahora=INSTANTE_REFERENCIA,
+            autor_id=autor_id,
+        )
+        assert conocimiento.documentos > 0
+        assert (
+            await sesion.scalar(
+                sa.select(sa.func.count())
+                .select_from(KnowledgeDocument)
+                .where(
+                    KnowledgeDocument.clinic_id == resumen.clinica_id,
+                    KnowledgeDocument.titulo.contains(MARCA_SINTETICO),
+                )
+            )
+        ) == conocimiento.documentos
+
+        clinico = await cargar_clinico(
+            sesion, clinica_id=resumen.clinica_id, reloj=RelojFijo(INSTANTE_REFERENCIA)
+        )
+        recetas = await sesion.scalar(
+            sa.select(sa.func.count())
+            .select_from(Receta)
+            .where(Receta.clinica_id == resumen.clinica_id)
+        )
+        assert clinico.recetas > 0
+        assert recetas == clinico.recetas
 
     async def test_ningun_documento_puede_ser_una_cedula_valida(
         self, sesion: AsyncSession, cargado

@@ -8,52 +8,68 @@
   </header>
 
   @if (puedeCargar() && !sinAcceso()) {
-    <form class="galeria__carga" (ngSubmit)="subir()">
-      <h4>Cargar imagen</h4>
-      <div class="galeria__campos">
-        <label class="campo">
-          <span class="campo__etiqueta">Tipo</span>
-          <select class="campo__control" name="tipo" [(ngModel)]="tipo">
-            @for (opcion of tipos; track opcion.valor) {
-              <option [value]="opcion.valor">{{ opcion.etiqueta }}</option>
-            }
-          </select>
-        </label>
-        @if (puedeLeerSensible()) {
+    <button type="button" class="boton boton--principal galeria__abrir-carga" (click)="abrirCarga()" aria-haspopup="dialog">
+      Cargar imagen clínica
+    </button>
+    @if (cargaAbierta()) {
+      <app-ventana-flotante
+        ceja="Historia clínica"
+        titulo="Cargar imagen clínica"
+        forma="centrada"
+        [anchoMaximo]="760"
+        [cierraAlPulsarFuera]="false"
+        (cerrar)="cerrarCarga()"
+      >
+      <form id="formulario-imagen-clinica" class="galeria__carga" (ngSubmit)="subir()">
+        <div class="galeria__campos">
           <label class="campo">
-            <span class="campo__etiqueta">Sensibilidad clínica</span>
-            <select class="campo__control" name="nivelSensibilidad" [(ngModel)]="nivelSensibilidad">
-              <option value="N2">N2 · Clínico</option>
-              <option value="N3">N3 · Clínico sensible</option>
+            <span class="campo__etiqueta">Tipo</span>
+            <select class="campo__control" name="tipo" [(ngModel)]="tipo">
+              @for (opcion of tipos; track opcion.valor) {
+                <option [value]="opcion.valor">{{ opcion.etiqueta }}</option>
+              }
             </select>
           </label>
-        }
-        <label class="campo">
-          <span class="campo__etiqueta">Piezas FDI (opcional)</span>
-          <input class="campo__control" name="piezas" [(ngModel)]="piezas" placeholder="14, 15" />
-        </label>
-        <label class="campo">
-          <span class="campo__etiqueta">Fecha de toma</span>
-          <input class="campo__control" type="date" name="tomadaEn" [(ngModel)]="tomadaEn" />
-        </label>
-        <label class="campo galeria__archivo">
-          <span class="campo__etiqueta">Archivo JPEG, PNG o WebP</span>
-          <input type="file" accept="image/jpeg,image/png,image/webp" (change)="seleccionarArchivo($event)" />
-          @if (archivoNombre) { <span class="campo__ayuda">{{ archivoNombre }}</span> }
-        </label>
-        <label class="campo galeria__descripcion">
-          <span class="campo__etiqueta">Descripción (opcional)</span>
-          <input class="campo__control" name="descripcion" maxlength="500" [(ngModel)]="descripcion" />
-        </label>
-      </div>
-      <button class="boton boton--principal" type="submit" [disabled]="!archivo || subiendo()">
-        {{ subiendo() ? 'Cargando…' : 'Guardar imagen' }}
-      </button>
+          @if (puedeLeerSensible()) {
+            <label class="campo">
+              <span class="campo__etiqueta">Sensibilidad clínica</span>
+              <select class="campo__control" name="nivelSensibilidad" [(ngModel)]="nivelSensibilidad">
+                <option value="N2">N2 · Clínico</option>
+                <option value="N3">N3 · Clínico sensible</option>
+              </select>
+            </label>
+          }
+          <label class="campo">
+            <span class="campo__etiqueta">Piezas FDI (opcional)</span>
+            <input class="campo__control" name="piezas" [(ngModel)]="piezas" placeholder="14, 15" />
+          </label>
+          <label class="campo">
+            <span class="campo__etiqueta">Fecha de toma</span>
+            <input class="campo__control" type="date" name="tomadaEn" [(ngModel)]="tomadaEn" />
+          </label>
+          <label class="campo galeria__archivo">
+            <span class="campo__etiqueta">Archivo JPEG, PNG o WebP</span>
+            <input type="file" accept="image/jpeg,image/png,image/webp" (change)="seleccionarArchivo($event)" />
+            @if (archivoNombre) { <span class="campo__ayuda">{{ archivoNombre }}</span> }
+          </label>
+          <label class="campo galeria__descripcion">
+            <span class="campo__etiqueta">Descripción (opcional)</span>
+            <input class="campo__control" name="descripcion" maxlength="500" [(ngModel)]="descripcion" />
+          </label>
+        </div>
       <p class="galeria__nota">
         La imagen se limpia de metadatos y se cifra antes de almacenarla. En desarrollo puede
         guardarse sin antivirus; la pantalla indica ese estado. Producción exige antivirus activo.
       </p>
-    </form>
+      </form>
+      <div pie>
+        <button class="boton" type="button" (click)="cerrarCarga()" [disabled]="subiendo()">Cancelar</button>
+        <button class="boton boton--principal" type="submit" form="formulario-imagen-clinica" [disabled]="!archivo || subiendo()">
+          {{ subiendo() ? 'Cargando…' : 'Guardar imagen' }}
+        </button>
+      </div>
+      </app-ventana-flotante>
+    }
   }
 
   <form class="galeria__filtros" (ngSubmit)="cargar(pacienteId())">

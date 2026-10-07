@@ -1,17 +1,24 @@
 import { Component, inject, input, OnInit, output, signal, ChangeDetectionStrategy } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { VentanaFlotanteComponent } from '../../compartido/ventana-flotante.component';
 import { ApiService, FalloApi } from '../../nucleo/servicios/api.service';
 import type { Cita, Consultorio, TurnoDisponible } from '../../nucleo/modelos/dominio';
 import { formatearHora, rangoDelDia } from '../../nucleo/utilidades/fechas';
 
 @Component({
-  selector: 'app-reprogramar-cita', standalone: true, imports: [FormsModule],
+  selector: 'app-reprogramar-cita', standalone: true, imports: [FormsModule, VentanaFlotanteComponent],
   template: `
-    <dialog open aria-labelledby="titulo-reprogramar">
-      <form (ngSubmit)="guardar()" class="tarjeta">
-        <h2 id="titulo-reprogramar">Reprogramar cita</h2>
+    <app-ventana-flotante
+      ceja="Agenda"
+      titulo="Reprogramar cita"
+      forma="centrada"
+      [anchoMaximo]="520"
+      [cierraAlPulsarFuera]="false"
+      (cerrar)="cerrar.emit()"
+    >
         <p>Elija un nuevo horario con el mismo profesional. Horas en {{ zona() }}.</p>
-        <fieldset [disabled]="ocupado()">
+        <form id="formulario-reprogramacion" (ngSubmit)="guardar()">
+          <fieldset [disabled]="ocupado()">
           <label class="campo"><span class="campo__etiqueta">Nueva fecha</span>
             <input class="campo__control" type="date" name="fechaNueva" [(ngModel)]="fecha" (ngModelChange)="buscar()" required />
           </label>
@@ -46,19 +53,17 @@ import { formatearHora, rangoDelDia } from '../../nucleo/utilidades/fechas';
             <textarea class="campo__control" name="motivoCambio" [(ngModel)]="motivo" minlength="3" maxlength="500" required></textarea>
             <span class="campo__ayuda">Indique un motivo administrativo, sin información clínica.</span>
           </label>
-        </fieldset>
-        @if (error()) { <p role="alert">{{ error() }}</p> }
-        <div class="fila">
-          <button class="boton boton--principal" type="submit" [disabled]="ocupado() || cargando() || !inicio || motivo.trim().length < 3">{{ ocupado() ? 'Guardando…' : 'Guardar cambio' }}</button>
+          </fieldset>
+          @if (error()) { <p role="alert">{{ error() }}</p> }
+        </form>
+        <div pie class="fila">
           <button class="boton" type="button" [disabled]="ocupado()" (click)="cerrar.emit()">Volver</button>
+          <button class="boton boton--principal" type="submit" form="formulario-reprogramacion" [disabled]="ocupado() || cargando() || !inicio || motivo.trim().length < 3">{{ ocupado() ? 'Guardando…' : 'Guardar cambio' }}</button>
         </div>
-      </form>
-    </dialog>
+    </app-ventana-flotante>
   `,
   changeDetection: ChangeDetectionStrategy.Eager,
   styles: `
-    :host { position: fixed; inset: 0; z-index: 50; display: grid; place-items: center; padding: 1rem; background: rgb(22 32 46 / 45%); }
-    dialog { position: static; border: 0; padding: 0; max-width: 520px; width: 100%; max-height: 90vh; overflow: auto; background: transparent; }
     fieldset { border: 0; padding: 0; margin: 0; min-width: 0; }
     [role=alert] { color: var(--peligro); }
   `,

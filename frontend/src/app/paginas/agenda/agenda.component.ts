@@ -47,7 +47,11 @@ import {
   rangoVista,
   type VistaCalendario,
 } from './calendario-agenda.component';
-import { ApiService, FalloApi } from '../../nucleo/servicios/api.service';
+import {
+  ApiService,
+  FalloApi,
+  type FrecuenciaSerieCitas,
+} from '../../nucleo/servicios/api.service';
 import { CatalogoService } from '../../nucleo/servicios/catalogo.service';
 import { PERMISOS } from '../../nucleo/servicios/configuracion';
 import {
@@ -253,6 +257,9 @@ export class AgendaComponent {
   protected readonly turnoElegido = signal<TurnoDisponible | null>(null);
   protected pacienteId = '';
   protected notas = '';
+  protected serieRecurrente = false;
+  protected frecuenciaSerie: FrecuenciaSerieCitas = 'SEMANAL';
+  protected cantidadSerie = 4;
   /** Consultorio elegido para la reserva. Vacio: sin sala asignada. */
   protected readonly consultorioId = signal('');
   /**
@@ -344,6 +351,14 @@ export class AgendaComponent {
   );
 
   protected readonly puedeCrear = computed(() => this.sesion.tienePermiso(PERMISOS.citaCrear));
+  protected get maximoCitasSerie(): number {
+    return this.frecuenciaSerie === 'MENSUAL' ? 13 : 53;
+  }
+  protected get cantidadSerieValida(): boolean {
+    return Number.isInteger(this.cantidadSerie)
+      && this.cantidadSerie >= 2
+      && this.cantidadSerie <= this.maximoCitasSerie;
+  }
   protected readonly puedeCancelar = computed(() =>
     this.sesion.tienePermiso(PERMISOS.citaCancelar),
   );
@@ -713,6 +728,9 @@ export class AgendaComponent {
     }
     this.citaSeleccionada.set(null);
     this.huecoElegido.set(fila);
+    this.serieRecurrente = false;
+    this.frecuenciaSerie = 'SEMANAL';
+    this.cantidadSerie = 4;
     const sugerido = this.pacienteSugerido();
     if (sugerido && !this.pacienteId) {
       this.pacienteId = sugerido;
@@ -743,6 +761,9 @@ export class AgendaComponent {
     this.turnoElegido.set(null);
     this.pacienteId = '';
     this.notas = '';
+    this.serieRecurrente = false;
+    this.frecuenciaSerie = 'SEMANAL';
+    this.cantidadSerie = 4;
     this.consultorioId.set('');
     this.errorReserva.set(null);
   }
@@ -992,25 +1013,38 @@ export class AgendaComponent {
     this.reservando.set(true);
     this.errorReserva.set(null);
 
-    this.api
-      .crearCita(
-        {
-          paciente_id: this.pacienteId,
-          profesional_id: this.profesionalId(),
-          servicio_id: this.servicioId(),
-          sede_id: this.sedeId(),
-          consultorio_id: this.consultorioId() || null,
-          procedimiento_plan_id: this.procedimientoPlanSugerido(),
-          inicio: turno.inicio,
-          notas_recepcion: this.notas.trim() || null,
-        },
-        this.claveIdempotencia,
-      )
-      .subscribe({
-        next: (cita) => {
+    const datos = {
+      paciente_id: this.pacienteId,
+      profesional_id: this.profesionalId(),
+      servicio_id: this.servicioId(),
+      sede_id: this.sedeId(),
+      consultorio_id: this.consultorioId() || null,
+      procedimiento_plan_id: this.procedimientoPlanSugerido(),
+      inicio: turno.inicio,
+      notas_recepcion: this.notas.trim() || null,
+    };
+    const esSerie = this.serieRecurrente;
+    const cantidad = this.cantidadSerie;
+    const frecuencia = this.frecuenciaSerie;
+    const citas$: Observable<readonly Cita[]> = esSerie
+      ? this.api
+          .crearSerieCitas({ ...datos, frecuencia, cantidad }, this.claveIdempotencia)
+          .pipe(map((respuesta) => respuesta.citas))
+      : this.api.crearCita(datos, this.claveIdempotencia).pipe(map((cita) => [cita] as const));
+
+    citas$.subscribe({
+        next: (citas) => {
           this.reservando.set(false);
-          this.mensajeExito.set(
-            `Cita creada para ${this.nombrePaciente(cita.paciente_id)} a las ${this.hora(cita.inicio)}.`,
+          const primera = citas[0];
+          if (!primera) {
+            this.errorReserva.set(
+              new FalloApi('RESPUESTA_INVALIDA', 'La API no devolvió las citas creadas.', 500),
+            );
+            return;
+          }
+          this.mensajeExito.set(esSerie
+            ? `Serie de ${cantidad} citas creada para ${this.nombrePaciente(primera.paciente_id)}. La primera es a las ${this.hora(primera.inicio)}.`
+            : `Cita creada para ${this.nombrePaciente(primera.paciente_id)} a las ${this.hora(primera.inicio)}.`,
           );
           this.procedimientoPlanSugerido.set(null);
           this.cancelarReserva();
@@ -1036,6 +1070,9 @@ export class AgendaComponent {
       return '';
     }
     if (fallo.estado === 409) {
+      if (fallo.message.toLowerCase().includes('serie')) {
+        return fallo.message;
+      }
       // Un 409 no es un fallo del sistema: es la carrera resuelta por la
       // restricción de exclusión de PostgreSQL.
       if (fallo.message.toLowerCase().includes('consultorio')) {

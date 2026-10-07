@@ -434,6 +434,87 @@
   gap: var(--espacio-3);
 }
 
+.reserva__formulario {
+  display: grid;
+  width: min(100%, 720px);
+  margin-inline: auto;
+  gap: var(--espacio-4);
+}
+
+.reserva__contexto {
+  padding: var(--espacio-4);
+  border: 1px solid color-mix(in srgb, var(--cristal-borde) 76%, var(--acento));
+  border-radius: calc(var(--radio) + 4px);
+  background: linear-gradient(135deg, var(--cristal-superficie-densa), var(--cristal-superficie));
+  box-shadow: var(--cristal-sombra), inset 0 1px 0 rgb(255 255 255 / 84%);
+  -webkit-backdrop-filter: saturate(145%) blur(var(--cristal-desenfoque));
+  backdrop-filter: saturate(145%) blur(var(--cristal-desenfoque));
+}
+
+.reserva__recurrencia {
+  display: grid;
+  gap: var(--espacio-3);
+  padding: var(--espacio-4);
+  border: 1px solid color-mix(in srgb, var(--borde) 65%, var(--acento));
+  border-radius: calc(var(--radio) + 4px);
+  background: linear-gradient(
+    145deg,
+    color-mix(in srgb, var(--cristal-superficie-densa) 94%, var(--acento-suave)),
+    color-mix(in srgb, var(--cristal-superficie) 90%, white)
+  );
+  box-shadow: 0 10px 28px rgb(16 42 46 / 7%), inset 0 1px 0 rgb(255 255 255 / 84%);
+  -webkit-backdrop-filter: saturate(135%) blur(14px);
+  backdrop-filter: saturate(135%) blur(14px);
+  transition: border-color 160ms ease, box-shadow 160ms ease;
+}
+
+.reserva__recurrencia:focus-within {
+  border-color: color-mix(in srgb, var(--acento) 62%, white);
+  box-shadow: 0 12px 30px rgb(16 42 46 / 10%), 0 0 0 3px color-mix(in srgb, var(--acento) 16%, transparent);
+}
+
+.reserva__recurrencia-campos {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--espacio-3);
+}
+
+.reserva__pie {
+  display: flex;
+  width: 100%;
+  max-width: 752px;
+  margin-inline: auto;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: var(--espacio-2);
+}
+
+@media (max-width: 560px) {
+  .reserva__recurrencia-campos {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .reserva__pie {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .reserva__contexto,
+  .reserva__recurrencia {
+    padding: var(--espacio-3);
+  }
+
+  .reserva__formulario .campo__control {
+    min-width: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .reserva__recurrencia {
+    transition: none;
+  }
+}
+
 .panel__titular {
   display: flex;
   align-items: center;

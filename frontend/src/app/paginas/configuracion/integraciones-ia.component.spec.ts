@@ -38,7 +38,27 @@ describe('IntegracionesIaComponent', () => {
         expect(c.jev.guardada).toBe(true);
         expect(c.jev.umbral).toBe(0.7);
         expect(c.respuestas.proveedor).toBe('ollama');
-        expect((fixture.nativeElement as HTMLElement).textContent).toContain('Clave guardada (no se muestra)');
+        expect((fixture.nativeElement as HTMLElement).textContent).toContain('Configurada y protegida');
+    });
+
+    it('abre la configuración en una ventana accesible y permite cancelarla', () => {
+        const botones = Array.from((fixture.nativeElement as HTMLElement).querySelectorAll('button'));
+        botones.find((boton) => boton.textContent?.includes('Configurar JEV'))?.click();
+        fixture.detectChanges();
+
+        const dialogo = (fixture.nativeElement as HTMLElement).querySelector('dialog[open]');
+        expect(dialogo).not.toBeNull();
+        expect(dialogo?.textContent).toContain('Clave API');
+        expect(dialogo?.textContent).toContain('Eliminar la clave guardada');
+
+        c.claveJev = 'clave-temporal-sin-guardar';
+        c.quitarClaveJev = true;
+        Array.from(dialogo?.querySelectorAll('button') ?? [])
+            .find((boton) => boton.textContent?.includes('Cancelar'))?.click();
+        fixture.detectChanges();
+        expect((fixture.nativeElement as HTMLElement).querySelector('dialog[open]')).toBeNull();
+        expect(c.claveJev).toBe('');
+        expect(c.quitarClaveJev).toBe(false);
     });
 
     it('guarda JEV: la clave solo viaja si se escribe una nueva', () => {

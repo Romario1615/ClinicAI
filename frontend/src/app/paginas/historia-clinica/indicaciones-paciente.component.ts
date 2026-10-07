@@ -13,6 +13,7 @@ import { Component, effect, inject, input, signal, untracked, ChangeDetectionStr
 import { DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 
+import { VentanaFlotanteComponent } from '../../compartido/ventana-flotante.component';
 import { OperacionesService } from '../../nucleo/servicios/operaciones.service';
 import { FalloApi } from '../../nucleo/servicios/api.service';
 
@@ -36,7 +37,7 @@ export interface RecetaOpcion {
 @Component({
   selector: 'app-indicaciones-paciente',
   standalone: true,
-  imports: [DatePipe, FormsModule],
+  imports: [DatePipe, FormsModule, VentanaFlotanteComponent],
   template: `
     <section class="indicaciones" aria-labelledby="titulo-indicaciones">
       <h3 id="titulo-indicaciones">Indicaciones para el paciente</h3>
@@ -46,7 +47,18 @@ export interface RecetaOpcion {
       </p>
 
       @if (puedeEscribir()) {
-        <form class="formulario" (ngSubmit)="publicar()" novalidate>
+        <button class="boton boton--principal" type="button" (click)="abrirEditor()" aria-haspopup="dialog">Redactar indicaciones</button>
+      }
+      @if (editorAbierto()) {
+        <app-ventana-flotante
+          ceja="Seguimiento clínico"
+          titulo="Redactar indicaciones"
+          forma="centrada"
+          [anchoMaximo]="680"
+          [cierraAlPulsarFuera]="false"
+          (cerrar)="cerrarEditor()"
+        >
+        <form id="formulario-indicaciones-paciente" class="formulario" (ngSubmit)="publicar()" novalidate>
           <label class="campo">
             <span class="campo__etiqueta">Indicaciones</span>
             <textarea class="campo__control" name="texto" rows="5" maxlength="4000" required minlength="10"
@@ -72,12 +84,14 @@ export interface RecetaOpcion {
             </label>
           </div>
           @if (error()) { <p class="aviso-error" role="alert">{{ error() }}</p> }
-          <div class="acciones">
-            <button class="boton boton--principal" type="submit" [disabled]="ocupado()">
-              {{ ocupado() ? 'Publicando…' : 'Publicar y avisar al paciente' }}
-            </button>
-          </div>
         </form>
+        <div pie>
+          <button class="boton" type="button" (click)="cerrarEditor()" [disabled]="ocupado()">Cancelar</button>
+          <button class="boton boton--principal" type="submit" form="formulario-indicaciones-paciente" [disabled]="ocupado()">
+            {{ ocupado() ? 'Publicando…' : 'Publicar indicaciones' }}
+          </button>
+        </div>
+        </app-ventana-flotante>
       }
 
       @if (publicada(); as p) {
@@ -108,16 +122,7 @@ export interface RecetaOpcion {
               </small>
             </div>
             @if (puedeEscribir() && !i.anulada_en) {
-              @if (anulando() === i.id) {
-                <form class="anular" (ngSubmit)="anular(i)">
-                  <input class="campo__control" name="motivoAnulacion" [(ngModel)]="motivoAnulacion"
-                         placeholder="Motivo (mín. 5)" aria-label="Motivo de la anulación" />
-                  <button class="boton boton--pequeno" type="submit">Confirmar</button>
-                  <button class="boton boton--pequeno boton--plano" type="button" (click)="anulando.set(null)">Cancelar</button>
-                </form>
-              } @else {
-                <button class="boton boton--pequeno boton--plano" type="button" (click)="anulando.set(i.id); motivoAnulacion = ''">Anular</button>
-              }
+              <button class="boton boton--pequeno boton--plano" type="button" (click)="abrirAnulacion(i.id)">Anular</button>
             }
           </li>
         } @empty {
@@ -125,6 +130,33 @@ export interface RecetaOpcion {
         }
       </ul>
     </section>
+    @if (anulando(); as id) {
+      @if (indicacionPorId(id); as indicacion) {
+        <app-ventana-flotante
+          ceja="Seguimiento clínico"
+          titulo="Anular indicación"
+          forma="centrada"
+          [anchoMaximo]="520"
+          [cierraAlPulsarFuera]="false"
+          (cerrar)="cerrarAnulacion()"
+        >
+        <p>La publicación quedará marcada como anulada. Registra un motivo para conservar el contexto asistencial.</p>
+        <form [id]="'formulario-anulacion-' + id" (ngSubmit)="anular(indicacion)">
+          <label class="campo">
+            <span class="campo__etiqueta">Motivo de anulación</span>
+            <textarea class="campo__control" name="motivoAnulacion" [(ngModel)]="motivoAnulacion" minlength="5" maxlength="500" required></textarea>
+          </label>
+          @if (error()) { <p class="aviso-error" role="alert">{{ error() }}</p> }
+        </form>
+        <div pie>
+          <button class="boton" type="button" (click)="cerrarAnulacion()" [disabled]="anulandoEnCurso()">Volver</button>
+          <button class="boton boton--peligro" type="submit" [attr.form]="'formulario-anulacion-' + id" [disabled]="anulandoEnCurso()">
+            {{ anulandoEnCurso() ? 'Anulando…' : 'Confirmar anulación' }}
+          </button>
+        </div>
+        </app-ventana-flotante>
+      }
+    }
   `,
   changeDetection: ChangeDetectionStrategy.Eager,
   styles: `
@@ -158,6 +190,8 @@ export class IndicacionesPacienteComponent {
 
   protected readonly lista = signal<readonly Indicacion[]>([]);
   protected readonly ocupado = signal(false);
+  protected readonly anulandoEnCurso = signal(false);
+  protected readonly editorAbierto = signal(false);
   protected readonly error = signal('');
   protected readonly copiado = signal(false);
   protected readonly publicada = signal<{ enlace: string; expira_en: string; aviso_enviado: boolean; motivo_sin_aviso: string | null } | null>(null);
@@ -179,7 +213,42 @@ export class IndicacionesPacienteComponent {
     });
   }
 
+  protected abrirEditor(): void {
+    this.error.set('');
+    this.texto = '';
+    this.recetaId = '';
+    this.dias = 7;
+    this.editorAbierto.set(true);
+  }
+
+  protected cerrarEditor(): void {
+    if (this.ocupado()) return;
+    this.editorAbierto.set(false);
+    this.error.set('');
+    this.texto = '';
+    this.recetaId = '';
+    this.dias = 7;
+  }
+
+  protected indicacionPorId(id: string): Indicacion | null {
+    return this.lista().find((indicacion) => indicacion.id === id) ?? null;
+  }
+
+  protected abrirAnulacion(id: string): void {
+    this.error.set('');
+    this.motivoAnulacion = '';
+    this.anulando.set(id);
+  }
+
+  protected cerrarAnulacion(): void {
+    if (this.anulandoEnCurso()) return;
+    this.anulando.set(null);
+    this.motivoAnulacion = '';
+    this.error.set('');
+  }
+
   protected publicar(): void {
+    if (!this.puedeEscribir() || this.ocupado()) return;
     if (this.texto.trim().length < 10) {
       this.error.set('Escriba las indicaciones (mínimo 10 caracteres).');
       return;
@@ -199,6 +268,8 @@ export class IndicacionesPacienteComponent {
           this.copiado.set(false);
           this.texto = '';
           this.recetaId = '';
+          this.dias = 7;
+          this.editorAbierto.set(false);
           this.cargar(this.pacienteId());
         },
         error: (fallo: FalloApi) => {
@@ -221,12 +292,16 @@ export class IndicacionesPacienteComponent {
       this.error.set('Escriba el motivo de la anulación (mínimo 5 caracteres).');
       return;
     }
+    if (this.anulandoEnCurso()) return;
+    this.anulandoEnCurso.set(true);
     this.api.cambiar<Indicacion>(`/historia/indicaciones/${indicacion.id}/anulacion`, { motivo }).subscribe({
       next: () => {
+        this.anulandoEnCurso.set(false);
         this.anulando.set(null);
+        this.motivoAnulacion = '';
         this.cargar(this.pacienteId());
       },
-      error: (fallo: FalloApi) => this.error.set(fallo.message),
+      error: (fallo: FalloApi) => { this.anulandoEnCurso.set(false); this.error.set(fallo.message); },
     });
   }
 }

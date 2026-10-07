@@ -2,13 +2,14 @@ import { Component, OnInit, inject, signal, ChangeDetectionStrategy } from '@ang
 import { FormsModule } from '@angular/forms';
 
 import { IconoComponent } from '../../compartido/icono.component';
+import { VentanaFlotanteComponent } from '../../compartido/ventana-flotante.component';
 import { FalloApi } from '../../nucleo/servicios/api.service';
 import { CatalogoService, type DatosSede, type SedeGestion } from '../../nucleo/servicios/catalogo.service';
 
 @Component({
   selector: 'app-sedes-configuracion',
   standalone: true,
-  imports: [FormsModule, IconoComponent],
+  imports: [FormsModule, IconoComponent, VentanaFlotanteComponent],
   template: `
     <section class="sedes-cabecera" aria-labelledby="sedes-titulo">
       <div>
@@ -20,7 +21,7 @@ import { CatalogoService, type DatosSede, type SedeGestion } from '../../nucleo/
     </section>
 
     @if (aviso()) { <p class="mensaje mensaje--bien" role="status">{{ aviso() }}</p> }
-    @if (error()) { <p class="mensaje mensaje--error" role="alert">{{ error() }}</p> }
+    @if (error() && !formulario()) { <p class="mensaje mensaje--error" role="alert">{{ error() }}</p> }
     @if (cargando()) { <p class="tarjeta" role="status">Cargando sedes…</p> }
 
     @if (!cargando() && !error() && sedes().length === 0) {
@@ -42,40 +43,51 @@ import { CatalogoService, type DatosSede, type SedeGestion } from '../../nucleo/
             }
           </header>
 
-          @if (editando() === sede.id && formulario(); as datos) {
-            <form class="sede__formulario" (ngSubmit)="guardar()">
-              <label class="campo"><span class="campo__etiqueta">Nombre</span>
-                <input class="campo__control" [name]="'nombre-' + sede.id" [(ngModel)]="datos.nombre" maxlength="200" required />
-              </label>
-              <label class="campo"><span class="campo__etiqueta">Dirección</span>
-                <input class="campo__control" [name]="'direccion-' + sede.id" [(ngModel)]="datos.direccion" maxlength="500" />
-              </label>
-              <label class="campo"><span class="campo__etiqueta">Teléfono</span>
-                <input class="campo__control" [name]="'telefono-' + sede.id" [(ngModel)]="datos.telefono" type="tel" maxlength="32" />
-              </label>
-              <label class="campo"><span class="campo__etiqueta">Zona horaria IANA</span>
-                <input class="campo__control" [name]="'zona-' + sede.id" [(ngModel)]="datos.zona_horaria" placeholder="America/Guayaquil" maxlength="64" required />
-              </label>
-              <label class="campo"><span class="campo__etiqueta">Antelación mínima para reservar (minutos)</span>
-                <input class="campo__control" [name]="'antelacion-' + sede.id" [(ngModel)]="datos.minutos_antelacion_minima" type="number" min="0" max="10080" step="1" required />
-              </label>
-              <div class="sede__acciones">
-                <button class="boton boton--principal" type="submit" [disabled]="guardando()">
-                  {{ guardando() ? 'Guardando…' : 'Guardar cambios' }}
-                </button>
-                <button class="boton" type="button" (click)="cancelar()" [disabled]="guardando()">Cancelar</button>
-              </div>
-            </form>
-          } @else {
-            <dl class="sede__datos">
-              <div><dt>Dirección</dt><dd>{{ sede.direccion || 'Sin dirección registrada' }}</dd></div>
-              <div><dt>Teléfono</dt><dd>{{ sede.telefono || 'Sin teléfono registrado' }}</dd></div>
-              <div><dt>Antelación mínima</dt><dd>{{ sede.minutos_antelacion_minima }} minutos</dd></div>
-            </dl>
-          }
+          <dl class="sede__datos">
+            <div><dt>Dirección</dt><dd>{{ sede.direccion || 'Sin dirección registrada' }}</dd></div>
+            <div><dt>Teléfono</dt><dd>{{ sede.telefono || 'Sin teléfono registrado' }}</dd></div>
+            <div><dt>Antelación mínima</dt><dd>{{ sede.minutos_antelacion_minima }} minutos</dd></div>
+          </dl>
         </article>
       }
     </div>
+
+    @if (formulario(); as datos) {
+      <app-ventana-flotante
+        ceja="Operación de la clínica"
+        [titulo]="'Editar sede · ' + (sedeEditada()?.nombre ?? '')"
+        forma="centrada"
+        [anchoMaximo]="640"
+        [cierraAlPulsarFuera]="false"
+        (cerrar)="cancelar()"
+      >
+        @if (error()) { <p class="mensaje mensaje--error" role="alert">{{ error() }}</p> }
+        <form id="formulario-sede" class="sede__formulario" (ngSubmit)="guardar()">
+          <label class="campo"><span class="campo__etiqueta">Nombre de la sede</span>
+            <input class="campo__control" name="nombre-sede" [(ngModel)]="datos.nombre" maxlength="200" autocomplete="organization" required />
+          </label>
+          <label class="campo"><span class="campo__etiqueta">Dirección</span>
+            <input class="campo__control" name="direccion-sede" [(ngModel)]="datos.direccion" maxlength="500" autocomplete="street-address" />
+          </label>
+          <label class="campo"><span class="campo__etiqueta">Teléfono</span>
+            <input class="campo__control" name="telefono-sede" [(ngModel)]="datos.telefono" type="tel" maxlength="32" autocomplete="tel" />
+          </label>
+          <label class="campo"><span class="campo__etiqueta">Zona horaria IANA</span>
+            <input class="campo__control" name="zona-sede" [(ngModel)]="datos.zona_horaria" placeholder="America/Guayaquil" maxlength="64" required aria-describedby="ayuda-zona-sede" />
+            <small id="ayuda-zona-sede" class="campo__ayuda">Se usa para mostrar horarios y calcular reservas.</small>
+          </label>
+          <label class="campo campo--completo"><span class="campo__etiqueta">Antelación mínima para reservar (minutos)</span>
+            <input class="campo__control" name="antelacion-sede" [(ngModel)]="datos.minutos_antelacion_minima" type="number" min="0" max="10080" step="1" required />
+          </label>
+        </form>
+        <div pie class="sede__acciones">
+          <button class="boton" type="button" (click)="cancelar()" [disabled]="guardando()">Cancelar</button>
+          <button class="boton boton--principal" type="submit" form="formulario-sede" [disabled]="guardando()">
+            {{ guardando() ? 'Guardando…' : 'Guardar cambios' }}
+          </button>
+        </div>
+      </app-ventana-flotante>
+    }
   `,
   changeDetection: ChangeDetectionStrategy.Eager,
   styles: `
@@ -98,16 +110,16 @@ import { CatalogoService, type DatosSede, type SedeGestion } from '../../nucleo/
     .sede__datos { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:var(--espacio-4); margin:var(--espacio-4) 0 0 56px; }
     .sede__datos dt { color:var(--texto-tenue); font-size:.78rem; }
     .sede__datos dd { margin:2px 0 0; font-weight:600; overflow-wrap:anywhere; }
-    .sede__formulario { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:var(--espacio-3) var(--espacio-4); padding-top:var(--espacio-4); }
+    .sede__formulario { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:var(--espacio-3) var(--espacio-4); }
     .sede__formulario .campo { margin:0; }
-    .sede__acciones { display:flex; align-items:center; gap:var(--espacio-2); grid-column:1/-1; }
+    .sede__acciones { justify-content:flex-end; flex-wrap:wrap; }
     .sedes-vacias { display:grid; justify-items:center; gap:var(--espacio-2); padding:var(--espacio-6); color:var(--texto-suave); text-align:center; }
     .sedes-vacias h3,.sedes-vacias p { margin:0; }
     .sedes-vacias app-icono { color:var(--acento); }
     .mensaje { padding:var(--espacio-3) var(--espacio-4); border-radius:var(--radio); }
     .mensaje--bien { color:var(--exito); background:var(--exito-fondo); }
     .mensaje--error { color:var(--peligro); background:var(--peligro-fondo); }
-    @media (max-width:680px) { .sede__datos { grid-template-columns:1fr; margin-left:0; } .sede__formulario { grid-template-columns:1fr; } .sedes-cabecera { min-height:190px; align-items:flex-start; } .sedes-cabecera img { width:78%; opacity:.56; mask-image:linear-gradient(90deg,transparent 0%,#000 40%); } .sede { padding:var(--espacio-4); } }
+    @media (max-width:680px) { .sede__datos { grid-template-columns:1fr; margin-left:0; } .sede__formulario { grid-template-columns:1fr; } .sede__formulario .campo--completo { grid-column:auto; } .sedes-cabecera { min-height:190px; align-items:flex-start; } .sedes-cabecera img { width:78%; opacity:.56; mask-image:linear-gradient(90deg,transparent 0%,#000 40%); } .sede { padding:var(--espacio-4); } }
     @media (prefers-reduced-motion: reduce) { .sedes-cabecera::after, .sedes-cabecera img { animation:none; } }
   `,
 })
@@ -154,9 +166,15 @@ export class SedesConfiguracionComponent implements OnInit {
   }
 
   protected cancelar(): void {
+    if (this.guardando()) return;
     this.editando.set(null);
     this.formulario.set(null);
     this.error.set('');
+  }
+
+  protected sedeEditada(): SedeGestion | null {
+    const id = this.editando();
+    return id ? this.sedes().find((sede) => sede.id === id) ?? null : null;
   }
 
   protected guardar(): void {

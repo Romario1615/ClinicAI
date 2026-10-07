@@ -311,6 +311,11 @@ class Cita(Base, MezclaIdentificador, MezclaAuditoria):
             "profundidad_lista_espera",
             postgresql_where=text("cadena_lista_espera_id IS NOT NULL"),
         ),
+        Index(
+            "ix_cita_serie_recurrente",
+            "serie_recurrente_id",
+            postgresql_where=text("serie_recurrente_id IS NOT NULL"),
+        ),
         CheckConstraint("duracion_minutos > 0", name="duracion_positiva"),
         CheckConstraint(
             "profundidad_lista_espera >= 0 AND profundidad_lista_espera <= 6",

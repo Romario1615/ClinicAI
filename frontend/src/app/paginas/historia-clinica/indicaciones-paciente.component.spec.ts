@@ -60,6 +60,31 @@ describe('IndicacionesPacienteComponent', () => {
     expect(texto).toContain('Sin leer');
   });
 
+  it('presenta la publicación y la anulación en ventanas Liquid Glass y descarta borradores al cancelar', () => {
+    const elemento = fixture.nativeElement as HTMLElement;
+    elemento.querySelector<HTMLButtonElement>('button[aria-haspopup="dialog"]')!.click();
+    fixture.detectChanges();
+    expect(elemento.querySelector('dialog[open]')?.textContent).toContain('Redactar indicaciones');
+    c.texto = 'Borrador clínico que no debe persistir.';
+    c.cerrarEditor();
+    fixture.detectChanges();
+    expect(elemento.querySelector('dialog[open]')).toBeNull();
+    expect(c.texto).toBe('');
+
+    const botonAnular = [...elemento.querySelectorAll<HTMLButtonElement>('button')]
+      .find((boton) => boton.textContent?.trim() === 'Anular');
+    botonAnular!.click();
+    fixture.detectChanges();
+    expect(elemento.querySelector('dialog[open]')?.textContent).toContain('Anular indicación');
+    c.motivoAnulacion = 'Motivo que se cancela';
+    c.cerrarAnulacion();
+    fixture.detectChanges();
+    expect(elemento.querySelector('dialog[open]')).toBeNull();
+    expect(c.motivoAnulacion).toBe('');
+    expect(http.match({ method: 'POST', url: LISTA })).toHaveLength(0);
+    expect(http.match({ method: 'PATCH', url: `${BASE}/historia/indicaciones/i1/anulacion` })).toHaveLength(0);
+  });
+
   it('publica y muestra el enlace; sin aviso lo explica', () => {
     c.publicar();
     expect(c.error()).toContain('mínimo 10');

@@ -20,7 +20,7 @@ import uuid
 from datetime import datetime
 from typing import Annotated, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from app.modulos.agenda.modelos import EstadoCita, OrigenCita
 
@@ -29,6 +29,7 @@ from app.modulos.agenda.modelos import EstadoCita, OrigenCita
 DIAS_MAXIMOS_CONSULTA = 62
 LONGITUD_MAXIMA_MOTIVO = 500
 LONGITUD_MAXIMA_NOTAS = 2000
+FrecuenciaSerieCitas = Literal["SEMANAL", "QUINCENAL", "MENSUAL"]
 
 
 def _exigir_zona(valor: datetime) -> datetime:
@@ -118,6 +119,26 @@ class PeticionReserva(_ConInstantes):
         return limpio or None
 
 
+class PeticionSerieReserva(PeticionReserva):
+    """Reserva una serie corta, siempre en el mismo horario local.
+
+    Las citas se confirman juntas o no se crea ninguna. El máximo protege la
+    agenda de una operación masiva y limita las fechas propuestas a un año.
+    """
+
+    frecuencia: FrecuenciaSerieCitas
+    cantidad: Annotated[int, Field(ge=2, le=53)]
+
+    @model_validator(mode="after")
+    def _limitar_horizonte_de_serie(self) -> PeticionSerieReserva:
+        maximo = 13 if self.frecuencia == "MENSUAL" else 53
+        if self.cantidad > maximo:
+            raise ValueError("La serie no puede superar un año de citas.")
+        if self.procedimiento_plan_id is not None:
+            raise ValueError("Los procedimientos de un plan dental se reservan individualmente.")
+        return self
+
+
 class PeticionCancelacion(_ConInstantes):
     motivo: Annotated[str, Field(min_length=3, max_length=LONGITUD_MAXIMA_MOTIVO)]
     # Politica de cancelacion de la clinica, en horas. Cero significa que el
@@ -165,6 +186,18 @@ class RespuestaCita(BaseModel):
     completada_en: datetime | None
     cancelada_en: datetime | None
     motivo_cancelacion: str | None
+    serie_recurrente_id: uuid.UUID | None
+
+
+class RespuestaSerieCitas(BaseModel):
+    """Resultado confirmado de una reserva recurrente."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    serie_id: uuid.UUID
+    frecuencia: FrecuenciaSerieCitas
+    cantidad: int
+    citas: list[RespuestaCita]
 
 
 class RespuestaCitaDetalle(RespuestaCita):

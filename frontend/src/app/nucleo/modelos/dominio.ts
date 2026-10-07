@@ -115,6 +115,8 @@ export interface Cita {
   readonly completada_en: string | null;
   readonly cancelada_en: string | null;
   readonly motivo_cancelacion: string | null;
+  /** Identificador de grupo en citas recurrentes. */
+  readonly serie_recurrente_id?: string | null;
 }
 
 export interface CitaDetalle extends Cita {

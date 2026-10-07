@@ -23,10 +23,14 @@ import { VentanaFlotanteComponent } from './ventana-flotante.component';
         ceja="Paciente"
         [forma]="forma()"
         [cierraAlPulsarFuera]="cierraFuera()"
+        [cierraConEscape]="cierraEscape()"
         (cerrar)="abierta.set(false)"
       >
         <button type="button" id="primero">Uno</button>
         <button type="button" id="ultimo">Dos</button>
+        <div aria-hidden="true"><button type="button" id="oculto-aria">Oculto semánticamente</button></div>
+        <button type="button" id="oculto-display" style="display: none">Oculto por display</button>
+        <button type="button" id="oculto-visibilidad" style="visibility: hidden">Oculto por visibilidad</button>
       </app-ventana-flotante>
     }
   `,
@@ -35,6 +39,7 @@ class AnfitrionComponent {
     readonly abierta = signal(false);
     readonly forma = signal<'lateral' | 'centrada'>('lateral');
     readonly cierraFuera = signal(true);
+    readonly cierraEscape = signal(true);
 }
 
 describe('VentanaFlotanteComponent', () => {
@@ -121,6 +126,20 @@ describe('VentanaFlotanteComponent', () => {
         fixture.detectChanges();
     });
 
+    it('excluye los controles ocultos del ciclo de teclado', () => {
+        abrir();
+        elemento().querySelector<HTMLButtonElement>('#ultimo')?.focus();
+
+        const evento = new KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true });
+        elemento().querySelector('[role="dialog"]')?.dispatchEvent(evento);
+        fixture.detectChanges();
+
+        expect(evento.defaultPrevented).toBe(true);
+        expect(document.activeElement?.classList.contains('ventana__cerrar')).toBe(true);
+        fixture.componentInstance.abierta.set(false);
+        fixture.detectChanges();
+    });
+
     it('con Shift+Tab en el primero salta al último', () => {
         abrir();
         // El primero es el botón de cerrar; desde él, hacia atrás, se va al final.
@@ -147,6 +166,20 @@ describe('VentanaFlotanteComponent', () => {
         fixture.detectChanges();
 
         expect(fixture.componentInstance.abierta()).toBe(false);
+    });
+
+    it('permite impedir Escape mientras hay una operación en curso', () => {
+        fixture.componentInstance.cierraEscape.set(false);
+        abrir();
+
+        const evento = new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true });
+        elemento().querySelector('[role="dialog"]')?.dispatchEvent(evento);
+        fixture.detectChanges();
+
+        expect(evento.defaultPrevented).toBe(true);
+        expect(fixture.componentInstance.abierta()).toBe(true);
+        fixture.componentInstance.abierta.set(false);
+        fixture.detectChanges();
     });
 
     it('tabular en medio de la ventana no la secuestra', () => {

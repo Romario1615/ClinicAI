@@ -19,13 +19,14 @@ from __future__ import annotations
 
 import uuid
 from dataclasses import replace
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime, time, timedelta
+from zoneinfo import ZoneInfo
 
 import pytest
 import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.modulos.agenda.modelos import CitaHistorial, EstadoCita, OrigenCita
+from app.modulos.agenda.modelos import Cita, CitaHistorial, EstadoCita, OrigenCita
 from app.modulos.agenda.repositorio import RepositorioAgenda
 from app.modulos.agenda.servicios import ServicioAgenda, SolicitudReserva
 from app.modulos.outbox.modelos import Recordatorio
@@ -1004,3 +1005,119 @@ class TestDisponibilidadIntegrada:
             hasta=AHORA + timedelta(days=2),
         )
         assert len(resultado) == 0
+
+
+class TestSeriesRecurrentes:
+    async def test_crea_todas_las_citas_de_la_serie_en_el_mismo_horario_local(
+        self, sesion, servicio_agenda, solicitud, principal_recepcion, sede
+    ) -> None:
+        await _horario_de_la_sede(sesion, sede.id)
+        solicitud_serie = await _solicitud_en_horario_disponible(
+            servicio_agenda, solicitud, principal_recepcion
+        )
+
+        resultado = await servicio_agenda.crear_serie_confirmada(
+            solicitud_serie,
+            principal=principal_recepcion,
+            frecuencia="SEMANAL",
+            cantidad=3,
+        )
+
+        assert resultado.serie_id is not None
+        assert len(resultado.citas) == 3
+        assert len(resultado.auditoria) == 3
+        assert {cita.serie_recurrente_id for cita in resultado.citas} == {resultado.serie_id}
+        assert {cita.origen for cita in resultado.citas} == {OrigenCita.RECURRENTE.value}
+        horarios_locales = {
+            (
+                cita.inicio.astimezone(ZoneInfo("America/Guayaquil")).hour,
+                cita.inicio.astimezone(ZoneInfo("America/Guayaquil")).minute,
+            )
+            for cita in resultado.citas
+        }
+        assert len(horarios_locales) == 1
+        assert [cita.inicio for cita in resultado.citas] == sorted(
+            cita.inicio for cita in resultado.citas
+        )
+
+    async def test_una_ocurrencia_ocupada_impide_guardar_toda_la_serie(
+        self,
+        sesion,
+        servicio_agenda,
+        solicitud,
+        principal_recepcion,
+        segundo_paciente,
+        sede,
+    ) -> None:
+        await _horario_de_la_sede(sesion, sede.id)
+        solicitud_serie = await _solicitud_en_horario_disponible(
+            servicio_agenda, solicitud, principal_recepcion
+        )
+        fecha_ocupada = solicitud_serie.inicio + timedelta(days=7)
+        await servicio_agenda.crear_cita_confirmada(
+            replace(solicitud_serie, paciente_id=segundo_paciente.id, inicio=fecha_ocupada),
+            principal=principal_recepcion,
+        )
+
+        with pytest.raises(TurnoNoDisponible, match="no está disponible"):
+            await servicio_agenda.crear_serie_confirmada(
+                solicitud_serie,
+                principal=principal_recepcion,
+                frecuencia="SEMANAL",
+                cantidad=3,
+            )
+
+        series = (
+            await sesion.execute(
+                sa.select(sa.func.count())
+                .select_from(Cita)
+                .where(Cita.serie_recurrente_id.is_not(None))
+            )
+        ).scalar_one()
+        assert series == 0
+
+    async def test_crear_una_serie_no_exige_permiso_de_lectura_de_agenda(
+        self, sesion, servicio_agenda, solicitud, principal_recepcion, sede
+    ) -> None:
+        await _horario_de_la_sede(sesion, sede.id)
+        solicitud_serie = await _solicitud_en_horario_disponible(
+            servicio_agenda, solicitud, principal_recepcion
+        )
+        principal_creacion = replace(principal_recepcion, permisos=frozenset({"cita.crear"}))
+
+        resultado = await servicio_agenda.crear_serie_confirmada(
+            solicitud_serie,
+            principal=principal_creacion,
+            frecuencia="SEMANAL",
+            cantidad=2,
+        )
+
+        assert len(resultado.citas) == 2
+
+
+async def _solicitud_en_horario_disponible(
+    servicio_agenda: ServicioAgenda,
+    solicitud: SolicitudReserva,
+    principal: Principal,
+) -> SolicitudReserva:
+    """Usa un turno ofrecido por el motor, no una hora asumida por el test."""
+    zona = ZoneInfo("America/Guayaquil")
+    dia = solicitud.inicio.astimezone(zona).date()
+    desde = datetime.combine(dia, time.min, tzinfo=zona)
+    hasta = datetime.combine(dia + timedelta(days=1), time.min, tzinfo=zona)
+    turnos = await servicio_agenda.consultar_disponibilidad(
+        principal=principal,
+        profesional_id=solicitud.profesional_id,
+        servicio_id=solicitud.servicio_id,
+        sede_id=solicitud.sede_id,
+        desde=desde,
+        hasta=hasta,
+        consultorio_id=solicitud.consultorio_id,
+    )
+    assert turnos.turnos, "La fixture de la sede debe ofrecer al menos un turno"
+    objetivo = solicitud.inicio.astimezone(zona)
+    turno = min(
+        turnos.turnos,
+        key=lambda disponible: abs(disponible.inicio.astimezone(zona) - objetivo),
+    )
+    return replace(solicitud, inicio=turno.inicio)

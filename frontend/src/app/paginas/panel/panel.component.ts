@@ -21,12 +21,9 @@
  *    con su variación respecto al periodo anterior, porque un 8 % no dice nada
  *    sin saber si sube o baja.
  *
- * Lo que esta pantalla NO afirma
- * ------------------------------
- * No hay porcentaje de ocupación de la jornada. Calcularlo exige el horario de
- * atención de cada profesional, y hoy ninguna API lo expone. Un porcentaje con
- * un denominador inventado es peor que no tenerlo: se toman decisiones de
- * contratación con él.
+ * La ocupación usa los horarios reales de agenda y resta pausas, feriados y
+ * bloqueos. Solo se calcula con todos los estados y con el ámbito completo de
+ * pacientes para que el numerador y el denominador sean comparables.
  */
 import { Component, computed, inject, signal, ChangeDetectionStrategy } from '@angular/core';
 import { FormsModule } from '@angular/forms';
@@ -35,6 +32,7 @@ import { RouterLink } from '@angular/router';
 import { ColaTrabajoComponent } from '../../compartido/cola-trabajo.component';
 import { IconoComponent, type NombreIcono } from '../../compartido/icono.component';
 import { TarjetasIndicadoresComponent } from '../../compartido/tarjetas-indicadores.component';
+import { VentanaFlotanteComponent } from '../../compartido/ventana-flotante.component';
 import { IndicadoresService, type Indicadores } from '../../nucleo/servicios/indicadores.service';
 import { indicadoresDe } from '../../nucleo/utilidades/indicadores';
 import { FalloApi } from '../../nucleo/servicios/api.service';
@@ -75,6 +73,7 @@ const DIAS_POR_PERIODO: Record<string, number> = { hoy: 1, '7': 7, '30': 30 };
     ColaTrabajoComponent,
     IconoComponent,
     TarjetasIndicadoresComponent,
+    VentanaFlotanteComponent,
   ],
   template: `
     <div class="cabecera-pagina">
@@ -134,9 +133,7 @@ const DIAS_POR_PERIODO: Record<string, number> = { hoy: 1, '7': 7, '30': 30 };
         </div>
         <div class="tarjeta">
           <p class="campo__ayuda carga__nota">
-            Minutos de consulta comprometidos, no número de citas: una primera consulta ocupa
-            el doble que un control. No se muestra porcentaje de ocupación porque haría falta
-            el horario de cada profesional, que todavía no expone ninguna API.
+            Minutos de consulta comprometidos por profesional durante la jornada.
           </p>
           @if (carga().length === 0) {
             <p class="carga__vacio">Sin citas hoy en su ámbito.</p>
@@ -178,44 +175,25 @@ const DIAS_POR_PERIODO: Record<string, number> = { hoy: 1, '7': 7, '30': 30 };
           </div>
         </div>
 
-        <div class="filtros-dashboard" aria-label="Filtros de métricas">
-          <label class="campo campo--linea"><span class="campo__etiqueta">Desde</span>
-            <input class="campo__control" type="date" name="dashboard-desde" [ngModel]="fechaDesde()" (ngModelChange)="cambiarFechaDesde($event)" />
-          </label>
-          <label class="campo campo--linea"><span class="campo__etiqueta">Hasta</span>
-            <input class="campo__control" type="date" name="dashboard-hasta" [ngModel]="fechaHasta()" (ngModelChange)="cambiarFechaHasta($event)" />
-          </label>
-          <label class="campo campo--linea"><span class="campo__etiqueta">Sede</span>
-            <select class="campo__control" name="dashboard-sede" [ngModel]="sedeId()" (ngModelChange)="cambiarSede($event)">
-              <option value="">Todas las sedes</option>
-              @for (sede of sedes(); track sede.id) { <option [value]="sede.id">{{ sede.nombre }}</option> }
-            </select>
-          </label>
-          <label class="campo campo--linea"><span class="campo__etiqueta">Especialidad</span>
-            <select class="campo__control" name="dashboard-especialidad" [ngModel]="especialidadId()" (ngModelChange)="cambiarEspecialidad($event)">
-              <option value="">Todas las especialidades</option>
-              @for (especialidad of especialidades(); track especialidad.id) { <option [value]="especialidad.id">{{ especialidad.nombre }}</option> }
-            </select>
-          </label>
-          <label class="campo campo--linea"><span class="campo__etiqueta">Profesional</span>
-            <select class="campo__control" name="dashboard-profesional" [ngModel]="profesionalId()" (ngModelChange)="profesionalId.set($event); aplicarFiltros()">
-              <option value="">Todos los profesionales</option>
-              @for (profesional of profesionales(); track profesional.id) { <option [value]="profesional.id">{{ profesional.nombre }} {{ profesional.apellido }}</option> }
-            </select>
-          </label>
-          <label class="campo campo--linea"><span class="campo__etiqueta">Servicio</span>
-            <select class="campo__control" name="dashboard-servicio" [ngModel]="servicioId()" (ngModelChange)="servicioId.set($event); aplicarFiltros()">
-              <option value="">Todos los servicios</option>
-              @for (servicio of servicios(); track servicio.id) { <option [value]="servicio.id">{{ servicio.nombre }}</option> }
-            </select>
-          </label>
-          <label class="campo campo--linea"><span class="campo__etiqueta">Estado de cita</span>
-            <select class="campo__control" name="dashboard-estado" [ngModel]="estadoCita()" (ngModelChange)="estadoCita.set($event); aplicarFiltros()">
-              <option value="">Todos los estados</option>
-              @for (estado of estados; track estado.codigo) { <option [value]="estado.codigo">{{ estado.etiqueta }}</option> }
-            </select>
-          </label>
-          <button class="boton boton--pequeno filtros-dashboard__limpiar" type="button" (click)="limpiarFiltros()" [disabled]="!hayFiltros()">Limpiar filtros</button>
+        <div class="filtros-dashboard__barra">
+          <p class="filtros-dashboard__estado" aria-live="polite">
+            @if (cantidadFiltrosActivos() > 0) {
+              {{ cantidadFiltrosActivos() }} filtro(s) activo(s) en este resumen
+            } @else {
+              Métricas de toda la clínica · hoy
+            }
+          </p>
+          <button
+            class="boton boton--secundario filtros-dashboard__abrir"
+            type="button"
+            (click)="abrirFiltros()"
+            aria-haspopup="dialog"
+          >
+            <app-icono nombre="configuracion" [tamano]="17" /> Ajustar filtros
+            @if (cantidadFiltrosActivos() > 0) {
+              <span class="filtros-dashboard__contador">{{ cantidadFiltrosActivos() }}</span>
+            }
+          </button>
         </div>
         @if (errorFechas()) { <p class="aviso-error" role="alert">{{ errorFechas() }}</p> }
 
@@ -224,6 +202,37 @@ const DIAS_POR_PERIODO: Record<string, number> = { hoy: 1, '7': 7, '30': 30 };
         } @else if (resumen()) {
           @let r = resumen()!;
           <div class="rejilla">
+            @if (r.ocupacion_agenda; as ocupacion) {
+            <article class="tarjeta tarjeta-vidrio">
+              <div class="ocupacion-agenda__cabecera">
+                <span class="ocupacion-agenda__icono" aria-hidden="true"><app-icono nombre="metricas" [tamano]="19" /></span>
+                <div>
+                  <p class="cifra__titulo">Ocupación de agenda</p>
+                  <p class="campo__ayuda">Reservas activas sobre minutos disponibles</p>
+                </div>
+              </div>
+              @if (ocupacion.porcentaje === null) {
+                <strong class="ocupacion-agenda__valor">—</strong>
+              } @else {
+                <strong class="ocupacion-agenda__valor numerico">{{ ocupacion.porcentaje }}<span>%</span></strong>
+                <progress
+                  class="ocupacion-agenda__barra"
+                  max="100"
+                  [value]="ocupacion.porcentaje"
+                  [attr.aria-label]="'Ocupación de agenda: ' + ocupacion.porcentaje + ' por ciento'"
+                ></progress>
+              }
+              @if (ocupacion.minutos_disponibles !== null && ocupacion.minutos_ocupados !== null) {
+                <p class="ocupacion-agenda__tiempos numerico">
+                  {{ formatearDuracion(ocupacion.minutos_ocupados) }} reservados
+                  <span aria-hidden="true">·</span>
+                  {{ formatearDuracion(ocupacion.minutos_disponibles) }} disponibles
+                </p>
+              }
+              <p class="campo__ayuda ocupacion-agenda__detalle">{{ ocupacion.detalle }}</p>
+            </article>
+            }
+
             <article class="tarjeta inasistencia">
               <p class="inasistencia__titulo">Inasistencia</p>
               <p class="inasistencia__valor">
@@ -257,6 +266,42 @@ const DIAS_POR_PERIODO: Record<string, number> = { hoy: 1, '7': 7, '30': 30 };
                   <div><dt>Recurrentes</dt><dd class="numerico">{{ r.pacientes_recurrentes }}</dd></div>
                 </dl>
                 <p class="campo__ayuda">Clasificados por su primera atención completada dentro del filtro.</p>
+              }
+            </article>
+
+            <article class="tarjeta tarjeta-vidrio retorno-30d" aria-labelledby="retorno-30d-titulo">
+              <h3 id="retorno-30d-titulo" class="cifra__titulo">Retorno a 30 días</h3>
+              @if (estadoCita()) {
+                <p class="campo__ayuda">Elige “Todos los estados” para calcular cohortes de atenciones completadas.</p>
+              } @else if (r.retorno_30_dias; as retorno) {
+                <strong class="cifra numerico">{{ retorno.porcentaje }}%</strong>
+                <progress
+                  class="ocupacion-agenda__barra"
+                  [value]="retorno.porcentaje"
+                  max="100"
+                  [attr.aria-label]="'Retorno a 30 días: ' + retorno.porcentaje + ' por ciento'"
+                ></progress>
+                <p class="campo__ayuda numerico">
+                  {{ retorno.pacientes_que_regresaron }} de {{ retorno.pacientes_seguimiento_completo }} pacientes regresaron.
+                </p>
+                <p class="campo__ayuda">
+                  Otra atención completada dentro de las 720 horas posteriores a la primera del periodo; solo cohortes con seguimiento completo.
+                </p>
+              } @else {
+                <p class="campo__ayuda">Sin una cohorte con seguimiento completo o el resultado está protegido para grupos pequeños.</p>
+              }
+            </article>
+
+            <article class="tarjeta altas-pacientes" aria-labelledby="altas-pacientes-titulo">
+              <h3 id="altas-pacientes-titulo" class="cifra__titulo">Altas de pacientes</h3>
+              @if (r.pacientes_registrados === null || r.pacientes_registrados === undefined || r.pacientes_registrados_sin_cita === null || r.pacientes_registrados_sin_cita === undefined) {
+                <p class="campo__ayuda">Elige “Todos los estados” para consultar las altas y su registro de citas.</p>
+              } @else {
+                <dl class="pacientes-tipo">
+                  <div><dt>Registrados</dt><dd class="numerico">{{ r.pacientes_registrados }}</dd></div>
+                  <div><dt>Sin cita en los filtros</dt><dd class="numerico">{{ r.pacientes_registrados_sin_cita }}</dd></div>
+                </dl>
+                <p class="campo__ayuda">Alta administrativa dentro del periodo. “Sin cita” significa que no hay un registro de cita dentro de las fechas y filtros actuales.</p>
               }
             </article>
 
@@ -345,6 +390,84 @@ const DIAS_POR_PERIODO: Record<string, number> = { hoy: 1, '7': 7, '30': 30 };
               </article>
             }
           </div>
+
+          <section class="tarjeta tarjeta-vidrio demografia" aria-labelledby="demografia-titulo">
+            <header class="ocupacion-agenda__cabecera">
+              <span class="ocupacion-agenda__icono" aria-hidden="true"><app-icono nombre="pacientes" [tamano]="18" /></span>
+              <div>
+                <h3 id="demografia-titulo" class="cifra__titulo">Perfil de pacientes</h3>
+                <p class="campo__ayuda">Personas con cita en el periodo y filtros actuales</p>
+              </div>
+            </header>
+            @if (!r.demografia) {
+              <p class="campo__ayuda demografia__protegida" role="status">Desglose oculto para proteger grupos de menos de 5 pacientes.</p>
+            } @else {
+              <div class="tendencias demografia__rejilla">
+                <section class="tendencia" aria-labelledby="demografia-edades">
+                  <h4 id="demografia-edades" class="cifra__titulo">Edades</h4>
+                  <ul class="tendencia__lista">
+                    @for (celda of r.demografia.edades; track celda.categoria) {
+                      <li class="demografia__fila">
+                        <span>{{ celda.categoria }}</span>
+                        <span class="tendencia__pista" aria-hidden="true">
+                          @if (celda.pacientes !== null && celda.pacientes > 0) {
+                            <span [style.width.%]="anchoDemografico(r.demografia.edades, celda.pacientes)"></span>
+                          }
+                        </span>
+                        <strong class="numerico">{{ celda.suprimida ? 'Protegido' : celda.pacientes }}</strong>
+                      </li>
+                    }
+                  </ul>
+                </section>
+                <section aria-labelledby="demografia-sexos">
+                  <h4 id="demografia-sexos">Sexo registrado</h4>
+                  <ul class="tendencia__lista">
+                    @for (celda of r.demografia.sexos; track celda.categoria) {
+                      <li class="demografia__fila">
+                        <span>{{ celda.categoria }}</span>
+                        <span class="tendencia__pista" aria-hidden="true">
+                          @if (celda.pacientes !== null && celda.pacientes > 0) {
+                            <span [style.width.%]="anchoDemografico(r.demografia.sexos, celda.pacientes)"></span>
+                          }
+                        </span>
+                        <strong class="numerico">{{ celda.suprimida ? 'Protegido' : celda.pacientes }}</strong>
+                      </li>
+                    }
+                  </ul>
+                </section>
+              </div>
+              <p class="campo__ayuda demografia__nota">Datos administrativos agregados. Las celdas pequeñas y una celda adicional se ocultan para que no se calculen a partir de las otras celdas del mismo desglose.</p>
+            }
+          </section>
+
+          <section class="tarjeta cohortes-registro" aria-labelledby="cohortes-registro-titulo">
+            <h3 id="cohortes-registro-titulo">Cohortes de registro</h3>
+            <p class="campo__ayuda">Altas agrupadas por mes · citas registradas dentro del periodo y los filtros actuales.</p>
+            @if (r.cohortes_registro === null || r.cohortes_registro === undefined) {
+              <p class="campo__ayuda">El desglose se oculta al filtrar por estado porque una cita en otro estado no debe contarse como ausencia.</p>
+            } @else if (r.cohortes_registro.length === 0) {
+              <p class="campo__ayuda">No hay altas de pacientes en este periodo.</p>
+            } @else {
+              <div class="cohortes-registro__desplazamiento" role="region" aria-label="Tabla de altas mensuales" tabindex="0">
+                <table class="cohortes-registro__tabla">
+                  <caption>Pacientes según su mes de registro</caption>
+                  <thead>
+                    <tr><th scope="col">Mes</th><th scope="col">Registrados</th><th scope="col">Con cita</th><th scope="col">Sin cita</th></tr>
+                  </thead>
+                  <tbody>
+                    @for (cohorte of r.cohortes_registro; track cohorte.mes) {
+                      <tr>
+                        <th scope="row"><time [attr.datetime]="cohorte.mes">{{ etiquetaMesCohorte(cohorte.mes) }}</time></th>
+                        <td class="numerico">{{ cohorte.registrados }}</td>
+                        <td class="numerico">{{ cohorte.con_cita_en_filtros }}</td>
+                        <td class="numerico">{{ cohorte.sin_cita_en_filtros }}</td>
+                      </tr>
+                    }
+                  </tbody>
+                </table>
+              </div>
+            }
+          </section>
 
           <div class="tarjeta estados">
             <p class="cifra__titulo">Reparto por estado</p>
@@ -474,6 +597,64 @@ const DIAS_POR_PERIODO: Record<string, number> = { hoy: 1, '7': 7, '30': 30 };
         </div>
         <p class="seguimiento__nota">Estas señales usan reglas transparentes sobre agenda y cobros; no generan diagnósticos ni predicciones clínicas.</p>
       </section>
+    }
+
+    @if (filtrosAbiertos()) {
+      <app-ventana-flotante
+        titulo="Filtros del dashboard"
+        ceja="Métricas operativas"
+        forma="centrada"
+        [anchoMaximo]="760"
+        [cierraAlPulsarFuera]="false"
+        (cerrar)="cerrarFiltros()"
+      >
+        <p class="campo__ayuda filtros-dashboard__ayuda">
+          Los cambios se aplican al seleccionar cada opción. Las fechas usan la zona horaria de la sede elegida.
+        </p>
+        <div class="filtros-dashboard" aria-label="Filtros de métricas">
+          <label class="campo campo--linea"><span class="campo__etiqueta">Desde</span>
+            <input class="campo__control" type="date" name="dashboard-desde" [ngModel]="fechaDesde()" (ngModelChange)="cambiarFechaDesde($event)" />
+          </label>
+          <label class="campo campo--linea"><span class="campo__etiqueta">Hasta</span>
+            <input class="campo__control" type="date" name="dashboard-hasta" [ngModel]="fechaHasta()" (ngModelChange)="cambiarFechaHasta($event)" />
+          </label>
+          <label class="campo campo--linea"><span class="campo__etiqueta">Sede</span>
+            <select class="campo__control" name="dashboard-sede" [ngModel]="sedeId()" (ngModelChange)="cambiarSede($event)">
+              <option value="">Todas las sedes</option>
+              @for (sede of sedes(); track sede.id) { <option [value]="sede.id">{{ sede.nombre }}</option> }
+            </select>
+          </label>
+          <label class="campo campo--linea"><span class="campo__etiqueta">Especialidad</span>
+            <select class="campo__control" name="dashboard-especialidad" [ngModel]="especialidadId()" (ngModelChange)="cambiarEspecialidad($event)">
+              <option value="">Todas las especialidades</option>
+              @for (especialidad of especialidades(); track especialidad.id) { <option [value]="especialidad.id">{{ especialidad.nombre }}</option> }
+            </select>
+          </label>
+          <label class="campo campo--linea"><span class="campo__etiqueta">Profesional</span>
+            <select class="campo__control" name="dashboard-profesional" [ngModel]="profesionalId()" (ngModelChange)="profesionalId.set($event); aplicarFiltros()">
+              <option value="">Todos los profesionales</option>
+              @for (profesional of profesionales(); track profesional.id) { <option [value]="profesional.id">{{ profesional.nombre }} {{ profesional.apellido }}</option> }
+            </select>
+          </label>
+          <label class="campo campo--linea"><span class="campo__etiqueta">Servicio</span>
+            <select class="campo__control" name="dashboard-servicio" [ngModel]="servicioId()" (ngModelChange)="servicioId.set($event); aplicarFiltros()">
+              <option value="">Todos los servicios</option>
+              @for (servicio of servicios(); track servicio.id) { <option [value]="servicio.id">{{ servicio.nombre }}</option> }
+            </select>
+          </label>
+          <label class="campo campo--linea"><span class="campo__etiqueta">Estado de cita</span>
+            <select class="campo__control" name="dashboard-estado" [ngModel]="estadoCita()" (ngModelChange)="estadoCita.set($event); aplicarFiltros()">
+              <option value="">Todos los estados</option>
+              @for (estado of estados; track estado.codigo) { <option [value]="estado.codigo">{{ estado.etiqueta }}</option> }
+            </select>
+          </label>
+        </div>
+        @if (errorFechas()) { <p class="aviso-error" role="alert">{{ errorFechas() }}</p> }
+        <div pie>
+          <button class="boton" type="button" (click)="limpiarFiltros()" [disabled]="!hayFiltros()">Restablecer</button>
+          <button class="boton boton--principal" type="button" (click)="cerrarFiltros()">Listo</button>
+        </div>
+      </app-ventana-flotante>
     }
   `,
   changeDetection: ChangeDetectionStrategy.Eager,
@@ -622,6 +803,12 @@ const DIAS_POR_PERIODO: Record<string, number> = { hoy: 1, '7': 7, '30': 30 };
     .analisis-ia p:last-child, .analisis-ia ul:last-child { margin-bottom:0; }
     @media (max-width:700px) { .seguimiento__rejilla { grid-template-columns:1fr; } }
     @media (max-width:540px) { .seguimiento__vacio { grid-template-columns:100px minmax(0,1fr); gap:var(--espacio-2); padding:var(--espacio-2); } .seguimiento__vacio h3 { font-size:.94rem; } .seguimiento__vacio p:last-child { font-size:.84rem; } }
+    @media (max-width:600px) {
+      .seguimiento .bloque__cabecera { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:var(--espacio-2); }
+      .seguimiento .bloque__cabecera h2, .seguimiento__metodo { grid-column:1/-1; }
+      .seguimiento .bloque__linea { display:none; }
+      .seguimiento .bloque__cabecera .boton { width:100%; min-width:0; min-height:var(--toque-minimo); padding-inline:var(--espacio-2); white-space:normal; text-align:center; }
+    }
     @media (prefers-reduced-motion: reduce) { .seguimiento__vacio, .seguimiento__vacio img, .seguimiento .bloque__cabecera h2 app-icono { animation:none; } }
 
     .bloque__cabecera {
@@ -688,20 +875,69 @@ const DIAS_POR_PERIODO: Record<string, number> = { hoy: 1, '7': 7, '30': 30 };
       align-items: end;
       gap: var(--espacio-3);
       padding: var(--espacio-4);
-      margin: 0 0 var(--espacio-4);
       border: 1px solid var(--borde);
       border-radius: var(--radio);
-      background: var(--superficie-elevada);
+      background: rgb(255 255 255 / 58%);
+      -webkit-backdrop-filter: blur(14px);
+      backdrop-filter: blur(14px);
     }
+
+    .demografia { margin-top: var(--espacio-3); }
+    .demografia__rejilla { margin-top: var(--espacio-3); }
+    .demografia__fila { grid-template-columns: minmax(95px, 1fr) minmax(46px, 1.1fr) minmax(76px, auto); }
 
     .filtros-dashboard .campo { min-width: 0; margin: 0; }
     .filtros-dashboard .campo__control { min-height: 42px; }
-    .filtros-dashboard__limpiar { justify-self: start; min-height: 42px; }
+    .filtros-dashboard__barra {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: var(--espacio-3);
+      min-height: 48px;
+      padding: var(--espacio-2) var(--espacio-3);
+      margin-bottom: var(--espacio-4);
+      border: 1px solid rgb(255 255 255 / 72%);
+      border-radius: var(--radio);
+      background: linear-gradient(110deg, rgb(255 255 255 / 78%), rgb(238 248 247 / 68%));
+      box-shadow: 0 8px 24px rgb(26 53 61 / 6%), inset 0 1px rgb(255 255 255 / 88%);
+      -webkit-backdrop-filter: blur(18px) saturate(135%);
+      backdrop-filter: blur(18px) saturate(135%);
+    }
+    .filtros-dashboard__estado { margin: 0; color: var(--texto-suave); font-size: .88rem; }
+    .filtros-dashboard__abrir { min-height: 40px; flex: 0 0 auto; }
+    .filtros-dashboard__contador {
+      display: inline-grid;
+      min-width: 22px;
+      min-height: 22px;
+      padding: 0 6px;
+      place-items: center;
+      border-radius: 999px;
+      background: var(--acento);
+      color: var(--acento-texto);
+      font-size: .75rem;
+      font-weight: 750;
+      line-height: 1;
+    }
+    .filtros-dashboard__ayuda { margin: 0 0 var(--espacio-3); }
+
+    @media (max-width: 520px) {
+      .filtros-dashboard__barra { align-items: flex-start; flex-direction: column; }
+      .filtros-dashboard__abrir { width: 100%; justify-content: center; }
+      .filtros-dashboard { grid-template-columns: minmax(0, 1fr); }
+    }
 
     .pacientes-tipo { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--espacio-3); margin: 0; }
     .pacientes-tipo div { display: grid; gap: var(--espacio-1); }
     .pacientes-tipo dt { color: var(--texto-suave); font-size: .85rem; }
     .pacientes-tipo dd { margin: 0; font-size: 1.6rem; font-weight: 750; }
+    .cohortes-registro { margin-top: var(--espacio-3); min-width: 0; }
+    .cohortes-registro__desplazamiento { max-height: 300px; overflow: auto; }
+    .cohortes-registro__tabla { width: 100%; border-collapse: collapse; }
+    .cohortes-registro__tabla caption { color: var(--texto-suave); text-align: left; }
+    .cohortes-registro__tabla th, .cohortes-registro__tabla td { padding: var(--espacio-2); border-top: 1px solid var(--borde); }
+    .cohortes-registro__tabla thead th { position: sticky; top: 0; background: var(--superficie); text-align: right; }
+    .cohortes-registro__tabla th:first-child { text-align: left; }
+    .cohortes-registro__tabla tbody td { text-align: right; font-variant-numeric: tabular-nums; }
 
     /* --- Carga por profesional --- */
     .carga {
@@ -778,6 +1014,31 @@ const DIAS_POR_PERIODO: Record<string, number> = { hoy: 1, '7': 7, '30': 30 };
       color: var(--aviso);
       font-weight: 650;
     }
+
+    .tarjeta-vidrio {
+      position: relative;
+      overflow: hidden;
+      border: 1px solid rgb(255 255 255 / 76%);
+      background:
+        radial-gradient(ellipse at 92% 6%, rgb(104 214 203 / 22%), transparent 48%),
+        linear-gradient(145deg, rgb(255 255 255 / 84%), rgb(232 247 244 / 72%));
+      box-shadow: 0 12px 32px rgb(20 61 66 / 9%), inset 0 1px rgb(255 255 255 / 94%);
+      -webkit-backdrop-filter: blur(22px) saturate(145%);
+      backdrop-filter: blur(22px) saturate(145%);
+    }
+    .ocupacion-agenda__cabecera { display:flex; align-items:center; gap:var(--espacio-2); }
+    .ocupacion-agenda__cabecera .cifra__titulo { margin-bottom:2px; }
+    .ocupacion-agenda__cabecera .campo__ayuda { margin:0; }
+    .ocupacion-agenda__icono { display:grid; flex:0 0 38px; width:38px; height:38px; place-items:center; border:1px solid rgb(255 255 255 / 82%); border-radius:13px; color:var(--acento-fuerte); background:rgb(255 255 255 / 62%); box-shadow:inset 0 1px rgb(255 255 255 / 90%); }
+    .ocupacion-agenda__valor { display:block; margin:var(--espacio-3) 0 var(--espacio-2); color:var(--texto); font-size:2.65rem; font-weight:760; letter-spacing:-.055em; line-height:1; }
+    .ocupacion-agenda__valor span { margin-left:2px; color:var(--acento-fuerte); font-size:1.35rem; }
+    .ocupacion-agenda__barra { display:block; width:100%; height:9px; overflow:hidden; appearance:none; border:0; border-radius:99px; background:rgb(32 79 82 / 10%); }
+    .ocupacion-agenda__barra::-webkit-progress-bar { border-radius:99px; background:rgb(32 79 82 / 10%); }
+    .ocupacion-agenda__barra::-webkit-progress-value { border-radius:99px; background:linear-gradient(90deg,#52bcae,#247c79); transition:width .5s ease; }
+    .ocupacion-agenda__barra::-moz-progress-bar { border-radius:99px; background:linear-gradient(90deg,#52bcae,#247c79); }
+    .ocupacion-agenda__tiempos { margin:var(--espacio-2) 0 0; font-size:.83rem; font-weight:650; }
+    .ocupacion-agenda__tiempos span { margin:0 4px; color:var(--texto-tenue); }
+    .ocupacion-agenda__detalle { margin:var(--espacio-2) 0 0; }
 
     /* --- Cifras --- */
     .cifra {
@@ -946,9 +1207,16 @@ export class PanelComponent {
   protected readonly especialidades = signal<readonly Especialidad[]>([]);
   protected readonly servicios = signal<readonly Servicio[]>([]);
   protected readonly profesionales = signal<readonly Profesional[]>([]);
-  protected readonly hayFiltros = computed(() => Boolean(
-    this.periodo() !== 'hoy' || this.sedeId() || this.especialidadId() || this.profesionalId() || this.servicioId() || this.estadoCita(),
-  ));
+  protected readonly filtrosAbiertos = signal(false);
+  protected readonly cantidadFiltrosActivos = computed(() => [
+    this.periodo() !== 'hoy',
+    Boolean(this.sedeId()),
+    Boolean(this.especialidadId()),
+    Boolean(this.profesionalId()),
+    Boolean(this.servicioId()),
+    Boolean(this.estadoCita()),
+  ].filter(Boolean).length);
+  protected readonly hayFiltros = computed(() => this.cantidadFiltrosActivos() > 0);
   protected readonly errorFechas = computed(() => {
     const inicio = this.fechaDesde();
     const fin = this.fechaHasta();
@@ -1018,6 +1286,7 @@ export class PanelComponent {
     if (this.estadoCita()) {
       return { valor: '—', delta: null as string | null, sube: false, lectura: 'La tasa no se calcula mientras se filtra por un único estado.' };
     }
+
     if (!actual || actual.total_citas === 0) {
       return { valor: '—', delta: null as string | null, sube: false, lectura: 'Sin citas en el periodo.' };
     }
@@ -1048,6 +1317,10 @@ export class PanelComponent {
     return Math.max(1, ...items.map((item) => item.total));
   }
 
+  protected formatearDuracion(minutos: number): string {
+    return duracionLegible(minutos);
+  }
+
   protected etiquetaDia(dia: number): string {
     return ['', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'][dia] ?? '—';
   }
@@ -1063,6 +1336,27 @@ export class PanelComponent {
       day: 'numeric',
       timeZone: 'UTC',
     }).format(mediodiaUtc);
+  }
+
+  protected etiquetaMesCohorte(mes: string): string {
+    const inicioUtc = new Date(`${mes}T12:00:00Z`);
+    if (Number.isNaN(inicioUtc.getTime())) {
+      return mes;
+    }
+    return new Intl.DateTimeFormat('es-EC', {
+      month: 'long',
+      year: 'numeric',
+      timeZone: 'UTC',
+    }).format(inicioUtc);
+  }
+
+  protected anchoDemografico(
+    celdas: readonly { pacientes: number | null }[],
+    cantidad: number | null,
+  ): number {
+    if (cantidad === null || cantidad <= 0) return 0;
+    const mayor = Math.max(0, ...celdas.map((celda) => celda.pacientes ?? 0));
+    return mayor ? Math.round((cantidad / mayor) * 100) : 0;
   }
 
   protected etiquetaHora(hora: number): string {
@@ -1173,6 +1467,14 @@ export class PanelComponent {
     this.cargar();
   }
 
+  protected abrirFiltros(): void {
+    this.filtrosAbiertos.set(true);
+  }
+
+  protected cerrarFiltros(): void {
+    this.filtrosAbiertos.set(false);
+  }
+
   protected cambiarPeriodo(clave: string): void {
     this.periodo.set(clave);
     const fin = hoyEnZona(this.zona());
@@ -1219,6 +1521,7 @@ export class PanelComponent {
     this.cargarServicios();
     this.cargarProfesionales();
     this.aplicarFiltros();
+    this.cerrarFiltros();
   }
 
   protected aplicarFiltros(): void {

@@ -1,6 +1,7 @@
 import { Component, OnInit, inject, signal, ChangeDetectionStrategy } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 
+import { VentanaFlotanteComponent } from '../../compartido/ventana-flotante.component';
 import {
   ApiService,
   FalloApi,
@@ -18,7 +19,7 @@ import {
 @Component({
   selector: 'app-plataforma',
   standalone: true,
-  imports: [FormsModule],
+  imports: [FormsModule, VentanaFlotanteComponent],
   template: `
     <header class="encabezado">
       <div><p class="sobretitulo">Administración global</p><h1>Clínicas</h1>
@@ -31,7 +32,8 @@ import {
 
     <section class="tarjeta">
       <div class="seccion-titulo"><div><h2>Organizaciones registradas</h2>
-        <p>{{ clinicas().length }} clínicas en la plataforma</p></div></div>
+        <p>{{ clinicas().length }} clínicas en la plataforma</p></div>
+        <button class="boton boton--principal" type="button" (click)="abrirNuevaClinica()">Registrar clínica</button></div>
       @if (cargando()) { <p role="status">Cargando clínicas…</p> }
       @if (!cargando() && clinicas().length === 0) { <p class="vacio">Todavía no se han registrado clínicas.</p> }
       @for (clinica of clinicas(); track clinica.id) {
@@ -50,8 +52,8 @@ import {
     @if (clinicaSedesId()) {
       <section class="tarjeta">
         <div class="seccion-titulo"><div><h2>Sedes de {{ nombreClinicaSedes() }}</h2>
-          <p>Agrega sucursales. Si no indicas otra zona horaria, heredarán la de la clínica.</p></div>
-          <button class="boton" type="button" (click)="cargarSedes()" [disabled]="cargandoSedes()">Actualizar sedes</button></div>
+          <p>Administra las sucursales que pertenecen a esta clínica.</p></div>
+          <div class="acciones-clinica"><button class="boton boton--principal" type="button" (click)="abrirNuevaSede()">Agregar sucursal</button><button class="boton" type="button" (click)="cargarSedes()" [disabled]="cargandoSedes()">Actualizar sedes</button></div></div>
         @if (errorSedes()) { <p class="mensaje mensaje--error" role="alert">{{ errorSedes() }}</p> }
         @if (avisoSede()) { <p class="mensaje mensaje--bien" role="status">{{ avisoSede() }}</p> }
         @if (cargandoSedes()) { <p role="status">Cargando sedes…</p> }
@@ -61,8 +63,14 @@ import {
             @if (sede.telefono) { <span>{{ sede.telefono }}</span> }
           </div><span class="etiqueta">{{ sede.activa ? 'Activa' : 'Inactiva' }}</span></article>
         }
-        <form (ngSubmit)="crearSede()">
-          <h3>Agregar sucursal</h3>
+      </section>
+    }
+
+    @if (nuevaSedeAbierta()) {
+      <app-ventana-flotante ceja="{{ nombreClinicaSedes() }}" titulo="Agregar sede" forma="centrada" [anchoMaximo]="600" [cierraAlPulsarFuera]="false" (cerrar)="cerrarNuevaSede()">
+        @if (errorSedes()) { <p class="mensaje mensaje--error" role="alert">{{ errorSedes() }}</p> }
+        <p>Si no indicas otra zona horaria, la sede heredará la de la clínica.</p>
+        <form id="formulario-sede-plataforma" (ngSubmit)="crearSede()">
           <div class="campos">
             <label>Nombre de la sede<input name="nombreSede" [(ngModel)]="formSede.nombre" required maxlength="200" /></label>
             <label>Dirección<input name="direccionSede" [(ngModel)]="formSede.direccion" maxlength="500" /></label>
@@ -74,9 +82,9 @@ import {
               <option value="Europe/Madrid">España · Madrid</option>
             </select></label>
           </div>
-          <button class="boton boton--principal" [disabled]="ocupadoSede() || !formSede.nombre.trim()">{{ ocupadoSede() ? 'Guardando…' : 'Crear sede' }}</button>
         </form>
-      </section>
+        <div pie class="acciones"><button class="boton" type="button" (click)="cerrarNuevaSede()" [disabled]="ocupadoSede()">Cancelar</button><button class="boton boton--principal" type="submit" form="formulario-sede-plataforma" [disabled]="ocupadoSede() || !formSede.nombre.trim()">{{ ocupadoSede() ? 'Guardando…' : 'Crear sede' }}</button></div>
+      </app-ventana-flotante>
     }
 
     <section class="tarjeta">
@@ -102,9 +110,9 @@ import {
     </section>
 
     @if (usuarioEditando(); as usuario) {
-      <section class="tarjeta">
-        <div class="seccion-titulo"><div><h2>Acceso de {{ usuario.nombre }} {{ usuario.apellido }}</h2>
-          <p>Guardar cambios revoca sesiones abiertas, reemplaza los roles y actualiza las sedes habilitadas.</p></div></div>
+      <app-ventana-flotante ceja="Acceso a la clínica y módulos" [titulo]="usuario.nombre + ' ' + usuario.apellido" forma="centrada" [anchoMaximo]="720" [altoCompleto]="true" [cierraAlPulsarFuera]="false" (cerrar)="cerrarEdicionAsignacion()">
+        <p>Guardar cambios revoca sesiones abiertas, reemplaza los roles y actualiza las sedes habilitadas.</p>
+        @if (errorUsuarios()) { <p class="mensaje mensaje--error" role="alert">{{ errorUsuarios() }}</p> }
         <label>Clínica<select name="clinicaDestino" [(ngModel)]="clinicaDestinoId" (ngModelChange)="cambioClinicaDestino($event)">
           @for (clinica of clinicas(); track clinica.id) { @if (clinica.activa) { <option [value]="clinica.id">{{ clinica.nombre }}</option> } }
         </select></label>
@@ -132,15 +140,20 @@ import {
           </div>
           @if (!cargandoSedesDestino() && sedesDestinoSeleccionadas().size === 0) { <p class="mensaje mensaje--error" role="alert">Selecciona al menos una sede para guardar el acceso.</p> }
         }
-        <div class="acciones"><button class="boton boton--principal" type="button" (click)="guardarAsignacion(usuario)" [disabled]="ocupadoUsuario() || rolesDestinoSeleccionados().size === 0 || cargandoSedesDestino() || (!todasLasSedesDestino() && sedesDestinoSeleccionadas().size === 0)">Guardar accesos</button>
-          <button class="boton" type="button" (click)="usuarioEditando.set(null)">Cancelar</button></div>
-      </section>
+        <div pie class="acciones"><button class="boton" type="button" (click)="cerrarEdicionAsignacion()" [disabled]="ocupadoUsuario()">Cancelar</button><button class="boton boton--principal" type="button" (click)="guardarAsignacion(usuario)" [disabled]="ocupadoUsuario() || rolesDestinoSeleccionados().size === 0 || cargandoSedesDestino() || (!todasLasSedesDestino() && sedesDestinoSeleccionadas().size === 0)">Guardar accesos</button></div>
+      </app-ventana-flotante>
     }
 
     <section class="tarjeta">
       <div class="seccion-titulo"><div><h2>Dar acceso a una persona</h2>
-        <p>La cuenta se vincula a una clínica, recibe los módulos seleccionados y deberá cambiar su contraseña temporal.</p></div></div>
-      <form (ngSubmit)="crearUsuario()">
+        <p>La cuenta se vincula a una clínica, recibe los módulos seleccionados y deberá cambiar su contraseña temporal.</p></div>
+        <button class="boton boton--principal" type="button" (click)="abrirNuevoUsuario()" [disabled]="!tieneClinicasActivas()">Dar acceso a una persona</button></div>
+    </section>
+
+    @if (nuevoUsuarioAbierto()) {
+      <app-ventana-flotante ceja="Roles, módulos y sedes" titulo="Dar acceso a una persona" forma="centrada" [anchoMaximo]="720" [altoCompleto]="true" [cierraAlPulsarFuera]="false" (cerrar)="cerrarNuevoUsuario()">
+        @if (errorUsuarios()) { <p class="mensaje mensaje--error" role="alert">{{ errorUsuarios() }}</p> }
+        <form id="formulario-nuevo-usuario-plataforma" (ngSubmit)="crearUsuario()">
         <div class="campos">
           <label>Clínica<select name="clinicaNuevaUsuario" [(ngModel)]="clinicaNuevaUsuarioId" (ngModelChange)="cambioClinicaNuevaUsuario($event)" required>
             <option value="">Seleccione una clínica</option>@for (clinica of clinicas(); track clinica.id) { @if (clinica.activa) { <option [value]="clinica.id">{{ clinica.nombre }}</option> } }
@@ -176,14 +189,15 @@ import {
             @if (!cargandoSedesNuevoUsuario() && sedesNuevoUsuarioSeleccionadas().size === 0) { <p class="mensaje mensaje--error" role="alert">Selecciona al menos una sede para crear la cuenta.</p> }
           }
         }
-        <button class="boton boton--principal" [disabled]="ocupadoUsuario() || !clinicaNuevaUsuarioId || rolesNuevoUsuarioSeleccionados().size === 0 || (!todasLasSedesNuevoUsuario() && sedesNuevoUsuarioSeleccionadas().size === 0)">Crear cuenta y asignar módulos</button>
-      </form>
-    </section>
+        </form>
+        <div pie class="acciones"><button class="boton" type="button" (click)="cerrarNuevoUsuario()" [disabled]="ocupadoUsuario()">Cancelar</button><button class="boton boton--principal" type="submit" form="formulario-nuevo-usuario-plataforma" [disabled]="ocupadoUsuario() || !clinicaNuevaUsuarioId || rolesNuevoUsuarioSeleccionados().size === 0 || (!todasLasSedesNuevoUsuario() && sedesNuevoUsuarioSeleccionadas().size === 0)">{{ ocupadoUsuario() ? 'Guardando…' : 'Crear cuenta y asignar módulos' }}</button></div>
+      </app-ventana-flotante>
+    }
 
-    <section class="tarjeta">
-      <div class="seccion-titulo"><div><h2>Registrar una clínica</h2>
-        <p>Se crea en una sola operación junto con la sede principal y una cuenta de administración.</p></div></div>
-      <form (ngSubmit)="crear()">
+    @if (nuevaClinicaAbierta()) {
+      <app-ventana-flotante ceja="Administración global" titulo="Registrar clínica" forma="centrada" [anchoMaximo]="760" [altoCompleto]="true" [cierraAlPulsarFuera]="false" (cerrar)="cerrarNuevaClinica()">
+        @if (error()) { <p class="mensaje mensaje--error" role="alert">{{ error() }}</p> }
+        <form id="formulario-clinica-plataforma" (ngSubmit)="crear()">
         <h3>Datos de la clínica</h3>
         <div class="campos">
           <label>Nombre de la clínica<input name="nombre" [(ngModel)]="form.nombre" required maxlength="200" /></label>
@@ -211,9 +225,10 @@ import {
           <label>Correo de acceso<input name="correoAdmin" [(ngModel)]="form.administrador_correo" type="email" required maxlength="200" /></label>
           <label>Contraseña temporal<input name="contrasena" [(ngModel)]="form.contrasena_inicial" type="password" required minlength="12" maxlength="128" autocomplete="new-password" /></label>
         </div>
-        <button class="boton boton--principal" [disabled]="ocupado()">{{ ocupado() ? 'Registrando…' : 'Crear clínica y administrador' }}</button>
-      </form>
-    </section>
+        </form>
+        <div pie class="acciones"><button class="boton" type="button" (click)="cerrarNuevaClinica()" [disabled]="ocupado()">Cancelar</button><button class="boton boton--principal" type="submit" form="formulario-clinica-plataforma" [disabled]="ocupado()">{{ ocupado() ? 'Registrando…' : 'Crear clínica y administrador' }}</button></div>
+      </app-ventana-flotante>
+    }
   `,
   changeDetection: ChangeDetectionStrategy.Eager,
   styles: [`
@@ -246,12 +261,14 @@ export class PlataformaComponent implements OnInit {
   protected readonly ocupado = signal(false);
   protected readonly error = signal('');
   protected readonly aviso = signal('');
+  protected readonly nuevaClinicaAbierta = signal(false);
   protected readonly clinicaSedesId = signal('');
   protected readonly sedes = signal<readonly SedePlataforma[]>([]);
   protected readonly cargandoSedes = signal(false);
   protected readonly ocupadoSede = signal(false);
   protected readonly errorSedes = signal('');
   protected readonly avisoSede = signal('');
+  protected readonly nuevaSedeAbierta = signal(false);
   protected formSede: AltaSedePlataforma = this.formularioSedeVacio();
   protected form: AltaClinicaPlataforma = this.formularioVacio();
   protected readonly usuarios = signal<readonly UsuarioPlataforma[]>([]);
@@ -260,6 +277,7 @@ export class PlataformaComponent implements OnInit {
   protected readonly errorUsuarios = signal('');
   protected readonly avisoUsuario = signal('');
   protected readonly usuarioEditando = signal<UsuarioPlataforma | null>(null);
+  protected readonly nuevoUsuarioAbierto = signal(false);
   protected readonly rolesDestino = signal<readonly RolPlataforma[]>([]);
   protected readonly profesionalesDestino = signal<readonly ProfesionalPlataforma[]>([]);
   protected readonly rolesDestinoSeleccionados = signal<ReadonlySet<string>>(new Set());
@@ -281,6 +299,64 @@ export class PlataformaComponent implements OnInit {
   protected nuevoUsuario = { nombre: '', apellido: '', correo: '', contrasena_inicial: '' };
 
   ngOnInit(): void { this.cargar(); }
+
+  protected abrirNuevaClinica(): void {
+    this.error.set(''); this.aviso.set('');
+    this.form = this.formularioVacio();
+    this.nuevaClinicaAbierta.set(true);
+  }
+
+  protected cerrarNuevaClinica(): void {
+    if (this.ocupado()) return;
+    this.nuevaClinicaAbierta.set(false);
+    this.form = this.formularioVacio();
+    this.error.set('');
+  }
+
+  protected abrirNuevaSede(): void {
+    if (!this.clinicaSedesId()) return;
+    this.errorSedes.set(''); this.avisoSede.set('');
+    this.formSede = this.formularioSedeVacio();
+    this.nuevaSedeAbierta.set(true);
+  }
+
+  protected cerrarNuevaSede(): void {
+    if (this.ocupadoSede()) return;
+    this.nuevaSedeAbierta.set(false);
+    this.formSede = this.formularioSedeVacio();
+    this.errorSedes.set('');
+  }
+
+  protected abrirNuevoUsuario(): void {
+    if (!this.tieneClinicasActivas()) return;
+    this.errorUsuarios.set(''); this.avisoUsuario.set('');
+    this.nuevoUsuario = { nombre: '', apellido: '', correo: '', contrasena_inicial: '' };
+    this.clinicaNuevaUsuarioId = ''; this.profesionalNuevoId = '';
+    this.rolesNuevoUsuario.set([]); this.profesionalesNuevoUsuario.set([]); this.sedesNuevoUsuario.set([]);
+    this.rolesNuevoUsuarioSeleccionados.set(new Set()); this.sedesNuevoUsuarioSeleccionadas.set(new Set());
+    this.todasLasSedesNuevoUsuario.set(true);
+    this.nuevoUsuarioAbierto.set(true);
+  }
+
+  protected cerrarNuevoUsuario(): void {
+    if (this.ocupadoUsuario()) return;
+    this.nuevoUsuarioAbierto.set(false);
+    this.nuevoUsuario = { nombre: '', apellido: '', correo: '', contrasena_inicial: '' };
+    this.clinicaNuevaUsuarioId = ''; this.profesionalNuevoId = '';
+    this.rolesNuevoUsuario.set([]); this.profesionalesNuevoUsuario.set([]); this.sedesNuevoUsuario.set([]);
+    this.rolesNuevoUsuarioSeleccionados.set(new Set()); this.sedesNuevoUsuarioSeleccionadas.set(new Set());
+    this.errorUsuarios.set('');
+  }
+
+  protected cerrarEdicionAsignacion(): void {
+    if (this.ocupadoUsuario()) return;
+    this.usuarioEditando.set(null);
+    this.errorUsuarios.set('');
+  }
+
+  protected tieneClinicasActivas(): boolean {
+    return this.clinicas().some((clinica) => clinica.activa);
+  }
 
   protected cargar(): void {
     this.cargando.set(true);
@@ -339,6 +415,7 @@ export class PlataformaComponent implements OnInit {
           ? { ...clinica, cantidad_sedes: clinica.cantidad_sedes + 1 }
           : clinica));
         this.formSede = this.formularioSedeVacio();
+        this.nuevaSedeAbierta.set(false);
         this.avisoSede.set(`Sede ${sede.nombre} creada.`); this.ocupadoSede.set(false);
       },
       error: (fallo: FalloApi) => { this.errorSedes.set(fallo.message); this.ocupadoSede.set(false); },
@@ -497,6 +574,7 @@ export class PlataformaComponent implements OnInit {
           ? { ...clinica, cantidad_usuarios: clinica.cantidad_usuarios + 1 }
           : clinica));
         this.nuevoUsuario = { nombre: '', apellido: '', correo: '', contrasena_inicial: '' };
+        this.nuevoUsuarioAbierto.set(false); this.clinicaNuevaUsuarioId = ''; this.profesionalNuevoId = '';
         this.rolesNuevoUsuarioSeleccionados.set(new Set()); this.avisoUsuario.set(`Cuenta creada y vinculada a ${creado.clinica_nombre}.`);
         this.ocupadoUsuario.set(false);
       },
@@ -523,6 +601,7 @@ export class PlataformaComponent implements OnInit {
       next: (clinica) => {
         this.clinicas.update((actuales) => [...actuales, clinica].sort((a, b) => a.nombre.localeCompare(b.nombre)));
         this.form = this.formularioVacio();
+        this.nuevaClinicaAbierta.set(false);
         this.aviso.set(`Clínica ${clinica.nombre} creada con sede y administrador inicial.`);
         this.ocupado.set(false);
       },

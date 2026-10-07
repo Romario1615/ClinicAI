@@ -49,6 +49,10 @@ FROM python:3.11-slim-bookworm AS ejecucion
 # falta: asyncpg habla el protocolo directamente.
 RUN apt-get update \
     && apt-get install --no-install-recommends -y tzdata curl \
+    # El runtime usa solo el virtualenv de la aplicacion; setuptools del
+    # Python global no se necesita y arrastraba copias vulnerables vendorizadas.
+    && rm -rf /usr/local/lib/python3.11/site-packages/setuptools \
+              /usr/local/lib/python3.11/site-packages/setuptools-*.dist-info \
     && rm -rf /var/lib/apt/lists/*
 
 # Usuario sin privilegios. Un proceso como root dentro del contenedor

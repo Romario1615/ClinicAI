@@ -21,6 +21,7 @@
   grid-area: cabecera;
   display: flex;
   align-items: center;
+  min-width: 0;
   gap: var(--espacio-4);
   margin: var(--hueco-armazon) var(--hueco-armazon) 0 var(--espacio-4);
   padding: var(--espacio-2) var(--espacio-3) var(--espacio-2) var(--espacio-5);
@@ -104,6 +105,7 @@
 
 @media (prefers-reduced-motion: reduce) {
   .notificaciones__vacio img { animation:none; }
+  .notificaciones, .navegacion--abierta, .navegacion__fondo { animation:none; }
 }
 
 .cabecera__avatar {
@@ -261,6 +263,7 @@
 .navegacion__enlace:hover {
   background-color: rgb(255 255 255 / 7%);
   color: #fff;
+  transform: translateX(2px);
 }
 
 /* La sección activa es una gota de vidrio claro dentro de la barra oscura. */
@@ -365,7 +368,7 @@
     grid-template-areas:
       'cabecera'
       'contenido';
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .cabecera {
@@ -386,7 +389,12 @@
 
   .navegacion--abierta {
     display: flex;
-    position: static;
+    position: fixed;
+    z-index: 22;
+    top: calc(72px + env(safe-area-inset-top));
+    bottom: max(1rem, env(safe-area-inset-bottom));
+    left: 1rem;
+    width: min(350px, calc(100vw - 2rem));
     height: auto;
     margin: var(--espacio-2);
     grid-area: contenido;
@@ -401,15 +409,43 @@
   }
 }
 
+@keyframes desplegar-menu {
+  from { opacity: 0; transform: translateX(-8px) scale(.99); }
+}
+
+@keyframes aparecer-fondo {
+  from { opacity: 0; }
+}
+
 @media (max-width: 540px) {
   .cabecera {
     flex-wrap: nowrap;
-    gap: var(--espacio-2);
+    /* A 390px reception phone has room for the five primary controls. Six px
+       keeps the logout control inside the viewport while preserving its 44px
+       hit target. */
+    gap: 6px;
     padding: var(--espacio-2) var(--espacio-3);
   }
 
   .cabecera__usuario {
     margin-left: auto;
+  }
+}
+
+@media (max-width: 360px) {
+  .cabecera {
+    gap: 4px;
+    padding-inline: var(--espacio-2);
+  }
+
+  .cabecera__menu {
+    width: var(--toque-minimo);
+    min-width: var(--toque-minimo);
+    padding: 0;
+  }
+
+  .cabecera__salir {
+    padding-inline: var(--espacio-1);
   }
 }
 

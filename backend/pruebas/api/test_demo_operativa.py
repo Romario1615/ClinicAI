@@ -1,7 +1,11 @@
 """Recorridos de la demostracion sobre PostgreSQL real, con ataques de ambito."""
 
+import json
+import sys
+import types
 import uuid
-from datetime import timedelta
+from datetime import date, timedelta
+from typing import Any
 from zoneinfo import ZoneInfo
 
 import pytest
@@ -18,10 +22,12 @@ from app.modulos.lista_espera.modelos import (
     EstadoOferta,
     OfertaTurno,
 )
-from app.modulos.organizacion.modelos import Clinica
+from app.modulos.organizacion.modelos import Clinica, ConfiguracionClinica
 from app.modulos.pacientes.modelos import Paciente, RelacionAsistencial
-from app.modulos.profesionales.modelos import ProfesionalSede
-from pruebas.api.conftest import cabecera_bearer, conceder_permisos
+from app.modulos.profesionales.modelos import Profesional, ProfesionalSede
+from app.modulos.usuarios.modelos import Usuario
+from app.nucleo.seguridad import hashear_contrasena
+from pruebas.api.conftest import CONTRASENA, cabecera_bearer, conceder_permisos
 
 pytestmark = [pytest.mark.api, pytest.mark.asyncio]
 PERMISOS = (
@@ -70,6 +76,52 @@ async def cita_demo(sesion, clinica, sede, paciente, profesional, servicio, relo
     sesion.add(cita)
     await sesion.flush()
     return cita
+
+
+@pytest.fixture
+async def citas_dashboard_contraste(
+    sesion, clinica, cita_demo, sede, otra_sede, profesional, especialidad, servicio
+):
+    """Agrega filas para probar intersección de filtros y alcance por sede."""
+    otro_profesional = Profesional(
+        clinica_id=clinica.id,
+        especialidad_id=especialidad.id,
+        nombre="Profesional",
+        apellido="Alterno",
+        numero_registro_profesional=f"REG-OTRO-{uuid.uuid4().hex[:8]}",
+    )
+    sesion.add(otro_profesional)
+    await sesion.flush()
+    sesion.add_all(
+        [
+            Cita(
+                clinica_id=clinica.id,
+                sede_id=sede.id,
+                paciente_id=cita_demo.paciente_id,
+                profesional_id=otro_profesional.id,
+                servicio_id=servicio.id,
+                inicio=cita_demo.inicio + timedelta(hours=1),
+                duracion_minutos=30,
+                minutos_preparacion=15,
+                estado="CONFIRMED",
+                origen="PANEL",
+            ),
+            Cita(
+                clinica_id=clinica.id,
+                sede_id=otra_sede.id,
+                paciente_id=cita_demo.paciente_id,
+                profesional_id=profesional.id,
+                servicio_id=servicio.id,
+                inicio=cita_demo.inicio + timedelta(hours=2),
+                duracion_minutos=30,
+                minutos_preparacion=15,
+                estado="CONFIRMED",
+                origen="PANEL",
+            ),
+        ]
+    )
+    await sesion.flush()
+    return otro_profesional
 
 
 async def test_paciente_crear_editar_reintento_y_auditoria(cliente, api, acceso, sesion):
@@ -254,28 +306,384 @@ async def test_dashboard_cifras_reales(cliente, api, acceso, cita_demo, reloj, s
     assert r.json()["por_dia_semana"] == [{"dia": inicio_local.isoweekday(), "total": 1}]
 
 
+async def test_dashboard_cohortes_altas_sin_cita_y_filtro_estado(
+    cliente,
+    api,
+    acceso,
+    cita_demo,
+    paciente,
+    paciente_ajeno,
+    clinica,
+    sede,
+    otra_sede,
+    profesional,
+    servicio,
+    reloj,
+    sesion,
+):
+    alta = reloj.ahora() + timedelta(hours=1)
+    paciente.creado_en = alta
+    paciente_ajeno.creado_en = alta + timedelta(minutes=15)
+    sin_cita = Paciente(
+        clinica_id=clinica.id,
+        tipo_documento="SIN_DOCUMENTO",
+        nombre="Alta",
+        apellido="Sin Cita",
+        creado_en=alta + timedelta(minutes=5),
+    )
+    cita_otra_sede = Paciente(
+        clinica_id=clinica.id,
+        tipo_documento="SIN_DOCUMENTO",
+        nombre="Alta",
+        apellido="Otra Sede",
+        creado_en=alta + timedelta(minutes=10),
+    )
+    fuera_periodo = Paciente(
+        clinica_id=clinica.id,
+        tipo_documento="SIN_DOCUMENTO",
+        nombre="Alta",
+        apellido="Anterior",
+        creado_en=alta - timedelta(days=40),
+    )
+    sesion.add_all([sin_cita, cita_otra_sede, fuera_periodo])
+    await sesion.flush()
+    sesion.add(
+        Cita(
+            clinica_id=clinica.id,
+            sede_id=otra_sede.id,
+            paciente_id=cita_otra_sede.id,
+            profesional_id=profesional.id,
+            servicio_id=servicio.id,
+            inicio=cita_demo.inicio + timedelta(hours=2),
+            duracion_minutos=30,
+            minutos_preparacion=15,
+            estado="CONFIRMED",
+            origen="PANEL",
+        )
+    )
+    await sesion.flush()
+    periodo = {
+        "desde": reloj.ahora().isoformat(),
+        "hasta": (reloj.ahora() + timedelta(days=7)).isoformat(),
+    }
+
+    respuesta = await cliente.get(f"{api}/dashboard/", params=periodo, headers=acceso)
+    assert respuesta.status_code == 200, respuesta.text
+    cuerpo = respuesta.json()
+    assert all(
+        nombre not in respuesta.text
+        for nombre in ("Sin Cita", "Otra Sede", "Anterior", "De Otra Clinica")
+    )
+    assert cuerpo["pacientes_registrados"] == 3
+    assert cuerpo["pacientes_registrados_sin_cita"] == 2
+    assert cuerpo["cohortes_registro"] == [
+        {
+            "mes": alta.date().replace(day=1).isoformat(),
+            "registrados": 3,
+            "con_cita_en_filtros": 1,
+            "sin_cita_en_filtros": 2,
+        }
+    ]
+
+    por_estado = await cliente.get(
+        f"{api}/dashboard/",
+        params={**periodo, "estado": "CONFIRMED"},
+        headers=acceso,
+    )
+    assert por_estado.status_code == 200, por_estado.text
+    assert por_estado.json()["pacientes_registrados"] is None
+    assert por_estado.json()["pacientes_registrados_sin_cita"] is None
+    assert por_estado.json()["cohortes_registro"] is None
+
+
+async def test_dashboard_demografia_agregada_y_supresion_de_grupos_pequenos(
+    cliente,
+    api,
+    acceso,
+    cita_demo,
+    paciente,
+    clinica,
+    sede,
+    profesional,
+    servicio,
+    reloj,
+    sesion,
+):
+    corte = (
+        (reloj.ahora() + timedelta(days=7) - timedelta(microseconds=1))
+        .astimezone(ZoneInfo(clinica.zona_horaria))
+        .date()
+    )
+    paciente.sexo = "F"
+    paciente.fecha_nacimiento = date(corte.year - 18, corte.month, corte.day)
+    muestras = [
+        *[("F", paciente.fecha_nacimiento) for _ in range(5)],
+        *[("M", date(corte.year - 50, corte.month, corte.day)) for _ in range(5)],
+        *[("OTRO", None) for _ in range(2)],
+    ]
+    for indice, (sexo, nacimiento) in enumerate(muestras, start=1):
+        nuevo = Paciente(
+            clinica_id=clinica.id,
+            tipo_documento="SIN_DOCUMENTO",
+            nombre=f"Nombre interno {indice}",
+            apellido=f"Privado {indice}",
+            sexo=sexo,
+            fecha_nacimiento=nacimiento,
+        )
+        sesion.add(nuevo)
+        await sesion.flush()
+        sesion.add(
+            Cita(
+                clinica_id=clinica.id,
+                sede_id=sede.id,
+                paciente_id=nuevo.id,
+                profesional_id=profesional.id,
+                servicio_id=servicio.id,
+                inicio=cita_demo.inicio + timedelta(minutes=indice * 60),
+                duracion_minutos=30,
+                minutos_preparacion=15,
+                estado="CONFIRMED",
+                origen="PANEL",
+            )
+        )
+    await sesion.flush()
+
+    periodo = {
+        "desde": reloj.ahora().isoformat(),
+        "hasta": (reloj.ahora() + timedelta(days=7)).isoformat(),
+    }
+    respuesta = await cliente.get(f"{api}/dashboard/", params=periodo, headers=acceso)
+    assert respuesta.status_code == 200, respuesta.text
+    cuerpo = respuesta.json()
+    demografia = cuerpo["demografia"]
+    assert len(demografia["edades"]) == 7
+    assert len(demografia["sexos"]) == 4
+    edades = {celda["categoria"]: celda for celda in demografia["edades"]}
+    sexos = {celda["categoria"]: celda for celda in demografia["sexos"]}
+    assert edades["18-29 años"]["pacientes"] == 6
+    assert edades["Sin fecha de nacimiento"]["pacientes"] is None
+    assert edades["45-59 años"]["pacientes"] is None
+    assert sexos["Femenino"]["pacientes"] == 6
+    assert sexos["Masculino"]["pacientes"] is None
+    assert sexos["Otro"]["pacientes"] is None
+    assert all(
+        set(celda) == {"categoria", "pacientes", "suprimida"}
+        for celda in (*demografia["edades"], *demografia["sexos"])
+    )
+    fecha_nacimiento_ejemplo = date(corte.year - 18, corte.month, corte.day).isoformat()
+    assert all(
+        valor not in respuesta.text
+        for valor in ("Nombre interno", "Privado", fecha_nacimiento_ejemplo)
+    )
+
+    sin_poblacion = await cliente.get(
+        f"{api}/dashboard/",
+        params={**periodo, "estado": "NO_SHOW"},
+        headers=acceso,
+    )
+    assert sin_poblacion.status_code == 200, sin_poblacion.text
+    assert sin_poblacion.json()["demografia"] is None
+
+
+async def test_dashboard_retorno_30_dias_solo_usa_cohortes_maduras_y_completadas(
+    cliente,
+    api,
+    acceso,
+    cita_demo,
+    paciente,
+    clinica,
+    sede,
+    profesional,
+    servicio,
+    reloj,
+    sesion,
+):
+    ahora = reloj.ahora()
+    primera_fecha = ahora - timedelta(days=45)
+    cita_demo.estado = "COMPLETED"
+    cita_demo.inicio = primera_fecha
+    retornos: list[Cita] = []
+    for indice in range(1, 12):
+        inicio = primera_fecha + timedelta(hours=3 * indice)
+        nuevo = Paciente(
+            clinica_id=clinica.id,
+            tipo_documento="SIN_DOCUMENTO",
+            nombre=f"Cohorte {indice}",
+            apellido="Sintética",
+        )
+        sesion.add(nuevo)
+        await sesion.flush()
+        sesion.add(
+            Cita(
+                clinica_id=clinica.id,
+                sede_id=sede.id,
+                paciente_id=nuevo.id,
+                profesional_id=profesional.id,
+                servicio_id=servicio.id,
+                inicio=inicio,
+                duracion_minutos=30,
+                minutos_preparacion=15,
+                estado="COMPLETED",
+                origen="PANEL",
+            )
+        )
+        if indice <= 5:
+            retorno = Cita(
+                clinica_id=clinica.id,
+                sede_id=sede.id,
+                paciente_id=nuevo.id,
+                profesional_id=profesional.id,
+                servicio_id=servicio.id,
+                inicio=inicio + timedelta(days=30) if indice == 5 else inicio + timedelta(days=15),
+                duracion_minutos=30,
+                minutos_preparacion=15,
+                estado="COMPLETED",
+                origen="PANEL",
+            )
+            retornos.append(retorno)
+            sesion.add(retorno)
+        elif indice == 6:
+            sesion.add(
+                Cita(
+                    clinica_id=clinica.id,
+                    sede_id=sede.id,
+                    paciente_id=nuevo.id,
+                    profesional_id=profesional.id,
+                    servicio_id=servicio.id,
+                    inicio=inicio + timedelta(days=15),
+                    duracion_minutos=30,
+                    minutos_preparacion=15,
+                    estado="CONFIRMED",
+                    origen="PANEL",
+                )
+            )
+    for indice in range(12, 17):
+        reciente = Paciente(
+            clinica_id=clinica.id,
+            tipo_documento="SIN_DOCUMENTO",
+            nombre=f"Cohorte reciente {indice}",
+            apellido="Sintética",
+        )
+        sesion.add(reciente)
+        await sesion.flush()
+        sesion.add(
+            Cita(
+                clinica_id=clinica.id,
+                sede_id=sede.id,
+                paciente_id=reciente.id,
+                profesional_id=profesional.id,
+                servicio_id=servicio.id,
+                inicio=ahora - timedelta(days=10) + timedelta(hours=indice),
+                duracion_minutos=30,
+                minutos_preparacion=15,
+                estado="COMPLETED",
+                origen="PANEL",
+            )
+        )
+    sesion.add(
+        Cita(
+            clinica_id=clinica.id,
+            sede_id=sede.id,
+            paciente_id=paciente.id,
+            profesional_id=profesional.id,
+            servicio_id=servicio.id,
+            inicio=primera_fecha + timedelta(days=15),
+            duracion_minutos=30,
+            minutos_preparacion=15,
+            estado="COMPLETED",
+            origen="PANEL",
+        )
+    )
+    await sesion.flush()
+    periodo = {
+        "desde": (ahora - timedelta(days=50)).isoformat(),
+        "hasta": (ahora - timedelta(days=5)).isoformat(),
+    }
+
+    respuesta = await cliente.get(f"{api}/dashboard/", params=periodo, headers=acceso)
+    assert respuesta.status_code == 200, respuesta.text
+    assert respuesta.json()["retorno_30_dias"] == {
+        "pacientes_seguimiento_completo": 12,
+        "pacientes_que_regresaron": 6,
+        "porcentaje": 50.0,
+    }
+
+    for retorno in retornos[-2:]:
+        retorno.inicio += timedelta(days=16)
+    await sesion.flush()
+    con_retorno_menor_a_cinco = await cliente.get(
+        f"{api}/dashboard/", params=periodo, headers=acceso
+    )
+    assert con_retorno_menor_a_cinco.status_code == 200, con_retorno_menor_a_cinco.text
+    assert con_retorno_menor_a_cinco.json()["retorno_30_dias"] is None
+
+    por_estado = await cliente.get(
+        f"{api}/dashboard/",
+        params={**periodo, "estado": "COMPLETED"},
+        headers=acceso,
+    )
+    assert por_estado.status_code == 200, por_estado.text
+    assert por_estado.json()["retorno_30_dias"] is None
+
+
 async def test_dashboard_aplica_filtros_de_especialidad_servicio_y_estado(
-    cliente, api, acceso, cita_demo, reloj, sede, profesional, especialidad, servicio
+    cliente,
+    api,
+    acceso,
+    citas_dashboard_contraste,
+    reloj,
+    sede,
+    otra_sede,
+    profesional,
+    especialidad,
+    servicio,
 ):
     base = {
         "desde": reloj.ahora().isoformat(),
         "hasta": (reloj.ahora() + timedelta(days=7)).isoformat(),
     }
+    filtros_completos = {
+        **base,
+        "sede_id": str(sede.id),
+        "profesional_id": str(profesional.id),
+        "especialidad_id": str(especialidad.id),
+        "servicio_id": str(servicio.id),
+        "estado": "CONFIRMED",
+    }
     filtrado = await cliente.get(
         f"{api}/dashboard/",
-        params={
-            **base,
-            "sede_id": str(sede.id),
-            "profesional_id": str(profesional.id),
-            "especialidad_id": str(especialidad.id),
-            "servicio_id": str(servicio.id),
-            "estado": "CONFIRMED",
-        },
+        params=filtros_completos,
         headers=acceso,
     )
     assert filtrado.status_code == 200, filtrado.text
     assert filtrado.json()["total_citas"] == 1
     assert filtrado.json()["citas"] == {"CONFIRMED": 1}
+
+    sede_completa = await cliente.get(
+        f"{api}/dashboard/",
+        params={**base, "sede_id": str(sede.id)},
+        headers=acceso,
+    )
+    assert sede_completa.status_code == 200, sede_completa.text
+    assert sede_completa.json()["total_citas"] == 2
+
+    sede_fuera_de_ambito = await cliente.get(
+        f"{api}/dashboard/",
+        params={**base, "sede_id": str(otra_sede.id)},
+        headers=acceso,
+    )
+    assert sede_fuera_de_ambito.status_code == 200, sede_fuera_de_ambito.text
+    assert sede_fuera_de_ambito.json()["total_citas"] == 0
+
+    resumen_local = await cliente.post(
+        f"{api}/dashboard/analisis-local",
+        params=filtros_completos,
+        headers=acceso,
+    )
+    assert resumen_local.status_code == 200, resumen_local.text
+    assert any(
+        "1 cita de 1 paciente distinto" in texto for texto in resumen_local.json()["hallazgos"]
+    )
 
     sin_resultados = await cliente.get(
         f"{api}/dashboard/", params={**base, "estado": "NO_SHOW"}, headers=acceso
@@ -291,18 +699,173 @@ async def test_dashboard_aplica_filtros_de_especialidad_servicio_y_estado(
         "promedio_minutos_para_recuperar": None,
     }
 
-    resumen_local = await cliente.post(
+    resumen_local_sin_resultados = await cliente.post(
         f"{api}/dashboard/analisis-local",
         params={**base, "servicio_id": str(servicio.id), "estado": "CANCELLED"},
         headers=acceso,
     )
-    assert resumen_local.status_code == 200, resumen_local.text
-    assert "No hay citas registradas" in resumen_local.json()["hallazgos"][0]
+    assert resumen_local_sin_resultados.status_code == 200, resumen_local_sin_resultados.text
+    assert "No hay citas registradas" in resumen_local_sin_resultados.json()["hallazgos"][0]
 
     invalido = await cliente.get(
         f"{api}/dashboard/", params={**base, "estado": "BORRADOR"}, headers=acceso
     )
     assert invalido.status_code == 422, invalido.text
+
+
+async def test_dashboard_analisis_ia_aplica_filtros_y_ambito(
+    cliente,
+    api,
+    acceso,
+    citas_dashboard_contraste,
+    reloj,
+    sede,
+    otra_sede,
+    profesional,
+    especialidad,
+    servicio,
+    clinica,
+    usuario,
+    sesion,
+    aplicacion,
+    monkeypatch,
+):
+    # El proveedor se reemplaza en memoria; la petición IA no sale a Internet.
+    base = {
+        "desde": reloj.ahora().isoformat(),
+        "hasta": (reloj.ahora() + timedelta(days=7)).isoformat(),
+    }
+    filtros_completos = {
+        **base,
+        "sede_id": str(sede.id),
+        "profesional_id": str(profesional.id),
+        "especialidad_id": str(especialidad.id),
+        "servicio_id": str(servicio.id),
+        "estado": "CONFIRMED",
+    }
+    agregados_ia: list[dict[str, object]] = []
+
+    class MensajesSimulados:
+        async def create(self, **argumentos):
+            agregados_ia.append(json.loads(argumentos["messages"][0]["content"]))
+            return types.SimpleNamespace(content=[types.SimpleNamespace(text="Resumen sintético.")])
+
+    class ClienteAnthropicSimulado:
+        def __init__(self, **_argumentos):
+            self.messages = MensajesSimulados()
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *_argumentos):
+            return None
+
+    modulo_anthropic: Any = types.ModuleType("anthropic")
+    modulo_anthropic.AsyncAnthropic = ClienteAnthropicSimulado
+    monkeypatch.setitem(sys.modules, "anthropic", modulo_anthropic)
+
+    await conceder_permisos(
+        sesion,
+        usuario,
+        clinica,
+        "configuracion.escribir",
+        sedes=(sede.id,),
+    )
+    clave = aplicacion.state.cifrador.cifrar(
+        "clave-sintetica-sin-uso-externo",
+        contexto=b"integracion:" + clinica.id.bytes + b":anthropic:api_key",
+    )
+    sesion.add(
+        ConfiguracionClinica(
+            clinica_id=clinica.id,
+            clave="integracion.anthropic",
+            valor={
+                "habilitada": True,
+                "secretos_cifrados": {"api_key": clave},
+                "ajustes": {"modelo": "modelo-simulado"},
+            },
+            version=1,
+            vigente=True,
+        )
+    )
+    await sesion.flush()
+
+    analisis_ia = await cliente.post(
+        f"{api}/dashboard/analisis-ia",
+        params=filtros_completos,
+        headers=acceso,
+    )
+    assert analisis_ia.status_code == 200, analisis_ia.text
+    assert analisis_ia.json()["analisis"] == "Resumen sintético."
+    assert int(agregados_ia[-1]["total_citas"]) == 1
+    assert "demografia" not in agregados_ia[-1]
+    assert "fecha_nacimiento" not in json.dumps(agregados_ia[-1])
+
+    analisis_sin_profesional = await cliente.post(
+        f"{api}/dashboard/analisis-ia",
+        params={key: value for key, value in filtros_completos.items() if key != "profesional_id"},
+        headers=acceso,
+    )
+    assert analisis_sin_profesional.status_code == 200, analisis_sin_profesional.text
+    assert int(agregados_ia[-1]["total_citas"]) == 2
+
+    analisis_fuera_de_ambito = await cliente.post(
+        f"{api}/dashboard/analisis-ia",
+        params={**filtros_completos, "sede_id": str(otra_sede.id)},
+        headers=acceso,
+    )
+    assert analisis_fuera_de_ambito.status_code == 200, analisis_fuera_de_ambito.text
+    assert int(agregados_ia[-1]["total_citas"]) == 0
+
+
+async def test_dashboard_profesional_usa_su_ambito_sin_filtro_explicito(
+    cliente,
+    api,
+    citas_dashboard_contraste,
+    reloj,
+    sede,
+    profesional,
+    clinica,
+    sesion,
+):
+    perfil = citas_dashboard_contraste
+    usuario_profesional = Usuario(
+        clinica_id=clinica.id,
+        correo=f"dashboard-{uuid.uuid4().hex[:12]}@example.invalid",
+        hash_contrasena=hashear_contrasena(CONTRASENA),
+        nombre="Profesional",
+        apellido="De Prueba",
+    )
+    sesion.add(usuario_profesional)
+    await sesion.flush()
+    perfil.usuario_id = usuario_profesional.id
+    await sesion.flush()
+    await conceder_permisos(
+        sesion,
+        usuario_profesional,
+        clinica,
+        "dashboard.leer",
+        sedes=(sede.id,),
+        profesionales=(perfil.id,),
+        todos_los_profesionales=False,
+    )
+    acceso_profesional = await cabecera_bearer(cliente, usuario_profesional, clinica)
+    periodo = {
+        "desde": reloj.ahora().isoformat(),
+        "hasta": (reloj.ahora() + timedelta(days=7)).isoformat(),
+    }
+
+    propio = await cliente.get(f"{api}/dashboard/", params=periodo, headers=acceso_profesional)
+    assert propio.status_code == 200, propio.text
+    assert propio.json()["total_citas"] == 1
+
+    ajeno = await cliente.get(
+        f"{api}/dashboard/",
+        params={**periodo, "profesional_id": str(profesional.id)},
+        headers=acceso_profesional,
+    )
+    assert ajeno.status_code == 200, ajeno.text
+    assert ajeno.json()["total_citas"] == 0
 
 
 async def test_dashboard_clasifica_pacientes_por_primera_atencion_completada(

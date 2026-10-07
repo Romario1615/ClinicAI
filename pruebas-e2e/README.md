@@ -31,6 +31,7 @@ deja corriendo mientras trabaja.
 # 1. API aislada del código actual, sin tocar una API de desarrollo que ya esté abierta
 cd backend
 $env:LIMITE_LOGIN_POR_MINUTO='200'
+$env:PROVEEDOR_EMBEDDINGS='mock' # CI local: evita depender del extra opcional fastembed
 uv run uvicorn app.main:crear_aplicacion --factory --host 127.0.0.1 --port 8002
 
 # 2. Frontend, en otra terminal
@@ -153,7 +154,7 @@ La suite contiene **55 pruebas** en 14 archivos. Incluye acceso y autorización 
 | `02-autorizacion.spec.ts` | Que el menú coincide con los permisos reales, que recargar cierra la sesión y que **el token no queda en el navegador** |
 | `03-pacientes.spec.ts` | Búsqueda, paginación, la ficha, y **los tres vacíos que no se pueden confundir** |
 | `04-clinico.spec.ts` | Notas versionadas, ciclo del plan dental con control posterior, el límite del asistente, que **un PRN nunca aparece en el calendario de tomas**, y revisión/atención de alertas por omisiones |
-| `05-demo-operativa.spec.ts` | Exportación agregada sin pacientes; reserva desde un hueco de Agenda, reserva por simulador, reprogramación y cancelación, check-in, seguimiento de espera en dashboard, cierre de atención y registro de un pago |
+| `05-demo-operativa.spec.ts` | Exportación agregada sin pacientes; reservas simple y recurrente desde una ventana Liquid Glass, reserva por simulador, reprogramación y cancelación, check-in, seguimiento de espera y ocupación accesible en dashboard, cierre de atención y registro de un pago |
 | `06-conocimiento.spec.ts` | Consulta RAG desde la interfaz; muestra fuentes aprobadas y deriva las consultas sin respaldo |
 | `07-imagenes.spec.ts` | El profesional carga una imagen clínica y la vuelve a ver desde la galería autenticada |
 | `08-conversaciones.spec.ts` | El profesional abre la bandeja protegida de mensajes derivados |

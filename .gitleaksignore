@@ -3,3 +3,17 @@
 # - test_autenticacion.py: referencia a la variable rotado.tokens.token_refresco, no un valor.
 290853658fbe39e8c756d283d59685498d9aa6b6:backend/pruebas/integracion/test_autenticacion.py:generic-api-key:747
 e725bab987988c333b99c16dbc61d5f5b00bb572:backend/pruebas/unitarias/test_registro.py:private-key:136
+# Falsos positivos revisados a mano (2026-10-07):
+# - test_pagos_listado_api.py: claves Idempotency-Key sintéticas de pruebas, no credenciales.
+# - test_autenticacion.py: acceso a un campo token_refresco para comprobar rotación; no valor de token.
+# - test_registro.py: clave PEM deliberadamente truncada para comprobar la redacción.
+801b4117a7a017aaa288fff75545a7a39a642208:backend/pruebas/api/test_pagos_listado_api.py:generic-api-key:267
+801b4117a7a017aaa288fff75545a7a39a642208:backend/pruebas/api/test_pagos_listado_api.py:generic-api-key:281
+801b4117a7a017aaa288fff75545a7a39a642208:backend/pruebas/api/test_pagos_listado_api.py:generic-api-key:287
+801b4117a7a017aaa288fff75545a7a39a642208:backend/pruebas/api/test_pagos_listado_api.py:generic-api-key:635
+e282e1946ae4b226d7dc60414afd05be642c8c54:backend/pruebas/api/test_pagos_listado_api.py:generic-api-key:267
+e282e1946ae4b226d7dc60414afd05be642c8c54:backend/pruebas/api/test_pagos_listado_api.py:generic-api-key:281
+e282e1946ae4b226d7dc60414afd05be642c8c54:backend/pruebas/api/test_pagos_listado_api.py:generic-api-key:287
+e282e1946ae4b226d7dc60414afd05be642c8c54:backend/pruebas/api/test_pagos_listado_api.py:generic-api-key:635
+e282e1946ae4b226d7dc60414afd05be642c8c54:backend/pruebas/integracion/test_autenticacion.py:generic-api-key:723
+e282e1946ae4b226d7dc60414afd05be642c8c54:backend/pruebas/unitarias/test_registro.py:private-key:144

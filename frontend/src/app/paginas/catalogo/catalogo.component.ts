@@ -2,6 +2,7 @@ import { Component, inject, signal, ChangeDetectionStrategy } from '@angular/cor
 import { FormsModule } from '@angular/forms';
 import { forkJoin, of } from 'rxjs';
 
+import { VentanaFlotanteComponent } from '../../compartido/ventana-flotante.component';
 import { CatalogoService } from '../../nucleo/servicios/catalogo.service';
 import { SesionService } from '../../nucleo/servicios/sesion.service';
 import { ModulosEspecialidadComponent } from './modulos-especialidad.component';
@@ -17,7 +18,7 @@ const TIPOS: readonly { readonly valor: TipoConsultorio; readonly etiqueta: stri
 ];
 
 @Component({
-  selector: 'app-catalogo', standalone: true, imports: [FormsModule, ModulosEspecialidadComponent],
+  selector: 'app-catalogo', standalone: true, imports: [FormsModule, ModulosEspecialidadComponent, VentanaFlotanteComponent],
   template: `
     <header class="modulo-cabecera"><div class="modulo-cabecera__texto"><p class="ceja">CONFIGURACIÓN</p><h1>Catálogo de la clínica</h1><p>Sedes, consultorios, servicios y profesionales disponibles para su sesión.</p></div><img class="modulo-cabecera__imagen" src="/images/catalogo-clinica.png" alt="" aria-hidden="true" loading="lazy" /></header>
     @if (error()) { <p class="aviso error" role="alert">{{ error() }}</p><button (click)="cargar()" class="boton">Reintentar</button> }
@@ -27,85 +28,92 @@ const TIPOS: readonly { readonly valor: TipoConsultorio; readonly etiqueta: stri
 
     <section class="gestion" aria-labelledby="titulo-consultorios">
       <div class="seccion-cabecera"><div><p class="ceja">ESPACIOS DE ATENCIÓN</p><h2 id="titulo-consultorios">Consultorios</h2><p>Administre los espacios disponibles en cada sede.</p></div>
-        @if (puedeGestionar()) { <label class="campo sede"><span>Sede</span><select [ngModel]="sedeSeleccionada()" (ngModelChange)="seleccionarSede($event)"><option value="">Seleccione una sede</option>@for (s of sedes(); track s.id) { <option [value]="s.id">{{ s.nombre }}</option> }</select></label> }
+        @if (puedeGestionar()) { <div class="acciones-sede"><label class="campo sede"><span>Sede</span><select [ngModel]="sedeSeleccionada()" (ngModelChange)="seleccionarSede($event)"><option value="">Seleccione una sede</option>@for (s of sedes(); track s.id) { <option [value]="s.id">{{ s.nombre }}</option> }</select></label><button class="boton boton--principal" type="button" [disabled]="!sedeSeleccionada()" (click)="abrirNuevoConsultorio()">Nuevo consultorio</button></div> }
       </div>
       @if (!puedeGestionar()) {
         <div class="rejilla">@for (sala of consultorios(); track sala.id) { <article class="tarjeta"><span class="etiqueta">{{ etiquetaTipo(sala.tipo) }}</span><h3>{{ sala.nombre }}</h3><p>Capacidad: {{ sala.capacidad }}</p></article> } @empty { <p>No hay consultorios disponibles.</p> }</div>
       } @else if (sedeSeleccionada()) {
-        <div class="panel-gestion">
-          <form class="formulario" (ngSubmit)="guardar()">
-            <h3>{{ editando() ? 'Editar consultorio' : 'Nuevo consultorio' }}</h3>
-            <label class="campo"><span>Nombre</span><input name="nombre" [(ngModel)]="form.nombre" required maxlength="100" placeholder="Ej. Consultorio 1" /></label>
-            <label class="campo"><span>Tipo</span><select name="tipo" [(ngModel)]="form.tipo">@for (tipo of tipos; track tipo.valor) { <option [value]="tipo.valor">{{ tipo.etiqueta }}</option> }</select></label>
-            <label class="campo"><span>Capacidad</span><input name="capacidad" type="number" [(ngModel)]="form.capacidad" min="1" max="100" required /></label>
-            <div class="acciones"><button class="boton primario" type="submit" [disabled]="guardando()">{{ guardando() ? 'Guardando…' : editando() ? 'Guardar cambios' : 'Crear consultorio' }}</button>@if (editando()) { <button class="boton secundario" type="button" (click)="nuevo()">Cancelar</button> }</div>
-          </form>
-          <div class="tabla-envoltorio"><table class="tabla"><thead><tr><th>Consultorio</th><th>Tipo</th><th>Capacidad</th><th>Estado</th><th>Acciones</th></tr></thead><tbody>
-            @for (sala of consultorios(); track sala.id) { <tr><td>{{ sala.nombre }}</td><td>{{ etiquetaTipo(sala.tipo) }}</td><td>{{ sala.capacidad }}</td><td><span class="estado" [class.inactivo]="!sala.activo">{{ sala.activo ? 'Activo' : 'Inactivo' }}</span></td><td class="acciones-fila"><button class="boton compacto" type="button" (click)="editar(sala)">Editar</button><button class="boton compacto" type="button" (click)="cambiarEstado(sala)">{{ sala.activo ? 'Desactivar' : 'Activar' }}</button></td></tr> }
-            @empty { <tr><td colspan="5">No hay consultorios registrados en esta sede.</td></tr> }
-          </tbody></table></div>
-        </div>
+        <div class="tabla-envoltorio"><table class="tabla"><thead><tr><th>Consultorio</th><th>Tipo</th><th>Capacidad</th><th>Estado</th><th>Acciones</th></tr></thead><tbody>
+          @for (sala of consultorios(); track sala.id) { <tr><td>{{ sala.nombre }}</td><td>{{ etiquetaTipo(sala.tipo) }}</td><td>{{ sala.capacidad }}</td><td><span class="estado" [class.inactivo]="!sala.activo">{{ sala.activo ? 'Activo' : 'Inactivo' }}</span></td><td class="acciones-fila"><button class="boton compacto" type="button" (click)="editar(sala)">Editar</button><button class="boton compacto" type="button" (click)="cambiarEstado(sala)">{{ sala.activo ? 'Desactivar' : 'Activar' }}</button></td></tr> }
+          @empty { <tr><td colspan="5">No hay consultorios registrados en esta sede.</td></tr> }
+        </tbody></table></div>
       } @else { <p class="ayuda">Seleccione una sede para consultar y administrar sus consultorios.</p> }
     </section>
 
     @if (puedeGestionarEspecialidades()) {
       <section class="gestion catalogo-admin" aria-labelledby="titulo-especialidades">
-        <div class="seccion-cabecera"><div><p class="ceja">ORGANIZACIÓN CLÍNICA</p><h2 id="titulo-especialidades">Especialidades</h2><p>Organice las áreas de atención y mantenga actualizado su catálogo.</p></div></div>
-        <div class="panel-gestion">
-          <form class="formulario" (ngSubmit)="guardarEspecialidad()">
-            <h3>{{ editandoEspecialidad() ? 'Editar especialidad' : 'Nueva especialidad' }}</h3>
-            <label class="campo"><span>Nombre</span><input name="especialidad-nombre" [(ngModel)]="formEspecialidad.nombre" maxlength="150" required /></label>
-            <label class="campo"><span>Código</span><input name="especialidad-codigo" [(ngModel)]="formEspecialidad.codigo" maxlength="32" /></label>
-            <label class="campo"><span>Descripción</span><textarea name="especialidad-descripcion" [(ngModel)]="formEspecialidad.descripcion" rows="3"></textarea></label>
-            <div class="acciones"><button class="boton primario" type="submit" [disabled]="guardando()">{{ editandoEspecialidad() ? 'Guardar cambios' : 'Crear especialidad' }}</button>@if (editandoEspecialidad()) { <button class="boton" type="button" (click)="nuevaEspecialidad()">Cancelar</button> }</div>
-          </form>
-          <div class="tabla-envoltorio"><table class="tabla"><thead><tr><th>Especialidad</th><th>Código</th><th>Estado</th><th></th></tr></thead><tbody>
-            @for (esp of especialidadesGestion(); track esp.id) { <tr><td>{{ esp.nombre }}<small class="descripcion">{{ esp.descripcion }}</small></td><td>{{ esp.codigo || '—' }}</td><td><span class="estado" [class.inactivo]="!esp.activa">{{ esp.activa ? 'Activa' : 'Inactiva' }}</span></td><td class="acciones-fila"><button class="boton compacto" type="button" (click)="editarEspecialidad(esp)">Editar</button><button class="boton compacto" type="button" (click)="cambiarEstadoEspecialidad(esp)">{{ esp.activa ? 'Desactivar' : 'Activar' }}</button></td></tr> } @empty { <tr><td colspan="4">Aún no hay especialidades registradas.</td></tr> }
-          </tbody></table></div>
-        </div>
+        <div class="seccion-cabecera"><div><p class="ceja">ORGANIZACIÓN CLÍNICA</p><h2 id="titulo-especialidades">Especialidades</h2><p>Organice las áreas de atención y mantenga actualizado su catálogo.</p></div><button class="boton boton--principal" type="button" (click)="abrirNuevaEspecialidad()">Nueva especialidad</button></div>
+        <div class="tabla-envoltorio"><table class="tabla"><thead><tr><th>Especialidad</th><th>Código</th><th>Estado</th><th>Acciones</th></tr></thead><tbody>
+          @for (esp of especialidadesGestion(); track esp.id) { <tr><td>{{ esp.nombre }}<small class="descripcion">{{ esp.descripcion }}</small></td><td>{{ esp.codigo || '—' }}</td><td><span class="estado" [class.inactivo]="!esp.activa">{{ esp.activa ? 'Activa' : 'Inactiva' }}</span></td><td class="acciones-fila"><button class="boton compacto" type="button" (click)="editarEspecialidad(esp)">Editar</button><button class="boton compacto" type="button" (click)="cambiarEstadoEspecialidad(esp)">{{ esp.activa ? 'Desactivar' : 'Activar' }}</button></td></tr> } @empty { <tr><td colspan="4">Aún no hay especialidades registradas.</td></tr> }
+        </tbody></table></div>
       </section>
       <app-modulos-especialidad />
     }
 
     @if (puedeGestionarServicios()) {
-      <div class="gestion catalogo-admin">
-        <div class="seccion-cabecera"><div><p class="ceja">OFERTA CLÍNICA</p><h2>Servicios</h2><p>Configure duración, preparación, precio y requisitos de agenda.</p></div></div>
-        <div class="panel-gestion">
-          <form class="formulario" (ngSubmit)="guardarServicio()">
-            <h3>{{ editandoServicio() ? 'Editar servicio' : 'Nuevo servicio' }}</h3>
-            <label class="campo"><span>Especialidad</span><select name="servicio-especialidad" [(ngModel)]="formServicio.especialidad_id" [disabled]="!!editandoServicio()" required><option value="">Seleccione</option>@for (esp of especialidades(); track esp.id) { <option [value]="esp.id">{{ esp.nombre }}</option> }</select></label>
-            <label class="campo"><span>Nombre</span><input name="servicio-nombre" [(ngModel)]="formServicio.nombre" maxlength="200" required /></label>
-            <label class="campo"><span>Descripción</span><textarea name="servicio-descripcion" [(ngModel)]="formServicio.descripcion" rows="2"></textarea></label>
-            <div class="campos-dos"><label class="campo"><span>Duración (min)</span><input name="servicio-duracion" type="number" [(ngModel)]="formServicio.duracion_minutos" min="1" max="1440" required /></label><label class="campo"><span>Preparación (min)</span><input name="servicio-preparacion" type="number" [(ngModel)]="formServicio.minutos_preparacion" min="0" max="1440" /></label></div>
-            <div class="campos-dos"><label class="campo"><span>Precio</span><input name="servicio-precio" type="number" [(ngModel)]="formServicio.precio" min="0" step="0.01" /></label><label class="campo"><span>Moneda</span><input name="servicio-moneda" [(ngModel)]="formServicio.moneda" maxlength="3" required /></label></div>
-            <label class="campo"><span>Consultorio requerido</span><select name="servicio-consultorio" [(ngModel)]="formServicio.tipo_consultorio_requerido"><option [ngValue]="null">Sin requisito</option>@for (tipo of tipos; track tipo.valor) { <option [ngValue]="tipo.valor">{{ tipo.etiqueta }}</option> }</select></label>
-            <label class="campo"><span class="opcion"><input name="servicio-pago-previo" type="checkbox" [(ngModel)]="formServicio.requiere_pago_previo" /> Requiere pago previo</span></label>
-            <label class="campo"><span>Indicaciones de preparación</span><textarea name="servicio-indicaciones" [(ngModel)]="formServicio.instrucciones_preparacion" rows="2"></textarea></label>
-            <div class="acciones"><button class="boton primario" type="submit" [disabled]="guardando()">{{ editandoServicio() ? 'Guardar cambios' : 'Crear servicio' }}</button>@if (editandoServicio()) { <button class="boton" type="button" (click)="nuevoServicio()">Cancelar</button> }</div>
-          </form>
-          <div class="tabla-envoltorio"><table class="tabla"><thead><tr><th>Servicio</th><th>Especialidad</th><th>Duración</th><th>Precio</th><th>Estado</th><th></th></tr></thead><tbody>
-            @for (s of serviciosGestion(); track s.id) { <tr><td>{{ s.nombre }}</td><td>{{ nombreEspecialidad(s.especialidad_id) }}</td><td>{{ s.duracion_minutos }} min</td><td>{{ s.precio === null ? 'Consultar' : s.moneda + ' ' + s.precio }}</td><td><span class="estado" [class.inactivo]="!s.activo">{{ s.activo ? 'Activo' : 'Inactivo' }}</span></td><td class="acciones-fila"><button class="boton compacto" type="button" (click)="editarServicio(s)">Editar</button><button class="boton compacto" type="button" (click)="cambiarEstadoServicio(s)">{{ s.activo ? 'Desactivar' : 'Activar' }}</button></td></tr> } @empty { <tr><td colspan="6">Aún no hay servicios registrados.</td></tr> }
-          </tbody></table></div>
-        </div>
-      </div>
+      <section class="gestion catalogo-admin" aria-labelledby="titulo-servicios">
+        <div class="seccion-cabecera"><div><p class="ceja">OFERTA CLÍNICA</p><h2 id="titulo-servicios">Servicios</h2><p>Configure duración, preparación, precio y requisitos de agenda.</p></div><button class="boton boton--principal" type="button" (click)="abrirNuevoServicio()">Nuevo servicio</button></div>
+        <div class="tabla-envoltorio"><table class="tabla"><thead><tr><th>Servicio</th><th>Especialidad</th><th>Duración</th><th>Precio</th><th>Estado</th><th>Acciones</th></tr></thead><tbody>
+          @for (s of serviciosGestion(); track s.id) { <tr><td>{{ s.nombre }}</td><td>{{ nombreEspecialidad(s.especialidad_id) }}</td><td>{{ s.duracion_minutos }} min</td><td>{{ s.precio === null ? 'Consultar' : s.moneda + ' ' + s.precio }}</td><td><span class="estado" [class.inactivo]="!s.activo">{{ s.activo ? 'Activo' : 'Inactivo' }}</span></td><td class="acciones-fila"><button class="boton compacto" type="button" (click)="editarServicio(s)">Editar</button><button class="boton compacto" type="button" (click)="cambiarEstadoServicio(s)">{{ s.activo ? 'Desactivar' : 'Activar' }}</button></td></tr> } @empty { <tr><td colspan="6">Aún no hay servicios registrados.</td></tr> }
+        </tbody></table></div>
+      </section>
     } @else {
       <h2>Servicios</h2><div class="tabla-envoltorio"><table class="tabla"><thead><tr><th>Servicio</th><th>Duración</th><th>Preparación</th><th>Precio</th></tr></thead><tbody>
         @for (s of servicios(); track s.id) { <tr><td>{{ s.nombre }}</td><td>{{ s.duracion_minutos }} min</td><td>{{ s.minutos_preparacion }} min</td><td>{{ s.precio === null ? 'Consultar' : (s.moneda || '$') + ' ' + s.precio }}</td></tr> }
       </tbody></table></div>
     }
     <h2>Profesionales</h2><div class="rejilla">@for (p of profesionales(); track p.id) { <article class="tarjeta"><h3>{{ p.nombre }} {{ p.apellido }}</h3><p>Registro {{ p.numero_registro_profesional || 'no registrado' }}</p></article> }</div>
+
+    @if (ventanaFormulario() === 'consultorio') {
+      <app-ventana-flotante ceja="Espacios de atención" [titulo]="editando() ? 'Editar consultorio' : 'Nuevo consultorio'" forma="centrada" [anchoMaximo]="560" [cierraAlPulsarFuera]="false" (cerrar)="nuevo()">
+        @if (error()) { <p class="aviso error" role="alert">{{ error() }}</p> }
+        <form id="form-consultorio" class="formulario-modal" (ngSubmit)="guardar()">
+          <label class="campo"><span>Nombre</span><input name="nombre" [(ngModel)]="form.nombre" required maxlength="100" placeholder="Ej. Consultorio 1" /></label>
+          <label class="campo"><span>Tipo</span><select name="tipo" [(ngModel)]="form.tipo">@for (tipo of tipos; track tipo.valor) { <option [value]="tipo.valor">{{ tipo.etiqueta }}</option> }</select></label>
+          <label class="campo"><span>Capacidad</span><input name="capacidad" type="number" [(ngModel)]="form.capacidad" min="1" max="100" required /></label>
+        </form>
+        <div pie class="acciones"><button class="boton" type="button" (click)="nuevo()">Cancelar</button><button class="boton boton--principal" type="submit" form="form-consultorio" [disabled]="guardando()">{{ guardando() ? 'Guardando…' : editando() ? 'Guardar cambios' : 'Crear consultorio' }}</button></div>
+      </app-ventana-flotante>
+    }
+    @if (ventanaFormulario() === 'especialidad') {
+      <app-ventana-flotante ceja="Organización clínica" [titulo]="editandoEspecialidad() ? 'Editar especialidad' : 'Nueva especialidad'" forma="centrada" [anchoMaximo]="560" [cierraAlPulsarFuera]="false" (cerrar)="nuevaEspecialidad()">
+        @if (error()) { <p class="aviso error" role="alert">{{ error() }}</p> }
+        <form id="form-especialidad" class="formulario-modal" (ngSubmit)="guardarEspecialidad()">
+          <label class="campo"><span>Nombre</span><input name="especialidad-nombre" [(ngModel)]="formEspecialidad.nombre" maxlength="150" required /></label>
+          <label class="campo"><span>Código</span><input name="especialidad-codigo" [(ngModel)]="formEspecialidad.codigo" maxlength="32" /></label>
+          <label class="campo"><span>Descripción</span><textarea name="especialidad-descripcion" [(ngModel)]="formEspecialidad.descripcion" rows="3"></textarea></label>
+        </form>
+        <div pie class="acciones"><button class="boton" type="button" (click)="nuevaEspecialidad()">Cancelar</button><button class="boton boton--principal" type="submit" form="form-especialidad" [disabled]="guardando()">{{ guardando() ? 'Guardando…' : editandoEspecialidad() ? 'Guardar cambios' : 'Crear especialidad' }}</button></div>
+      </app-ventana-flotante>
+    }
+    @if (ventanaFormulario() === 'servicio') {
+      <app-ventana-flotante ceja="Oferta clínica" [titulo]="editandoServicio() ? 'Editar servicio' : 'Nuevo servicio'" forma="centrada" [anchoMaximo]="680" [cierraAlPulsarFuera]="false" (cerrar)="nuevoServicio()">
+        @if (error()) { <p class="aviso error" role="alert">{{ error() }}</p> }
+        <form id="form-servicio" class="formulario-modal" (ngSubmit)="guardarServicio()">
+          <label class="campo"><span>Especialidad</span><select name="servicio-especialidad" [(ngModel)]="formServicio.especialidad_id" [disabled]="!!editandoServicio()" required><option value="">Seleccione</option>@for (esp of especialidades(); track esp.id) { <option [value]="esp.id">{{ esp.nombre }}</option> }</select></label>
+          <label class="campo"><span>Nombre</span><input name="servicio-nombre" [(ngModel)]="formServicio.nombre" maxlength="200" required /></label>
+          <label class="campo campo--completo"><span>Descripción</span><textarea name="servicio-descripcion" [(ngModel)]="formServicio.descripcion" rows="2"></textarea></label>
+          <div class="campos-dos"><label class="campo"><span>Duración (min)</span><input name="servicio-duracion" type="number" [(ngModel)]="formServicio.duracion_minutos" min="1" max="1440" required /></label><label class="campo"><span>Preparación (min)</span><input name="servicio-preparacion" type="number" [(ngModel)]="formServicio.minutos_preparacion" min="0" max="1440" /></label></div>
+          <div class="campos-dos"><label class="campo"><span>Precio</span><input name="servicio-precio" type="number" [(ngModel)]="formServicio.precio" min="0" step="0.01" /></label><label class="campo"><span>Moneda</span><input name="servicio-moneda" [(ngModel)]="formServicio.moneda" maxlength="3" required /></label></div>
+          <label class="campo"><span>Consultorio requerido</span><select name="servicio-consultorio" [(ngModel)]="formServicio.tipo_consultorio_requerido"><option [ngValue]="null">Sin requisito</option>@for (tipo of tipos; track tipo.valor) { <option [ngValue]="tipo.valor">{{ tipo.etiqueta }}</option> }</select></label>
+          <label class="campo"><span class="opcion"><input name="servicio-pago-previo" type="checkbox" [(ngModel)]="formServicio.requiere_pago_previo" /> Requiere pago previo</span></label>
+          <label class="campo campo--completo"><span>Indicaciones de preparación</span><textarea name="servicio-indicaciones" [(ngModel)]="formServicio.instrucciones_preparacion" rows="2"></textarea></label>
+        </form>
+        <div pie class="acciones"><button class="boton" type="button" (click)="nuevoServicio()">Cancelar</button><button class="boton boton--principal" type="submit" form="form-servicio" [disabled]="guardando()">{{ guardando() ? 'Guardando…' : editandoServicio() ? 'Guardar cambios' : 'Crear servicio' }}</button></div>
+      </app-ventana-flotante>
+    }
   `,
   changeDetection: ChangeDetectionStrategy.Eager,
   styles: `
-    h2 { margin-top: 24px; } .gestion { margin-top: 30px; padding: 22px; border: 1px solid var(--borde, #dce5ec); border-radius: 16px; background: var(--superficie, #fff); } .catalogo-admin h2 { margin-top: 4px; }
-    .seccion-cabecera { display:flex; align-items:end; justify-content:space-between; gap:20px; margin-bottom:18px; } .seccion-cabecera h2 { margin:4px 0; } .seccion-cabecera p { margin:4px 0; color:var(--texto-secundario, var(--texto-tenue)); }
-    .ceja { font-size:.72rem; font-weight:700; letter-spacing:.09em; color:var(--primario, #087e8b); } .sede { min-width:230px; }
-    .panel-gestion { display:grid; grid-template-columns:minmax(220px, .72fr) minmax(0, 1.7fr); gap:24px; align-items:start; } .formulario { display:grid; gap:14px; padding:16px; border-radius:12px; background:var(--superficie-suave, #f5f8fa); }
-    .formulario h3 { margin:0; } .campo { display:grid; gap:6px; font-size:.88rem; font-weight:600; } .campo input,.campo select,.campo textarea { min-height:42px; padding:8px 10px; border:1px solid #cbd5e1; border-radius:8px; background:white; font:inherit; } .campos-dos { display:grid; grid-template-columns:1fr 1fr; gap:10px; } .opcion { display:flex; align-items:center; gap:8px; } .opcion input { min-height:auto; } .descripcion { display:block; margin-top:4px; color:var(--texto-tenue); font-weight:400; }
-    .acciones,.acciones-fila { display:flex; align-items:center; gap:8px; flex-wrap:wrap; } .boton { cursor:pointer; border:1px solid #cbd5e1; border-radius:8px; padding:9px 13px; background:white; font:inherit; } .boton.primario { color:white; border-color:#087e8b; background:#087e8b; } .boton:disabled { opacity:.6; cursor:wait; } .compacto { padding:6px 9px; font-size:.82rem; }
+    h2 { margin-top: 24px; } .gestion { margin-top: 30px; padding: 22px; border: 1px solid var(--borde); border-radius: var(--radio); background: var(--superficie-elevada); } .catalogo-admin h2 { margin-top: 4px; }
+    .seccion-cabecera { display:flex; align-items:end; justify-content:space-between; gap:20px; margin-bottom:18px; } .seccion-cabecera h2 { margin:4px 0; } .seccion-cabecera p { margin:4px 0; color:var(--texto-suave); }
+    .acciones-sede { display:flex; align-items:end; gap:10px; } .ceja { font-size:.72rem; font-weight:700; letter-spacing:.09em; color:var(--acento); } .sede { min-width:230px; }
+    .formulario-modal { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:var(--espacio-3); } .campo--completo { grid-column:1/-1; }
+    .campo { display:grid; gap:6px; font-size:.9rem; font-weight:600; } .campo input,.campo select,.campo textarea { width:100%; min-height:42px; padding:8px 10px; border:1px solid var(--borde-fuerte); border-radius:var(--radio-pequeno); background:var(--superficie-elevada); color:var(--texto); font:inherit; } .campos-dos { display:grid; grid-template-columns:1fr 1fr; gap:10px; } .opcion { display:flex; align-items:center; gap:8px; } .opcion input { min-height:auto; width:auto; } .descripcion { display:block; margin-top:4px; color:var(--texto-suave); font-weight:400; }
+    .acciones,.acciones-fila { display:flex; align-items:center; gap:8px; flex-wrap:wrap; } .compacto { padding:6px 9px; font-size:.82rem; }
     .estado,.etiqueta { display:inline-block; border-radius:999px; padding:4px 9px; color:#087443; background:#e8f7ef; font-size:.78rem; font-weight:650; } .estado.inactivo { color:var(--texto-tenue); background:#eef2f6; } .etiqueta { color:#176b76; background:#e8f5f6; }
     .aviso { padding:12px 14px; border-radius:9px; } .aviso.error { background:#fff0ef; color:#a12820; } .aviso.exito { background:#e8f7ef; color:#087443; } .ayuda { color:var(--texto-tenue); }
-    @media (max-width:850px) { .panel-gestion { grid-template-columns:1fr; } .panel-gestion > *, .formulario, .campo { min-width:0; } .campo input,.campo select,.campo textarea { width:100%; max-width:100%; } .campos-dos { grid-template-columns:1fr; } .seccion-cabecera { align-items:stretch; flex-direction:column; } .tabla-envoltorio { overflow-x:auto; } }
+    @media (max-width:850px) { .formulario-modal,.campos-dos { grid-template-columns:1fr; } .formulario-modal > *, .campo { min-width:0; } .campo--completo { grid-column:auto; } .seccion-cabecera,.acciones-sede { align-items:stretch; flex-direction:column; } .sede { min-width:0; } .tabla-envoltorio { overflow-x:auto; } }
   `,
 })
 export class CatalogoComponent {
@@ -123,6 +131,7 @@ export class CatalogoComponent {
   protected readonly profesionales = signal<readonly Profesional[]>([]);
   protected readonly consultorios = signal<readonly Consultorio[]>([]);
   protected readonly sedeSeleccionada = signal('');
+  protected readonly ventanaFormulario = signal<'consultorio' | 'especialidad' | 'servicio' | null>(null);
   protected readonly cargando = signal(true);
   protected readonly guardando = signal(false);
   protected readonly error = signal('');
@@ -160,6 +169,8 @@ export class CatalogoComponent {
     if (id) this.catalogo.consultoriosGestion(id).subscribe({ next: (items) => this.consultorios.set(items), error: () => this.error.set('No se pudieron cargar los consultorios de esta sede.') });
   }
 
+  protected abrirNuevoConsultorio(): void { this.nuevo(); this.error.set(''); this.mensaje.set(''); this.ventanaFormulario.set('consultorio'); }
+
   protected guardar(): void {
     if (!this.form.nombre.trim() || !this.sedeSeleccionada()) return;
     this.guardando.set(true); this.error.set(''); this.mensaje.set('');
@@ -176,10 +187,10 @@ export class CatalogoComponent {
   }
 
   protected editar(sala: Consultorio): void {
-    this.editando.set(sala.id); this.form = { nombre: sala.nombre, tipo: sala.tipo, capacidad: sala.capacidad }; this.mensaje.set(''); this.error.set('');
+    this.editando.set(sala.id); this.form = { nombre: sala.nombre, tipo: sala.tipo, capacidad: sala.capacidad }; this.mensaje.set(''); this.error.set(''); this.ventanaFormulario.set('consultorio');
   }
 
-  protected nuevo(): void { this.editando.set(''); this.form = { nombre: '', tipo: 'CONSULTA', capacidad: 1 }; }
+  protected nuevo(): void { this.editando.set(''); this.form = { nombre: '', tipo: 'CONSULTA', capacidad: 1 }; this.ventanaFormulario.set(null); }
 
   protected cambiarEstado(sala: Consultorio): void {
     this.error.set(''); this.mensaje.set('');
@@ -224,14 +235,16 @@ export class CatalogoComponent {
     });
   }
 
+  protected abrirNuevaEspecialidad(): void { this.nuevaEspecialidad(); this.error.set(''); this.mensaje.set(''); this.ventanaFormulario.set('especialidad'); }
+
   protected editarEspecialidad(item: Especialidad): void {
     this.editandoEspecialidad.set(item.id);
     this.formEspecialidad = { nombre: item.nombre, codigo: item.codigo ?? '', descripcion: item.descripcion ?? '' };
-    this.error.set(''); this.mensaje.set('');
+    this.error.set(''); this.mensaje.set(''); this.ventanaFormulario.set('especialidad');
   }
 
   protected nuevaEspecialidad(): void {
-    this.editandoEspecialidad.set(''); this.formEspecialidad = { nombre: '', codigo: '', descripcion: '' };
+    this.editandoEspecialidad.set(''); this.formEspecialidad = { nombre: '', codigo: '', descripcion: '' }; this.ventanaFormulario.set(null);
   }
 
   protected cambiarEstadoEspecialidad(item: Especialidad): void {
@@ -282,11 +295,13 @@ export class CatalogoComponent {
       instrucciones_preparacion: item.instrucciones_preparacion,
       tipo_consultorio_requerido: item.tipo_consultorio_requerido ?? null,
     };
-    this.error.set(''); this.mensaje.set('');
+    this.error.set(''); this.mensaje.set(''); this.ventanaFormulario.set('servicio');
   }
 
+  protected abrirNuevoServicio(): void { this.nuevoServicio(); this.error.set(''); this.mensaje.set(''); this.ventanaFormulario.set('servicio'); }
+
   protected nuevoServicio(): void {
-    this.editandoServicio.set(''); this.formServicio = this.formularioServicioVacio();
+    this.editandoServicio.set(''); this.formServicio = this.formularioServicioVacio(); this.ventanaFormulario.set(null);
   }
 
   protected cambiarEstadoServicio(item: ServicioGestion): void {

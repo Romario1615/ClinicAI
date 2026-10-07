@@ -12,6 +12,7 @@ import {
 import { DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 
+import { VentanaFlotanteComponent } from './ventana-flotante.component';
 import { ApiService, type ImagenPacienteApi } from '../nucleo/servicios/api.service';
 import { PERMISOS } from '../nucleo/servicios/configuracion';
 import { SesionService } from '../nucleo/servicios/sesion.service';
@@ -31,7 +32,7 @@ const TIPOS = [
   selector: 'app-galeria-imagenes',
   standalone: true,
   host: { '(document:keydown.escape)': 'cerrarVisor()' },
-  imports: [DatePipe, FormsModule],
+  imports: [DatePipe, FormsModule, VentanaFlotanteComponent],
   templateUrl: './galeria-imagenes.component.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './galeria-imagenes.component.scss',
@@ -58,6 +59,7 @@ export class GaleriaImagenesComponent {
   /** La carga devolvió el 404 de acceso clínico: no se ofrece cargar imágenes. */
   protected readonly sinAcceso = signal(false);
   protected readonly exito = signal('');
+  protected readonly cargaAbierta = signal(false);
 
   protected tipo = 'FOTO_INTRAORAL';
   protected nivelSensibilidad: 'N2' | 'N3' = 'N2';
@@ -68,6 +70,23 @@ export class GaleriaImagenesComponent {
   protected descripcion = '';
   protected archivo: File | null = null;
   protected archivoNombre = '';
+
+  protected abrirCarga(): void {
+    this.error.set('');
+    this.cargaAbierta.set(true);
+  }
+
+  protected cerrarCarga(): void {
+    if (this.subiendo()) return;
+    this.cargaAbierta.set(false);
+    this.error.set('');
+    this.archivo = null;
+    this.archivoNombre = '';
+    this.piezas = '';
+    this.tomadaEn = '';
+    this.descripcion = '';
+    this.nivelSensibilidad = 'N2';
+  }
 
   constructor() {
     effect(() => {
@@ -133,6 +152,7 @@ export class GaleriaImagenesComponent {
       .subscribe({
         next: (imagen) => {
           this.subiendo.set(false);
+          this.cargaAbierta.set(false);
           this.archivo = null;
           this.archivoNombre = '';
           this.piezas = '';

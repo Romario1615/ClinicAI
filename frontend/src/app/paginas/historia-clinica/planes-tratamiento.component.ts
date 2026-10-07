@@ -1,6 +1,7 @@
 import { Component, computed, effect, inject, input, signal, ChangeDetectionStrategy } from '@angular/core';
 import { DatePipe } from '@angular/common';
 import { FotosClinicasComponent } from '../../compartido/fotos-clinicas.component';
+import { VentanaFlotanteComponent } from '../../compartido/ventana-flotante.component';
 import { PERMISOS } from '../../nucleo/servicios/configuracion';
 import { SesionService } from '../../nucleo/servicios/sesion.service';
 import { Router } from '@angular/router';
@@ -43,7 +44,7 @@ type AccionAbierta =
 @Component({
   selector: 'app-planes-tratamiento',
   standalone: true,
-  imports: [DatePipe, FormsModule, FotosClinicasComponent],
+  imports: [DatePipe, FormsModule, FotosClinicasComponent, VentanaFlotanteComponent],
   templateUrl: './planes-tratamiento.component.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './planes-tratamiento.component.scss',
@@ -392,13 +393,17 @@ export class PlanesTratamientoComponent {
   }
 
   protected abrirFormulario(): void {
-    this.mostrarFormulario.update((abierto) => !abierto);
+    this.mostrarFormulario.set(true);
     if (this.mostrarFormulario() && this.plantillas() === null) {
       this.api.plantillasPlan().subscribe({
         next: (lista) => this.plantillas.set(lista),
         error: () => this.plantillas.set([]),
       });
     }
+  }
+
+  protected cerrarFormulario(): void {
+    if (!this.guardando()) this.reiniciarFormulario();
   }
 
   /** Copia los procedimientos de la plantilla al borrador. El borrador se puede ajustar. */

@@ -19,6 +19,7 @@
  * lenta y dependiente de como siembre el generador.
  */
 import type { Page } from '@playwright/test';
+import AxeBuilder from '@axe-core/playwright';
 import { expect, test } from '../apoyo/prueba';
 
 import {
@@ -69,6 +70,111 @@ test.describe('Historia clinica', () => {
     await abrir(page, paciente.numero_documento ?? '', /abrir historia/i);
 
     await expect(page.locator('.nota').first()).toBeVisible();
+  });
+
+  test('la nueva nota SOAP se abre en Liquid Glass, es accesible y se adapta a móviles', async ({ page, request }) => {
+    const paciente = await pacienteConVersionAnterior(request);
+    await acceder(page, 'profesional');
+    await irA(page, /historia/i);
+    await abrir(page, paciente.numero_documento ?? '', /abrir historia/i);
+
+    await page.getByRole('button', { name: 'Nueva nota', exact: true }).click();
+    const editor = page.getByRole('dialog', { name: 'Nueva nota de evolución' });
+    await expect(editor).toBeVisible();
+    await editor.evaluate((dialog) => Promise.all(
+      dialog.getAnimations({ subtree: true }).map((animacion) => animacion.finished.catch(() => undefined)),
+    ));
+    const auditoria = await new AxeBuilder({ page })
+      .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
+      .include('dialog.capa')
+      .analyze();
+    expect(auditoria.violations.map((item) => item.id)).toEqual([]);
+
+    for (const ancho of [390, 320]) {
+      await page.setViewportSize({ width: ancho, height: 844 });
+      expect(
+        await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1),
+        `El editor de nota no debe desbordarse a ${ancho}px`,
+      ).toBeTruthy();
+    }
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await page.keyboard.press('Escape');
+    await expect(editor).toHaveCount(0);
+  });
+
+  test('la receta extensa usa una ventana accesible con el pie siempre disponible', async ({ page, request }) => {
+    const paciente = await pacienteConVersionAnterior(request);
+    await acceder(page, 'profesional');
+    await irA(page, /historia/i);
+    await abrir(page, paciente.numero_documento ?? '', /abrir historia/i);
+
+    await page.getByRole('tab', { name: 'Recetas' }).click();
+    await page.getByRole('button', { name: 'Nueva receta', exact: true }).click();
+    const editor = page.getByRole('dialog', { name: 'Nueva receta · borrador' });
+    await expect(editor).toBeVisible();
+    await editor.evaluate((dialog) => Promise.all(
+      dialog.getAnimations({ subtree: true }).map((animacion) => animacion.finished.catch(() => undefined)),
+    ));
+    const auditoria = await new AxeBuilder({ page })
+      .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
+      .include('dialog.capa')
+      .analyze();
+    expect(auditoria.violations.map((item) => item.id)).toEqual([]);
+    await expect(editor.locator('.ventana__pie')).toBeVisible();
+
+    for (const ancho of [390, 320]) {
+      await page.setViewportSize({ width: ancho, height: 844 });
+      expect(
+        await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1),
+        `El editor de receta no debe desbordarse a ${ancho}px`,
+      ).toBeTruthy();
+    }
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await page.keyboard.press('Escape');
+    await expect(editor).toHaveCount(0);
+  });
+
+  test('el Formulario MSP 033 usa una ventana amplia accesible con acciones fijas', async ({ page, request }) => {
+    const paciente = await pacienteConVersionAnterior(request);
+    await acceder(page, 'profesional');
+    await irA(page, /historia/i);
+    await abrir(page, paciente.numero_documento ?? '', /abrir historia/i);
+
+    const especialidadOdontologica = page
+      .locator('app-selector-especialidad [role="group"] button')
+      .filter({ hasText: /odontolog/i });
+    if (await especialidadOdontologica.count()) await especialidadOdontologica.first().click();
+    await page.getByRole('tab', { name: 'Formulario MSP 033' }).click();
+    await page.getByRole('button', { name: 'Registrar formulario' }).click();
+    const editor = page.getByRole('dialog', { name: 'Registrar atención' });
+    await expect(editor).toBeVisible();
+    await expect(editor.locator('.ventana--alta')).toBeVisible();
+    await expect(editor.locator('.ventana__pie button', { hasText: 'Guardar formulario' })).toBeVisible();
+    const desplazamiento = await editor.locator('.ventana__cuerpo').evaluate((cuerpo) => ({
+      altoContenido: cuerpo.scrollHeight,
+      altoVisible: cuerpo.clientHeight,
+    }));
+    expect(desplazamiento.altoContenido).toBeGreaterThan(desplazamiento.altoVisible);
+    await editor.evaluate((dialog) => Promise.all(
+      dialog.getAnimations({ subtree: true }).map((animacion) => animacion.finished.catch(() => undefined)),
+    ));
+
+    const auditoria = await new AxeBuilder({ page })
+      .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
+      .include('dialog.capa')
+      .analyze();
+    expect(auditoria.violations.map((item) => item.id)).toEqual([]);
+
+    for (const ancho of [390, 320]) {
+      await page.setViewportSize({ width: ancho, height: 844 });
+      expect(
+        await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1),
+        `El formulario MSP 033 no debe desbordarse a ${ancho}px`,
+      ).toBeTruthy();
+    }
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await page.keyboard.press('Escape');
+    await expect(editor).toHaveCount(0);
   });
 
   test('las versiones anteriores se conservan y se pueden ver', async ({ page, request }) => {
@@ -181,21 +287,62 @@ test('el profesional completa un plan y atiende su control posterior', async ({ 
   await page.getByRole('tab', { name: 'Planes de tratamiento' }).click();
   const planes = page.getByRole('region', { name: 'Planes de tratamiento' });
   await planes.getByRole('button', { name: 'Crear borrador' }).click();
-  await planes.getByLabel('Título del plan').fill(titulo);
-  await planes.getByLabel('Descripción').fill('Restauración sintetica de prueba');
-  await planes.getByLabel('Pieza FDI (opcional)').fill('36');
-  await planes.getByLabel('Caras FDI').fill('OM');
-  await planes.getByLabel('Precio (USD)').fill('85.00');
-  await planes.getByRole('button', { name: 'Añadir al plan' }).click();
+  const editor = page.getByRole('dialog', { name: 'Crear borrador de tratamiento' });
+  await expect(editor).toBeVisible();
+  await editor.evaluate((dialog) => Promise.all(
+    dialog.getAnimations({ subtree: true }).map((animacion) => animacion.finished.catch(() => undefined)),
+  ));
+  const incumplimientos = await new AxeBuilder({ page })
+    .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
+    .include('dialog.capa')
+    .analyze();
+  expect(incumplimientos.violations.map((item) => item.id)).toEqual([]);
+  for (const ancho of [390, 320]) {
+    await page.setViewportSize({ width: ancho, height: 844 });
+    const desbordamiento = await page.evaluate(() => ({
+      viewport: window.innerWidth,
+      documento: document.documentElement.scrollWidth,
+      cuerpo: document.body.scrollWidth,
+      contenido: [...document.querySelectorAll<HTMLElement>('.contenido, main, .planes, .lista-planes, dialog, .ventana')]
+        .map((elemento) => ({
+          selector: elemento.className ? `${elemento.tagName.toLowerCase()}.${String(elemento.className).replace(/\s+/g, '.')}` : elemento.tagName.toLowerCase(),
+          ancho: Math.round(elemento.getBoundingClientRect().width),
+          cliente: elemento.clientWidth,
+          scroll: elemento.scrollWidth,
+          derecha: Math.round(elemento.getBoundingClientRect().right),
+        })),
+      elementos: [...document.querySelectorAll<HTMLElement>('body *')]
+        .map((elemento) => ({
+          selector: `${elemento.tagName.toLowerCase()}${elemento.className && typeof elemento.className === 'string' ? `.${elemento.className.trim().replace(/\s+/g, '.')}` : ''}`,
+          izquierda: Math.round(elemento.getBoundingClientRect().left),
+          derecha: Math.round(elemento.getBoundingClientRect().right),
+          ancho: Math.round(elemento.getBoundingClientRect().width),
+          texto: (elemento.textContent ?? '').trim().slice(0, 80),
+          padre: elemento.parentElement?.className,
+        }))
+        .filter((elemento) => elemento.izquierda < -1 || elemento.derecha > window.innerWidth + 1),
+    }));
+    expect(desbordamiento.documento <= desbordamiento.viewport + 1,
+      `El editor del plan no debe desbordarse a ${ancho}px: ${JSON.stringify({ contenido: desbordamiento.contenido, elementos: desbordamiento.elementos.filter((elemento) => elemento.derecha > ancho + 1).slice(-10) })}`,
+    ).toBeTruthy();
+  }
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await editor.getByLabel('Título del plan').fill(titulo);
+  await editor.getByLabel('Descripción').fill('Restauración sintetica de prueba');
+  await editor.getByLabel('Pieza FDI (opcional)').fill('36');
+  await editor.getByLabel('Caras FDI').fill('OM');
+  await editor.getByLabel('Precio (USD)').fill('85.00');
+  await editor.getByRole('button', { name: 'Añadir al plan' }).click();
   const guardado = page.waitForResponse(
     (respuesta) =>
       respuesta.url().includes(`/odontologia/pacientes/${paciente.id}/planes-tratamiento`) &&
       respuesta.request().method() === 'POST',
   );
-  await planes.getByRole('button', { name: 'Guardar borrador' }).click();
+  await editor.getByRole('button', { name: 'Guardar borrador' }).click();
   const respuestaPlan = await guardado;
   expect(respuestaPlan.status()).toBe(201);
   const procedimientoId = (await respuestaPlan.json()).procedimientos[0].id as string;
+  await expect(editor).toHaveCount(0);
   await expect(planes.getByRole('status').filter({ hasText: 'Borrador guardado' })).toBeVisible();
 
   const plan = planes.locator('article.plan').filter({ hasText: titulo });
@@ -227,11 +374,13 @@ test('el profesional completa un plan y atiende su control posterior', async ({ 
   const hueco = huecosVisiblesEnAgenda(page).first();
   await expect(hueco, 'debe haber al menos un turno disponible para agendar la fase').toBeVisible();
   await hueco.click();
+  const dialogoReserva = page.getByRole('dialog', { name: 'Reservar cita' });
+  await expect(dialogoReserva).toBeVisible();
   const reserva = page.waitForResponse(
     (respuesta) =>
       respuesta.url().endsWith('/agenda/citas') && respuesta.request().method() === 'POST',
   );
-  await page.locator('.panel').getByRole('button', { name: 'Confirmar cita' }).click();
+  await dialogoReserva.getByRole('button', { name: 'Confirmar cita', exact: true }).click();
   const respuestaCita = await reserva;
   expect(respuestaCita.status()).toBe(201);
   expect(respuestaCita.request().postDataJSON().procedimiento_plan_id).toBe(procedimientoId);

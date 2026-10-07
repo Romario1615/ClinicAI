@@ -73,6 +73,22 @@ describe('GaleriaImagenesComponent', () => {
         expect(texto).not.toContain('Cargar imagen');
     });
 
+    it('abre la carga en una ventana Liquid Glass y descarta metadatos al cancelar', () => {
+        http.expectOne((p) => p.url === LISTA).flush([]);
+        c.abrirCarga();
+        fixture.detectChanges();
+        const elemento = fixture.nativeElement as HTMLElement;
+        expect(elemento.querySelector('dialog[open]')?.textContent).toContain('Cargar imagen clínica');
+        c.descripcion = 'borrador privado';
+        c.piezas = '14, 15';
+        c.cerrarCarga();
+        fixture.detectChanges();
+        expect(elemento.querySelector('dialog[open]')).toBeNull();
+        expect(c.descripcion).toBe('');
+        expect(c.piezas).toBe('');
+        expect(http.match({ method: 'POST', url: LISTA })).toHaveLength(0);
+    });
+
     it('filtra por tipo y pieza', () => {
         http.expectOne((p) => p.url === LISTA).flush([]);
         c.filtroTipo = 'FOTO_INTRAORAL';
@@ -99,8 +115,10 @@ describe('GaleriaImagenesComponent', () => {
             'historia_clinica.leer_sensible',
         ]);
         fixture.detectChanges();
-        expect((fixture.nativeElement as HTMLElement).textContent).toContain('Sensibilidad clínica');
         http.expectOne((p) => p.url === LISTA).flush([]);
+        c.abrirCarga();
+        fixture.detectChanges();
+        expect((fixture.nativeElement as HTMLElement).textContent).toContain('Sensibilidad clínica');
         const campo = document.createElement('input');
         Object.defineProperty(campo, 'files', {
             value: { item: () => archivo('rx.png', 'x', 'image/png') },

@@ -187,6 +187,8 @@
 /* Vidrio líquido con desenfoque real: dentro no hay visores ni diálogos
    `position: fixed` que el bloque contenedor pudiera atrapar. */
 .acceso__tarjeta {
+  position: relative;
+  z-index: 1;
   width: 100%;
   max-width: 440px;
   padding: clamp(1.5rem, 4vw, 2.75rem);

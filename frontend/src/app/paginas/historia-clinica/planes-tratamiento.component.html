@@ -11,7 +11,7 @@
         type="button"
         (click)="abrirFormulario()"
       >
-        {{ mostrarFormulario() ? 'Cerrar borrador' : 'Crear borrador' }}
+        Crear borrador
       </button>
     }
   </div>
@@ -24,9 +24,17 @@
   }
 
   @if (mostrarFormulario() && puedeEditar()) {
-    <form class="tarjeta editor-plan" (ngSubmit)="guardarBorrador()">
-      <h3>Nuevo borrador</h3>
-      <p>El borrador no se envía al paciente ni se incorpora a su odontograma.</p>
+    <app-ventana-flotante
+      ceja="Planificación dental"
+      titulo="Crear borrador de tratamiento"
+      forma="centrada"
+      [anchoMaximo]="940"
+      [altoCompleto]="true"
+      [cierraAlPulsarFuera]="false"
+      (cerrar)="cerrarFormulario()"
+    >
+      <form id="formulario-plan" class="editor-plan" (ngSubmit)="guardarBorrador()">
+      <p class="campo__ayuda">El borrador no se envía al paciente ni se incorpora a su odontograma.</p>
       @if (plantillas()?.length) {
         <label class="campo">
           <span class="campo__etiqueta">Partir de una plantilla (opcional)</span>
@@ -58,13 +66,12 @@
             name="descripcionProcedimiento"
             [(ngModel)]="descripcionProcedimiento"
             maxlength="300"
-            required
           />
         </label>
         <div class="campos-procedimiento">
           <label class="campo">
             <span class="campo__etiqueta">Fase</span>
-            <input class="campo__control" type="number" name="fase" [(ngModel)]="fase" min="1" max="20" required />
+            <input class="campo__control" type="number" name="fase" [(ngModel)]="fase" min="1" max="20" />
           </label>
           <label class="campo">
             <span class="campo__etiqueta">Pieza FDI (opcional)</span>
@@ -76,7 +83,7 @@
           </label>
           <label class="campo">
             <span class="campo__etiqueta">Precio (USD)</span>
-            <input class="campo__control" type="number" name="precioPlan" [(ngModel)]="precio" min="0" step="0.01" required />
+            <input class="campo__control" type="number" name="precioPlan" [(ngModel)]="precio" min="0" step="0.01" />
           </label>
         </div>
         <button class="boton" type="button" (click)="agregarProcedimiento()">
@@ -119,18 +126,19 @@
           </select>
         </label>
       }
-      <div class="acciones-plan">
-        <button class="boton boton--principal" type="submit" [disabled]="guardando() || !procedimientos().length">
-          {{ guardando() ? 'Guardando…' : 'Guardar borrador' }}
-        </button>
+      </form>
+      <div pie class="acciones-plan">
+        <button class="boton" type="button" [disabled]="guardando()" (click)="cerrarFormulario()">Descartar</button>
         @if (nivelSensibilidad !== 'N3') {
           <button class="boton" type="button" [disabled]="guardando() || !procedimientos().length" (click)="guardarComoPlantilla()">
             Guardar como plantilla
           </button>
         }
-        <button class="boton" type="button" (click)="reiniciarFormulario()">Descartar</button>
+        <button class="boton boton--principal" type="submit" form="formulario-plan" [disabled]="guardando() || !procedimientos().length">
+          {{ guardando() ? 'Guardando…' : 'Guardar borrador' }}
+        </button>
       </div>
-    </form>
+    </app-ventana-flotante>
   }
 
   @if (cargando()) {

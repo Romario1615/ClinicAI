@@ -26,6 +26,29 @@ describe('AnamnesisConfiguracionComponent', () => {
 
     afterEach(() => http.verify());
 
+    it('abre el diseñador en una ventana Liquid Glass con acciones persistentes', () => {
+        fixture.detectChanges();
+        http.expectOne(`${BASE}/historia/anamnesis/plantillas`).flush([]);
+        fixture.detectChanges();
+
+        const nueva = Array.from(fixture.nativeElement.querySelectorAll('button') as NodeListOf<HTMLButtonElement>)
+            .find((boton) => boton.textContent?.includes('Nueva plantilla'));
+        expect(nueva).toBeDefined();
+        nueva!.click();
+        fixture.detectChanges();
+
+        const dialogo = fixture.nativeElement.querySelector('dialog[open][aria-modal="true"]') as HTMLElement | null;
+        expect(dialogo).not.toBeNull();
+        expect(dialogo?.querySelector('#formulario-plantilla-anamnesis')).not.toBeNull();
+        expect(dialogo?.querySelector('.ventana__pie button[type="submit"]')?.textContent).toContain('Guardar borrador');
+        expect(dialogo?.querySelector('.ventana__cuerpo .pregunta-editor')).not.toBeNull();
+
+        const cancelar = Array.from(dialogo!.querySelectorAll('button')).find((boton) => boton.textContent?.trim() === 'Cancelar');
+        cancelar?.click();
+        fixture.detectChanges();
+        expect(fixture.nativeElement.querySelector('dialog[open]')).toBeNull();
+    });
+
     it('crea un borrador en la clínica y publica desde la pantalla de configuración', () => {
         fixture.detectChanges();
         http.expectOne(`${BASE}/historia/anamnesis/plantillas`).flush([]);

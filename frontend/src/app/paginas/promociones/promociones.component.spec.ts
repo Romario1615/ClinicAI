@@ -76,13 +76,20 @@ describe('PromocionesComponent', () => {
     it('crea un borrador con su segmento', () => {
         montar(['promocion.gestionar'], []);
         expect(texto()).toContain('Aún no hay campañas');
-        c.creando.set(true);
+        const abrir = (fixture.nativeElement as HTMLElement).querySelector<HTMLButtonElement>('.portada .boton');
+        abrir?.click();
+        fixture.detectChanges();
+        const dialogo = (fixture.nativeElement as HTMLElement).querySelector('dialog[open]');
+        expect(dialogo?.getAttribute('aria-modal')).toBe('true');
+        expect(dialogo?.getAttribute('aria-label')).toBe('Nueva campaña');
+        expect(dialogo?.querySelector('form.nueva')).not.toBeNull();
         c.nombre = 'Reactivacion';
         c.texto = 'Le esperamos para su control anual con descuento.';
         c.sedeId = 's-1';
         c.tipoAudiencia = 'reactivar';
         c.dias = 365;
-        c.crear();
+        fixture.detectChanges();
+        dialogo?.querySelector<HTMLButtonElement>('button[type="submit"]')?.click();
         const alta = http.expectOne(RUTA);
         expect(alta.request.body.segmento).toEqual({
             sede_id: 's-1',
@@ -91,7 +98,9 @@ describe('PromocionesComponent', () => {
         });
         alta.flush(campana({ segmento: { sede_id: 's-1', sin_visita_hace_dias: 365 } }));
         http.expectOne(`${RUTA}/camp-1/audiencia`).flush({ con_consentimiento: 2 });
+        fixture.detectChanges();
         expect(c.creando()).toBe(false);
+        expect((fixture.nativeElement as HTMLElement).querySelector('dialog[open]')).toBeNull();
         expect(c.describirSegmento(c.seleccionada())).toContain('Sede Centro');
         expect(c.describirSegmento(c.seleccionada())).toContain('365');
     });

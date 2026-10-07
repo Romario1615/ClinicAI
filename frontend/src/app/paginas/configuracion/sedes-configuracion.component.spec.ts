@@ -42,7 +42,7 @@ describe('SedesConfiguracionComponent', () => {
         expect(fixture.nativeElement.textContent).toContain('60 minutos');
     });
 
-    it('edita y persiste la configuración de la sede', async () => {
+    it('edita la sede en una ventana Liquid Glass y persiste los cambios', async () => {
         const editar = fixture.debugElement.query(By.css('.sede__cabecera button'));
         expect(editar).not.toBeNull();
         editar.triggerEventHandler('click');
@@ -50,12 +50,17 @@ describe('SedesConfiguracionComponent', () => {
         await fixture.whenStable();
         fixture.detectChanges();
 
-        const nombre = fixture.nativeElement.querySelector('.sede__formulario input') as HTMLInputElement;
+        const dialogo = fixture.nativeElement.querySelector('dialog[open][aria-modal="true"]') as HTMLDialogElement;
+        expect(dialogo).not.toBeNull();
+        expect(dialogo.getAttribute('aria-label')).toContain('Editar sede');
+
+        const nombre = dialogo.querySelector('.sede__formulario input') as HTMLInputElement;
         expect(nombre).not.toBeNull();
         nombre.value = 'Centro Norte';
         nombre.dispatchEvent(new Event('input'));
-        const form = fixture.nativeElement.querySelector('form') as HTMLFormElement;
-        form.dispatchEvent(new Event('submit'));
+        const guardar = dialogo.querySelector<HTMLButtonElement>('.ventana__pie button[type="submit"]');
+        expect(guardar?.textContent).toContain('Guardar cambios');
+        guardar?.click();
         fixture.detectChanges();
 
         expect(catalogo.actualizarSede).toHaveBeenCalledWith('sede-1', expect.objectContaining({
@@ -64,20 +69,39 @@ describe('SedesConfiguracionComponent', () => {
             minutos_antelacion_minima: 60,
         }));
         expect(fixture.nativeElement.textContent).toContain('La información de la sede se actualizó.');
+        expect(fixture.nativeElement.querySelector('dialog[open]')).toBeNull();
     });
 
-    it('conserva el formulario y muestra el error de API si el guardado falla', async () => {
+    it('cierra sin modificar datos cuando se cancela', async () => {
+        const editar = fixture.debugElement.query(By.css('.sede__cabecera button'));
+        editar.triggerEventHandler('click');
+        fixture.detectChanges();
+        await fixture.whenStable();
+        fixture.detectChanges();
+
+        const dialogo = fixture.nativeElement.querySelector('dialog[open]') as HTMLDialogElement;
+        const cancelar = Array.from(dialogo.querySelectorAll('button')).find((boton) => boton.textContent?.includes('Cancelar'));
+        expect(cancelar).toBeDefined();
+        cancelar?.click();
+        fixture.detectChanges();
+
+        expect(fixture.nativeElement.querySelector('dialog[open]')).toBeNull();
+        expect(fixture.nativeElement.querySelector('form')).toBeNull();
+        expect(catalogo.actualizarSede).not.toHaveBeenCalled();
+    });
+
+    it('conserva el diálogo abierto y muestra el error de API si el guardado falla', async () => {
         catalogo.actualizarSede.mockReturnValue(throwError(() => new Error('fallo')));
         const editar = fixture.debugElement.query(By.css('.sede__cabecera button'));
         expect(editar).not.toBeNull();
         editar.triggerEventHandler('click');
         fixture.detectChanges();
         await fixture.whenStable();
-        const form = fixture.nativeElement.querySelector('form') as HTMLFormElement;
+        const form = fixture.nativeElement.querySelector('dialog form') as HTMLFormElement;
         form.dispatchEvent(new Event('submit'));
         fixture.detectChanges();
 
         expect(fixture.nativeElement.textContent).toContain('No se pudo guardar la sede.');
-        expect(fixture.nativeElement.querySelector('form')).not.toBeNull();
+        expect(fixture.nativeElement.querySelector('dialog[open] form')).not.toBeNull();
     });
 });

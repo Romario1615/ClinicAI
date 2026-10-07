@@ -11,6 +11,7 @@ import { AgendaConfiguracionComponent } from './agenda-configuracion.component';
 import { AgendaProfesionalesComponent } from './agenda-profesionales.component';
 import { BloqueosAgendaComponent } from './bloqueos-agenda.component';
 import { SedesConfiguracionComponent } from './sedes-configuracion.component';
+import { VentanaFlotanteComponent } from '../../compartido/ventana-flotante.component';
 import {
   IntegracionesService,
   type ActualizacionIntegracion,
@@ -40,7 +41,7 @@ import { AnamnesisConfiguracionComponent } from './anamnesis-configuracion.compo
 @Component({
   selector: 'app-configuracion',
   standalone: true,
-  imports: [FormsModule, RouterLink, IconoComponent, AgendaConfiguracionComponent, AgendaProfesionalesComponent, BloqueosAgendaComponent, SedesConfiguracionComponent, IntegracionesIaComponent, AnamnesisConfiguracionComponent],
+  imports: [FormsModule, RouterLink, IconoComponent, VentanaFlotanteComponent, AgendaConfiguracionComponent, AgendaProfesionalesComponent, BloqueosAgendaComponent, SedesConfiguracionComponent, IntegracionesIaComponent, AnamnesisConfiguracionComponent],
   template: `
     <header class="pagina-cabecera">
       <div>
@@ -66,24 +67,47 @@ import { AnamnesisConfiguracionComponent } from './anamnesis-configuracion.compo
 
     @if (seccion() === 'clinica') {
       <section class="tarjeta ficha-clinica">
-        <div class="ficha-clinica__intro"><p class="ceja">PERFIL INSTITUCIONAL</p><h2>Información de la clínica</h2><p>Estos datos se aplican a la clínica de tu sesión. El acceso se controla con el permiso de clínica.</p></div>
+        <div class="ficha-clinica__cabecera">
+          <div class="ficha-clinica__intro"><p class="ceja">PERFIL INSTITUCIONAL</p><h2>Información de la clínica</h2><p>Estos datos se aplican a la clínica de tu sesión. El acceso se controla con el permiso de clínica.</p></div>
+          @if (perfilGuardado() && sesion.tienePermiso(PERMISOS.clinicaEscribir)) {
+            <button class="boton boton--principal" type="button" (click)="abrirEditorClinica()">Editar información</button>
+          }
+        </div>
         @if (cargandoClinica()) { <p role="status">Cargando datos…</p> }
-        @if (errorClinica()) { <p class="mensaje mensaje--error" role="alert">{{ errorClinica() }}</p> }
+        @if (errorClinica() && !editorClinicaAbierto()) { <p class="mensaje mensaje--error" role="alert">{{ errorClinica() }}</p> }
         @if (avisoClinica()) { <p class="mensaje mensaje--bien" role="status">{{ avisoClinica() }}</p> }
-        @if (clinica(); as datos) {
-          <form class="form-clinica" (ngSubmit)="guardarClinica()">
-            <label class="campo"><span class="campo__etiqueta">Nombre de la clínica</span><input class="campo__control" name="clinica-nombre" [(ngModel)]="datos.nombre" maxlength="200" required [disabled]="!sesion.tienePermiso(PERMISOS.clinicaEscribir)" /></label>
-            <label class="campo"><span class="campo__etiqueta">Identificación fiscal</span><input class="campo__control" name="clinica-ruc" [(ngModel)]="datos.identificacion_fiscal" maxlength="50" [disabled]="!sesion.tienePermiso(PERMISOS.clinicaEscribir)" /></label>
-            <label class="campo"><span class="campo__etiqueta">Teléfono</span><input class="campo__control" name="clinica-telefono" [(ngModel)]="datos.telefono" maxlength="32" [disabled]="!sesion.tienePermiso(PERMISOS.clinicaEscribir)" /></label>
-            <label class="campo"><span class="campo__etiqueta">Correo institucional</span><input class="campo__control" name="clinica-correo" type="email" [(ngModel)]="datos.correo" maxlength="200" [disabled]="!sesion.tienePermiso(PERMISOS.clinicaEscribir)" /></label>
-            <label class="campo"><span class="campo__etiqueta">Zona horaria (IANA)</span><input class="campo__control" name="clinica-zona" [(ngModel)]="datos.zona_horaria" placeholder="America/Guayaquil" required [disabled]="!sesion.tienePermiso(PERMISOS.clinicaEscribir)" /></label>
-            <label class="campo"><span class="campo__etiqueta">Idioma</span><input class="campo__control" name="clinica-idioma" [(ngModel)]="datos.idioma" maxlength="8" required [disabled]="!sesion.tienePermiso(PERMISOS.clinicaEscribir)" /></label>
-            <label class="campo"><span class="campo__etiqueta">Moneda</span><input class="campo__control" name="clinica-moneda" [(ngModel)]="datos.moneda" maxlength="3" required [disabled]="!sesion.tienePermiso(PERMISOS.clinicaEscribir)" /></label>
-            @if (sesion.tienePermiso(PERMISOS.clinicaEscribir)) { <button class="boton boton--principal" type="submit" [disabled]="guardandoClinica()">{{ guardandoClinica() ? 'Guardando…' : 'Guardar información' }}</button> }
-            @else { <p class="campo__ayuda">Tienes acceso de lectura. Solicita el permiso «clinica.escribir» para modificar estos datos.</p> }
-          </form>
+        @if (perfilGuardado(); as datos) {
+          <dl class="perfil-clinica">
+            <div><dt>Nombre de la clínica</dt><dd>{{ datos.nombre }}</dd></div>
+            <div><dt>Identificación fiscal</dt><dd>{{ datos.identificacion_fiscal || 'Sin registrar' }}</dd></div>
+            <div><dt>Teléfono</dt><dd>{{ datos.telefono || 'Sin registrar' }}</dd></div>
+            <div><dt>Correo institucional</dt><dd>{{ datos.correo || 'Sin registrar' }}</dd></div>
+            <div><dt>Zona horaria</dt><dd>{{ datos.zona_horaria }}</dd></div>
+            <div><dt>Idioma</dt><dd>{{ datos.idioma }}</dd></div>
+            <div><dt>Moneda</dt><dd>{{ datos.moneda }}</dd></div>
+          </dl>
+          @if (!sesion.tienePermiso(PERMISOS.clinicaEscribir)) { <p class="campo__ayuda">Tienes acceso de lectura. Solicita el permiso «clinica.escribir» para modificar estos datos.</p> }
         }
       </section>
+
+      @if (editorClinicaAbierto() && clinica(); as datos) {
+        <app-ventana-flotante ceja="Perfil institucional" titulo="Editar información de la clínica" forma="centrada" [anchoMaximo]="720" [cierraAlPulsarFuera]="false" (cerrar)="cerrarEditorClinica()">
+          <form id="formulario-clinica" class="form-clinica" (ngSubmit)="guardarClinica()">
+            <label class="campo"><span class="campo__etiqueta">Nombre de la clínica</span><input class="campo__control" name="clinica-nombre" [(ngModel)]="datos.nombre" maxlength="200" required /></label>
+            <label class="campo"><span class="campo__etiqueta">Identificación fiscal</span><input class="campo__control" name="clinica-ruc" [(ngModel)]="datos.identificacion_fiscal" maxlength="50" /></label>
+            <label class="campo"><span class="campo__etiqueta">Teléfono</span><input class="campo__control" name="clinica-telefono" [(ngModel)]="datos.telefono" maxlength="32" /></label>
+            <label class="campo"><span class="campo__etiqueta">Correo institucional</span><input class="campo__control" name="clinica-correo" type="email" [(ngModel)]="datos.correo" maxlength="200" /></label>
+            <label class="campo"><span class="campo__etiqueta">Zona horaria (IANA)</span><input class="campo__control" name="clinica-zona" [(ngModel)]="datos.zona_horaria" placeholder="America/Guayaquil" required /></label>
+            <label class="campo"><span class="campo__etiqueta">Idioma</span><input class="campo__control" name="clinica-idioma" [(ngModel)]="datos.idioma" maxlength="8" required /></label>
+            <label class="campo"><span class="campo__etiqueta">Moneda</span><input class="campo__control" name="clinica-moneda" [(ngModel)]="datos.moneda" maxlength="3" required /></label>
+          </form>
+          @if (errorClinica()) { <p class="mensaje mensaje--error" role="alert">{{ errorClinica() }}</p> }
+          <div pie class="dialogo__acciones">
+            <button class="boton" type="button" [disabled]="guardandoClinica()" (click)="cerrarEditorClinica()">Cancelar</button>
+            <button class="boton boton--principal" type="submit" form="formulario-clinica" [disabled]="guardandoClinica()">{{ guardandoClinica() ? 'Guardando…' : 'Guardar información' }}</button>
+          </div>
+        </app-ventana-flotante>
+      }
     }
 
     @if (seccion() === 'anamnesis' && sesion.tienePermiso(PERMISOS.configuracionEscribir)) {
@@ -110,7 +134,7 @@ import { AnamnesisConfiguracionComponent } from './anamnesis-configuracion.compo
     </section>
 
     @if (aviso()) { <p class="mensaje mensaje--bien" role="status">{{ aviso() }}</p> }
-    @if (error()) { <p class="mensaje mensaje--error" role="alert">{{ error() }}</p> }
+    @if (error() && !editorIntegracion()) { <p class="mensaje mensaje--error" role="alert">{{ error() }}</p> }
     @if (cargando()) { <p class="tarjeta" role="status">Cargando configuración…</p> }
 
     @if (cargada()) {
@@ -121,29 +145,9 @@ import { AnamnesisConfiguracionComponent } from './anamnesis-configuracion.compo
           <div><p class="ceja">INTELIGENCIA ARTIFICIAL</p><h2>Anthropic</h2>
             <p>Credenciales y límites del modelo conversacional.</p></div>
         </header>
-        <form (ngSubmit)="guardar('anthropic')">
-          <label class="interruptor"><input type="checkbox" name="anthropic-habilitada" [(ngModel)]="anthropic.habilitada" />
-            <span><strong>Integración habilitada</strong><small>Usar la cuenta de Anthropic de esta clínica.</small></span></label>
-          <label class="campo"><span class="campo__etiqueta"><app-icono nombre="llave-api" [tamano]="15" /> Clave API</span>
-            <input class="campo__control" type="password" name="anthropic-api-key" autocomplete="new-password" [(ngModel)]="anthropic.secretos['api_key']" placeholder="sk-ant-…" />
-          </label>
-          @if (anthropic.guardados['api_key']) {
-            <label class="quitar-secreto"><input type="checkbox" name="anthropic-quitar-key" [(ngModel)]="anthropic.eliminar['api_key']" /> Eliminar clave guardada</label>
-          }
-          <div class="campos-dos">
-            <label class="campo"><span class="campo__etiqueta">Modelo</span>
-              <input class="campo__control" name="anthropic-modelo" [(ngModel)]="anthropic.ajustes['modelo']" maxlength="120" required />
-            </label>
-            <label class="campo"><span class="campo__etiqueta">Tokens máximos</span>
-              <input class="campo__control" type="number" name="anthropic-tokens" [(ngModel)]="anthropic.ajustes['max_tokens']" min="64" max="32000" required />
-            </label>
-          </div>
-          <label class="campo"><span class="campo__etiqueta">Temperatura</span>
-            <input class="campo__control" type="number" name="anthropic-temperatura" [(ngModel)]="anthropic.ajustes['temperatura']" min="0" max="1" step="0.1" required />
-          </label>
-          <button class="boton boton--principal" type="submit" [disabled]="guardando()">Guardar Anthropic</button>
-          <p class="estado-credencial">{{ estadoSecreto(anthropic, 'api_key') }}</p>
-        </form>
+        <p class="integracion__estado"><span class="integracion__punto" [class.integracion__punto--activa]="anthropic.habilitada" aria-hidden="true"></span>{{ anthropic.habilitada ? 'Servicio habilitado' : 'Servicio deshabilitado' }}</p>
+        <p class="estado-credencial">{{ estadoSecreto(anthropic, 'api_key') }} · Modelo {{ anthropic.ajustes['modelo'] }}</p>
+        <button class="boton" type="button" (click)="abrirEditorIntegracion('anthropic')">Configurar Anthropic</button>
       </section>
 
       <section class="tarjeta integracion">
@@ -152,31 +156,9 @@ import { AnamnesisConfiguracionComponent } from './anamnesis-configuracion.compo
           <div><p class="ceja">MENSAJERÍA</p><h2>WhatsApp Cloud API</h2>
             <p>Datos del número de Meta y validación de webhooks.</p></div>
         </header>
-        <form (ngSubmit)="guardar('whatsapp')">
-          <label class="interruptor"><input type="checkbox" name="whatsapp-habilitada" [(ngModel)]="whatsapp.habilitada" />
-            <span><strong>Integración habilitada</strong><small>Conectar el número de WhatsApp de esta clínica.</small></span></label>
-          <label class="campo"><span class="campo__etiqueta">ID del número de teléfono</span>
-            <input class="campo__control" name="whatsapp-numero-id" [(ngModel)]="whatsapp.ajustes['id_numero_telefono']" />
-          </label>
-          <label class="campo"><span class="campo__etiqueta">ID de la cuenta de negocio</span>
-            <input class="campo__control" name="whatsapp-cuenta-id" [(ngModel)]="whatsapp.ajustes['id_cuenta_negocio']" />
-          </label>
-          <div class="campos-dos">
-            <label class="campo"><span class="campo__etiqueta">Versión de API</span>
-              <input class="campo__control" name="whatsapp-version" [(ngModel)]="whatsapp.ajustes['version_api']" placeholder="v21.0" />
-            </label>
-            <label class="interruptor interruptor--campo"><input type="checkbox" name="whatsapp-validar-firma" [(ngModel)]="whatsapp.ajustes['validar_firma']" /> Validar firma de Meta</label>
-          </div>
-          @for (campo of camposWhatsApp; track campo.clave) {
-            <label class="campo"><span class="campo__etiqueta">{{ campo.etiqueta }}</span>
-              <input class="campo__control" type="password" [name]="'whatsapp-' + campo.clave" autocomplete="new-password" [(ngModel)]="whatsapp.secretos[campo.clave]" [placeholder]="campo.placeholder" />
-            </label>
-            @if (whatsapp.guardados[campo.clave]) {
-              <label class="quitar-secreto"><input type="checkbox" [name]="'whatsapp-quitar-' + campo.clave" [(ngModel)]="whatsapp.eliminar[campo.clave]" /> Eliminar {{ campo.etiqueta.toLowerCase() }} guardado</label>
-            }
-          }
-          <button class="boton boton--principal" type="submit" [disabled]="guardando()">Guardar WhatsApp</button>
-        </form>
+        <p class="integracion__estado"><span class="integracion__punto" [class.integracion__punto--activa]="whatsapp.habilitada" aria-hidden="true"></span>{{ whatsapp.habilitada ? 'Servicio habilitado' : 'Servicio deshabilitado' }}</p>
+        <p class="estado-credencial">{{ resumenCredenciales(whatsapp) }} · {{ textoAjuste(whatsapp, 'id_numero_telefono', 'Número sin definir') }}</p>
+        <button class="boton" type="button" (click)="abrirEditorIntegracion('whatsapp')">Configurar WhatsApp</button>
       </section>
 
       <section class="tarjeta integracion">
@@ -185,27 +167,9 @@ import { AnamnesisConfiguracionComponent } from './anamnesis-configuracion.compo
           <div><p class="ceja">CALENDARIOS</p><h2>Google Calendar</h2>
             <p>Credenciales OAuth para vincular calendarios profesionales.</p></div>
         </header>
-        <form (ngSubmit)="guardar('google_calendar')">
-          <label class="interruptor"><input type="checkbox" name="google-habilitada" [(ngModel)]="google.habilitada" />
-            <span><strong>Integración habilitada</strong><small>Permitir conexiones de calendario para esta clínica.</small></span></label>
-          <label class="campo"><span class="campo__etiqueta">Client ID</span>
-            <input class="campo__control" name="google-client-id" [(ngModel)]="google.ajustes['client_id']" />
-          </label>
-          <label class="campo"><span class="campo__etiqueta">Client secret</span>
-            <input class="campo__control" type="password" name="google-client-secret" autocomplete="new-password" [(ngModel)]="google.secretos['client_secret']" />
-          </label>
-          @if (google.guardados['client_secret']) {
-            <label class="quitar-secreto"><input type="checkbox" name="google-quitar-secret" [(ngModel)]="google.eliminar['client_secret']" /> Eliminar client secret guardado</label>
-          }
-          <label class="campo"><span class="campo__etiqueta">URI de retorno OAuth</span>
-            <input class="campo__control" name="google-redirect" [(ngModel)]="google.ajustes['redirect_uri']" placeholder="https://…" />
-          </label>
-          <label class="campo"><span class="campo__etiqueta">Permisos OAuth</span>
-            <input class="campo__control" name="google-scopes" [(ngModel)]="google.ajustes['scopes']" />
-          </label>
-          <button class="boton boton--principal" type="submit" [disabled]="guardando()">Guardar Google Calendar</button>
-          <p class="estado-credencial">{{ estadoSecreto(google, 'client_secret') }}</p>
-        </form>
+        <p class="integracion__estado"><span class="integracion__punto" [class.integracion__punto--activa]="google.habilitada" aria-hidden="true"></span>{{ google.habilitada ? 'Servicio habilitado' : 'Servicio deshabilitado' }}</p>
+        <p class="estado-credencial">{{ estadoSecreto(google, 'client_secret') }} · {{ textoAjuste(google, 'client_id', 'Client ID sin definir') }}</p>
+        <button class="boton" type="button" (click)="abrirEditorIntegracion('google_calendar')">Configurar Google Calendar</button>
       </section>
 
       <section class="tarjeta integracion">
@@ -214,40 +178,74 @@ import { AnamnesisConfiguracionComponent } from './anamnesis-configuracion.compo
           <div><p class="ceja">CORREO ELECTRÓNICO</p><h2>Servidor SMTP</h2>
             <p>Cuenta para enviar mensajes operativos de la clínica.</p></div>
         </header>
-        <form (ngSubmit)="guardar('smtp')">
-          <label class="interruptor"><input type="checkbox" name="smtp-habilitada" [(ngModel)]="smtp.habilitada" />
-            <span><strong>Integración habilitada</strong><small>Enviar correo con el servidor configurado.</small></span></label>
-          <div class="campos-dos">
-            <label class="campo"><span class="campo__etiqueta">Servidor</span>
-              <input class="campo__control" name="smtp-host" [(ngModel)]="smtp.ajustes['host']" />
-            </label>
-            <label class="campo"><span class="campo__etiqueta">Puerto</span>
-              <input class="campo__control" type="number" name="smtp-puerto" [(ngModel)]="smtp.ajustes['puerto']" min="1" max="65535" />
-            </label>
-          </div>
-          <label class="campo"><span class="campo__etiqueta">Usuario</span>
-            <input class="campo__control" name="smtp-usuario" [(ngModel)]="smtp.ajustes['usuario']" autocomplete="username" />
-          </label>
-          <label class="campo"><span class="campo__etiqueta">Contraseña SMTP</span>
-            <input class="campo__control" type="password" name="smtp-contrasena" [(ngModel)]="smtp.secretos['contrasena']" autocomplete="new-password" />
-          </label>
-          @if (smtp.guardados['contrasena']) {
-            <label class="quitar-secreto"><input type="checkbox" name="smtp-quitar-password" [(ngModel)]="smtp.eliminar['contrasena']" /> Eliminar contraseña guardada</label>
-          }
-          <div class="campos-dos">
-            <label class="campo"><span class="campo__etiqueta">Correo remitente</span>
-              <input class="campo__control" type="email" name="smtp-remitente" [(ngModel)]="smtp.ajustes['correo_remitente']" />
-            </label>
-            <label class="campo"><span class="campo__etiqueta">Nombre remitente</span>
-              <input class="campo__control" name="smtp-nombre" [(ngModel)]="smtp.ajustes['nombre_remitente']" />
-            </label>
-          </div>
-          <label class="interruptor interruptor--campo"><input type="checkbox" name="smtp-tls" [(ngModel)]="smtp.ajustes['tls']" /> Usar conexión TLS</label>
-          <button class="boton boton--principal" type="submit" [disabled]="guardando()">Guardar SMTP</button>
-          <p class="estado-credencial">{{ estadoSecreto(smtp, 'contrasena') }}</p>
-        </form>
+        <p class="integracion__estado"><span class="integracion__punto" [class.integracion__punto--activa]="smtp.habilitada" aria-hidden="true"></span>{{ smtp.habilitada ? 'Servicio habilitado' : 'Servicio deshabilitado' }}</p>
+        <p class="estado-credencial">{{ estadoSecreto(smtp, 'contrasena') }} · {{ textoAjuste(smtp, 'host', 'Servidor sin definir') }}</p>
+        <button class="boton" type="button" (click)="abrirEditorIntegracion('smtp')">Configurar SMTP</button>
       </section>
     </div>
+
+    @if (editorIntegracion(); as codigo) {
+      <app-ventana-flotante ceja="Servicios conectados" [titulo]="tituloIntegracion(codigo)" forma="centrada" [anchoMaximo]="720" [cierraAlPulsarFuera]="false" (cerrar)="cerrarEditorIntegracion()">
+        @if (error()) { <p class="mensaje mensaje--error" role="alert">{{ error() }}</p> }
+        <form id="formulario-integracion" class="formulario-integracion" (ngSubmit)="guardarEditorIntegracion()">
+          @switch (codigo) {
+            @case ('anthropic') {
+              <label class="interruptor"><input type="checkbox" name="anthropic-habilitada" [(ngModel)]="anthropic.habilitada" /><span><strong>Integración habilitada</strong><small>Usar la cuenta de Anthropic de esta clínica.</small></span></label>
+              <label class="campo"><span class="campo__etiqueta"><app-icono nombre="llave-api" [tamano]="15" /> Clave API</span><input class="campo__control" type="password" name="anthropic-api-key" autocomplete="new-password" [(ngModel)]="anthropic.secretos['api_key']" placeholder="sk-ant-…" /></label>
+              @if (anthropic.guardados['api_key']) { <label class="quitar-secreto"><input type="checkbox" name="anthropic-quitar-key" [(ngModel)]="anthropic.eliminar['api_key']" /> Eliminar clave guardada</label> }
+              <div class="campos-dos">
+                <label class="campo"><span class="campo__etiqueta">Modelo</span><input class="campo__control" name="anthropic-modelo" [(ngModel)]="anthropic.ajustes['modelo']" maxlength="120" required /></label>
+                <label class="campo"><span class="campo__etiqueta">Tokens máximos</span><input class="campo__control" type="number" name="anthropic-tokens" [(ngModel)]="anthropic.ajustes['max_tokens']" min="64" max="32000" required /></label>
+              </div>
+              <label class="campo"><span class="campo__etiqueta">Temperatura</span><input class="campo__control" type="number" name="anthropic-temperatura" [(ngModel)]="anthropic.ajustes['temperatura']" min="0" max="1" step="0.1" required /></label>
+              <p class="estado-credencial">{{ estadoSecreto(anthropic, 'api_key') }}</p>
+            }
+            @case ('whatsapp') {
+              <label class="interruptor"><input type="checkbox" name="whatsapp-habilitada" [(ngModel)]="whatsapp.habilitada" /><span><strong>Integración habilitada</strong><small>Conectar el número de WhatsApp de esta clínica.</small></span></label>
+              <label class="campo"><span class="campo__etiqueta">ID del número de teléfono</span><input class="campo__control" name="whatsapp-numero-id" [(ngModel)]="whatsapp.ajustes['id_numero_telefono']" /></label>
+              <label class="campo"><span class="campo__etiqueta">ID de la cuenta de negocio</span><input class="campo__control" name="whatsapp-cuenta-id" [(ngModel)]="whatsapp.ajustes['id_cuenta_negocio']" /></label>
+              <div class="campos-dos">
+                <label class="campo"><span class="campo__etiqueta">Versión de API</span><input class="campo__control" name="whatsapp-version" [(ngModel)]="whatsapp.ajustes['version_api']" placeholder="v21.0" /></label>
+                <label class="interruptor interruptor--campo"><input type="checkbox" name="whatsapp-validar-firma" [(ngModel)]="whatsapp.ajustes['validar_firma']" /> Validar firma de Meta</label>
+              </div>
+              @for (campo of camposWhatsApp; track campo.clave) {
+                <label class="campo"><span class="campo__etiqueta">{{ campo.etiqueta }}</span><input class="campo__control" type="password" [name]="'whatsapp-' + campo.clave" autocomplete="new-password" [(ngModel)]="whatsapp.secretos[campo.clave]" [placeholder]="campo.placeholder" /></label>
+                @if (whatsapp.guardados[campo.clave]) { <label class="quitar-secreto"><input type="checkbox" [name]="'whatsapp-quitar-' + campo.clave" [(ngModel)]="whatsapp.eliminar[campo.clave]" /> Eliminar {{ campo.etiqueta.toLowerCase() }} guardado</label> }
+              }
+            }
+            @case ('google_calendar') {
+              <label class="interruptor"><input type="checkbox" name="google-habilitada" [(ngModel)]="google.habilitada" /><span><strong>Integración habilitada</strong><small>Permitir conexiones de calendario para esta clínica.</small></span></label>
+              <label class="campo"><span class="campo__etiqueta">Client ID</span><input class="campo__control" name="google-client-id" [(ngModel)]="google.ajustes['client_id']" /></label>
+              <label class="campo"><span class="campo__etiqueta">Client secret</span><input class="campo__control" type="password" name="google-client-secret" autocomplete="new-password" [(ngModel)]="google.secretos['client_secret']" /></label>
+              @if (google.guardados['client_secret']) { <label class="quitar-secreto"><input type="checkbox" name="google-quitar-secret" [(ngModel)]="google.eliminar['client_secret']" /> Eliminar client secret guardado</label> }
+              <label class="campo"><span class="campo__etiqueta">URI de retorno OAuth</span><input class="campo__control" name="google-redirect" [(ngModel)]="google.ajustes['redirect_uri']" placeholder="https://…" /></label>
+              <label class="campo"><span class="campo__etiqueta">Permisos OAuth</span><input class="campo__control" name="google-scopes" [(ngModel)]="google.ajustes['scopes']" /></label>
+              <p class="estado-credencial">{{ estadoSecreto(google, 'client_secret') }}</p>
+            }
+            @case ('smtp') {
+              <label class="interruptor"><input type="checkbox" name="smtp-habilitada" [(ngModel)]="smtp.habilitada" /><span><strong>Integración habilitada</strong><small>Enviar correo con el servidor configurado.</small></span></label>
+              <div class="campos-dos">
+                <label class="campo"><span class="campo__etiqueta">Servidor</span><input class="campo__control" name="smtp-host" [(ngModel)]="smtp.ajustes['host']" /></label>
+                <label class="campo"><span class="campo__etiqueta">Puerto</span><input class="campo__control" type="number" name="smtp-puerto" [(ngModel)]="smtp.ajustes['puerto']" min="1" max="65535" /></label>
+              </div>
+              <label class="campo"><span class="campo__etiqueta">Usuario</span><input class="campo__control" name="smtp-usuario" [(ngModel)]="smtp.ajustes['usuario']" autocomplete="username" /></label>
+              <label class="campo"><span class="campo__etiqueta">Contraseña SMTP</span><input class="campo__control" type="password" name="smtp-contrasena" [(ngModel)]="smtp.secretos['contrasena']" autocomplete="new-password" /></label>
+              @if (smtp.guardados['contrasena']) { <label class="quitar-secreto"><input type="checkbox" name="smtp-quitar-password" [(ngModel)]="smtp.eliminar['contrasena']" /> Eliminar contraseña guardada</label> }
+              <div class="campos-dos">
+                <label class="campo"><span class="campo__etiqueta">Correo remitente</span><input class="campo__control" type="email" name="smtp-remitente" [(ngModel)]="smtp.ajustes['correo_remitente']" /></label>
+                <label class="campo"><span class="campo__etiqueta">Nombre remitente</span><input class="campo__control" name="smtp-nombre" [(ngModel)]="smtp.ajustes['nombre_remitente']" /></label>
+              </div>
+              <label class="interruptor interruptor--campo"><input type="checkbox" name="smtp-tls" [(ngModel)]="smtp.ajustes['tls']" /> Usar conexión TLS</label>
+              <p class="estado-credencial">{{ estadoSecreto(smtp, 'contrasena') }}</p>
+            }
+          }
+        </form>
+        <div pie class="dialogo__acciones">
+          <button class="boton" type="button" [disabled]="guardando()" (click)="cerrarEditorIntegracion()">Cancelar</button>
+          <button class="boton boton--principal" type="submit" form="formulario-integracion" [disabled]="guardando()">{{ guardando() ? 'Guardando…' : 'Guardar configuración' }}</button>
+        </div>
+      </app-ventana-flotante>
+    }
     <app-integraciones-ia />
     }
 
@@ -275,16 +273,23 @@ import { AnamnesisConfiguracionComponent } from './anamnesis-configuracion.compo
   `,
   changeDetection: ChangeDetectionStrategy.Eager,
   styles: `
+    :host { display:block; width:100%; min-width:0; }
     .pagina-cabecera { display:flex; align-items:center; justify-content:space-between; gap:var(--espacio-4); margin-bottom:var(--espacio-4); }
-    .pestanas { display:flex; gap:var(--espacio-2); align-items:center; margin-bottom:var(--espacio-4); border-bottom:1px solid var(--borde); }
+    .pestanas { display:flex; gap:var(--espacio-2); align-items:center; min-width:0; max-width:100%; margin-bottom:var(--espacio-4); border-bottom:1px solid var(--borde); }
     .pestanas button,.pestanas a { display:inline-flex; align-items:center; min-height:44px; padding:0 var(--espacio-3); border:0; border-bottom:2px solid transparent; background:transparent; color:var(--texto-suave); font:inherit; font-weight:650; text-decoration:none; cursor:pointer; }
     .pestanas .pestanas__activa { color:var(--acento-fuerte); border-bottom-color:var(--acento); }
     .ficha-clinica { padding:var(--espacio-5); }
+    .ficha-clinica__cabecera { display:flex; align-items:center; justify-content:space-between; gap:var(--espacio-4); margin-bottom:var(--espacio-4); }
     .ficha-clinica__intro h2 { margin:0; }
     .ficha-clinica__intro p:last-child { color:var(--texto-suave); }
+    .perfil-clinica { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:var(--espacio-3); margin:0; }
+    .perfil-clinica div { min-width:0; padding:var(--espacio-3) var(--espacio-4); border:1px solid rgb(255 255 255 / 80%); border-radius:var(--radio); background:rgb(255 255 255 / 52%); }
+    .perfil-clinica dt { color:var(--texto-suave); font-size:.82rem; }
+    .perfil-clinica dd { margin:var(--espacio-1) 0 0; font-weight:650; overflow-wrap:anywhere; }
     .form-clinica { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:var(--espacio-4); }
     .form-clinica .campo { margin:0; }
     .form-clinica .boton,.form-clinica .campo__ayuda { grid-column:1/-1; justify-self:start; }
+    .dialogo__acciones { justify-content:flex-end; flex-wrap:wrap; }
     .pagina-cabecera h1 { margin:0; }
     .pagina-cabecera p:last-child { margin:var(--espacio-2) 0 0; color:var(--texto-suave); }
     .integraciones-banner { position:relative; display:flex; align-items:center; min-height:190px; overflow:hidden; padding:var(--espacio-5); margin-bottom:var(--espacio-4); border:1px solid #193c49; border-radius:calc(var(--radio) + 4px); background:linear-gradient(105deg,#071c2b 0%,#0b2b39 62%,#123b43 100%); isolation:isolate; color:#fff; }
@@ -300,7 +305,7 @@ import { AnamnesisConfiguracionComponent } from './anamnesis-configuracion.compo
     .aviso-seguridad p { margin:0; }
     .aviso-seguridad__icono { display:grid; place-items:center; color:var(--acento); }
     .integraciones { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:var(--espacio-4); align-items:start; }
-    .integracion { min-width:0; padding:var(--espacio-5); }
+    .integracion { display:grid; align-content:start; gap:var(--espacio-3); min-width:0; padding:var(--espacio-5); border:1px solid rgb(255 255 255 / 80%); background:linear-gradient(145deg,rgb(255 255 255 / 87%),rgb(246 251 250 / 74%)); -webkit-backdrop-filter:saturate(150%) blur(18px); backdrop-filter:saturate(150%) blur(18px); box-shadow:var(--cristal-sombra); }
     .integracion__cabecera { display:flex; align-items:center; gap:var(--espacio-3); padding-bottom:var(--espacio-4); margin-bottom:var(--espacio-4); border-bottom:1px solid var(--borde); }
     .integracion__cabecera h2 { margin:0; font-size:1.15rem; }
     .integracion__cabecera p:last-child { margin:var(--espacio-1) 0 0; color:var(--texto-suave); font-size:.88rem; }
@@ -309,9 +314,13 @@ import { AnamnesisConfiguracionComponent } from './anamnesis-configuracion.compo
     .integracion__simbolo--whatsapp { background:#e3f2ea; color:#1c6b45; }
     .integracion__simbolo--calendario { background:#e7effa; color:#1e5081; }
     .integracion__simbolo--correo { background:#fdf3e0; color:#8a5800; }
-    .integracion form { display:grid; gap:var(--espacio-3); }
-    .integracion .campo { margin:0; }
-    .integracion .campo__etiqueta:has(app-icono) { display:flex; align-items:center; gap:6px; }
+    .integracion .boton { justify-self:start; }
+    .integracion__estado { display:flex; align-items:center; gap:var(--espacio-2); margin:0; font-weight:650; }
+    .integracion__punto { width:9px; height:9px; flex:0 0 9px; border-radius:50%; background:#94a4a3; }
+    .integracion__punto--activa { background:#14866f; box-shadow:0 0 0 4px rgb(20 134 111 / 12%); }
+    .formulario-integracion { display:grid; gap:var(--espacio-3); }
+    .formulario-integracion .campo { margin:0; }
+    .formulario-integracion .campo__etiqueta:has(app-icono) { display:flex; align-items:center; gap:6px; }
     .interruptor { display:flex; align-items:center; gap:var(--espacio-3); min-height:48px; padding:var(--espacio-2) 0; cursor:pointer; }
     .interruptor > span { display:grid; gap:2px; }
     .interruptor small { color:var(--texto-suave); }
@@ -324,7 +333,7 @@ import { AnamnesisConfiguracionComponent } from './anamnesis-configuracion.compo
     .mensaje--bien { color:var(--exito); background:var(--exito-fondo); }
     .mensaje--error { color:var(--peligro); background:var(--peligro-fondo); }
     @media (max-width:900px) { .integraciones { grid-template-columns:1fr; } }
-    @media (max-width:560px) { .pagina-cabecera { align-items:flex-start; } .campos-dos,.form-clinica { grid-template-columns:1fr; } .integracion { padding:var(--espacio-4); } .pestanas { overflow:auto; } .integraciones-banner { min-height:210px; align-items:flex-start; padding:var(--espacio-4); } .integraciones-banner__texto { max-width:78%; } .integraciones-banner img { width:80%; opacity:.72; mask-image:linear-gradient(90deg,transparent 0%,#000 38%); } }
+    @media (max-width:560px) { .pagina-cabecera { align-items:flex-start; flex-wrap:wrap; } .campos-dos,.form-clinica,.perfil-clinica { grid-template-columns:1fr; } .ficha-clinica__cabecera { align-items:flex-start; flex-direction:column; } .integracion { padding:var(--espacio-4); } .pestanas { overflow:auto; } .integraciones-banner { min-height:210px; align-items:flex-start; padding:var(--espacio-4); } .integraciones-banner__texto { max-width:78%; } .integraciones-banner img { width:80%; opacity:.72; mask-image:linear-gradient(90deg,transparent 0%,#000 38%); } }
     @media (prefers-reduced-motion: reduce) { .integraciones-banner::after,.integraciones-banner img { animation:none; } }
   `,
 })
@@ -344,6 +353,9 @@ export class ConfiguracionComponent implements OnInit {
   protected readonly guardandoClinica = signal(false);
   protected readonly errorClinica = signal('');
   protected readonly avisoClinica = signal('');
+  protected readonly perfilGuardado = signal<DatosClinica | null>(null);
+  protected readonly editorClinicaAbierto = signal(false);
+  protected readonly editorIntegracion = signal<'anthropic' | 'whatsapp' | 'google_calendar' | 'smtp' | null>(null);
   private readonly estados = signal(new Map<string, EstadoIntegracion>());
 
   protected readonly camposWhatsApp = [
@@ -374,9 +386,26 @@ export class ConfiguracionComponent implements OnInit {
   private cargarClinica(): void {
     this.cargandoClinica.set(true);
     this.servicio.clinica().subscribe({
-      next: (datos) => { this.clinica.set(datos); this.cargandoClinica.set(false); },
+      next: (datos) => { this.clinica.set({ ...datos }); this.perfilGuardado.set({ ...datos }); this.cargandoClinica.set(false); },
       error: (fallo: unknown) => { this.errorClinica.set(fallo instanceof FalloApi ? fallo.message : 'No se pudo cargar la clínica.'); this.cargandoClinica.set(false); },
     });
+  }
+
+  protected abrirEditorClinica(): void {
+    const guardada = this.perfilGuardado();
+    if (!guardada || !this.sesion.tienePermiso(PERMISOS.clinicaEscribir)) return;
+    this.clinica.set({ ...guardada });
+    this.errorClinica.set('');
+    this.avisoClinica.set('');
+    this.editorClinicaAbierto.set(true);
+  }
+
+  protected cerrarEditorClinica(): void {
+    if (this.guardandoClinica()) return;
+    const guardada = this.perfilGuardado();
+    if (guardada) this.clinica.set({ ...guardada });
+    this.errorClinica.set('');
+    this.editorClinicaAbierto.set(false);
   }
 
   protected guardarClinica(): void {
@@ -388,7 +417,7 @@ export class ConfiguracionComponent implements OnInit {
     this.errorClinica.set('');
     this.avisoClinica.set('');
     this.servicio.guardarClinica(cambios).subscribe({
-      next: (actualizada) => { this.clinica.set(actualizada); this.catalogo.limpiar(); this.avisoClinica.set('Información de la clínica actualizada.'); this.guardandoClinica.set(false); },
+      next: (actualizada) => { this.clinica.set({ ...actualizada }); this.perfilGuardado.set({ ...actualizada }); this.catalogo.limpiar(); this.avisoClinica.set('Información de la clínica actualizada.'); this.guardandoClinica.set(false); this.editorClinicaAbierto.set(false); },
       error: (fallo: unknown) => { this.errorClinica.set(fallo instanceof FalloApi ? fallo.message : 'No se pudo guardar la clínica.'); this.guardandoClinica.set(false); },
     });
   }
@@ -439,12 +468,60 @@ export class ConfiguracionComponent implements OnInit {
         for (const clave of Object.keys(formulario.eliminar)) formulario.eliminar[clave] = false;
         this.aviso.set('Configuración guardada. Las credenciales quedaron cifradas en el servidor.');
         this.guardando.set(false);
+        this.editorIntegracion.set(null);
       },
       error: (fallo: unknown) => {
         this.error.set(fallo instanceof FalloApi ? fallo.message : 'No se pudo guardar la configuración.');
         this.guardando.set(false);
       },
     });
+  }
+
+  protected abrirEditorIntegracion(codigo: 'anthropic' | 'whatsapp' | 'google_calendar' | 'smtp'): void {
+    this.hidratar(codigo, this.formulario(codigo));
+    const formulario = this.formulario(codigo);
+    for (const clave of Object.keys(formulario.secretos)) formulario.secretos[clave] = '';
+    for (const clave of Object.keys(formulario.eliminar)) formulario.eliminar[clave] = false;
+    this.error.set('');
+    this.aviso.set('');
+    this.editorIntegracion.set(codigo);
+  }
+
+  protected cerrarEditorIntegracion(): void {
+    if (this.guardando()) return;
+    const codigo = this.editorIntegracion();
+    if (codigo) {
+      const formulario = this.formulario(codigo);
+      this.hidratar(codigo, formulario);
+      for (const clave of Object.keys(formulario.secretos)) formulario.secretos[clave] = '';
+      for (const clave of Object.keys(formulario.eliminar)) formulario.eliminar[clave] = false;
+    }
+    this.error.set('');
+    this.editorIntegracion.set(null);
+  }
+
+  protected guardarEditorIntegracion(): void {
+    const codigo = this.editorIntegracion();
+    if (codigo) this.guardar(codigo);
+  }
+
+  protected tituloIntegracion(codigo: 'anthropic' | 'whatsapp' | 'google_calendar' | 'smtp'): string {
+    switch (codigo) {
+      case 'anthropic': return 'Configurar Anthropic';
+      case 'whatsapp': return 'Configurar WhatsApp Cloud API';
+      case 'google_calendar': return 'Configurar Google Calendar';
+      case 'smtp': return 'Configurar servidor SMTP';
+    }
+  }
+
+  protected resumenCredenciales(formulario: FormularioIntegracion): string {
+    const total = Object.keys(formulario.guardados).length;
+    const configuradas = Object.values(formulario.guardados).filter(Boolean).length;
+    return configuradas ? `${configuradas} de ${total} credenciales cifradas` : 'Sin credenciales guardadas';
+  }
+
+  protected textoAjuste(formulario: FormularioIntegracion, campo: string, vacio: string): string {
+    return String(formulario.ajustes[campo] ?? '').trim() || vacio;
   }
 
   protected estadoSecreto(formulario: FormularioIntegracion, campo: string): string {

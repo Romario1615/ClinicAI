@@ -16,6 +16,7 @@ import { ApiService, FalloApi } from '../../nucleo/servicios/api.service';
 import type { Nota, NotaNueva } from '../../nucleo/servicios/api.service';
 import { PERMISOS } from '../../nucleo/servicios/configuracion';
 import { SesionService } from '../../nucleo/servicios/sesion.service';
+import { VentanaFlotanteComponent } from '../../compartido/ventana-flotante.component';
 
 const TIPOS = [
   { valor: 'EVOLUCION', texto: 'Evolución' },
@@ -34,10 +35,19 @@ const SIGNOS = [
 @Component({
   selector: 'app-nota-editor',
   standalone: true,
-  imports: [FormsModule],
+  imports: [FormsModule, VentanaFlotanteComponent],
   template: `
-    <form class="tarjeta editor-nota" (ngSubmit)="guardar()">
-      <h3>{{ base() ? 'Corregir nota (versión nueva)' : 'Nueva nota de evolución' }}</h3>
+    @if (abierta()) {
+      <app-ventana-flotante
+        ceja="Historia clínica"
+        [titulo]="base() ? 'Corregir nota · versión nueva' : 'Nueva nota de evolución'"
+        forma="centrada"
+        [anchoMaximo]="960"
+        [altoCompleto]="true"
+        [cierraAlPulsarFuera]="false"
+        (cerrar)="cerrar()"
+      >
+    <form id="form-nota" class="editor-nota" (ngSubmit)="guardar()">
       <div class="editor-nota__fila">
         <label class="campo">
           <span class="campo__etiqueta">Tipo</span>
@@ -85,18 +95,19 @@ const SIGNOS = [
       @if (error()) {
         <p class="aviso-error" role="alert">{{ error() }}</p>
       }
-      <div class="acciones acciones--final">
-        <button class="boton" type="button" (click)="cancelado.emit()">Cancelar</button>
-        <button class="boton boton--principal" type="submit" [disabled]="guardando()">
-          {{ guardando() ? 'Guardando…' : base() ? 'Guardar versión nueva' : 'Guardar nota' }}
-        </button>
-      </div>
     </form>
+        <div class="acciones acciones--final" pie>
+          <button class="boton" type="button" [disabled]="guardando()" (click)="cerrar()">Cancelar</button>
+          <button class="boton boton--principal" type="submit" form="form-nota" [disabled]="guardando()">
+            {{ guardando() ? 'Guardando…' : base() ? 'Guardar versión nueva' : 'Guardar nota' }}
+          </button>
+        </div>
+      </app-ventana-flotante>
+    }
   `,
   changeDetection: ChangeDetectionStrategy.Eager,
   styles: `
-    .editor-nota { display: grid; gap: var(--espacio-2); margin-bottom: var(--espacio-4); }
-    .editor-nota h3 { margin: 0 0 var(--espacio-2); }
+    .editor-nota { display: grid; gap: var(--espacio-3); }
     .editor-nota__fila { display: grid; grid-template-columns: minmax(160px, 220px) 1fr; gap: var(--espacio-3); }
     .editor-nota__signos { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: var(--espacio-3); margin: 0; padding: var(--espacio-3); border: 1px solid var(--borde); border-radius: var(--radio); }
     @media (max-width: 640px) { .editor-nota__fila { grid-template-columns: 1fr; } }
@@ -127,6 +138,7 @@ export class NotaEditorComponent implements OnInit {
   protected valores: Record<string, string> = { subjetivo: '', objetivo: '', analisis: '', plan: '' };
   protected vitales: Record<string, number | null> = {};
   protected motivo = '';
+  protected readonly abierta = signal(true);
   protected readonly guardando = signal(false);
   protected readonly error = signal('');
 
@@ -183,6 +195,7 @@ export class NotaEditorComponent implements OnInit {
     peticion.subscribe({
       next: (nota) => {
         this.guardando.set(false);
+        this.abierta.set(false);
         this.guardada.emit(nota);
       },
       error: (fallo: unknown) => {
@@ -190,6 +203,12 @@ export class NotaEditorComponent implements OnInit {
         this.error.set(fallo instanceof FalloApi ? fallo.message : 'No se pudo guardar la nota.');
       },
     });
+  }
+
+  protected cerrar(): void {
+    if (this.guardando()) return;
+    this.abierta.set(false);
+    this.cancelado.emit();
   }
 
   protected puedeLeerSensible(): boolean {

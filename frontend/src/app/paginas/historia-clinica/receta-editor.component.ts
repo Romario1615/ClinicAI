@@ -20,6 +20,7 @@ import type {
   Receta,
 } from '../../nucleo/servicios/api.service';
 import { SesionService } from '../../nucleo/servicios/sesion.service';
+import { VentanaFlotanteComponent } from '../../compartido/ventana-flotante.component';
 
 const VIAS = [
   'ORAL',
@@ -52,10 +53,19 @@ function lineaVacia(): MedicamentoNuevo {
 @Component({
   selector: 'app-receta-editor',
   standalone: true,
-  imports: [FormsModule],
+  imports: [FormsModule, VentanaFlotanteComponent],
   template: `
-    <form class="tarjeta editor-receta" (ngSubmit)="crear()">
-      <h3>{{ versionDe() ? 'Nueva versión de receta' : 'Nueva receta (borrador)' }}</h3>
+    @if (abierta()) {
+      <app-ventana-flotante
+        ceja="Historia clínica"
+        [titulo]="versionDe() ? 'Nueva versión de receta' : 'Nueva receta · borrador'"
+        forma="centrada"
+        [anchoMaximo]="1040"
+        [altoCompleto]="true"
+        [cierraAlPulsarFuera]="false"
+        (cerrar)="cerrar()"
+      >
+    <form id="form-receta" class="editor-receta" (ngSubmit)="crear()">
       <p class="campo__ayuda">
         @if (versionDe()) {
           El cambio sustituye la receta vigente en una sola operación. Conserva el historial y
@@ -137,18 +147,19 @@ function lineaVacia(): MedicamentoNuevo {
         }
       </label>
       @if (error()) { <p class="aviso-error" role="alert">{{ error() }}</p> }
-      <div class="acciones acciones--final">
-        <button class="boton" type="button" (click)="cancelado.emit()">Cancelar</button>
-        <button class="boton boton--principal" type="submit" [disabled]="guardando()">
-          {{ guardando() ? 'Guardando…' : versionDe() ? 'Firmar nueva versión' : 'Guardar borrador' }}
-        </button>
-      </div>
     </form>
+        <div class="acciones acciones--final" pie>
+          <button class="boton" type="button" [disabled]="guardando()" (click)="cerrar()">Cancelar</button>
+          <button class="boton boton--principal" type="submit" form="form-receta" [disabled]="guardando()">
+            {{ guardando() ? 'Guardando…' : versionDe() ? 'Firmar nueva versión' : 'Guardar borrador' }}
+          </button>
+        </div>
+      </app-ventana-flotante>
+    }
   `,
   changeDetection: ChangeDetectionStrategy.Eager,
   styles: `
-    .editor-receta { display: grid; gap: var(--espacio-3); margin-bottom: var(--espacio-4); }
-    .editor-receta h3 { margin: 0; }
+    .editor-receta { display: grid; gap: var(--espacio-3); }
     .linea { display: grid; gap: var(--espacio-2); margin: 0; padding: var(--espacio-3); border: 1px solid var(--borde); border-radius: var(--radio); }
     .linea__rejilla { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: var(--espacio-3); }
     .linea .boton, .editor-receta > .boton { justify-self: start; }
@@ -166,6 +177,7 @@ export class RecetaEditorComponent {
   protected readonly vias = VIAS;
   protected readonly lineas = signal<MedicamentoNuevo[]>([lineaVacia()]);
   protected readonly delegaciones = signal<readonly DelegacionFirma[]>([]);
+  protected readonly abierta = signal(true);
   protected readonly guardando = signal(false);
   protected readonly error = signal('');
   protected indicaciones = '';
@@ -276,6 +288,7 @@ export class RecetaEditorComponent {
     peticion.subscribe({
         next: (receta) => {
           this.guardando.set(false);
+          this.abierta.set(false);
           this.guardada.emit(receta);
         },
         error: (fallo: unknown) => {
@@ -283,5 +296,11 @@ export class RecetaEditorComponent {
           this.error.set(fallo instanceof FalloApi ? fallo.message : 'No se pudo guardar la receta.');
         },
       });
+  }
+
+  protected cerrar(): void {
+    if (this.guardando()) return;
+    this.abierta.set(false);
+    this.cancelado.emit();
   }
 }

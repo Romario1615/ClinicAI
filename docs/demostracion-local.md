@@ -165,7 +165,7 @@ Ejecuciones verificadas el 2026-10-06:
 |---|---|
 | Pruebas de backend | **1640 aprobadas, 3 omitidas** en la suite completa |
 | Pruebas focalizadas de lista de espera | **55 aprobadas**; incluye rollback real ante la restricción de PostgreSQL y diez respuestas HTTP concurrentes |
-| Suite E2E | **55 pruebas aprobadas** con navegador, frontend, API y PostgreSQL; incluye exportación agregada desde Agenda, control posterior dentro del ciclo del plan dental, edición de sede y axe en 20 rutas del menú |
+| Suite E2E | **56 pruebas aprobadas** con navegador, frontend, API y PostgreSQL; incluye exportación agregada desde Agenda, control posterior dentro del ciclo del plan dental, edición de sede, menú móvil y axe en 20 rutas del menú |
 | Pruebas de frontend | **377 aprobadas**; cobertura: **88,92 %** líneas, **72,17 %** ramas y **81,38 %** funciones, sobre sus umbrales |
 | Estática del backend | Ruff aprobado en los módulos tocados en esta revisión |
 | Pruebas omitidas | Tres integraciones que requieren `PRUEBAS_LLM_REAL=1` y llaman a Anthropic |

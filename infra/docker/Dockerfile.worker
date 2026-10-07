@@ -31,6 +31,10 @@ FROM python:3.11-slim-bookworm AS ejecucion
 
 RUN apt-get update \
     && apt-get install --no-install-recommends -y tzdata \
+    # El worker usa solo el virtualenv de la aplicacion; setuptools del
+    # Python global no se necesita y arrastraba copias vulnerables vendorizadas.
+    && rm -rf /usr/local/lib/python3.11/site-packages/setuptools \
+              /usr/local/lib/python3.11/site-packages/setuptools-*.dist-info \
     && rm -rf /var/lib/apt/lists/*
 
 RUN groupadd --system --gid 1001 clinica \

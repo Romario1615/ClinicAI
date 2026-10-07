@@ -94,6 +94,7 @@ async def analizar_local(
         servicio_id,
         estado,
         ahora=reloj.ahora(),
+        incluir_metricas_pacientes=False,
     )
     return ResumenOperativoLocal(hallazgos=generar_hallazgos(datos))
 
@@ -155,6 +156,7 @@ async def analizar_con_ia(
         servicio_id,
         estado,
         ahora=reloj.ahora(),
+        incluir_metricas_pacientes=False,
     )
     agregado = {
         "periodo": {"desde": filtro.desde.isoformat(), "hasta": filtro.hasta.isoformat()},

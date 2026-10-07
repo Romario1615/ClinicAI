@@ -420,140 +420,7 @@
           }
 
           @case ('reservar') {
-            @if (huecoElegido(); as hueco) {
-              <div class="panel__cabecera panel__cabecera--accion">
-                <h2>Reservar</h2>
-                <button type="button" class="boton boton--plano boton--pequeno" (click)="cerrarPanel()">
-                  Descartar
-                </button>
-              </div>
-              <div class="panel__cuerpo">
-                <p class="panel__titular numerico">
-                  {{ duracionHueco(hueco) }} libre desde las {{ hora(hueco.inicio) }}
-                </p>
-                <p class="panel__subtitulo">
-                  {{ nombreServicio(servicioId()) }} con
-                  {{ nombreProfesional(profesionalId()) }}
-                </p>
-
-                <!-- El tramo es un rango, la reserva es un punto: se elige el
-                     arranque exacto en lugar de dar por bueno el primero. -->
-                <fieldset class="arranques">
-                  <legend class="campo__etiqueta">Hora de inicio</legend>
-                  <div class="arranques__lista">
-                    @for (turno of hueco.turnos; track turno.inicio) {
-                      <button
-                        type="button"
-                        class="boton boton--pequeno numerico"
-                        [class.arranques__elegido]="turnoElegido()?.inicio === turno.inicio"
-                        (click)="elegirTurno(turno)"
-                      >
-                        {{ hora(turno.inicio) }}
-                      </button>
-                    }
-                  </div>
-                </fieldset>
-
-                @if (turnoElegido(); as turno) {
-                  <p class="campo__ayuda">
-                    {{ turno.duracion_minutos }} min de consulta
-                    @if (turno.minutos_preparacion > 0) {
-                      <span>(+{{ turno.minutos_preparacion }} min de preparación)</span>
-                    }
-                    · termina a las {{ hora(turno.fin_consulta) }}
-                  </p>
-                }
-
-                @if (consultorios().length > 0 && turnoElegido()) {
-                  <!-- Las salas ocupadas a esa hora se ven, pero no se pueden
-                       elegir: ocultarlas haría pensar que no existen. -->
-                  <fieldset class="selector-sala">
-                    <legend class="campo__etiqueta">Consultorio</legend>
-                    <div class="selector-sala__lista">
-                      <button
-                        type="button"
-                        class="selector-sala__opcion"
-                        [attr.aria-pressed]="consultorioId() === ''"
-                        (click)="elegirConsultorio('')"
-                      >
-                        <strong>Sin asignar</strong>
-                        <span>Se decide al llegar</span>
-                      </button>
-                      @for (sala of consultorios(); track sala.id) {
-                        @let choque = choqueConsultorio(sala.id);
-                        <button
-                          type="button"
-                          class="selector-sala__opcion"
-                          [class.selector-sala__opcion--ocupada]="choque"
-                          [attr.aria-pressed]="consultorioId() === sala.id"
-                          [disabled]="choque !== null"
-                          (click)="elegirConsultorio(sala.id)"
-                        >
-                          <strong>{{ sala.nombre }}</strong>
-                          @if (choque) {
-                            <span class="numerico">
-                              Ocupado {{ hora(choque.inicio) }}–{{ hora(choque.fin) }}
-                            </span>
-                          } @else {
-                            <span>Libre</span>
-                          }
-                        </button>
-                      }
-                    </div>
-                  </fieldset>
-                }
-
-                <!-- Se busca al paciente: una lista desplegable solo alcanzaba a los
-                     primeros cien y en una clínica real el buscado no estaba. -->
-                <div class="campo">
-                  <span class="campo__etiqueta">Paciente <span class="obligatorio">*</span></span>
-                  @if (pacienteId) {
-                    <p class="reserva__paciente">
-                      <strong>{{ nombrePaciente(pacienteId) }}</strong>
-                      @if (!procedimientoPlanSugerido()) {
-                        <button type="button" class="boton boton--plano boton--pequeno" (click)="pacienteId = ''">
-                          Cambiar
-                        </button>
-                      }
-                    </p>
-                  } @else {
-                    <app-selector-paciente (seleccion)="elegirPacienteReserva($event)" />
-                  }
-                </div>
-
-                <label class="campo">
-                  <span class="campo__etiqueta">Notas de recepción (opcional)</span>
-                  <textarea
-                    class="campo__control"
-                    name="notas"
-                    maxlength="2000"
-                    [(ngModel)]="notas"
-                  ></textarea>
-                  <span class="campo__ayuda">
-                    Texto administrativo. No escriba aquí información clínica: la ve todo el
-                    personal que gestiona la agenda.
-                  </span>
-                </label>
-
-                @if (errorReserva()) {
-                  <p class="reserva__error" role="alert">{{ mensajeErrorReserva() }}</p>
-                }
-
-                <div class="fila">
-                  @if (!pacienteId) {
-                    <span class="campo__ayuda">Busque y elija al paciente para confirmar.</span>
-                  }
-                  <button
-                    type="button"
-                    class="boton boton--principal"
-                    [disabled]="!pacienteId || reservando()"
-                    (click)="confirmarReserva()"
-                  >
-                    {{ reservando() ? 'Reservando...' : 'Confirmar cita' }}
-                  </button>
-                </div>
-              </div>
-            }
+            <p class="sr-only" role="status">Formulario de reserva abierto.</p>
           }
 
           @case ('cita') {
@@ -695,6 +562,198 @@
           }
         }
       </aside>
+
+      @if (huecoElegido(); as hueco) {
+        <app-ventana-flotante
+          ceja="AGENDA · RESERVA"
+          titulo="Reservar cita"
+          forma="centrada"
+          [anchoMaximo]="820"
+          [altoCompleto]="true"
+          [cierraAlPulsarFuera]="false"
+          (cerrar)="cancelarReserva()"
+        >
+          <form
+            id="formulario-reserva-serie"
+            class="reserva__formulario"
+            (ngSubmit)="confirmarReserva()"
+          >
+            <div class="reserva__contexto">
+              <p class="panel__titular numerico">
+                {{ duracionHueco(hueco) }} libre desde las {{ hora(hueco.inicio) }}
+              </p>
+              <p class="panel__subtitulo">
+                {{ nombreServicio(servicioId()) }} con {{ nombreProfesional(profesionalId()) }}
+              </p>
+            </div>
+
+            <fieldset class="arranques">
+              <legend class="campo__etiqueta">Hora de inicio</legend>
+              <div class="arranques__lista">
+                @for (turno of hueco.turnos; track turno.inicio) {
+                  <button
+                    type="button"
+                    class="boton boton--pequeno numerico"
+                    [class.arranques__elegido]="turnoElegido()?.inicio === turno.inicio"
+                    (click)="elegirTurno(turno)"
+                  >
+                    {{ hora(turno.inicio) }}
+                  </button>
+                }
+              </div>
+            </fieldset>
+
+            @if (turnoElegido(); as turno) {
+              <p class="campo__ayuda">
+                {{ turno.duracion_minutos }} min de consulta
+                @if (turno.minutos_preparacion > 0) {
+                  <span>(+{{ turno.minutos_preparacion }} min de preparación)</span>
+                }
+                · termina a las {{ hora(turno.fin_consulta) }}
+              </p>
+            }
+
+            @if (consultorios().length > 0 && turnoElegido()) {
+              <fieldset class="selector-sala">
+                <legend class="campo__etiqueta">Consultorio</legend>
+                <div class="selector-sala__lista">
+                  <button
+                    type="button"
+                    class="selector-sala__opcion"
+                    [attr.aria-pressed]="consultorioId() === ''"
+                    (click)="elegirConsultorio('')"
+                  >
+                    <strong>Sin asignar</strong>
+                    <span>Se decide al llegar</span>
+                  </button>
+                  @for (sala of consultorios(); track sala.id) {
+                    @let choque = choqueConsultorio(sala.id);
+                    <button
+                      type="button"
+                      class="selector-sala__opcion"
+                      [class.selector-sala__opcion--ocupada]="choque"
+                      [attr.aria-pressed]="consultorioId() === sala.id"
+                      [disabled]="choque !== null"
+                      (click)="elegirConsultorio(sala.id)"
+                    >
+                      <strong>{{ sala.nombre }}</strong>
+                      @if (choque) {
+                        <span class="numerico">Ocupado {{ hora(choque.inicio) }}–{{ hora(choque.fin) }}</span>
+                      } @else {
+                        <span>Libre</span>
+                      }
+                    </button>
+                  }
+                </div>
+              </fieldset>
+            }
+
+            <div class="campo">
+              <span class="campo__etiqueta">Paciente <span class="obligatorio">*</span></span>
+              @if (pacienteId) {
+                <p class="reserva__paciente">
+                  <strong>{{ nombrePaciente(pacienteId) }}</strong>
+                  @if (!procedimientoPlanSugerido()) {
+                    <button type="button" class="boton boton--plano boton--pequeno" (click)="pacienteId = ''">
+                      Cambiar
+                    </button>
+                  }
+                </p>
+              } @else {
+                <app-selector-paciente (seleccion)="elegirPacienteReserva($event)" />
+              }
+              @if (!pacienteId) {
+                <span class="campo__ayuda">Busque y elija al paciente para confirmar.</span>
+              }
+            </div>
+
+            <section class="reserva__recurrencia" aria-labelledby="etiqueta-recurrencia">
+              <label class="interruptor">
+                <input
+                  type="checkbox"
+                  name="serie-recurrente"
+                  [(ngModel)]="serieRecurrente"
+                  [disabled]="!!procedimientoPlanSugerido()"
+                />
+                <span>
+                  <strong id="etiqueta-recurrencia">Repetir esta cita</strong>
+                  <small>Se conserva el día y la hora local de la sede.</small>
+                </span>
+              </label>
+              @if (procedimientoPlanSugerido()) {
+                <p class="campo__ayuda">
+                  Las citas vinculadas a un procedimiento de plan dental se reservan individualmente.
+                </p>
+              }
+              @if (serieRecurrente) {
+                <div class="reserva__recurrencia-campos">
+                  <label class="campo">
+                    <span class="campo__etiqueta">Frecuencia</span>
+                    <select class="campo__control" name="frecuencia-serie" [(ngModel)]="frecuenciaSerie">
+                      <option value="SEMANAL">Cada semana</option>
+                      <option value="QUINCENAL">Cada dos semanas</option>
+                      <option value="MENSUAL">Cada mes</option>
+                    </select>
+                  </label>
+                  <label class="campo">
+                    <span class="campo__etiqueta">Cantidad de citas</span>
+                    <input
+                      class="campo__control numerico"
+                      type="number"
+                      name="cantidad-serie"
+                      min="2"
+                      [max]="maximoCitasSerie"
+                      required
+                      [(ngModel)]="cantidadSerie"
+                    />
+                    <span class="campo__ayuda">Incluye la fecha elegida · máximo {{ maximoCitasSerie }}.</span>
+                  </label>
+                </div>
+                <p class="campo__ayuda">
+                  Se comprobará cada fecha antes de guardar. Si una no está libre, no se creará ninguna.
+                </p>
+              }
+            </section>
+
+            <label class="campo">
+              <span class="campo__etiqueta">Notas de recepción (opcional)</span>
+              <textarea
+                class="campo__control"
+                name="notas"
+                maxlength="2000"
+                [(ngModel)]="notas"
+              ></textarea>
+              <span class="campo__ayuda">
+                Texto administrativo. No escriba aquí información clínica: la ve el personal que gestiona la agenda.
+              </span>
+            </label>
+
+            @if (serieRecurrente && !cantidadSerieValida) {
+              <p class="reserva__error" role="alert">Indique una cantidad entre 2 y {{ maximoCitasSerie }}.</p>
+            }
+            @if (errorReserva()) {
+              <p class="reserva__error" role="alert">{{ mensajeErrorReserva() }}</p>
+            }
+          </form>
+          <div pie class="reserva__pie">
+            <button type="button" class="boton" (click)="cancelarReserva()">Descartar</button>
+            <button
+              type="submit"
+              form="formulario-reserva-serie"
+              class="boton boton--principal"
+              [disabled]="!pacienteId || reservando() || (serieRecurrente && !cantidadSerieValida)"
+            >
+              @if (reservando()) {
+                Guardando…
+              } @else if (serieRecurrente) {
+                Crear serie de {{ cantidadSerie }} citas
+              } @else {
+                Confirmar cita
+              }
+            </button>
+          </div>
+        </app-ventana-flotante>
+      }
     </div>
   }
 

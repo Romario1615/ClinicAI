@@ -69,6 +69,23 @@ export interface EntradaEspera {
 
 export interface ResumenPanel {
   total_citas: number; pacientes: number; pacientes_nuevos: number | null; pacientes_recurrentes: number | null; citas: Record<string, number>;
+  pacientes_registrados: number | null;
+  pacientes_registrados_sin_cita: number | null;
+  cohortes_registro: readonly {
+    mes: string;
+    registrados: number;
+    con_cita_en_filtros: number;
+    sin_cita_en_filtros: number;
+  }[] | null;
+  demografia: {
+    edades: readonly { categoria: string; pacientes: number | null; suprimida: boolean }[];
+    sexos: readonly { categoria: string; pacientes: number | null; suprimida: boolean }[];
+  } | null;
+  retorno_30_dias: {
+    pacientes_seguimiento_completo: number;
+    pacientes_que_regresaron: number;
+    porcentaje: number;
+  } | null;
   tendencia_diaria: { fecha: string; total: number }[];
   por_hora: { hora: number; total: number }[];
   por_dia_semana: { dia: number; total: number }[];
@@ -81,6 +98,12 @@ export interface ResumenPanel {
     turnos_liberados: number | null;
     turnos_recuperados: number | null;
     promedio_minutos_para_recuperar: number | null;
+  };
+  ocupacion_agenda: {
+    minutos_disponibles: number | null;
+    minutos_ocupados: number | null;
+    porcentaje: number | null;
+    detalle: string;
   };
   adherencia: {
     tomas_confirmadas: number;

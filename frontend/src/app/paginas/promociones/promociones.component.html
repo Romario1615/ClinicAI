@@ -7,7 +7,7 @@
       recibir publicidad, y siempre las aprueba una persona antes de salir.
     </p>
   </div>
-  <button type="button" class="boton boton--principal" (click)="creando.set(!creando())">
+  <button type="button" class="boton boton--principal" (click)="abrirCreacion()">
     <app-icono nombre="mas" [tamano]="18" />
     Nueva campaña
   </button>
@@ -24,65 +24,72 @@
 }
 
 @if (creando()) {
-  <form class="tarjeta nueva" (ngSubmit)="crear()" #formulario="ngForm">
-    <h2>Nueva campaña</h2>
-    <div class="nueva__rejilla">
-      <label class="campo">
-        <span class="campo__etiqueta">Nombre interno</span>
-        <input class="campo__control" name="nombre" required minlength="3" maxlength="150" [(ngModel)]="nombre" placeholder="Limpieza dental de octubre" />
-      </label>
-      <label class="campo">
-        <span class="campo__etiqueta">Plantilla aprobada en Meta</span>
-        <input class="campo__control" name="plantilla" pattern="[a-z0-9_]+" [(ngModel)]="plantillaMeta" />
-        <span class="campo__ayuda">Plantilla de marketing con cabecera de imagen.</span>
-      </label>
-    </div>
-    <label class="campo">
-      <span class="campo__etiqueta">Texto de la oferta</span>
-      <textarea class="campo__control" name="texto" required minlength="10" maxlength="500" rows="3" [(ngModel)]="texto" placeholder="Este mes la limpieza dental tiene 20 % de descuento. Agende por este chat."></textarea>
-      <span class="campo__ayuda">El saludo con el nombre y la opción de baja se añaden solos. Sin datos de pacientes.</span>
-    </label>
-
-    <fieldset class="segmento">
-      <legend class="campo__etiqueta">A quién va dirigida</legend>
+  <app-ventana-flotante
+    titulo="Nueva campaña"
+    ceja="Promociones por WhatsApp"
+    forma="centrada"
+    [anchoMaximo]="720"
+    [cierraAlPulsarFuera]="false"
+    (cerrar)="cerrarCreacion()"
+  >
+    <form id="formulario-campana" class="nueva" (ngSubmit)="crear()">
       <div class="nueva__rejilla">
         <label class="campo">
-          <span class="campo__etiqueta">Sede</span>
-          <select class="campo__control" name="sede" [(ngModel)]="sedeId">
-            <option value="">Todas las sedes</option>
-            @for (sede of sedes(); track sede.id) {
-              <option [value]="sede.id">{{ sede.nombre }}</option>
-            }
-          </select>
+          <span class="campo__etiqueta">Nombre interno</span>
+          <input class="campo__control" name="nombre" required minlength="3" maxlength="150" [(ngModel)]="nombre" placeholder="Limpieza dental de octubre" />
         </label>
         <label class="campo">
-          <span class="campo__etiqueta">Pacientes</span>
-          <select class="campo__control" name="audiencia" [(ngModel)]="tipoAudiencia">
-            <option value="todos">Todos los que aceptaron promociones</option>
-            <option value="reactivar">Sin visita desde hace…</option>
-            <option value="recientes">Visitaron en los últimos…</option>
-          </select>
+          <span class="campo__etiqueta">Plantilla aprobada en Meta</span>
+          <input class="campo__control" name="plantilla" pattern="[a-z0-9_]+" [(ngModel)]="plantillaMeta" />
+          <span class="campo__ayuda">Plantilla de marketing con cabecera de imagen.</span>
         </label>
-        @if (tipoAudiencia !== 'todos') {
-          <label class="campo">
-            <span class="campo__etiqueta">Días</span>
-            <input class="campo__control numerico" type="number" name="dias" min="1" max="3650" [(ngModel)]="dias" />
-          </label>
-        }
       </div>
-      <p class="campo__ayuda">
-        El segmento usa solo datos administrativos. No existe filtro por tratamiento ni por
-        diagnóstico.
-      </p>
-    </fieldset>
+      <label class="campo">
+        <span class="campo__etiqueta">Texto de la oferta</span>
+        <textarea class="campo__control" name="texto" required minlength="10" maxlength="500" rows="3" [(ngModel)]="texto" placeholder="Este mes la limpieza dental tiene 20 % de descuento. Agende por este chat."></textarea>
+        <span class="campo__ayuda">El saludo con el nombre y la opción de baja se añaden solos. Sin datos de pacientes.</span>
+      </label>
 
-    <div class="acciones acciones--final">
-      <button class="boton" type="button" (click)="creando.set(false)">Cancelar</button>
-      <button class="boton boton--principal" type="submit" [disabled]="trabajando() || !formulario.form.valid">
-        Crear borrador
+      <fieldset class="segmento">
+        <legend class="campo__etiqueta">A quién va dirigida</legend>
+        <div class="nueva__rejilla">
+          <label class="campo">
+            <span class="campo__etiqueta">Sede</span>
+            <select class="campo__control" name="sede" [(ngModel)]="sedeId">
+              <option value="">Todas las sedes</option>
+              @for (sede of sedes(); track sede.id) {
+                <option [value]="sede.id">{{ sede.nombre }}</option>
+              }
+            </select>
+          </label>
+          <label class="campo">
+            <span class="campo__etiqueta">Pacientes</span>
+            <select class="campo__control" name="audiencia" [(ngModel)]="tipoAudiencia">
+              <option value="todos">Todos los que aceptaron promociones</option>
+              <option value="reactivar">Sin visita desde hace…</option>
+              <option value="recientes">Visitaron en los últimos…</option>
+            </select>
+          </label>
+          @if (tipoAudiencia !== 'todos') {
+            <label class="campo">
+              <span class="campo__etiqueta">Días</span>
+              <input class="campo__control numerico" type="number" name="dias" min="1" max="3650" [(ngModel)]="dias" />
+            </label>
+          }
+        </div>
+        <p class="campo__ayuda">
+          El segmento usa solo datos administrativos. No existe filtro por tratamiento ni por
+          diagnóstico.
+        </p>
+      </fieldset>
+    </form>
+    <div pie class="acciones acciones--final">
+      <button class="boton" type="button" (click)="cerrarCreacion()">Cancelar</button>
+      <button class="boton boton--principal" type="submit" form="formulario-campana" [disabled]="trabajando()">
+        {{ trabajando() ? 'Guardando…' : 'Crear borrador' }}
       </button>
     </div>
-  </form>
+  </app-ventana-flotante>
 }
 
 <div class="columnas">

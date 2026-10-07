@@ -1,14 +1,15 @@
 :host { display: block; }
 .galeria { display: grid; gap: var(--espacio-4); }
 .galeria__cabecera, .galeria__filtros { display: flex; align-items: end; justify-content: space-between; gap: var(--espacio-3); }
-.galeria__cabecera h3, .galeria__carga h4 { margin: 0; }
+.galeria__cabecera h3 { margin: 0; }
 .galeria__cabecera p, .galeria__nota { margin: var(--espacio-1) 0 0; color: var(--texto-suave); font-size: .86rem; }
 .galeria__cantidad { display: grid; place-items: center; min-width: 2rem; height: 2rem; border-radius: 999px; background: var(--acento-suave); color: var(--acento-fuerte); font-weight: 700; }
-.galeria__carga { display: grid; gap: var(--espacio-3); padding: var(--espacio-3); border: 1px solid var(--borde); border-radius: var(--radio); background: var(--superficie); }
+.galeria__carga { display: grid; gap: var(--espacio-3); }
 .galeria__campos { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--espacio-3); }
 .galeria__archivo input { max-width: 100%; }
 .galeria__filtros { justify-content: start; flex-wrap: wrap; padding-bottom: var(--espacio-3); border-bottom: 1px solid var(--borde); }
 .galeria__filtros .campo { min-width: 9rem; }
+.galeria__abrir-carga { justify-self: start; }
 .galeria__rejilla { display: grid; grid-template-columns: repeat(auto-fill, minmax(155px, 1fr)); gap: var(--espacio-3); }
 .galeria__tarjeta { min-width: 0; overflow: hidden; border: 1px solid var(--borde); border-radius: var(--radio); background: var(--superficie-elevada); }
 .galeria__abrir { display: grid; width: 100%; padding: 0; border: 0; cursor: zoom-in; place-items: center; aspect-ratio: 4 / 3; background: var(--superficie-hundida); }

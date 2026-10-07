@@ -446,6 +446,7 @@ async def conceder_permisos(
     *codigos: str,
     codigo_rol: str | None = None,
     sedes: Sequence[uuid.UUID] = (),
+    profesionales: Sequence[uuid.UUID] = (),
     todas_las_sedes: bool = False,
     todas_las_especialidades: bool = True,
     todos_los_profesionales: bool = True,
@@ -501,6 +502,14 @@ async def conceder_permisos(
     ambitos.extend(
         AmbitoAsignacion(usuario_rol_id=asignacion.id, tipo=TipoAmbito.SEDE.value, valor_id=sede_id)
         for sede_id in sedes
+    )
+    ambitos.extend(
+        AmbitoAsignacion(
+            usuario_rol_id=asignacion.id,
+            tipo=TipoAmbito.PROFESIONAL.value,
+            valor_id=profesional_id,
+        )
+        for profesional_id in profesionales
     )
     if todas_las_especialidades:
         ambitos.append(

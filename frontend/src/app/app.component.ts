@@ -11,7 +11,7 @@
  * algo que va a recibir un 403 (CLAUDE.md, regla 7).
  */
 import { DOCUMENT } from '@angular/common';
-import { Component, DestroyRef, computed, effect, inject, signal, ChangeDetectionStrategy } from '@angular/core';
+import { Component, DestroyRef, computed, effect, inject, signal, ChangeDetectionStrategy, ElementRef } from '@angular/core';
 import { Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 
 import { BuscadorGlobalComponent } from './compartido/buscador-global.component';
@@ -182,6 +182,10 @@ const NAVEGACION: readonly EnlaceNavegacion[] = [
 @Component({
   selector: 'app-root',
   standalone: true,
+  host: {
+    '(document:keydown.escape)': 'cerrarCapasDesplegadas()',
+    '(document:click)': 'cerrarCapasAlPulsarFuera($event)',
+  },
   imports: [
     RouterOutlet,
     RouterLink,
@@ -197,6 +201,7 @@ const NAVEGACION: readonly EnlaceNavegacion[] = [
   styleUrl: './app.component.scss',
 })
 export class AppComponent {
+  private readonly elemento = inject<ElementRef<HTMLElement>>(ElementRef);
   private readonly autenticacion = inject(AutenticacionService);
   private readonly router = inject(Router);
   protected readonly sesion = inject(SesionService);
@@ -265,6 +270,27 @@ export class AppComponent {
 
   protected cerrarNotificaciones(): void {
     this.notificacionesAbiertas.set(false);
+  }
+
+  /** Escape cierra cualquier panel flotante del armazón, esté abierto el menú o las notificaciones. */
+  protected cerrarCapasDesplegadas(): void {
+    this.cerrarMenu();
+    this.cerrarNotificaciones();
+  }
+
+  /** Los paneles del encabezado se descartan al pulsar fuera y nunca quedan abiertos a la vez. */
+  protected cerrarCapasAlPulsarFuera(evento: MouseEvent): void {
+    const objetivo = evento.target as Node;
+    const raiz = this.elemento.nativeElement;
+    if (this.menuAbierto()) {
+      const navegacion = raiz.querySelector('#navegacion-principal');
+      const botonMenu = raiz.querySelector('.cabecera__menu');
+      if (!navegacion?.contains(objetivo) && !botonMenu?.contains(objetivo)) this.cerrarMenu();
+    }
+    if (this.notificacionesAbiertas()) {
+      const ancla = raiz.querySelector('.cabecera__notificaciones');
+      if (!ancla?.contains(objetivo)) this.cerrarNotificaciones();
+    }
   }
 
   protected cerrarMenu(): void {

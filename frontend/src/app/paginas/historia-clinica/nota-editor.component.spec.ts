@@ -48,7 +48,28 @@ describe('NotaEditorComponent', () => {
         http = TestBed.inject(HttpTestingController);
     });
 
-    afterEach(() => http.verify());
+    afterEach(() => {
+        c?.cerrar();
+        fixture?.detectChanges();
+        http.verify();
+        expect(document.body.style.overflow).not.toBe('hidden');
+    });
+
+    it('presenta el editor en una ventana centrada y cancela con Escape', () => {
+        montar(null);
+        const cancelado = vi.fn();
+        fixture.componentInstance.cancelado.subscribe(cancelado);
+        const raiz = fixture.nativeElement as HTMLElement;
+        const dialogo = raiz.querySelector<HTMLDialogElement>('dialog[open][aria-modal="true"]');
+        expect(dialogo?.getAttribute('aria-label')).toBe('Nueva nota de evolución');
+        expect(dialogo?.querySelector('form#form-nota')).not.toBeNull();
+        expect(dialogo?.querySelector('.ventana__pie')).not.toBeNull();
+
+        dialogo?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+        fixture.detectChanges();
+        expect(raiz.querySelector('dialog[open]')).toBeNull();
+        expect(cancelado).toHaveBeenCalledOnce();
+    });
 
     it('no guarda una nota vacía y no envía el autor', () => {
         montar(null);

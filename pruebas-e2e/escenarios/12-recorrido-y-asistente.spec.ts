@@ -150,5 +150,10 @@ test('administración ve dónde configurar JEV y el modelo de respuestas', async
   await expect(jev.getByRole('button', { name: /probar conexión/i })).toBeVisible();
   const respuestas = page.getByRole('region', { name: 'Respuestas del asistente' });
   await expect(respuestas).toBeVisible();
-  await expect(respuestas.getByRole('radio')).toHaveCount(3);
+  await respuestas.getByRole('button', { name: 'Configurar respuestas' }).click();
+  const editor = page.getByRole('dialog', { name: 'Configurar respuestas del asistente' });
+  await expect(editor).toBeVisible();
+  await expect(editor.getByRole('radio')).toHaveCount(3);
+  await page.keyboard.press('Escape');
+  await expect(editor).toHaveCount(0);
 });

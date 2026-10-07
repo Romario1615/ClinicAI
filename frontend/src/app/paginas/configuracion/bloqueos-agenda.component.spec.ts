@@ -43,6 +43,16 @@ describe('BloqueosAgendaComponent', () => {
         expect(catalogo.consultorios).toHaveBeenCalledWith('s-1');
     });
 
+    it('abre la captura en una ventana flotante accesible', () => {
+        cargarLista();
+        const boton = Array.from((fixture.nativeElement as HTMLElement).querySelectorAll('button'))
+            .find((elemento) => elemento.textContent?.trim() === 'Nuevo bloqueo');
+        boton?.click();
+        fixture.detectChanges();
+        expect(fixture.nativeElement.querySelector('dialog[open][aria-label="Nuevo bloqueo"]')).not.toBeNull();
+        expect(fixture.nativeElement.querySelector('#form-bloqueo')).not.toBeNull();
+    });
+
     it('convierte el horario local de la sede a un instante UTC', () => {
         cargarLista();
         const control = fixture.componentInstance as unknown as {
@@ -61,9 +71,9 @@ describe('BloqueosAgendaComponent', () => {
 
     it('pide confirmación sin mostrar datos de pacientes y guarda las citas afectadas', async () => {
         cargarLista();
-        const confirmacion = vi.spyOn(window, 'confirm').mockReturnValue(true);
         const componente = fixture.componentInstance as unknown as {
             guardar: () => Promise<void>;
+            confirmarCitasAfectadas(): void;
             form: {
                 tipo: string;
                 motivo: string;
@@ -80,11 +90,17 @@ describe('BloqueosAgendaComponent', () => {
         expect(primera.request.body.inicio).toBe('2026-01-15T14:30:00.000Z');
         primera.flush({ codigo: 'CONFLICTO_ESTADO', mensaje: 'Citas afectadas', detalles: { citas_afectadas: [{ id: 'cita-1' }] } }, { status: 409, statusText: 'Conflict' });
         await Promise.resolve();
-        expect(confirmacion).toHaveBeenCalledWith(expect.stringMatching(/1 cita\(s\).*No se mostrarán datos de pacientes/));
+        fixture.detectChanges();
+        const confirmacion = fixture.nativeElement.querySelector('dialog[open][aria-label="Confirmar el bloqueo"]');
+        expect(confirmacion?.textContent).toContain('1 cita activa');
+        expect(confirmacion?.textContent).toContain('No se muestran datos de pacientes');
+        const confirmacionGuardada = componente.confirmarCitasAfectadas();
         const segunda = http.expectOne(`${CONFIGURACION_POR_DEFECTO.urlApi}/agenda/bloqueos`);
         expect(segunda.request.body.aceptar_citas_afectadas).toBe(true);
         segunda.flush({ id: 'b-1', sede_id: 's-1', profesional_id: null, consultorio_id: null, tipo: 'AUSENCIA', inicio: '2026-01-15T14:30:00Z', fin: '2026-01-15T15:30:00Z', motivo: 'Ausencia médica', creado_con_citas_afectadas: true });
-        await guardar;
+        await confirmacionGuardada;
+        fixture.detectChanges();
         http.expectOne((r) => r.url === `${CONFIGURACION_POR_DEFECTO.urlApi}/agenda/bloqueos`).flush([]);
+        await guardar;
     });
 });

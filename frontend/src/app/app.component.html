@@ -30,7 +30,7 @@
       }
 
       <div class="cabecera__notificaciones">
-        <button type="button" class="boton boton--plano campana" (click)="alternarNotificaciones()" [attr.aria-expanded]="notificacionesAbiertas()" aria-label="Notificaciones de seguimiento">
+        <button type="button" class="boton boton--plano campana" (click)="alternarNotificaciones()" [attr.aria-expanded]="notificacionesAbiertas()" aria-controls="panel-notificaciones" aria-haspopup="dialog" aria-label="Notificaciones de seguimiento">
           <app-icono nombre="notificaciones" [tamano]="19" />
           @if (pendientes.notificaciones() > 0) { <span class="campana__cuenta">{{ pendientes.notificaciones() }}</span> }
         </button>
@@ -105,6 +105,16 @@
         <span class="cabecera__salir-texto">Cerrar sesión</span>
       </button>
     </header>
+
+    @if (menuAbierto()) {
+      <button
+        type="button"
+        class="navegacion__fondo"
+        aria-label="Cerrar menú de navegación"
+        tabindex="-1"
+        (click)="cerrarMenu()"
+      ></button>
+    }
 
     @if (miFotoAbierta()) {
       <app-ventana-flotante ceja="Mi perfil" titulo="Mi foto" forma="centrada" [anchoMaximo]="420" (cerrar)="miFotoAbierta.set(false)">

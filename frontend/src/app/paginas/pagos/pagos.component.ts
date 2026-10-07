@@ -73,6 +73,15 @@ function sumarDias(fecha: string, dias: number): string {
     <header class="modulo-cabecera"><div class="modulo-cabecera__texto"><p class="ceja">ADMINISTRACIÓN</p><h1><app-icono nombre="balance-clinico" [tamano]="28" /> Pagos</h1><p>Registro de efectivo y transferencias en USD. La confirmación la realiza el personal autorizado.</p></div><img class="modulo-cabecera__imagen" src="/images/pagos-administrativos.png" alt="" aria-hidden="true" loading="lazy" /></header>
 
     <app-resumen-modulo modulo="pagos" />
+    <div class="cabecera-pagina">
+      <h2>Pagos · {{ total() }}</h2>
+      <div class="acciones-cabecera">
+        @if (sesion.tienePermiso('pago.registrar')) {
+          <button class="boton boton--principal" type="button" (click)="abrirRegistro()">Registrar un abono</button>
+        }
+        <button class="boton" type="button" (click)="cargar()" [disabled]="ocupado()">Actualizar</button>
+      </div>
+    </div>
     @if (puedeLeerPagos() && puedeExportar()) {
       <section class="tarjeta reporte-pagos" aria-labelledby="titulo-reporte-pagos">
         <div><p class="ceja">ANÁLISIS FINANCIERO</p><h2 id="titulo-reporte-pagos">Exportar movimientos</h2>
@@ -91,10 +100,10 @@ function sumarDias(fecha: string, dias: number): string {
         @if (avisoReporte()) { <p class="aviso-ok" role="status">{{ avisoReporte() }}</p> }
       </section>
     }
-    @if (sesion.tienePermiso('pago.registrar')) {
-      <section class="tarjeta editor-demo"><h2>Registrar un abono</h2>
+    @if (formularioAbonoAbierto() && sesion.tienePermiso('pago.registrar')) {
+      <app-ventana-flotante ceja="Gestión financiera" titulo="Registrar un abono" forma="centrada" [anchoMaximo]="720" [cierraAlPulsarFuera]="false" (cerrar)="cerrarRegistro()">
         <app-selector-paciente (seleccion)="seleccionar($event)" />
-        <form #formulario="ngForm" (ngSubmit)="registrar()">
+        <form id="formulario-abono" class="formulario-abono" #formulario="ngForm" (ngSubmit)="registrar()">
           <div class="formulario-demo">
             <label>Cita<select name="cita" [(ngModel)]="citaId" (ngModelChange)="seleccionarCita($event)" required><option value="">Seleccione una cita</option>
               @for (c of citas(); track c.id) { <option [value]="c.id">{{ fecha(c.inicio) }} · {{ estadoCita(c.estado) }}</option> }
@@ -112,11 +121,14 @@ function sumarDias(fecha: string, dias: number): string {
           @if (formulario.invalid) {
             <p class="ayuda-demo" role="status">Para registrar: elija al paciente y una cita, indique el total pactado y el importe del abono.</p>
           }
-          <div class="acciones-demo"><button class="boton boton--principal" [disabled]="formulario.invalid || ocupado()">Registrar abono pendiente</button>
-            @if (!cargoSeleccionado()) { <button class="boton" type="button" (click)="crearCargo()" [disabled]="!citaId || !totalAcordado || totalAcordado <= 0 || ocupado()">Crear solo el cargo</button> }
-          </div>
+          @if (error()) { <p class="aviso-error" role="alert">{{ error() }}</p> }
         </form>
-      </section>
+        <div pie class="acciones-demo">
+          <button class="boton" type="button" (click)="cerrarRegistro()" [disabled]="ocupado()">Cancelar</button>
+          @if (!cargoSeleccionado()) { <button class="boton" type="button" (click)="crearCargo()" [disabled]="!citaId || !totalAcordado || totalAcordado <= 0 || ocupado()">Crear solo el cargo</button> }
+          <button class="boton boton--principal" type="submit" form="formulario-abono" [disabled]="formulario.invalid || ocupado()">Registrar abono pendiente</button>
+        </div>
+      </app-ventana-flotante>
     }
     @if (sesion.tienePermiso('pago.leer')) {
       <section class="tarjeta cargos" aria-labelledby="titulo-cargos">
@@ -144,13 +156,8 @@ function sumarDias(fecha: string, dias: number): string {
         <div class="acciones-demo"><button class="boton" type="button" (click)="moverCargos(-1)" [disabled]="paginaCargos() === 0 || cargandoCargos()">Anterior</button><span>Página {{ paginaCargos() + 1 }}</span><button class="boton" type="button" (click)="moverCargos(1)" [disabled]="(paginaCargos() + 1) * 25 >= totalCargos() || cargandoCargos()">Siguiente</button></div>
       </section>
     }
-    @if (error() && !revisando()) { <p class="aviso-error" role="alert">{{ error() }}</p> }
+    @if (error() && !revisando() && !formularioAbonoAbierto()) { <p class="aviso-error" role="alert">{{ error() }}</p> }
     @if (aviso()) { <p class="aviso-ok" role="status">{{ aviso() }}</p> }
-
-    <div class="cabecera-pagina">
-      <h2>Pagos · {{ total() }}</h2>
-      <button class="boton" (click)="cargar()" [disabled]="ocupado()">Actualizar</button>
-    </div>
     <div class="filtros" role="group" aria-label="Filtrar por estado">
       @for (f of filtros; track f.clave) {
         <button type="button" class="filtro" [attr.aria-pressed]="estadoFiltro() === f.clave" (click)="filtrar(f.clave)">{{ f.texto }}</button>
@@ -279,6 +286,15 @@ function sumarDias(fecha: string, dias: number): string {
   changeDetection: ChangeDetectionStrategy.Eager,
   styles: `
     .cargos { margin-bottom: var(--espacio-5); }
+    .acciones-cabecera { display: flex; flex-wrap: wrap; gap: var(--espacio-2); }
+    .formulario-abono { display: grid; gap: var(--espacio-3); }
+    .formulario-abono .formulario-demo { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--espacio-3); }
+    .formulario-abono .formulario-demo > label { display: grid; gap: 6px; min-width: 0; color: var(--texto); font-weight: 600; }
+    .formulario-abono .formulario-demo input, .formulario-abono .formulario-demo select { width: 100%; min-height: 42px; padding: 8px 10px; border: 1px solid var(--borde); border-radius: var(--radio); background: var(--superficie); color: var(--texto); font: inherit; }
+    .formulario-abono .formulario-demo small { color: var(--texto-suave); font-weight: 400; }
+    .formulario-abono .acciones-demo { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: var(--espacio-2); }
+    .formulario-abono .ayuda-demo { margin: 0; }
+    @media (max-width: 600px) { .formulario-abono .formulario-demo { grid-template-columns: 1fr; } .formulario-abono .acciones-demo > .boton { flex: 1 1 auto; } }
     .cargos .cabecera-pagina { margin-top: 0; }
     .reporte-pagos { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: end; gap: var(--espacio-4); margin-bottom: var(--espacio-5); }
     .reporte-pagos h2 { margin: 0; }
@@ -335,6 +351,7 @@ export class PagosComponent {
   protected readonly cargandoCargos = signal(false);
   protected readonly errorCargos = signal('');
   protected readonly cargoSeleccionado = signal<CargoPago | null>(null);
+  protected readonly formularioAbonoAbierto = signal(false);
   protected readonly cargoConciliando = signal<CargoPago | null>(null);
   protected readonly cargoVencimiento = signal<CargoPago | null>(null);
   protected readonly errorConciliacion = signal('');
@@ -354,6 +371,7 @@ export class PagosComponent {
   protected readonly errorComprobantes = signal('');
   protected readonly avisoComprobante = signal('');
   protected readonly puedeValidar = computed(() => this.sesion.tienePermiso('pago.validar'));
+  protected readonly puedeRegistrarPago = computed(() => this.sesion.tienePermiso('pago.registrar'));
   protected readonly puedeLeerPagos = computed(() => this.sesion.tienePermiso('pago.leer'));
   protected readonly puedeExportar = computed(() => this.sesion.tienePermiso('reporte.exportar'));
   protected readonly exportandoReporte = signal(false);
@@ -378,6 +396,28 @@ export class PagosComponent {
   private clave = crypto.randomUUID();
   private cuerpoAnterior = '';
   private consultaCargo = 0;
+
+  protected abrirRegistro(): void {
+    if (!this.puedeRegistrarPago()) return;
+    this.error.set('');
+    this.aviso.set('');
+    this.formularioAbonoAbierto.set(true);
+  }
+
+  protected cerrarRegistro(): void {
+    if (this.ocupado()) return;
+    this.formularioAbonoAbierto.set(false);
+    this.consultaCargo += 1;
+    this.citas.set([]);
+    this.citaId = '';
+    this.importe = null;
+    this.totalAcordado = null;
+    this.fechaVencimiento = '';
+    this.metodo = 'EFECTIVO';
+    this.referencia = '';
+    this.cargoSeleccionado.set(null);
+    this.error.set('');
+  }
 
   protected readonly transiciones: Record<string, string[]> = {
     PENDING: ['PROOF_RECEIVED', 'CONFIRMED', 'REJECTED'],
@@ -532,7 +572,7 @@ export class PagosComponent {
       fecha_vencimiento: this.fechaVencimiento || null,
       metodo: this.metodo,
       referencia: this.referencia.trim() || null,
-    }, 'Abono registrado como pendiente de confirmación.');
+    }, 'Abono registrado como pendiente de confirmación.', () => this.cerrarRegistro());
   }
 
   protected crearCargo(): void {
@@ -544,7 +584,7 @@ export class PagosComponent {
       cita_id: this.citaId,
       total_acordado: this.totalAcordado,
       fecha_vencimiento: this.fechaVencimiento || null,
-    }, 'Cargo registrado sin abono inicial.');
+    }, 'Cargo registrado sin abono inicial.', () => this.cerrarRegistro());
   }
 
   protected abrirConciliacion(cargo: CargoPago): void {
@@ -733,7 +773,7 @@ export class PagosComponent {
     }
   }
 
-  private enviar<T = Pago>(ruta: string, datos: unknown, exito: string): void {
+  private enviar<T = Pago>(ruta: string, datos: unknown, exito: string, alCompletar?: () => void): void {
     if (this.ocupado()) return;
     const cuerpo = JSON.stringify({ ruta, datos });
     if (this.cuerpoAnterior && cuerpo !== this.cuerpoAnterior) this.clave = crypto.randomUUID();
@@ -748,6 +788,7 @@ export class PagosComponent {
         this.aviso.set(exito);
         this.clave = crypto.randomUUID();
         this.cuerpoAnterior = '';
+        alCompletar?.();
         this.cargar();
       },
       error: (e: FalloApi) => {

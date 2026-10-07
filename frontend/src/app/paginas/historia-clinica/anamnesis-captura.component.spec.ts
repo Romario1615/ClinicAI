@@ -47,6 +47,10 @@ describe('AnamnesisCapturaComponent', () => {
         ]);
         http.expectOne(`${BASE}/historia/pacientes/paciente-1/anamnesis/respuestas`).flush([]);
         fixture.detectChanges();
+        (fixture.nativeElement as HTMLElement)
+            .querySelector<HTMLButtonElement>('button[aria-haspopup="dialog"]')!
+            .click();
+        fixture.detectChanges();
         expect((fixture.nativeElement as HTMLElement).textContent).toContain('Primera consulta · v2');
 
         const componente = fixture.componentInstance as unknown as {
@@ -88,5 +92,31 @@ describe('AnamnesisCapturaComponent', () => {
         expect(texto).toContain('No');
         expect(texto).toContain('Ninguno');
         expect(texto).toContain('guardadas en la historia clínica');
+    });
+
+    it('abre la captura en una ventana Liquid Glass y descarta el borrador al cancelar', () => {
+        fixture.detectChanges();
+        http.expectOne(`${BASE}/historia/pacientes/paciente-1/anamnesis/plantillas-activas`).flush([
+            { id: 'plantilla-1', nombre: 'Primera consulta', version: 2, nivel_sensibilidad: 'N2', preguntas: PREGUNTAS },
+        ]);
+        http.expectOne(`${BASE}/historia/pacientes/paciente-1/anamnesis/respuestas`).flush([]);
+        fixture.detectChanges();
+
+        const elemento = fixture.nativeElement as HTMLElement;
+        expect(elemento.querySelector('dialog')).toBeNull();
+        elemento.querySelector<HTMLButtonElement>('button[aria-haspopup="dialog"]')!.click();
+        fixture.detectChanges();
+        expect(elemento.querySelector('dialog[open]')?.textContent).toContain('Registrar anamnesis');
+
+        const componente = fixture.componentInstance as unknown as {
+            valores: Record<string, unknown>;
+            cerrarEditor(): void;
+        };
+        componente.valores = { motivo: 'Texto que debe descartarse' };
+        componente.cerrarEditor();
+        fixture.detectChanges();
+        expect(elemento.querySelector('dialog[open]')).toBeNull();
+        expect(componente.valores).toEqual({});
+        expect(http.match(`${BASE}/historia/pacientes/paciente-1/anamnesis/respuestas`).length).toBe(0);
     });
 });

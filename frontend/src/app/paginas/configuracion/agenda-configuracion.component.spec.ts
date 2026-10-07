@@ -59,13 +59,26 @@ describe('AgendaConfiguracionComponent', () => {
         return encontrado as HTMLButtonElement;
     }
 
+    function confirmarEliminacion(): void {
+        const confirmacion = (fixture.nativeElement as HTMLElement).querySelector<HTMLButtonElement>(
+            'dialog[open] .ventana__pie .boton--peligro',
+        );
+        if (!confirmacion) throw new Error('No se encontró el botón de confirmación.');
+        confirmacion.click();
+        fixture.detectChanges();
+    }
+
     it('carga la sede, presenta horarios y permite crear una franja con pausa', () => {
         expect(api.horarios).toHaveBeenCalledWith('s-1');
         expect(api.feriados).toHaveBeenCalled();
         expect(fixture.nativeElement.textContent).toContain('Lunes · 08:00–17:00');
         expect(fixture.nativeElement.textContent).toContain('Navidad');
 
-        boton('Agregar horario').click();
+        boton('Nuevo horario').click();
+        fixture.detectChanges();
+        expect(fixture.nativeElement.querySelector('dialog[open][aria-modal="true"]')).not.toBeNull();
+        const componente = fixture.componentInstance as unknown as { guardarHorario(): void };
+        componente.guardarHorario();
         fixture.detectChanges();
         expect(api.guardarHorario).toHaveBeenCalledWith('s-1', expect.objectContaining({ dia_semana: 1, descansos: [] }), undefined);
     });
@@ -81,20 +94,40 @@ describe('AgendaConfiguracionComponent', () => {
     });
 
     it('permite editar y eliminar una franja y un feriado', () => {
-        vi.spyOn(window, 'confirm').mockReturnValue(true);
         boton('Editar').click();
         fixture.detectChanges();
         boton('Guardar cambios').click();
         fixture.detectChanges();
         expect(api.guardarHorario).toHaveBeenCalledWith('s-1', expect.objectContaining({ descansos: [expect.objectContaining({ motivo: 'Almuerzo' })] }), 'h-1');
 
-        const botones = fixture.nativeElement.querySelectorAll('button') as NodeListOf<HTMLButtonElement>;
-        const eliminar = Array.from(botones).filter((elemento) => elemento.textContent?.includes('Eliminar'));
-        eliminar[0].click();
-        eliminar[1].click();
+        const filas = fixture.nativeElement.querySelectorAll('.fila') as NodeListOf<HTMLElement>;
+        const filaHorario = Array.from(filas).find((fila) => fila.textContent?.includes('Lunes'));
+        const eliminarHorario = filaHorario?.querySelector<HTMLButtonElement>('button.peligro');
+        if (!eliminarHorario) throw new Error('No se encontró la acción para eliminar el horario.');
+        eliminarHorario.click();
         fixture.detectChanges();
+        expect(fixture.nativeElement.querySelector('dialog[open]')?.textContent).toContain('horario del Lunes');
+        confirmarEliminacion();
+
+        const filasActualizadas = fixture.nativeElement.querySelectorAll('.fila') as NodeListOf<HTMLElement>;
+        const filaFeriado = Array.from(filasActualizadas).find((fila) => fila.textContent?.includes('Navidad'));
+        const eliminarFeriado = filaFeriado?.querySelector<HTMLButtonElement>('button.peligro');
+        if (!eliminarFeriado) throw new Error('No se encontró la acción para eliminar el cierre.');
+        eliminarFeriado.click();
+        fixture.detectChanges();
+        expect(fixture.nativeElement.querySelector('dialog[open]')?.textContent).toContain('cierre «Navidad»');
+        confirmarEliminacion();
         expect(api.eliminarHorario).toHaveBeenCalledWith('h-1');
         expect(api.eliminarFeriado).toHaveBeenCalledWith('f-1');
+    });
+
+    it('mantiene la lista intacta si se cancela la confirmación de borrado', () => {
+        boton('Eliminar').click();
+        fixture.detectChanges();
+        boton('Cancelar').click();
+        fixture.detectChanges();
+        expect(api.eliminarHorario).not.toHaveBeenCalled();
+        expect(fixture.nativeElement.querySelector('dialog[open]')).toBeNull();
     });
 
     it('guarda un feriado anual después de capturar el nombre', () => {

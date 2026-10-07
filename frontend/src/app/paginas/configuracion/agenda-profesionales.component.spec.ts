@@ -52,6 +52,8 @@ describe('AgendaProfesionalesComponent', () => {
         editar(franja: FranjaProfesional): void;
         nueva(): void;
         eliminar(franja: FranjaProfesional): void;
+        cancelarEliminacion(): void;
+        confirmarEliminacion(): void;
         nombreDia(dia: number): string;
         etiquetaProfesional(): string;
         sedeId: string;
@@ -67,6 +69,8 @@ describe('AgendaProfesionalesComponent', () => {
         };
         mensaje(): string;
         esError(): boolean;
+        ventanaFormulario(): boolean;
+        confirmacionEliminar(): FranjaProfesional | null;
     }
     const controles = (): Controles => fixture.componentInstance as unknown as Controles;
 
@@ -89,6 +93,7 @@ describe('AgendaProfesionalesComponent', () => {
 
     it('edita una franja sin duplicarla', () => {
         controles().editar(franja);
+        expect(controles().ventanaFormulario()).toBe(true);
         expect(controles().editando).toBe('f-1');
         expect(controles().form.hora_inicio).toBe('08:00');
         controles().form.hora_inicio = '09:00';
@@ -101,21 +106,28 @@ describe('AgendaProfesionalesComponent', () => {
         botones().find((b) => b.textContent?.trim() === 'Editar')?.click();
         fixture.detectChanges();
         expect(controles().editando).toBe('f-1');
+        expect(fixture.nativeElement.querySelector('dialog[open][aria-label="Editar franja"]')).not.toBeNull();
         botones().find((b) => b.textContent?.trim() === 'Cancelar')?.click();
         fixture.detectChanges();
         expect(controles().editando).toBe('');
+        botones().find((b) => b.textContent?.trim() === 'Nueva franja')?.click();
+        fixture.detectChanges();
         const form = fixture.nativeElement.querySelector('form') as HTMLFormElement;
         form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
         fixture.detectChanges();
         expect(agenda.crear).toHaveBeenCalled();
     });
 
-    it('elimina tras confirmación y permite cancelar la confirmación', () => {
-        const confirmacion = vi.spyOn(window, 'confirm').mockReturnValueOnce(false).mockReturnValueOnce(true);
+    it('confirma la eliminación en una ventana y permite cancelarla', () => {
         controles().eliminar(franja);
-        expect(confirmacion).toHaveBeenCalledTimes(1);
+        fixture.detectChanges();
+        expect(controles().confirmacionEliminar()).toEqual(franja);
+        expect(fixture.nativeElement.querySelector('dialog[open][aria-label="Eliminar franja"]')).not.toBeNull();
+        controles().cancelarEliminacion();
+        fixture.detectChanges();
         expect(agenda.eliminar).not.toHaveBeenCalled();
         controles().eliminar(franja);
+        controles().confirmarEliminacion();
         expect(agenda.eliminar).toHaveBeenCalledWith('p-1', 's-1', 'f-1');
     });
 
@@ -153,9 +165,9 @@ describe('AgendaProfesionalesComponent', () => {
     });
 
     it('muestra errores de servicio al eliminar y omite acciones sin sede', () => {
-        vi.spyOn(window, 'confirm').mockReturnValue(true);
         agenda.eliminar.mockReturnValue(throwError(() => new HttpErrorResponse({ status: 500 })));
         controles().eliminar(franja);
+        controles().confirmarEliminacion();
         expect(controles().mensaje()).toBe('No se pudo eliminar la franja.');
         controles().sedeId = '';
         controles().cargarProfesionales();

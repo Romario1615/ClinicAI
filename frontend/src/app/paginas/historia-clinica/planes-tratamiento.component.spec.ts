@@ -127,6 +127,13 @@ describe('PlanesTratamientoComponent', () => {
 
     it('valida y arma el borrador con su total', () => {
         montar([]);
+        c.abrirFormulario();
+        http.expectOne(`${BASE}/odontologia/plantillas-plan`).flush([]);
+        fixture.detectChanges();
+        const dialogo = (fixture.nativeElement as HTMLElement).querySelector('dialog[open]');
+        expect(dialogo?.getAttribute('aria-modal')).toBe('true');
+        expect(dialogo?.getAttribute('aria-label')).toBe('Crear borrador de tratamiento');
+
         c.descripcionProcedimiento = 'ab';
         c.agregarProcedimiento();
         expect(c.error()).toContain('3 caracteres');
@@ -165,12 +172,15 @@ describe('PlanesTratamientoComponent', () => {
         expect(c.procedimientos()[0].orden).toBe(1);
 
         c.titulo = 'Plan sintetico';
-        c.guardarBorrador();
+        fixture.detectChanges();
+        dialogo?.querySelector<HTMLButtonElement>('button[type="submit"]')?.click();
         const alta = http.expectOne(RUTA);
         expect(alta.request.body.titulo).toBe('Plan sintetico');
         alta.flush(plan());
+        fixture.detectChanges();
         expect(c.planes().length).toBe(1);
         expect(c.exito()).toContain('Borrador guardado');
+        expect((fixture.nativeElement as HTMLElement).querySelector('dialog[open]')).toBeNull();
     });
 
     it('propone un borrador', () => {

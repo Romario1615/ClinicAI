@@ -35,7 +35,20 @@ describe('RecetaEditorComponent', () => {
         fixture.detectChanges();
     });
 
-    afterEach(() => http.verify());
+    afterEach(() => {
+        c.cerrar();
+        fixture.detectChanges();
+        http.verify();
+        expect(document.body.style.overflow).not.toBe('hidden');
+    });
+
+    it('presenta la receta extensa en una ventana con pie de acciones', () => {
+        const raiz = fixture.nativeElement as HTMLElement;
+        const dialogo = raiz.querySelector<HTMLDialogElement>('dialog[open][aria-modal="true"]');
+        expect(dialogo?.getAttribute('aria-label')).toBe('Nueva receta · borrador');
+        expect(dialogo?.querySelector('form#form-receta')).not.toBeNull();
+        expect(dialogo?.querySelector('.ventana__pie')).not.toBeNull();
+    });
 
     it('ofrece firma propia y solo las delegaciones vigentes', () => {
         expect(c.firmante).toBe('prof-yo');

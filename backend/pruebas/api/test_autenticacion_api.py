@@ -22,8 +22,10 @@ import sqlalchemy as sa
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.modulos.auditoria.modelos import Auditoria
 from app.modulos.organizacion.modelos import Clinica
-from app.modulos.usuarios.modelos import RolPermiso, Sesion, Usuario
+from app.modulos.usuarios.modelos import Rol, RolPermiso, Sesion, Usuario, UsuarioRol
+from app.nucleo.configuracion import Entorno
 from app.nucleo.reloj import RelojFijo
 from pruebas.api.conftest import (
     CONTRASENA,
@@ -38,6 +40,32 @@ pytestmark = [pytest.mark.api, pytest.mark.asyncio]
 
 def _ruta(api: str, sufijo: str) -> str:
     return f"{api}/autenticacion{sufijo}"
+
+
+ROLES_BASE = (
+    "superadministrador",
+    "administrador_clinica",
+    "recepcion",
+    "asistente",
+    "auditor",
+    "profesional",
+)
+
+
+async def _rol_del_sistema(sesion: AsyncSession, codigo: str) -> Rol:
+    rol = await sesion.scalar(sa.select(Rol).where(Rol.codigo == codigo, Rol.clinica_id.is_(None)))
+    if rol is None:
+        rol = Rol(codigo=codigo, nombre=codigo.replace("_", " ").title(), es_sistema=True)
+        sesion.add(rol)
+        await sesion.flush()
+    return rol
+
+
+async def _asignar_rol_sintetico(sesion: AsyncSession, usuario: Usuario, codigo: str) -> None:
+    rol = await _rol_del_sistema(sesion, codigo)
+    sesion.add(UsuarioRol(usuario_id=usuario.id, rol_id=rol.id))
+    usuario.apellido = f"{usuario.apellido} [SINTETICO]"
+    await sesion.flush()
 
 
 # ===========================================================================
@@ -306,6 +334,206 @@ class TestInicioSesion:
 
         assert respuesta.status_code == 503
         assert respuesta.json()["codigo"] == "PROVEEDOR_EXTERNO_NO_DISPONIBLE"
+
+
+class TestAccesoLocalPorRoles:
+    """Acceso rapido local: solo cuentas sinteticas, sin selector de usuario."""
+
+    async def test_publica_los_seis_roles_base_con_cuentas_sinteticas(
+        self,
+        cliente: AsyncClient,
+        api: str,
+        sesion: AsyncSession,
+        usuario: Usuario,
+        aplicacion,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        monkeypatch.setattr(aplicacion.state.configuracion, "entorno", Entorno.LOCAL)
+        for codigo in ROLES_BASE:
+            await _asignar_rol_sintetico(sesion, usuario, codigo)
+
+        respuesta = await cliente.get(_ruta(api, "/accesos-locales"))
+
+        assert respuesta.status_code == 200
+        cuerpo = respuesta.json()
+        assert cuerpo["habilitado"] is True
+        assert [rol["codigo"] for rol in cuerpo["roles"]] == list(ROLES_BASE)
+        assert [rol["nombre"] for rol in cuerpo["roles"]] == [
+            "Superadministrador",
+            "Administración de clínica",
+            "Recepción",
+            "Asistencia clínica",
+            "Auditoría",
+            "Profesional de salud",
+        ]
+
+    @pytest.mark.parametrize("codigo_rol", ROLES_BASE)
+    async def test_inicia_sesion_y_resuelve_la_identidad_del_rol_elegido(
+        self,
+        cliente: AsyncClient,
+        api: str,
+        sesion: AsyncSession,
+        usuario: Usuario,
+        aplicacion,
+        configuracion,
+        monkeypatch: pytest.MonkeyPatch,
+        codigo_rol: str,
+    ) -> None:
+        monkeypatch.setattr(aplicacion.state.configuracion, "entorno", Entorno.LOCAL)
+        # La API suite comparte una base que puede tener semillas sintéticas.
+        # Aislamos la elección para que el rol pruebe esta cuenta concreta.
+        await sesion.execute(
+            sa.update(Usuario).where(Usuario.apellido.contains("[SINTETICO]")).values(activo=False)
+        )
+        usuario.correo = f"000-prueba-{usuario.id}@example.invalid"
+        await _asignar_rol_sintetico(sesion, usuario, codigo_rol)
+
+        respuesta = await cliente.post(_ruta(api, "/sesion-local"), json={"codigo_rol": codigo_rol})
+
+        assert respuesta.status_code == 200
+        tokens = respuesta.json()
+        assert tokens["token_acceso"]
+        assert tokens["token_refresco"]
+        # El acceso local satisface el segundo factor para esta sesión
+        # sintética; por eso no deja al navegador bloqueado en una pantalla
+        # que exige un código de autenticación inexistente.
+        assert tokens["requiere_segundo_factor"] is False
+        sesion_emitida = await sesion.scalar(
+            sa.select(Sesion).where(Sesion.usuario_id == usuario.id)
+        )
+        assert sesion_emitida is not None
+        assert sesion_emitida.segundo_factor_cumplido is (
+            codigo_rol in configuracion.lista_roles_con_2fa
+        )
+        identidad = await cliente.get(
+            _ruta(api, "/yo"),
+            headers={"Authorization": f"Bearer {tokens['token_acceso']}"},
+        )
+        assert identidad.status_code == 200
+        assert identidad.json()["usuario_id"] == str(usuario.id)
+        assert identidad.json()["roles"] == [codigo_rol]
+        assert identidad.json()["segundo_factor_cumplido"] is (
+            codigo_rol in configuracion.lista_roles_con_2fa
+        )
+
+        evento = await sesion.scalar(
+            sa.select(Auditoria).where(
+                Auditoria.accion == "login.rol_local",
+                Auditoria.actor_id == usuario.id,
+            )
+        )
+        assert evento is not None
+        assert evento.metadatos == {"codigo_rol": codigo_rol, "cuenta_sintetica": True}
+        assert respuesta.text.count("token_") == 2
+
+    async def test_no_ofrece_cuentas_normales_inactivas_ni_roles_personalizados(
+        self,
+        cliente: AsyncClient,
+        api: str,
+        sesion: AsyncSession,
+        usuario: Usuario,
+        clinica: Clinica,
+        aplicacion,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        monkeypatch.setattr(aplicacion.state.configuracion, "entorno", Entorno.LOCAL)
+        # Aísla esta aserción aunque la base compartida ya tenga semillas
+        # sintéticas activas de otras pruebas o del entorno local.
+        await sesion.execute(
+            sa.update(Usuario).where(Usuario.apellido.contains("[SINTETICO]")).values(activo=False)
+        )
+        recepcion = await _rol_del_sistema(sesion, "recepcion")
+        sesion.add(UsuarioRol(usuario_id=usuario.id, rol_id=recepcion.id))
+
+        rol_auditor = await _rol_del_sistema(sesion, "auditor")
+        inactivo = Usuario(
+            clinica_id=clinica.id,
+            correo="inactivo-sintetico@example.invalid",
+            hash_contrasena=usuario.hash_contrasena,
+            nombre="Cuenta",
+            apellido="Inactiva [SINTETICO]",
+            activo=False,
+        )
+        sesion.add(inactivo)
+        await sesion.flush()
+        sesion.add(UsuarioRol(usuario_id=inactivo.id, rol_id=rol_auditor.id))
+
+        rol_clinica = Rol(
+            clinica_id=clinica.id,
+            codigo="profesional",
+            nombre="Rol personalizado",
+            es_sistema=False,
+        )
+        sesion.add(rol_clinica)
+        personalizado = Usuario(
+            clinica_id=clinica.id,
+            correo="personalizado-sintetico@example.invalid",
+            hash_contrasena=usuario.hash_contrasena,
+            nombre="Cuenta",
+            apellido="Personalizada [SINTETICO]",
+        )
+        sesion.add(personalizado)
+        await sesion.flush()
+        sesion.add(UsuarioRol(usuario_id=personalizado.id, rol_id=rol_clinica.id))
+
+        respuesta = await cliente.get(_ruta(api, "/accesos-locales"))
+
+        assert respuesta.status_code == 200
+        assert respuesta.json() == {"habilitado": False, "roles": []}
+
+    @pytest.mark.parametrize("entorno", [Entorno.PREPRODUCCION, Entorno.PRODUCCION])
+    async def test_no_emite_accesos_locales_fuera_de_desarrollo(
+        self,
+        cliente: AsyncClient,
+        api: str,
+        sesion: AsyncSession,
+        usuario: Usuario,
+        aplicacion,
+        monkeypatch: pytest.MonkeyPatch,
+        entorno: Entorno,
+    ) -> None:
+        await _asignar_rol_sintetico(sesion, usuario, "administrador_clinica")
+        monkeypatch.setattr(aplicacion.state.configuracion, "entorno", entorno)
+
+        accesos = await cliente.get(_ruta(api, "/accesos-locales"))
+        inicio = await cliente.post(
+            _ruta(api, "/sesion-local"), json={"codigo_rol": "administrador_clinica"}
+        )
+
+        assert accesos.status_code == 200
+        assert accesos.json() == {"habilitado": False, "roles": []}
+        assert inicio.status_code == 404
+        assert inicio.json()["codigo"] == "RECURSO_NO_ENCONTRADO"
+        assert (
+            await sesion.scalar(
+                sa.select(sa.func.count())
+                .select_from(Sesion)
+                .where(Sesion.usuario_id == usuario.id)
+            )
+            == 0
+        )
+
+    async def test_rechaza_roles_no_disponibles_y_campos_desconocidos(
+        self,
+        cliente: AsyncClient,
+        api: str,
+        aplicacion,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        monkeypatch.setattr(aplicacion.state.configuracion, "entorno", Entorno.LOCAL)
+
+        desconocido = await cliente.post(
+            _ruta(api, "/sesion-local"), json={"codigo_rol": "dueño_de_todo"}
+        )
+        campo_adicional = await cliente.post(
+            _ruta(api, "/sesion-local"),
+            json={"codigo_rol": "recepcion", "usuario_id": "elegido-por-el-cliente"},
+        )
+
+        assert desconocido.status_code == 404
+        assert desconocido.json()["codigo"] == "RECURSO_NO_ENCONTRADO"
+        assert campo_adicional.status_code == 422
+        assert "elegido-por-el-cliente" not in campo_adicional.text
 
 
 # ===========================================================================

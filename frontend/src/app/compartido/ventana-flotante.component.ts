@@ -262,6 +262,13 @@ import { IconoComponent } from './icono.component';
       }
     }
 
+    @media (prefers-reduced-motion: reduce) {
+      .capa,
+      .ventana {
+        animation: none;
+      }
+    }
+
     /* En pantalla estrecha ocupa todo: una ventana lateral de 440 px en una
        tableta de 600 no deja ver ni el contexto ni el detalle. */
     @media (max-width: 720px) {
@@ -290,6 +297,8 @@ export class VentanaFlotanteComponent implements AfterViewInit, OnDestroy {
   readonly anchoMaximo = input(460);
   /** Ocupa todo el alto disponible (fichas con pestanas de distinto largo). */
   readonly altoCompleto = input(false);
+  /** Impide descartar el diálogo por Escape mientras hay un guardado en curso. */
+  readonly cierraConEscape = input(true);
   /**
    * Si pulsar el fondo cierra.
    *
@@ -440,12 +449,23 @@ export class VentanaFlotanteComponent implements AfterViewInit, OnDestroy {
 
   private enfocables(): HTMLElement[] {
     const raiz = this.ventana()?.nativeElement ?? this.anfitrion.nativeElement;
-    // Se descarta lo oculto con `getClientRects`, no con `offsetParent`: la
-    // capa es `position: fixed` y eso vuelve poco fiable el segundo.
+    // Se descarta lo que no puede recibir foco. `getClientRects` distingue lo
+    // oculto por CSS en navegador; la conexión al documento conserva la
+    // navegación de teclado en pruebas sin motor de layout.
     return Array.from(
       raiz.querySelectorAll<HTMLElement>(
-        'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+        'a[href], button:not([disabled]), input:not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex^="-"])',
       ),
-    ).filter((elemento) => elemento.getClientRects().length > 0 || elemento.isConnected);
+    ).filter((elemento) => {
+      if (elemento.closest('[hidden], [inert], [aria-hidden="true"]')) return false;
+      const estilos = elemento.ownerDocument.defaultView?.getComputedStyle(elemento);
+      if (
+        estilos &&
+        (estilos.display === 'none' || estilos.visibility === 'hidden' || estilos.visibility === 'collapse')
+      ) {
+        return false;
+      }
+      return elemento.getClientRects().length > 0 || elemento.isConnected;
+    });
   }
 }

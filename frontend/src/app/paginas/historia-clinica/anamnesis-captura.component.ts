@@ -3,6 +3,7 @@ import { DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 
 import { IconoComponent } from '../../compartido/icono.component';
+import { VentanaFlotanteComponent } from '../../compartido/ventana-flotante.component';
 import { FalloApi } from '../../nucleo/servicios/api.service';
 import { OperacionesService } from '../../nucleo/servicios/operaciones.service';
 import { SesionService } from '../../nucleo/servicios/sesion.service';
@@ -40,7 +41,7 @@ interface RespuestaAnamnesis {
 @Component({
   selector: 'app-anamnesis-captura',
   standalone: true,
-  imports: [DatePipe, FormsModule, IconoComponent],
+  imports: [DatePipe, FormsModule, IconoComponent, VentanaFlotanteComponent],
   template: `
     <section class="captura" aria-labelledby="titulo-captura-anamnesis">
       <header class="captura__cabecera">
@@ -52,7 +53,24 @@ interface RespuestaAnamnesis {
       @if (cargando()) { <p class="captura__estado" role="status">Cargando formularios y capturas…</p> }
       @else {
         @if (plantillas().length && puedeEscribir()) {
-          <form class="formulario" (ngSubmit)="guardar()">
+          <div class="iniciar-captura">
+            <p>Registra las respuestas con la plantilla clínica publicada.</p>
+            <button type="button" class="boton boton--principal" (click)="abrirEditor()" aria-haspopup="dialog">
+              Registrar anamnesis
+            </button>
+          </div>
+        }
+        @if (editorAbierto()) {
+          <app-ventana-flotante
+            ceja="Registro asistencial"
+            titulo="Registrar anamnesis"
+            forma="centrada"
+            [anchoMaximo]="900"
+            [altoCompleto]="true"
+            [cierraAlPulsarFuera]="false"
+            (cerrar)="cerrarEditor()"
+          >
+          <form id="formulario-captura-anamnesis" class="formulario" (ngSubmit)="guardar()">
             <div class="formulario__encabezado">
               <label class="campo"><span class="campo__etiqueta">Formulario activo</span>
                 <select class="campo__control" name="plantilla" [ngModel]="plantillaSeleccionada()" (ngModelChange)="seleccionar($event)">
@@ -80,10 +98,17 @@ interface RespuestaAnamnesis {
                   </div>
                 }
               </div>
-              <div class="acciones acciones--final"><button class="boton boton--principal" type="submit" [disabled]="guardando()">{{ guardando() ? 'Guardando…' : 'Guardar respuestas en la historia' }}</button></div>
             }
           </form>
-        } @else if (!plantillas().length) {
+          <div pie>
+            <button class="boton" type="button" (click)="cerrarEditor()" [disabled]="guardando()">Cancelar</button>
+            <button class="boton boton--principal" type="submit" form="formulario-captura-anamnesis" [disabled]="guardando() || !plantillaActual()">
+              {{ guardando() ? 'Guardando…' : 'Guardar respuestas' }}
+            </button>
+          </div>
+          </app-ventana-flotante>
+        }
+        @if (!plantillas().length) {
           <p class="captura__estado">No hay una plantilla publicada disponible para esta clínica.</p>
         }
 
@@ -112,7 +137,9 @@ interface RespuestaAnamnesis {
     .captura__error { color:var(--peligro); background:var(--peligro-fondo); }
     .captura__aviso { color:var(--exito); background:var(--exito-fondo); }
     .captura__estado { color:var(--texto-suave); background:var(--superficie); }
-    .formulario { display:grid; gap:var(--espacio-3); padding:var(--espacio-3); border:1px solid var(--borde); border-radius:var(--radio); background:var(--superficie); }
+    .iniciar-captura { display:flex; align-items:center; justify-content:space-between; gap:var(--espacio-3); padding:var(--espacio-3); border:1px solid var(--cristal-borde); border-radius:var(--radio); background:var(--cristal-superficie); box-shadow:inset 0 1px rgb(255 255 255 / 85%); }
+    .iniciar-captura p { margin:0; color:var(--texto-suave); font-size:.9rem; }
+    .formulario { display:grid; gap:var(--espacio-3); }
     .formulario__encabezado { display:flex; align-items:end; gap:var(--espacio-3); }
     .formulario__encabezado .campo { flex:1; margin:0; }
     .sensibilidad { display:inline-flex; align-items:center; width:max-content; padding:3px 9px; border:1px solid var(--borde); border-radius:999px; color:var(--texto-suave); font-size:.72rem; font-weight:700; }
@@ -137,7 +164,7 @@ interface RespuestaAnamnesis {
     .captura-anterior dl div { display:grid; grid-template-columns:minmax(130px,.7fr) minmax(0,1.3fr); gap:var(--espacio-3); }
     .captura-anterior dt { color:var(--texto-suave); font-size:.86rem; font-weight:650; }
     .captura-anterior dd { margin:0; overflow-wrap:anywhere; font-size:.9rem; }
-    @media(max-width:560px) { .formulario__encabezado { align-items:stretch; flex-direction:column; } .captura-anterior dl div { grid-template-columns:1fr; gap:2px; } }
+    @media(max-width:560px) { .iniciar-captura { align-items:stretch; flex-direction:column; } .formulario__encabezado { align-items:stretch; flex-direction:column; } .captura-anterior dl div { grid-template-columns:1fr; gap:2px; } }
   `,
 })
 export class AnamnesisCapturaComponent {
@@ -151,6 +178,7 @@ export class AnamnesisCapturaComponent {
   protected readonly guardando = signal(false);
   protected readonly error = signal('');
   protected readonly aviso = signal('');
+  protected readonly editorAbierto = signal(false);
   protected valores: Record<string, unknown> = {};
 
   constructor() {
@@ -166,6 +194,19 @@ export class AnamnesisCapturaComponent {
 
   protected plantillaActual(): PlantillaAnamnesis | null {
     return this.plantillas().find((plantilla) => plantilla.id === this.plantillaSeleccionada()) ?? null;
+  }
+
+  protected abrirEditor(): void {
+    this.valores = {};
+    this.error.set('');
+    this.editorAbierto.set(true);
+  }
+
+  protected cerrarEditor(): void {
+    if (this.guardando()) return;
+    this.editorAbierto.set(false);
+    this.valores = {};
+    this.error.set('');
   }
 
   protected seleccionar(id: string): void {
@@ -209,6 +250,7 @@ export class AnamnesisCapturaComponent {
         this.valores = {};
         this.aviso.set(`Respuestas de «${respuesta.plantilla}» guardadas en la historia clínica.`);
         this.guardando.set(false);
+        this.editorAbierto.set(false);
       },
       error: (fallo: FalloApi) => { this.error.set(fallo.message); this.guardando.set(false); },
     });

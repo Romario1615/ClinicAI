@@ -55,6 +55,7 @@ describe('EquipoComponent', () => {
         cambiarSede(id: string, marcada: boolean): void;
         guardar(): void;
         editar(perfil: PerfilProfesional): void;
+        abrirNuevo(): void;
         nuevo(): void;
         nombreSede(id: string): string;
         etiquetasSedes(ids: readonly string[]): string;
@@ -87,6 +88,40 @@ describe('EquipoComponent', () => {
         expect(fixture.nativeElement.textContent).toContain('Ana Paz');
         expect(fixture.nativeElement.textContent).toContain('Centro');
         expect(vm().cargando()).toBe(false);
+    });
+
+    it('abre el alta en una ventana accesible y conserva el listado como contexto', () => {
+        const elemento = fixture.nativeElement as HTMLElement;
+        expect(elemento.querySelector('dialog[open]')).toBeNull();
+        elemento.querySelector<HTMLButtonElement>('.lista__agregar')?.click();
+        fixture.detectChanges();
+
+        const dialogo = elemento.querySelector<HTMLDialogElement>('dialog[open]');
+        expect(dialogo?.getAttribute('aria-modal')).toBe('true');
+        expect(dialogo?.getAttribute('aria-label')).toBe('Agregar profesional');
+        expect(dialogo?.querySelector('#form-equipo')).not.toBeNull();
+        expect(elemento.querySelector('.lista')?.textContent).toContain('Ana Paz');
+
+        dialogo?.querySelector<HTMLButtonElement>('.ventana__pie button[type="button"]')?.click();
+        fixture.detectChanges();
+        expect(elemento.querySelector('dialog[open]')).toBeNull();
+        expect(vm().form.nombre).toBe('');
+    });
+
+    it('abre la edición con los datos del profesional y restablece el formulario al cancelar con Escape', async () => {
+        const elemento = fixture.nativeElement as HTMLElement;
+        elemento.querySelector<HTMLButtonElement>('.fila button')?.click();
+        fixture.detectChanges();
+        await fixture.whenStable();
+        fixture.detectChanges();
+
+        const dialogo = elemento.querySelector<HTMLDialogElement>('dialog[open]');
+        expect(dialogo?.getAttribute('aria-label')).toBe('Editar perfil profesional');
+        expect(dialogo?.querySelector<HTMLInputElement>('input[name="nombre"]')?.value).toBe('Ana');
+        dialogo?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+        fixture.detectChanges();
+        expect(elemento.querySelector('dialog[open]')).toBeNull();
+        expect(vm().form.nombre).toBe('');
     });
 
     it('valida los campos obligatorios y permite marcar y desmarcar sedes', () => {
@@ -142,13 +177,18 @@ describe('EquipoComponent', () => {
     });
 
     it('muestra errores HTTP del servidor y errores inesperados al guardar', () => {
+        vm().abrirNuevo();
         equipo.crear.mockReturnValue(throwError(() => new HttpErrorResponse({ status: 409, error: { mensaje: 'Registro duplicado.' } })));
         Object.assign(vm().form, { especialidad_id: 'e-1', nombre: 'Lina', apellido: 'Sol', sede_ids: ['s-1'], sede_principal_id: 's-1' });
         vm().guardar();
+        fixture.detectChanges();
         expect(vm().error()).toBe('Registro duplicado.');
+        expect((fixture.nativeElement as HTMLElement).querySelector('dialog[open] [role="alert"]')?.textContent).toContain('Registro duplicado.');
         equipo.crear.mockReturnValue(throwError(() => new Error('red')));
         vm().guardar();
+        fixture.detectChanges();
         expect(vm().error()).toBe('No se pudo guardar el perfil profesional.');
+        expect((fixture.nativeElement as HTMLElement).querySelector('dialog[open] [role="alert"]')?.textContent).toContain('No se pudo guardar');
     });
 
     it('presenta errores independientes de carga para catálogos y equipo', () => {

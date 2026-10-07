@@ -112,11 +112,20 @@ describe('ConfiguracionComponent', () => {
         fixture.detectChanges();
     }
 
+    function abrirAnthropic(): void {
+        const botones = Array.from((fixture.nativeElement as HTMLElement).querySelectorAll('button')) as HTMLButtonElement[];
+        const boton = botones.find((elemento) => elemento.textContent?.includes('Configurar Anthropic') ?? false) as HTMLButtonElement | undefined;
+        if (!boton)
+            throw new Error('No se encontró la acción para configurar Anthropic.');
+        boton.click();
+        fixture.detectChanges();
+    }
+
     function guardarAnthropic(): void {
         const botones = Array.from((fixture.nativeElement as HTMLElement).querySelectorAll('button')) as HTMLButtonElement[];
-        const boton = botones.find((elemento) => elemento.textContent?.includes('Guardar Anthropic') ?? false) as HTMLButtonElement | undefined;
+        const boton = botones.find((elemento) => elemento.textContent?.includes('Guardar configuración') ?? false) as HTMLButtonElement | undefined;
         if (!boton)
-            throw new Error('No se encontró el botón de guardado de Anthropic.');
+            throw new Error('No se encontró el botón de guardado de la ventana.');
         boton.click();
         fixture.detectChanges();
     }
@@ -124,6 +133,8 @@ describe('ConfiguracionComponent', () => {
     it('muestra que existe una clave guardada sin rellenar su valor', () => {
         abrirIntegraciones();
 
+        expect(fixture.nativeElement.querySelector('input[name="anthropic-api-key"]')).toBeNull();
+        abrirAnthropic();
         const entrada = fixture.nativeElement.querySelector('input[name="anthropic-api-key"]') as HTMLInputElement;
         expect(entrada.type).toBe('password');
         expect(entrada.value).toBe('');
@@ -132,11 +143,76 @@ describe('ConfiguracionComponent', () => {
 
     it('no vuelve a enviar una clave vacía y conserva el estado guardado', () => {
         abrirIntegraciones();
+        abrirAnthropic();
         guardarAnthropic();
 
         expect(servicio.guardar).toHaveBeenCalledWith('anthropic', expect.objectContaining({ secretos: {}, eliminar_secretos: [] }));
         expect(fixture.nativeElement.textContent).toContain('Hay una credencial cifrada guardada.');
+        expect(fixture.nativeElement.querySelector('input[name="anthropic-api-key"]')).toBeNull();
+        abrirAnthropic();
         expect((fixture.nativeElement.querySelector('input[name="anthropic-api-key"]') as HTMLInputElement).value).toBe('');
+    });
+
+    it('cancela el editor de credenciales sin conservar la clave escrita ni los cambios de borrador', () => {
+        abrirIntegraciones();
+        abrirAnthropic();
+        const clave = fixture.nativeElement.querySelector('input[name="anthropic-api-key"]') as HTMLInputElement;
+        clave.value = 'clave-no-guardada';
+        clave.dispatchEvent(new Event('input', { bubbles: true }));
+        const modelo = fixture.nativeElement.querySelector('input[name="anthropic-modelo"]') as HTMLInputElement;
+        modelo.value = 'modelo-no-guardado';
+        modelo.dispatchEvent(new Event('input', { bubbles: true }));
+        fixture.detectChanges();
+
+        const cancelar = Array.from((fixture.nativeElement as HTMLElement).querySelectorAll('button'))
+            .find((elemento) => elemento.textContent?.includes('Cancelar')) as HTMLButtonElement | undefined;
+        cancelar?.click();
+        fixture.detectChanges();
+
+        expect(fixture.nativeElement.querySelector('dialog[open]')).toBeNull();
+        expect((fixture.componentInstance as unknown as { anthropic: { secretos: Record<string, string>; ajustes: Record<string, string | number | boolean> } }).anthropic.secretos['api_key']).toBe('');
+        expect(fixture.nativeElement.textContent).toContain('claude-sonnet-5');
+        expect(fixture.nativeElement.textContent).not.toContain('modelo-no-guardado');
+    });
+
+    it('muestra el perfil de clínica y abre su edición dentro de una ventana Liquid Glass', () => {
+        const componente = fixture.componentInstance as unknown as {
+            clinica: { (): DatosClinica | null; set(valor: DatosClinica | null): void };
+        };
+        const botones = Array.from((fixture.nativeElement as HTMLElement).querySelectorAll('button'));
+        botones.find((elemento) => elemento.textContent?.includes('Editar información'))?.click();
+        fixture.detectChanges();
+
+        const dialogo = fixture.nativeElement.querySelector('dialog[open]') as HTMLElement;
+        expect(dialogo.textContent).toContain('Zona horaria (IANA)');
+        componente.clinica.set({ ...componente.clinica()!, nombre: 'Nombre de borrador' });
+        fixture.detectChanges();
+        const cancelar = Array.from((fixture.nativeElement as HTMLElement).querySelectorAll('button'))
+            .find((elemento) => elemento.textContent?.includes('Cancelar')) as HTMLButtonElement | undefined;
+        cancelar?.click();
+        fixture.detectChanges();
+        expect(fixture.nativeElement.querySelector('dialog[open]')).toBeNull();
+        expect(fixture.nativeElement.textContent).toContain('Clínica de prueba');
+        expect(fixture.nativeElement.textContent).not.toContain('Nombre de borrador');
+    });
+
+    it('guarda el perfil desde el diálogo y cierra solo al confirmar la respuesta', () => {
+        const componente = fixture.componentInstance as unknown as {
+            clinica: { (): DatosClinica | null; set(valor: DatosClinica | null): void };
+        };
+        servicio.guardarClinica.mockImplementation((datos) => of({ ...clinica(), ...datos }));
+        const botones = Array.from((fixture.nativeElement as HTMLElement).querySelectorAll('button'));
+        botones.find((elemento) => elemento.textContent?.includes('Editar información'))?.click();
+        fixture.detectChanges();
+        componente.clinica.set({ ...componente.clinica()!, nombre: 'Clínica actualizada' });
+        fixture.detectChanges();
+
+        (fixture.nativeElement.querySelector('button[form="formulario-clinica"]') as HTMLButtonElement).click();
+        fixture.detectChanges();
+
+        expect(servicio.guardarClinica).toHaveBeenCalledWith(expect.objectContaining({ nombre: 'Clínica actualizada' }));
+        expect(fixture.nativeElement.querySelector('dialog[open]')).toBeNull();
+        expect(fixture.nativeElement.textContent).toContain('Clínica actualizada');
     });
 
     it('presenta los errores al cargar y guardar la configuración y la clínica', () => {

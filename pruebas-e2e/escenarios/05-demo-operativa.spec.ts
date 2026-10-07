@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
-import type { APIRequestContext, Page } from '@playwright/test';
+import AxeBuilder from '@axe-core/playwright';
+import type { APIRequestContext, Locator, Page } from '@playwright/test';
 import { expect, test } from '../apoyo/prueba';
 import { acceder, CODIGOS_ROL, irA } from '../apoyo/sesion';
 import { huecosVisiblesEnAgenda, seleccionarCitaEnAgenda } from '../apoyo/agenda';
@@ -8,6 +9,14 @@ const API = process.env.URL_API ?? 'http://127.0.0.1:8000/api/v1';
 const fecha = (iso: string) => new Intl.DateTimeFormat('en-CA', {
   timeZone: 'America/Guayaquil', year: 'numeric', month: '2-digit', day: '2-digit',
 }).format(new Date(iso));
+const horaLocal = (iso: string) => new Intl.DateTimeFormat('en-GB', {
+  timeZone: 'America/Guayaquil', hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
+}).format(new Date(iso));
+
+function fechaSemanal(iso: string, semanas: number): string {
+  const [anio, mes, dia] = fecha(iso).split('-').map(Number);
+  return new Date(Date.UTC(anio, mes - 1, dia + semanas * 7)).toISOString().slice(0, 10);
+}
 
 async function preparar(request: APIRequestContext) {
   const acceso = await request.post(`${API}/autenticacion/sesion-local`, {
@@ -47,6 +56,44 @@ async function preparar(request: APIRequestContext) {
   return { headers, sede, servicio, profesional, paciente, turno, cuerpo, leer };
 }
 
+async function encontrarTurnoParaSerie(datos: Awaited<ReturnType<typeof preparar>>) {
+  const desde = new Date(Date.now() + 14 * 86400000).toISOString();
+  const hasta = new Date(Date.now() + 60 * 86400000).toISOString();
+  const parametros = new URLSearchParams({
+    sede_id: datos.sede.id,
+    profesional_id: datos.profesional.id,
+    servicio_id: datos.servicio.id,
+    desde,
+    hasta,
+  });
+  const candidatos = await datos.leer(`/agenda/disponibilidad?${parametros}`);
+
+  for (const candidato of candidatos.turnos.slice(0, 120)) {
+    const hora = horaLocal(candidato.inicio);
+    let todasDisponibles = true;
+    for (const semana of [1, 2]) {
+      const dia = fechaSemanal(candidato.inicio, semana);
+      const diaDesde = new Date(`${dia}T00:00:00-05:00`).toISOString();
+      const diaHasta = new Date(Date.parse(diaDesde) + 86400000).toISOString();
+      const parametrosDia = new URLSearchParams({
+        sede_id: datos.sede.id,
+        profesional_id: datos.profesional.id,
+        servicio_id: datos.servicio.id,
+        desde: diaDesde,
+        hasta: diaHasta,
+      });
+      const disponibilidad = await datos.leer(`/agenda/disponibilidad?${parametrosDia}`);
+      if (!disponibilidad.turnos.some((turno: { inicio: string }) => horaLocal(turno.inicio) === hora)) {
+        todasDisponibles = false;
+        break;
+      }
+    }
+    if (todasDisponibles) return candidato;
+  }
+
+  throw new Error('No se encontró un horario libre para crear una serie semanal de dos citas.');
+}
+
 /** La limpieza no debe reemplazar el fallo que Playwright ya está reportando. */
 async function limpiarCitaDePrueba(
   request: APIRequestContext,
@@ -68,8 +115,8 @@ async function limpiarCitaDePrueba(
   }
 }
 
-async function seleccionarPaciente(page: Page, paciente: { id: string; apellido: string }) {
-  const selector = page.locator('app-selector-paciente');
+async function seleccionarPaciente(contenedor: Page | Locator, paciente: { id: string; apellido: string }) {
+  const selector = contenedor.locator('app-selector-paciente');
   await selector.getByLabel('Buscar paciente', { exact: true }).fill(paciente.apellido);
   await selector.getByRole('button', { name: 'Buscar', exact: true }).click();
   const pacientes = selector.getByRole('combobox', { name: 'Paciente', exact: true });
@@ -119,13 +166,28 @@ test('recepción reserva desde un hueco de la agenda y la API conserva la cita',
     const huecos = huecosVisiblesEnAgenda(page);
     await expect(huecos.first()).toBeVisible();
     await huecos.first().click();
-    const panel = page.locator('.panel');
-    await expect(panel.getByRole('heading', { name: 'Reservar' })).toBeVisible();
-    await seleccionarPaciente(page, datos.paciente);
+    const dialogo = page.getByRole('dialog', { name: 'Reservar cita' });
+    await expect(dialogo.getByRole('heading', { name: 'Reservar cita' })).toBeVisible();
+    await dialogo.evaluate((dialog) => Promise.all(
+      dialog.getAnimations({ subtree: true }).map((animacion) => animacion.finished.catch(() => undefined)),
+    ));
+    const auditoria = await new AxeBuilder({ page })
+      .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
+      .analyze();
+    expect(auditoria.violations.map((violacion) => violacion.id)).toEqual([]);
+    for (const ancho of [390, 320]) {
+      await page.setViewportSize({ width: ancho, height: 844 });
+      expect(
+        await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1),
+        `La reserva Liquid Glass no debe desbordarse a ${ancho}px`,
+      ).toBeTruthy();
+    }
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await seleccionarPaciente(dialogo, datos.paciente);
     const respuesta = page.waitForResponse(r =>
       r.url().endsWith('/agenda/citas') && r.request().method() === 'POST',
     );
-    await panel.getByRole('button', { name: 'Confirmar cita', exact: true }).click();
+    await dialogo.getByRole('button', { name: 'Confirmar cita', exact: true }).click();
     const creada = await respuesta;
     expect(creada.status()).toBe(201);
     const cuerpo = await creada.json();
@@ -136,6 +198,49 @@ test('recepción reserva desde un hueco de la agenda y la API conserva la cita',
     expect((await datos.leer(`/agenda/citas/${citaId}`)).estado).toBe('CONFIRMED');
   } finally {
     if (citaId) await limpiarCitaDePrueba(request, datos, citaId, false);
+  }
+});
+
+test('recepción crea dos citas recurrentes desde el formulario Liquid Glass', async ({ page, request }) => {
+  const datos = await preparar(request);
+  const turno = await encontrarTurnoParaSerie(datos);
+  const citasCreadas: string[] = [];
+  try {
+    await acceder(page, 'recepcion');
+    await irA(page, 'Agenda');
+    await page.getByRole('combobox', { name: 'Sede', exact: true }).selectOption(datos.sede.id);
+    await page.getByRole('combobox', { name: 'Especialidad', exact: true }).selectOption(datos.servicio.especialidad_id);
+    await page.getByRole('combobox', { name: 'Servicio', exact: true }).selectOption(datos.servicio.id);
+    await page.getByRole('combobox', { name: 'Profesional', exact: true }).selectOption(datos.profesional.id);
+    await page.getByLabel('Fecha', { exact: true }).fill(fecha(turno.inicio));
+    await page.getByRole('button', { name: 'Lista', exact: true }).click();
+
+    const hueco = huecosVisiblesEnAgenda(page).filter({ hasText: horaLocal(turno.inicio) }).first();
+    await expect(hueco).toBeVisible();
+    await hueco.click();
+    const dialogo = page.getByRole('dialog', { name: 'Reservar cita' });
+    await dialogo.getByRole('checkbox', { name: /Repetir esta cita/ }).check();
+    await dialogo.getByLabel('Frecuencia').selectOption('SEMANAL');
+    await dialogo.getByLabel('Cantidad de citas').fill('2');
+    await seleccionarPaciente(dialogo, datos.paciente);
+
+    const respuesta = page.waitForResponse((r) =>
+      r.url().endsWith('/agenda/citas/series') && r.request().method() === 'POST',
+    );
+    await dialogo.getByRole('button', { name: 'Crear serie de 2 citas', exact: true }).click();
+    const creada = await respuesta;
+    expect(creada.status()).toBe(201);
+    const cuerpo = await creada.json();
+    expect(cuerpo.citas).toHaveLength(2);
+    expect(cuerpo.frecuencia).toBe('SEMANAL');
+    expect(cuerpo.citas.map((cita: { inicio: string }) => horaLocal(cita.inicio))).toEqual([
+      horaLocal(turno.inicio),
+      horaLocal(turno.inicio),
+    ]);
+    citasCreadas.push(...cuerpo.citas.map((cita: { id: string }) => cita.id));
+    await expect(page.getByRole('status').filter({ hasText: 'Serie de 2 citas creada' })).toBeVisible();
+  } finally {
+    for (const citaId of citasCreadas) await limpiarCitaDePrueba(request, datos, citaId, false);
   }
 });
 
@@ -288,9 +393,18 @@ test('recepción registra la llegada y asistencia clínica mide la espera y cier
       `/dashboard/?desde=${encodeURIComponent(inicioDia.toISOString())}&hasta=${encodeURIComponent(finDia.toISOString())}`,
     );
     expect(resumenPanel.espera.personas_en_espera).toBeGreaterThan(0);
+    expect(resumenPanel.ocupacion_agenda.minutos_disponibles).toBeGreaterThan(0);
+    expect(resumenPanel.ocupacion_agenda.porcentaje).not.toBeNull();
     await irA(page, 'Panel');
     await expect(page.locator('.rejilla .tarjeta').filter({ hasText: 'Sala de espera' }))
       .toContainText('paciente(s) esperando en el periodo');
+    const ocupacion = page.locator('.ocupacion-agenda');
+    await expect(ocupacion).toBeVisible();
+    await expect(ocupacion).toContainText(`${resumenPanel.ocupacion_agenda.porcentaje}%`);
+    await expect(ocupacion.locator('progress')).toHaveAttribute(
+      'aria-label',
+      `Ocupación de agenda: ${resumenPanel.ocupacion_agenda.porcentaje} por ciento`,
+    );
 
     await acceder(page, 'asistente');
     await irA(page, 'Agenda');
@@ -328,6 +442,8 @@ test('un pago registrado en la pantalla aparece en la API', async ({ page, reque
   const cita = await creada.json();
   await acceder(page, 'recepcion');
   await irA(page, 'Pagos');
+  await page.getByRole('button', { name: 'Registrar un abono', exact: true }).click();
+  await expect(page.getByRole('dialog', { name: 'Registrar un abono' })).toBeVisible();
   await seleccionarPaciente(page, datos.paciente);
   await page.getByRole('combobox', { name: 'Cita', exact: true }).selectOption(cita.id);
   await page.getByLabel('Total pactado (USD)').fill('100');

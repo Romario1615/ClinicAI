@@ -74,6 +74,49 @@ describe('Formulario033Component', () => {
         expect(fixture.nativeElement.querySelectorAll('[aria-labelledby="salud-bucal"] tbody tr').length).toBe(18);
     });
 
+    it('presenta la captura extensa en una ventana de alto completo con acciones fijas', () => {
+        abrir();
+        botonConTexto('Registrar formulario').click();
+        fixture.detectChanges();
+
+        const dialogo = fixture.nativeElement.querySelector('[role="dialog"]') as HTMLElement;
+        const formulario = dialogo.querySelector('form#formulario-033-captura') as HTMLFormElement;
+        const guardar = dialogo.querySelector('.ventana__pie button[type="submit"]') as HTMLButtonElement;
+
+        expect(dialogo.getAttribute('aria-modal')).toBe('true');
+        expect(dialogo.querySelector('.ventana--alta')).not.toBeNull();
+        expect(dialogo.querySelector('.ventana__cuerpo form')).toBe(formulario);
+        expect(formulario.querySelector('button[type="submit"]')).toBeNull();
+        expect(guardar.form).toBe(formulario);
+        expect(dialogo.querySelector('.ventana__pie button[type="button"]')?.textContent).toContain('Cancelar');
+    });
+
+    it('mantiene el error de guardado visible dentro de la ventana para poder corregirlo', () => {
+        abrir();
+        botonConTexto('Registrar formulario').click();
+        fixture.detectChanges();
+
+        const motivo = fixture.nativeElement.querySelector('textarea[name="motivo"]') as HTMLTextAreaElement;
+        motivo.value = 'Dolor dental al masticar';
+        motivo.dispatchEvent(new Event('input', { bubbles: true }));
+        (fixture.nativeElement.querySelector('form#formulario-033-captura') as HTMLFormElement)
+            .dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+
+        http.expectOne({ method: 'POST', url: `${BASE}/odontologia/pacientes/${PACIENTE}/formularios-033` })
+            .flush({ codigo: 'VALIDACION', mensaje: 'La información requiere una corrección.' }, { status: 422, statusText: 'Unprocessable Entity' });
+        fixture.detectChanges();
+
+        const dialogo = fixture.nativeElement.querySelector('[role="dialog"]') as HTMLElement;
+        expect(dialogo.querySelector('[role="alert"]')?.textContent).toContain('La información requiere una corrección');
+        expect(fixture.nativeElement.querySelector('.formulario-033 > [role="alert"]')).toBeNull();
+        expect(dialogo.querySelector('form#formulario-033-captura')).not.toBeNull();
+
+        botonConTexto('Cancelar').click();
+        fixture.detectChanges();
+        expect(fixture.nativeElement.querySelector('[role="dialog"]')).toBeNull();
+        expect(fixture.nativeElement.querySelector('[role="alert"]')).toBeNull();
+    });
+
     it('vincula campos del navegador y envía las secciones sin datos de identidad editables', () => {
         abrir();
         botonConTexto('Registrar formulario').click();
@@ -82,7 +125,7 @@ describe('Formulario033Component', () => {
         const motivo = fixture.nativeElement.querySelector('textarea[name="motivo"]') as HTMLTextAreaElement;
         motivo.value = 'Dolor dental al masticar';
         motivo.dispatchEvent(new Event('input', { bubbles: true }));
-        (fixture.nativeElement.querySelector('form') as HTMLFormElement).dispatchEvent(new Event('submit'));
+        botonConTexto('Guardar formulario').click();
         fixture.detectChanges();
 
         const solicitud = http.expectOne({ method: 'POST', url: `${BASE}/odontologia/pacientes/${PACIENTE}/formularios-033` });

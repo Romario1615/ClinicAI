@@ -11,6 +11,7 @@ import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { FormsModule } from '@angular/forms';
 
 import { CONFIGURACION } from '../../nucleo/servicios/configuracion';
+import { VentanaFlotanteComponent } from '../../compartido/ventana-flotante.component';
 
 interface Integracion {
   readonly codigo: string;
@@ -44,9 +45,12 @@ const INTENCIONES: Record<string, string> = {
 @Component({
   selector: 'app-integraciones-ia',
   standalone: true,
-  imports: [FormsModule],
+  imports: [FormsModule, VentanaFlotanteComponent],
   template: `
     <div class="ia">
+      @if (aviso()) { <p class="ia__aviso" role="status">{{ aviso() }}</p> }
+      @if (error()) { <p class="campo__error ia__error" role="alert">{{ error() }}</p> }
+
       <section class="tarjeta ia__tarjeta" aria-labelledby="titulo-jev">
         <p class="ceja">DECISIONES DEL ASISTENTE</p>
         <h2 id="titulo-jev">JEV · TypeSafe</h2>
@@ -54,32 +58,20 @@ const INTENCIONES: Record<string, string> = {
           Decide qué quiere el paciente y si su mensaje es clínico o urgente, con probabilidad. No genera texto ni
           ejecuta nada: elige entre opciones cerradas. Se envía solo el texto del mensaje, sin nombre ni teléfono.
         </p>
-        <form (ngSubmit)="guardarJev()">
-          <label class="interruptor"><input type="checkbox" name="jev-habilitada" [(ngModel)]="jev.habilitada" /> Usar JEV en esta clínica</label>
-          <label class="campo"><span class="campo__etiqueta">Clave API</span>
-            <input class="campo__control" type="password" name="jev-clave" autocomplete="new-password" [(ngModel)]="claveJev" placeholder="Pegue la clave de TypeSafe" />
-          </label>
-          @if (jev.guardada) {
-            <label class="ia__quitar"><input type="checkbox" name="jev-quitar" [(ngModel)]="quitarClaveJev" /> Eliminar la clave guardada</label>
-          }
-          <div class="ia__campos">
-            <label class="campo"><span class="campo__etiqueta">Modelo</span>
-              <input class="campo__control" name="jev-modelo" [(ngModel)]="jev.modelo" maxlength="100" />
-            </label>
-            <label class="campo"><span class="campo__etiqueta">Tiempo máximo (s)</span>
-              <input class="campo__control" type="number" name="jev-tiempo" [(ngModel)]="jev.tiempo" min="0.2" max="30" step="0.1" />
-            </label>
-            <label class="campo"><span class="campo__etiqueta">Confianza mínima</span>
-              <input class="campo__control" type="number" name="jev-umbral" [(ngModel)]="jev.umbral" min="0.5" max="0.99" step="0.01" />
-            </label>
-          </div>
-          <p class="ia__ayuda">Por debajo de la confianza mínima, el asistente pregunta con opciones en lugar de adivinar.</p>
-          <div class="ia__acciones">
-            <button class="boton boton--principal" type="submit" [disabled]="ocupado()">Guardar JEV</button>
-            <button class="boton" type="button" [disabled]="ocupado() || !jev.guardada" (click)="probar()">Probar conexión</button>
-          </div>
-          <p class="ia__estado">{{ jev.guardada ? 'Clave guardada (no se muestra).' : 'No hay clave guardada: se usan las reglas locales.' }}</p>
-        </form>
+        <div class="ia__estado" role="status">
+          <span class="ia__punto" [class.ia__punto--activo]="jev.habilitada" aria-hidden="true"></span>
+          <strong>{{ jev.habilitada ? 'JEV está habilitado' : 'Se usan las reglas locales' }}</strong>
+        </div>
+        <dl class="ia__detalles">
+          <div><dt>Modelo</dt><dd>{{ jev.modelo }}</dd></div>
+          <div><dt>Clave API</dt><dd>{{ jev.guardada ? 'Configurada y protegida' : 'Sin configurar' }}</dd></div>
+          <div><dt>Confianza mínima</dt><dd>{{ porcentaje(jev.umbral) }}</dd></div>
+        </dl>
+        <p class="ia__ayuda">Con confianza baja, el asistente pide una aclaración en vez de adivinar.</p>
+        <div class="ia__acciones">
+          <button class="boton boton--principal" type="button" (click)="abrirEditor('jev')">Configurar JEV</button>
+          <button class="boton" type="button" [disabled]="ocupado() || !jev.guardada" (click)="probar()">{{ ocupado() ? 'Probando…' : 'Probar conexión' }}</button>
+        </div>
         @if (prueba(); as p) {
           <div class="ia__prueba" [class.ia__prueba--mal]="!p.respondio" role="status">
             <strong>{{ p.mensaje }}</strong>
@@ -95,50 +87,110 @@ const INTENCIONES: Record<string, string> = {
           Quién redacta cuando JEV delega una pregunta. Responde solo con documentos publicados de Conocimiento; sin
           LLM, cita el documento tal cual. Nunca diagnostica ni envía datos clínicos por WhatsApp.
         </p>
-        <form (ngSubmit)="guardarRespuestas()">
-          <label class="interruptor"><input type="checkbox" name="resp-habilitada" [(ngModel)]="respuestas.habilitada" /> Usar esta configuración</label>
-          <fieldset class="ia__opciones">
-            <legend class="campo__etiqueta">Proveedor</legend>
-            <label><input type="radio" name="resp-proveedor" value="entorno" [(ngModel)]="respuestas.proveedor" /> El del servidor</label>
-            <label><input type="radio" name="resp-proveedor" value="anthropic" [(ngModel)]="respuestas.proveedor" /> Anthropic (usa la clave de su tarjeta)</label>
-            <label><input type="radio" name="resp-proveedor" value="ollama" [(ngModel)]="respuestas.proveedor" /> Ollama en la red de la clínica</label>
-          </fieldset>
+        <div class="ia__estado" role="status">
+          <span class="ia__punto" [class.ia__punto--activo]="respuestas.habilitada" aria-hidden="true"></span>
+          <strong>{{ respuestas.habilitada ? 'Respuestas automáticas habilitadas' : 'Respuestas automáticas pausadas' }}</strong>
+        </div>
+        <dl class="ia__detalles">
+          <div><dt>Proveedor</dt><dd>{{ nombreProveedor() }}</dd></div>
           @if (respuestas.proveedor === 'ollama') {
+            <div><dt>Modelo local</dt><dd>{{ respuestas.modelo || 'Sin definir' }}</dd></div>
+          }
+        </dl>
+        <p class="ia__ayuda">Las respuestas se basan en documentos aprobados de la base de conocimiento.</p>
+        <div class="ia__acciones">
+          <button class="boton boton--principal" type="button" (click)="abrirEditor('respuestas')">Configurar respuestas</button>
+        </div>
+      </section>
+
+      @if (editorAbierto() === 'jev') {
+        <app-ventana-flotante ceja="Decisiones del asistente" titulo="Configurar JEV · TypeSafe" forma="centrada" [anchoMaximo]="620" [cierraAlPulsarFuera]="false" (cerrar)="cerrarEditor()">
+          <form id="formulario-jev" class="ia__editor" (ngSubmit)="guardarJev()">
+            <label class="interruptor"><input type="checkbox" name="jev-habilitada" [(ngModel)]="jev.habilitada" /> Usar JEV en esta clínica</label>
+            <label class="campo"><span class="campo__etiqueta">Clave API</span>
+              <input class="campo__control" type="password" name="jev-clave" autocomplete="new-password" [(ngModel)]="claveJev" placeholder="Pegue la clave de TypeSafe" />
+              <span class="campo__ayuda">La clave se cifra al guardarla y nunca se vuelve a mostrar.</span>
+            </label>
+            @if (jev.guardada) {
+              <label class="ia__quitar"><input type="checkbox" name="jev-quitar" [(ngModel)]="quitarClaveJev" /> Eliminar la clave guardada</label>
+            }
             <div class="ia__campos">
-              <label class="campo"><span class="campo__etiqueta">URL de Ollama</span>
-                <input class="campo__control" name="resp-url" [(ngModel)]="respuestas.url" placeholder="http://127.0.0.1:11434" />
-              </label>
               <label class="campo"><span class="campo__etiqueta">Modelo</span>
-                <input class="campo__control" name="resp-modelo" [(ngModel)]="respuestas.modelo" placeholder="llama3.1" />
+                <input class="campo__control" name="jev-modelo" [(ngModel)]="jev.modelo" maxlength="100" required />
+              </label>
+              <label class="campo"><span class="campo__etiqueta">Tiempo máximo (s)</span>
+                <input class="campo__control" type="number" name="jev-tiempo" [(ngModel)]="jev.tiempo" min="0.2" max="30" step="0.1" required />
+              </label>
+              <label class="campo"><span class="campo__etiqueta">Confianza mínima</span>
+                <input class="campo__control" type="number" name="jev-umbral" [(ngModel)]="jev.umbral" min="0.5" max="0.99" step="0.01" required />
               </label>
             </div>
-            <p class="ia__ayuda">Solo direcciones locales o de red privada: el texto de sus pacientes no sale de la clínica.</p>
-          }
-          <div class="ia__acciones">
-            <button class="boton boton--principal" type="submit" [disabled]="ocupado()">Guardar respuestas</button>
+            <p class="ia__ayuda">Por debajo de este umbral, el asistente pregunta con opciones en lugar de adivinar.</p>
+          </form>
+          <div pie class="ia__pie">
+            <button class="boton" type="button" [disabled]="ocupado()" (click)="cerrarEditor()">Cancelar</button>
+            <button class="boton boton--principal" type="submit" form="formulario-jev" [disabled]="ocupado()">{{ ocupado() ? 'Guardando…' : 'Guardar cambios' }}</button>
           </div>
-        </form>
-      </section>
-      @if (aviso()) { <p class="ia__aviso" role="status">{{ aviso() }}</p> }
-      @if (error()) { <p class="campo__error" role="alert">{{ error() }}</p> }
+        </app-ventana-flotante>
+      }
+
+      @if (editorAbierto() === 'respuestas') {
+        <app-ventana-flotante ceja="Redacción de respuestas" titulo="Configurar respuestas del asistente" forma="centrada" [anchoMaximo]="620" [cierraAlPulsarFuera]="false" (cerrar)="cerrarEditor()">
+          <form id="formulario-respuestas" class="ia__editor" (ngSubmit)="guardarRespuestas()">
+            <label class="interruptor"><input type="checkbox" name="resp-habilitada" [(ngModel)]="respuestas.habilitada" /> Usar esta configuración</label>
+            <fieldset class="ia__opciones">
+              <legend class="campo__etiqueta">Proveedor</legend>
+              <label><input type="radio" name="resp-proveedor" value="entorno" [(ngModel)]="respuestas.proveedor" /> El del servidor</label>
+              <label><input type="radio" name="resp-proveedor" value="anthropic" [(ngModel)]="respuestas.proveedor" /> Anthropic (usa la clave configurada allí)</label>
+              <label><input type="radio" name="resp-proveedor" value="ollama" [(ngModel)]="respuestas.proveedor" /> Ollama en la red de la clínica</label>
+            </fieldset>
+            @if (respuestas.proveedor === 'ollama') {
+              <div class="ia__campos">
+                <label class="campo"><span class="campo__etiqueta">URL de Ollama</span>
+                  <input class="campo__control" name="resp-url" [(ngModel)]="respuestas.url" placeholder="http://127.0.0.1:11434" />
+                </label>
+                <label class="campo"><span class="campo__etiqueta">Modelo</span>
+                  <input class="campo__control" name="resp-modelo" [(ngModel)]="respuestas.modelo" placeholder="llama3.1" />
+                </label>
+              </div>
+              <p class="ia__ayuda">Solo direcciones locales o de red privada: el texto de sus pacientes no sale de la clínica.</p>
+            }
+          </form>
+          <div pie class="ia__pie">
+            <button class="boton" type="button" [disabled]="ocupado()" (click)="cerrarEditor()">Cancelar</button>
+            <button class="boton boton--principal" type="submit" form="formulario-respuestas" [disabled]="ocupado()">{{ ocupado() ? 'Guardando…' : 'Guardar cambios' }}</button>
+          </div>
+        </app-ventana-flotante>
+      }
     </div>
   `,
   changeDetection: ChangeDetectionStrategy.Eager,
   styles: `
-    .ia { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: var(--espacio-4); margin-top: var(--espacio-4); }
-    .ia__tarjeta { display: grid; align-content: start; gap: var(--espacio-2); padding: var(--espacio-4); }
+    .ia { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 290px), 1fr)); gap: var(--espacio-4); margin-top: var(--espacio-4); }
+    .ia__tarjeta { display: grid; align-content: start; gap: var(--espacio-3); padding: var(--espacio-4); border: 1px solid rgb(255 255 255 / 82%); background: linear-gradient(145deg, rgb(255 255 255 / 88%), rgb(245 251 250 / 76%)); -webkit-backdrop-filter: saturate(150%) blur(18px); backdrop-filter: saturate(150%) blur(18px); box-shadow: var(--cristal-sombra); }
     .ia__tarjeta h2 { margin: 0; }
-    .ia__tarjeta form { display: grid; gap: var(--espacio-3); }
     .ia__ayuda, .ia__estado { margin: 0; color: var(--texto-suave); font-size: 0.9rem; }
+    .ia__estado { display:flex; align-items:center; gap:var(--espacio-2); color:var(--texto); }
+    .ia__punto { width:9px; height:9px; flex:0 0 9px; border-radius:50%; background:#98a9aa; }
+    .ia__punto--activo { background:#14866f; box-shadow:0 0 0 4px rgb(20 134 111 / 12%); }
+    .ia__detalles { display:grid; gap:0; margin:0; border-top:1px solid var(--borde); border-bottom:1px solid var(--borde); }
+    .ia__detalles div { display:flex; align-items:center; justify-content:space-between; gap:var(--espacio-3); padding:var(--espacio-2) 0; }
+    .ia__detalles div + div { border-top:1px solid rgb(219 231 229 / 70%); }
+    .ia__detalles dt { color:var(--texto-suave); font-size:.88rem; }
+    .ia__detalles dd { margin:0; color:var(--texto); font-size:.9rem; font-weight:600; text-align:right; overflow-wrap:anywhere; }
     .ia__campos { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: var(--espacio-2); }
     .ia__campos .campo { margin: 0; }
     .ia__acciones { display: flex; flex-wrap: wrap; gap: var(--espacio-2); }
     .ia__opciones { display: grid; gap: 6px; margin: 0; padding: 0; border: 0; }
     .ia__opciones label { display: flex; align-items: center; gap: var(--espacio-2); cursor: pointer; }
     .ia__quitar { display: flex; align-items: center; gap: var(--espacio-2); font-size: 0.9rem; }
+    .ia__editor { display:grid; gap:var(--espacio-4); }
+    .ia__editor .campo { margin:0; }
+    .ia__pie { justify-content:flex-end; flex-wrap:wrap; }
     .ia__prueba { display: grid; gap: 4px; padding: var(--espacio-3); border-radius: var(--radio); background: var(--acento-suave); color: var(--acento-fuerte); font-size: 0.9rem; }
     .ia__prueba--mal { background: #fdf3dc; color: #7a5a10; }
-    .ia__aviso { grid-column: 1 / -1; margin: 0; color: var(--acento-fuerte); }
+    .ia__aviso, .ia__error { grid-column: 1 / -1; margin: 0; }
+    .ia__aviso { padding:var(--espacio-3) var(--espacio-4); border:1px solid rgb(20 134 111 / 20%); border-radius:var(--radio); background:rgb(20 134 111 / 8%); color:var(--acento-fuerte); }
     .interruptor { display: flex; align-items: center; gap: var(--espacio-2); font-weight: 600; }
   `,
 })
@@ -155,6 +207,28 @@ export class IntegracionesIaComponent implements OnInit {
   protected readonly aviso = signal('');
   protected readonly error = signal('');
   protected readonly prueba = signal<PruebaJev | null>(null);
+  protected readonly editorAbierto = signal<'jev' | 'respuestas' | null>(null);
+
+  protected abrirEditor(editor: 'jev' | 'respuestas'): void {
+    this.error.set('');
+    this.aviso.set('');
+    this.editorAbierto.set(editor);
+  }
+
+  protected cerrarEditor(): void {
+    if (this.ocupado()) return;
+    this.claveJev = '';
+    this.quitarClaveJev = false;
+    this.editorAbierto.set(null);
+  }
+
+  protected nombreProveedor(): string {
+    switch (this.respuestas.proveedor) {
+      case 'anthropic': return 'Anthropic';
+      case 'ollama': return 'Ollama · red local';
+      default: return 'Configurado en el servidor';
+    }
+  }
 
   ngOnInit(): void {
     this.http.get<readonly Integracion[]>(this.base).subscribe({
@@ -238,6 +312,7 @@ export class IntegracionesIaComponent implements OnInit {
         this.ocupado.set(false);
         this.aviso.set(exito);
         despues(respuesta);
+        this.editorAbierto.set(null);
       },
       error: (fallo: HttpErrorResponse) => {
         this.ocupado.set(false);

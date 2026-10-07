@@ -97,6 +97,29 @@ describe('PagosComponent', () => {
             .toContain('Sin fecha');
     });
 
+    it('abre el alta de abonos en una ventana flotante y la cancela sin dejar el formulario en la lista', () => {
+        montar(['pago.leer', 'pago.registrar']);
+        const raiz = fixture.nativeElement as HTMLElement;
+        expect(raiz.querySelector('.editor-demo')).toBeNull();
+        const abrir = [...raiz.querySelectorAll('button')]
+            .find((boton) => boton.textContent?.trim() === 'Registrar un abono');
+        expect(abrir).toBeDefined();
+
+        abrir?.click();
+        fixture.detectChanges();
+        const dialogo = document.querySelector('dialog.capa') as HTMLDialogElement | null;
+        expect(dialogo?.open).toBe(true);
+        expect(dialogo?.textContent).toContain('Registrar un abono');
+        expect(dialogo?.querySelector('app-selector-paciente')).not.toBeNull();
+
+        const cancelar = [...(dialogo?.querySelectorAll('button') ?? [])]
+            .find((boton) => boton.textContent?.trim() === 'Cancelar');
+        cancelar?.click();
+        fixture.detectChanges();
+        expect(document.querySelector('dialog.capa')).toBeNull();
+        expect(raiz.querySelector('.editor-demo')).toBeNull();
+    });
+
     it('ofrece el reporte solo con permisos y descarga el CSV agregado', () => {
         montar(['pago.leer', 'reporte.exportar']);
         expect((fixture.nativeElement as HTMLElement).textContent).toContain('Exportar movimientos');

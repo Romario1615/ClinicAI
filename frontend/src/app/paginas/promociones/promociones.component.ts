@@ -19,6 +19,7 @@ import { DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 
 import { IconoComponent } from '../../compartido/icono.component';
+import { VentanaFlotanteComponent } from '../../compartido/ventana-flotante.component';
 import { ApiService, FalloApi } from '../../nucleo/servicios/api.service';
 import type { Campana, EstadoCampana } from '../../nucleo/servicios/api.service';
 import { CatalogoService } from '../../nucleo/servicios/catalogo.service';
@@ -39,7 +40,7 @@ import { ResumenModuloComponent } from '../../compartido/resumen-modulo.componen
 @Component({
   selector: 'app-promociones',
   standalone: true,
-  imports: [ResumenModuloComponent, DatePipe, FormsModule, IconoComponent],
+  imports: [ResumenModuloComponent, DatePipe, FormsModule, IconoComponent, VentanaFlotanteComponent],
   templateUrl: './promociones.component.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './promociones.component.scss',
@@ -109,6 +110,21 @@ export class PromocionesComponent {
   // ======================================================================
   //  Crear
   // ======================================================================
+  protected abrirCreacion(): void {
+    this.nombre = '';
+    this.texto = '';
+    this.plantillaMeta = 'promocion_clinica';
+    this.sedeId = '';
+    this.tipoAudiencia = 'todos';
+    this.dias = 180;
+    this.error.set('');
+    this.creando.set(true);
+  }
+
+  protected cerrarCreacion(): void {
+    if (!this.trabajando()) this.creando.set(false);
+  }
+
   protected crear(): void {
     if (this.trabajando()) return;
     const segmento = {

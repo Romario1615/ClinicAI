@@ -195,6 +195,62 @@ describe('AppComponent', () => {
         expect(router.navigate).toHaveBeenCalledWith(['/acceso']);
     });
 
+    it('anuncia el panel de notificaciones y lo cierra con Escape o al pulsar fuera', () => {
+        sesion.establecerTokens({
+            token_acceso: 't', token_refresco: 'r', tipo_token: 'Bearer',
+            expira_en: new Date().toISOString(), requiere_segundo_factor: false,
+        });
+        sesion.establecerIdentidad(identidadCon(['agenda.leer']));
+        fixture.detectChanges();
+
+        const boton = fixture.nativeElement.querySelector('.campana') as HTMLButtonElement;
+        expect(boton.getAttribute('aria-controls')).toBe('panel-notificaciones');
+        expect(boton.getAttribute('aria-haspopup')).toBe('dialog');
+        boton.click();
+        fixture.detectChanges();
+        const panel = fixture.nativeElement.querySelector('#panel-notificaciones') as HTMLElement;
+        expect(panel.getAttribute('role')).toBe('dialog');
+        expect(panel.getAttribute('aria-modal')).toBe('false');
+
+        document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+        fixture.detectChanges();
+        expect(fixture.nativeElement.querySelector('#panel-notificaciones')).toBeNull();
+
+        boton.click();
+        fixture.detectChanges();
+        document.body.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+        fixture.detectChanges();
+        expect(fixture.nativeElement.querySelector('#panel-notificaciones')).toBeNull();
+    });
+
+    it('despliega la navegación móvil con estado accesible y se cierra desde el fondo', () => {
+        sesion.establecerTokens({
+            token_acceso: 't', token_refresco: 'r', tipo_token: 'Bearer',
+            expira_en: new Date().toISOString(), requiere_segundo_factor: false,
+        });
+        sesion.establecerIdentidad(identidadCon(['agenda.leer']));
+        fixture.detectChanges();
+
+        const boton = fixture.nativeElement.querySelector('.cabecera__menu') as HTMLButtonElement;
+        expect(boton.getAttribute('aria-controls')).toBe('navegacion-principal');
+        boton.click();
+        fixture.detectChanges();
+        expect(boton.getAttribute('aria-expanded')).toBe('true');
+        expect(fixture.nativeElement.querySelector('.navegacion--abierta')).not.toBeNull();
+
+        (fixture.nativeElement.querySelector('.navegacion__fondo') as HTMLButtonElement).click();
+        fixture.detectChanges();
+        expect(boton.getAttribute('aria-expanded')).toBe('false');
+        expect(fixture.nativeElement.querySelector('.navegacion--abierta')).toBeNull();
+
+        boton.click();
+        fixture.detectChanges();
+        (fixture.nativeElement.querySelector('.campana') as HTMLButtonElement).click();
+        fixture.detectChanges();
+        expect(fixture.nativeElement.querySelector('.navegacion--abierta')).toBeNull();
+        expect(fixture.nativeElement.querySelector('#panel-notificaciones')).not.toBeNull();
+    });
+
     it('no anuncia que todo está al día si queda un reporte clínico por revisar', () => {
         sesion.establecerTokens({
             token_acceso: 't', token_refresco: 'r', tipo_token: 'Bearer',

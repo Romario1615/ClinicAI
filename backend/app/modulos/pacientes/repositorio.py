@@ -47,6 +47,11 @@ class RepositorioPacientes:
     def __init__(self, sesion: AsyncSession) -> None:
         self._sesion = sesion
 
+    def consulta_autorizada(self, principal: Principal) -> Select[Any]:
+        """Consulta base de pacientes activos restringida a su clínica y ámbito."""
+        consulta = select(Paciente).where(Paciente.anulado_en.is_(None), Paciente.activo.is_(True))
+        return self._acotar(consulta, principal)
+
     async def obtener(self, paciente_id: uuid.UUID, principal: Principal) -> Paciente | None:
         """Un paciente, si esta dentro del ambito.
 
@@ -108,8 +113,7 @@ class RepositorioPacientes:
         documento: str | None,
     ) -> Select[Any] | None:
         """Consulta con ambito y filtros, o `None` si no puede devolver nada."""
-        consulta = select(Paciente).where(Paciente.anulado_en.is_(None), Paciente.activo.is_(True))
-        consulta = self._acotar(consulta, principal)
+        consulta = self.consulta_autorizada(principal)
 
         if documento:
             # Exacta, no parcial: un prefijo permitiria enumerar documentos.

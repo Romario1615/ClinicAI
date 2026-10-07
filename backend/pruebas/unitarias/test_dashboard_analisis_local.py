@@ -39,6 +39,12 @@ def _resumen(
             "turnos_recuperados": turnos_recuperados,
             "promedio_minutos_para_recuperar": promedio_recuperacion,
         },
+        ocupacion_agenda={
+            "minutos_disponibles": 0,
+            "minutos_ocupados": 0,
+            "porcentaje": None,
+            "detalle": "Sin horarios para la prueba.",
+        },
         adherencia=adherencia,
         pagos=pagos,
         tendencia_diaria=[],

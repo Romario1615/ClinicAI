@@ -365,6 +365,16 @@
   min-width: 0;
 }
 
+@media (max-width: 600px) {
+  .cabecera-paciente {
+    flex-wrap: wrap;
+  }
+
+  .cabecera-paciente > .boton {
+    margin-left: auto;
+  }
+}
+
 // Barra «Revisando como»: separada de la cabecera y de las pestañas.
 .historia__especialidad {
   display: block;

@@ -10,7 +10,7 @@
     }
   </header>
 
-  @if (error()) { <p class="aviso-error" role="alert">{{ error() }}</p> }
+  @if (error() && !seleccionado() && !creando()) { <p class="aviso-error" role="alert">{{ error() }}</p> }
   @if (exito()) { <p class="exito" role="status">{{ exito() }}</p> }
   @if (cargando()) { <app-cargando mensaje="Cargando formularios clínicos..." /> }
 
@@ -115,14 +115,18 @@
   }
 
   @if (seleccionado() || creando()) {
-      <form class="captura" (ngSubmit)="guardar()">
-        <header class="captura__cabecera">
-          <div>
-            <p class="ceja">{{ seleccionado() ? 'CORRECCIÓN VERSIONADA' : 'NUEVA CAPTURA' }}</p>
-            <h3>{{ seleccionado() ? 'Crear nueva versión' : 'Registrar atención' }}</h3>
-          </div>
-          <button class="boton boton--plano" type="button" (click)="cancelar()">Cancelar</button>
-        </header>
+      <app-ventana-flotante
+        [ceja]="seleccionado() ? 'CORRECCIÓN VERSIONADA · MSP 033/2021' : 'NUEVA CAPTURA · MSP 033/2021'"
+        [titulo]="seleccionado() ? 'Crear nueva versión' : 'Registrar atención'"
+        [forma]="'centrada'"
+        [anchoMaximo]="1440"
+        [altoCompleto]="true"
+        [cierraAlPulsarFuera]="false"
+        [cierraConEscape]="!guardando()"
+        (cerrar)="cancelar()"
+      >
+      <form id="formulario-033-captura" class="captura" (ngSubmit)="guardar()">
+        @if (error()) { <p class="aviso-error" role="alert">{{ error() }}</p> }
 
         @if (seleccionado()) {
           <label class="campo correccion"><span class="campo__etiqueta">Motivo de la corrección</span><textarea class="campo__control" name="motivo-correccion" [(ngModel)]="motivoCorreccion" minlength="8" maxlength="500" required></textarea></label>
@@ -267,10 +271,11 @@
           }
         </section>
 
-        <footer class="acciones">
-          <p class="ayuda">El formulario contiene información clínica sensible y cada consulta o cambio queda auditado.</p>
-          <div><button class="boton" type="button" (click)="cancelar()">Cancelar</button><button class="boton boton--principal" type="submit" [disabled]="guardando()">{{ guardando() ? 'Guardando…' : (seleccionado() ? 'Guardar nueva versión' : 'Guardar formulario') }}</button></div>
-        </footer>
       </form>
+      <div pie class="acciones">
+          <p class="ayuda">El formulario contiene información clínica sensible y cada consulta o cambio queda auditado.</p>
+          <div><button class="boton" type="button" (click)="cancelar()" [disabled]="guardando()">Cancelar</button><button class="boton boton--principal" type="submit" form="formulario-033-captura" [disabled]="guardando()">{{ guardando() ? 'Guardando…' : (seleccionado() ? 'Guardar nueva versión' : 'Guardar formulario') }}</button></div>
+      </div>
+      </app-ventana-flotante>
   }
 </section>

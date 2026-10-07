@@ -4,6 +4,7 @@ import { FormsModule } from '@angular/forms';
 import { catchError, forkJoin, of, type Observable, type OperatorFunction } from 'rxjs';
 
 import { CargandoComponent } from '../../compartido/estados.component';
+import { VentanaFlotanteComponent } from '../../compartido/ventana-flotante.component';
 import { ApiService, FalloApi, type Formulario033Api, type Formulario033DatosApi, type Formulario033EntradaApi, type Nota, type Odontograma, type RegistroPlaca } from '../../nucleo/servicios/api.service';
 import { CatalogoService } from '../../nucleo/servicios/catalogo.service';
 import type { Cita, PaginaCitas, Sede } from '../../nucleo/modelos/dominio';
@@ -67,7 +68,7 @@ export function nuevoFormulario033(): Formulario033DatosApi {
 @Component({
   selector: 'app-formulario-033',
   standalone: true,
-  imports: [CommonModule, FormsModule, CargandoComponent],
+  imports: [CommonModule, FormsModule, CargandoComponent, VentanaFlotanteComponent],
   templateUrl: './formulario-033.component.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './formulario-033.component.scss',
@@ -257,6 +258,9 @@ export class Formulario033Component {
     this.creando.set(false);
     this.datos = nuevoFormulario033();
     this.limpiarVinculos();
+    this.error.set('');
+    this.errorFuentes.set('');
+    this.exito.set('');
   }
 
   protected seleccionarCita(citaId: string): void {

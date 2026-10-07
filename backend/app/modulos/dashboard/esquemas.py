@@ -42,6 +42,47 @@ class ResumenAdherencia(BaseModel):
     seguimientos_pendientes: int
 
 
+class ResumenOcupacionAgenda(BaseModel):
+    """Tiempo de agenda disponible frente a tiempo reservado dentro del ámbito."""
+
+    minutos_disponibles: int | None
+    minutos_ocupados: int | None
+    porcentaje: float | None
+    detalle: str
+
+
+class CohorteRegistroPacientes(BaseModel):
+    """Altas agrupadas por mes, con citas registradas dentro del filtro actual."""
+
+    mes: date
+    registrados: int
+    con_cita_en_filtros: int
+    sin_cita_en_filtros: int
+
+
+class CeldaDemografica(BaseModel):
+    """Una categoría agregada; el valor es nulo cuando se protege."""
+
+    categoria: str
+    pacientes: int | None
+    suprimida: bool
+
+
+class ResumenDemografico(BaseModel):
+    """Distribuciones separadas, sin cruces que faciliten identificar personas."""
+
+    edades: list[CeldaDemografica]
+    sexos: list[CeldaDemografica]
+
+
+class Retorno30Dias(BaseModel):
+    """Retorno a otra atención completada en los 30 días siguientes a la cita índice."""
+
+    pacientes_seguimiento_completo: int
+    pacientes_que_regresaron: int
+    porcentaje: float
+
+
 class ConteoCitasPorDia(BaseModel):
     fecha: date
     total: int
@@ -65,8 +106,14 @@ class ResumenDashboard(BaseModel):
     pacientes: int
     pacientes_nuevos: int | None
     pacientes_recurrentes: int | None
+    pacientes_registrados: int | None = None
+    pacientes_registrados_sin_cita: int | None = None
+    cohortes_registro: list[CohorteRegistroPacientes] | None = None
+    demografia: ResumenDemografico | None = None
+    retorno_30_dias: Retorno30Dias | None = None
     espera: ResumenEspera
     recuperacion_turnos: ResumenRecuperacionTurnos
+    ocupacion_agenda: ResumenOcupacionAgenda
     adherencia: ResumenAdherencia | None
     pagos: dict[str, Decimal] | None
     tendencia_diaria: list[ConteoCitasPorDia]

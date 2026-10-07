@@ -88,6 +88,37 @@ async def _recepcion(
     return await cabecera_bearer(cliente, usuario, clinica)
 
 
+async def _inicio_ofrecido_para_serie(
+    cliente: AsyncClient,
+    api: str,
+    cabeceras: dict[str, str],
+    cuerpo: dict[str, str],
+) -> str:
+    """Elige la hora ofrecida más cercana a la preferencia inicial del test."""
+    zona = ZoneInfo("America/Guayaquil")
+    preferido = datetime.fromisoformat(cuerpo["inicio"]).astimezone(zona)
+    desde = datetime.combine(preferido.date(), datetime.min.time(), tzinfo=zona)
+    hasta = datetime.combine(preferido.date() + timedelta(days=1), datetime.min.time(), tzinfo=zona)
+    respuesta = await cliente.get(
+        _ruta(api, "/disponibilidad"),
+        headers=cabeceras,
+        params={
+            "profesional_id": cuerpo["profesional_id"],
+            "servicio_id": cuerpo["servicio_id"],
+            "sede_id": cuerpo["sede_id"],
+            "desde": desde.isoformat(),
+            "hasta": hasta.isoformat(),
+        },
+    )
+    assert respuesta.status_code == 200, respuesta.text
+    turnos = respuesta.json()["turnos"]
+    assert turnos, "La fixture de la sede debe ofrecer al menos un turno"
+    return min(
+        turnos,
+        key=lambda turno: abs(datetime.fromisoformat(turno["inicio"]).astimezone(zona) - preferido),
+    )["inicio"]
+
+
 # ===========================================================================
 #  Disponibilidad
 # ===========================================================================
@@ -567,6 +598,123 @@ class TestCreacion:
             )
         ).scalar_one()
         assert total == 1
+
+    async def test_crea_una_serie_semanal_y_repetirla_no_duplica_citas(
+        self,
+        cliente: AsyncClient,
+        api: str,
+        sesion: AsyncSession,
+        usuario: Usuario,
+        clinica: Clinica,
+        sede: Sede,
+        cuerpo_reserva: dict[str, str],
+    ) -> None:
+        cabeceras = await _recepcion(cliente, sesion, usuario, clinica, sede)
+        clave = {"Idempotency-Key": f"serie-{uuid.uuid4().hex}"}
+        inicio = await _inicio_ofrecido_para_serie(cliente, api, cabeceras, cuerpo_reserva)
+        datos = {
+            **cuerpo_reserva,
+            "inicio": inicio,
+            "frecuencia": "SEMANAL",
+            "cantidad": 3,
+        }
+
+        primera = await cliente.post(
+            _ruta(api, "/citas/series"), headers={**cabeceras, **clave}, json=datos
+        )
+        segunda = await cliente.post(
+            _ruta(api, "/citas/series"), headers={**cabeceras, **clave}, json=datos
+        )
+
+        assert primera.status_code == 201, primera.text
+        assert segunda.status_code == 201, segunda.text
+        resultado = primera.json()
+        assert resultado["frecuencia"] == "SEMANAL"
+        assert resultado["cantidad"] == 3
+        assert len(resultado["citas"]) == 3
+        assert resultado == segunda.json()
+        assert {cita["serie_recurrente_id"] for cita in resultado["citas"]} == {
+            resultado["serie_id"]
+        }
+        assert {cita["origen"] for cita in resultado["citas"]} == {"RECURRENTE"}
+
+        total = (
+            await sesion.execute(
+                sa.select(sa.func.count())
+                .select_from(Cita)
+                .where(Cita.serie_recurrente_id == uuid.UUID(resultado["serie_id"]))
+            )
+        ).scalar_one()
+        assert total == 3
+
+    async def test_una_fecha_ocupada_rechaza_la_serie_sin_guardar_parciales(
+        self,
+        cliente: AsyncClient,
+        api: str,
+        sesion: AsyncSession,
+        usuario: Usuario,
+        clinica: Clinica,
+        sede: Sede,
+        cuerpo_reserva: dict[str, str],
+    ) -> None:
+        cabeceras = await _recepcion(cliente, sesion, usuario, clinica, sede)
+        inicio = await _inicio_ofrecido_para_serie(cliente, api, cabeceras, cuerpo_reserva)
+        cuerpo_disponible = {**cuerpo_reserva, "inicio": inicio}
+        fecha_ocupada = datetime.fromisoformat(inicio) + timedelta(days=7)
+        ocupada = await cliente.post(
+            _ruta(api, "/citas"),
+            headers=cabeceras,
+            json={**cuerpo_disponible, "inicio": fecha_ocupada.isoformat()},
+        )
+        assert ocupada.status_code == 201, ocupada.text
+
+        respuesta = await cliente.post(
+            _ruta(api, "/citas/series"),
+            headers=cabeceras,
+            json={**cuerpo_disponible, "frecuencia": "SEMANAL", "cantidad": 3},
+        )
+
+        assert respuesta.status_code == 409
+        total_series = (
+            await sesion.execute(
+                sa.select(sa.func.count())
+                .select_from(Cita)
+                .where(Cita.serie_recurrente_id.is_not(None))
+            )
+        ).scalar_one()
+        assert total_series == 0
+
+    async def test_clave_reutilizada_con_otra_cantidad_es_conflictiva(
+        self,
+        cliente: AsyncClient,
+        api: str,
+        sesion: AsyncSession,
+        usuario: Usuario,
+        clinica: Clinica,
+        sede: Sede,
+        cuerpo_reserva: dict[str, str],
+    ) -> None:
+        cabeceras = await _recepcion(cliente, sesion, usuario, clinica, sede)
+        clave = {"Idempotency-Key": f"serie-{uuid.uuid4().hex}"}
+        inicio = await _inicio_ofrecido_para_serie(cliente, api, cabeceras, cuerpo_reserva)
+        datos = {
+            **cuerpo_reserva,
+            "inicio": inicio,
+            "frecuencia": "SEMANAL",
+            "cantidad": 3,
+        }
+        primera = await cliente.post(
+            _ruta(api, "/citas/series"), headers={**cabeceras, **clave}, json=datos
+        )
+        distinta = await cliente.post(
+            _ruta(api, "/citas/series"),
+            headers={**cabeceras, **clave},
+            json={**datos, "cantidad": 2},
+        )
+
+        assert primera.status_code == 201, primera.text
+        assert distinta.status_code == 409
+        assert distinta.json()["codigo"] == "CLAVE_IDEMPOTENCIA_CONFLICTIVA"
 
     async def test_una_clave_de_idempotencia_invalida_se_rechaza(
         self,

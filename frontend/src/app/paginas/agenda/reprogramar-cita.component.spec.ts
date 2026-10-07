@@ -78,6 +78,19 @@ describe('ReprogramarCitaComponent', () => {
 
     afterEach(() => http.verify());
 
+    it('presenta el formulario en una ventana accesible y no lo cierra al pulsar fuera', () => {
+        const dialogo = fixture.nativeElement.querySelector('dialog.capa') as HTMLDialogElement | null;
+        const cerrado = vi.fn();
+        c.cerrar.subscribe(cerrado);
+
+        expect(dialogo?.getAttribute('aria-modal')).toBe('true');
+        expect(dialogo?.getAttribute('aria-label')).toBe('Reprogramar cita');
+        expect(fixture.nativeElement.querySelector('#formulario-reprogramacion')).not.toBeNull();
+
+        dialogo?.click();
+        expect(cerrado).not.toHaveBeenCalled();
+    });
+
     it('solo ofrece salas libres y avisa si la actual está ocupada', () => {
         c.inicio = TURNO.inicio;
         expect(c.salasLibres().map((s: Consultorio) => s.id)).toEqual(['sala-2', 'sala-3']);

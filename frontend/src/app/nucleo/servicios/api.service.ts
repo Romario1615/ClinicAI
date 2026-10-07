@@ -276,6 +276,20 @@ export interface DatosReserva {
   readonly notas_recepcion?: string | null;
 }
 
+export type FrecuenciaSerieCitas = 'SEMANAL' | 'QUINCENAL' | 'MENSUAL';
+
+export interface DatosSerieReserva extends DatosReserva {
+  readonly frecuencia: FrecuenciaSerieCitas;
+  readonly cantidad: number;
+}
+
+export interface RespuestaSerieCitas {
+  readonly serie_id: string;
+  readonly frecuencia: FrecuenciaSerieCitas;
+  readonly cantidad: number;
+  readonly citas: readonly Cita[];
+}
+
 // ---------------------------------------------------------------------------
 //  Conocimiento
 // ---------------------------------------------------------------------------
@@ -981,6 +995,13 @@ export class ApiService {
 
   crearCita(datos: DatosReserva, claveIdempotencia?: string): Observable<Cita> {
     return this.post<Cita>('/agenda/citas', datos, claveIdempotencia);
+  }
+
+  crearSerieCitas(
+    datos: DatosSerieReserva,
+    claveIdempotencia?: string,
+  ): Observable<RespuestaSerieCitas> {
+    return this.post<RespuestaSerieCitas>('/agenda/citas/series', datos, claveIdempotencia);
   }
 
   bloquearTurno(datos: DatosReserva, claveIdempotencia?: string): Observable<Cita> {

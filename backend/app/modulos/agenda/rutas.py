@@ -38,17 +38,24 @@ from app.modulos.agenda.disponibilidad import ResultadoDisponibilidad
 from app.modulos.agenda.esquemas import (
     DIAS_MAXIMOS_CONSULTA,
     EstadoFiltro,
+    FrecuenciaSerieCitas,
     PaginaCitas,
     PeticionCancelacion,
     PeticionReprogramacion,
     PeticionReserva,
+    PeticionSerieReserva,
     RespuestaCita,
     RespuestaCitaDetalle,
     RespuestaDisponibilidad,
+    RespuestaSerieCitas,
     TurnoDisponible,
 )
 from app.modulos.agenda.modelos import Cita, EstadoCita, OrigenCita
-from app.modulos.agenda.servicios import ResultadoOperacion, SolicitudReserva
+from app.modulos.agenda.servicios import (
+    ResultadoOperacion,
+    ResultadoSerieOperacion,
+    SolicitudReserva,
+)
 from app.nucleo.auditoria import AccionAuditada, construir_entrada
 from app.nucleo.autorizacion import Principal
 from app.nucleo.dependencias import (
@@ -61,6 +68,8 @@ from app.nucleo.dependencias import (
 )
 from app.nucleo.errores import DatosInvalidos, RecursoNoEncontrado
 from app.nucleo.idempotencia import validar_clave_cliente
+from app.nucleo.operaciones import completar_operacion
+from app.nucleo.reloj import Reloj
 
 enrutador = APIRouter(prefix="/agenda", tags=["agenda"])
 
@@ -111,6 +120,7 @@ def _a_respuesta(cita: Cita) -> RespuestaCita:
         completada_en=cita.completada_en,
         cancelada_en=cita.cancelada_en,
         motivo_cancelacion=cita.motivo_cancelacion,
+        serie_recurrente_id=cita.serie_recurrente_id,
     )
 
 
@@ -142,6 +152,35 @@ async def _persistir(
     await auditor.registrar(resultado.auditoria)
     await sesion.commit()
     return _a_respuesta(resultado.cita)
+
+
+async def _persistir_serie(
+    resultado: ResultadoSerieOperacion,
+    *,
+    frecuencia: FrecuenciaSerieCitas,
+    cantidad: int,
+    sesion: Sesion,
+    auditor: Auditor,
+    reloj: Reloj,
+) -> RespuestaSerieCitas:
+    """Guarda auditoría, respuesta idempotente y serie en una transacción."""
+    if resultado.respuesta_repetida is not None:
+        await sesion.commit()
+        return RespuestaSerieCitas.model_validate(resultado.respuesta_repetida)
+
+    if resultado.serie_id is None:
+        raise RuntimeError("La serie creada no tiene identificador.")
+    respuesta = RespuestaSerieCitas(
+        serie_id=resultado.serie_id,
+        frecuencia=frecuencia,
+        cantidad=cantidad,
+        citas=[_a_respuesta(cita) for cita in resultado.citas],
+    )
+    await auditor.registrar(resultado.auditoria)
+    if resultado.operacion is not None:
+        completar_operacion(resultado.operacion, respuesta.model_dump(mode="json"), reloj)
+    await sesion.commit()
+    return respuesta
 
 
 # ===========================================================================
@@ -421,6 +460,44 @@ async def crear_cita(
         principal=principal,
     )
     return await _persistir(resultado, sesion, auditor)
+
+
+@enrutador.post(
+    "/citas/series",
+    response_model=RespuestaSerieCitas,
+    status_code=status.HTTP_201_CREATED,
+    summary="Crear citas recurrentes",
+    responses={
+        409: {"description": "Una de las fechas no está disponible"},
+        422: {"description": "Frecuencia, cantidad o fecha inválida"},
+    },
+)
+async def crear_serie_citas(
+    peticion: Request,
+    principal: PuedeCrearCita,
+    datos: PeticionSerieReserva,
+    servicio_agenda: ServicioDeAgenda,
+    sesion: Sesion,
+    auditor: Auditor,
+    reloj: RelojActual,
+    clave_idempotencia: ClaveIdempotencia = None,
+) -> RespuestaSerieCitas:
+    """Reserva varias citas en el horario local elegido, de forma atómica."""
+    resultado = await servicio_agenda.crear_serie_confirmada(
+        _solicitud(datos, None, peticion),
+        principal=principal,
+        frecuencia=datos.frecuencia,
+        cantidad=datos.cantidad,
+        clave_idempotencia=clave_idempotencia,
+    )
+    return await _persistir_serie(
+        resultado,
+        frecuencia=datos.frecuencia,
+        cantidad=datos.cantidad,
+        sesion=sesion,
+        auditor=auditor,
+        reloj=reloj,
+    )
 
 
 @enrutador.post(

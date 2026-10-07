@@ -6,6 +6,8 @@
 .planes {
   display: grid;
   gap: var(--espacio-4);
+  grid-template-columns: minmax(0, 1fr);
+  min-width: 0;
 }
 
 .sensibilidad--n3 {
@@ -27,6 +29,17 @@
   align-items: center;
   justify-content: space-between;
   gap: var(--espacio-3);
+}
+
+.cabecera-planes > div,
+.lista-planes,
+.plan,
+.plan__cabecera > div {
+  min-width: 0;
+}
+
+.acciones-plan {
+  flex-wrap: wrap;
 }
 
 .cabecera-planes p:not(.ceja),
@@ -102,6 +115,7 @@ p {
 
 .plan__cabecera h3 {
   margin: 0;
+  overflow-wrap: anywhere;
 }
 
 .plan__cabecera .ceja {

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from datetime import date
 
 import pytest
@@ -622,7 +623,10 @@ async def test_al_cerrar_una_fase_se_invita_a_agendar_la_siguiente(
         return
     assert len(mensajes) == 1
     texto = mensajes[0].carga_util["texto"]
-    assert "Fase" not in texto and "36" not in texto
+    assert "Fase" not in texto
+    # La clínica sintética incluye un sufijo numérico; buscar "36" como
+    # subcadena daba un falso positivo cuando coincidía con ese identificador.
+    assert re.search(r"\b36\b", texto) is None
     assert set(mensajes[0].carga_util["variables"]) == {"nombre", "clinica"}
 
 

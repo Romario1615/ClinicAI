@@ -60,7 +60,8 @@
 }
 
 .nueva {
-  margin-bottom: var(--espacio-5);
+  display: grid;
+  gap: var(--espacio-4);
 }
 
 .nueva__rejilla {

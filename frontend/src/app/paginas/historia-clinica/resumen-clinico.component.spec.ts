@@ -70,6 +70,44 @@ describe('ResumenClinicoComponent', () => {
     expect(c.errorRedaccion()).toBe('IA local caída');
   });
 
+  it('abre el alta clínica en una ventana y descarta el borrador al cambiar de paciente', () => {
+    const fixture = montar(['historia_clinica.leer', 'historia_clinica.escribir']);
+    const sesion = TestBed.inject(SesionService);
+    sesion.establecerIdentidad({ ...sesion.identidad()!, profesional_id: 'prof-1' });
+    http.expectOne(URL).flush(resumen());
+    fixture.detectChanges();
+
+    const el = fixture.nativeElement as HTMLElement;
+    const abrir = Array.from(el.querySelectorAll('button')).find((boton) => boton.textContent?.trim() === 'Añadir alergia');
+    expect(abrir).toBeDefined();
+    abrir!.click();
+    fixture.detectChanges();
+    const dialogo = el.querySelector('dialog[open][aria-modal="true"]');
+    expect(dialogo?.getAttribute('aria-label')).toBe('Registrar alergia');
+    expect(dialogo?.querySelector('.ventana__pie button[type="submit"]')?.textContent).toContain('Guardar alergia registrada');
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const c = fixture.componentInstance as any;
+    c.nuevaSustancia = 'Borrador cancelado';
+    const cancelar = Array.from(dialogo!.querySelectorAll('button')).find((boton) => boton.textContent?.trim() === 'Cancelar');
+    cancelar!.click();
+    fixture.detectChanges();
+    expect(el.querySelector('dialog[open]')).toBeNull();
+    expect(c.nuevaSustancia).toBe('');
+
+    abrir!.click();
+    fixture.detectChanges();
+    c.nuevaSustancia = 'Borrador clínico';
+    fixture.componentRef.setInput('pacienteId', 'pac-2');
+    fixture.detectChanges();
+    http.expectOne(`${BASE}/historia/pacientes/pac-2/resumen-clinico`).flush(resumen());
+    fixture.detectChanges();
+
+    expect(el.querySelector('dialog[open]')).toBeNull();
+    expect(c.nuevaSustancia).toBe('');
+    expect(c.formularioAlergia()).toBe(false);
+  });
+
   it('carga la anamnesis configurable solo cuando se abre', () => {
     const fixture = montar();
     http.expectOne(URL).flush(resumen());

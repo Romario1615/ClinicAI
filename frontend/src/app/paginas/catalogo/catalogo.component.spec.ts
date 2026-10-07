@@ -102,6 +102,35 @@ describe('CatalogoComponent', () => {
         expect(fixture.nativeElement.textContent).toContain('Consultorio creado.');
     });
 
+    it('abre los formularios de catálogo en ventanas modales accesibles', () => {
+        const boton = (texto: string): HTMLButtonElement => {
+            const encontrado = Array.from(
+                (fixture.nativeElement as HTMLElement).querySelectorAll('button'),
+            ).find((elemento) => elemento.textContent?.trim() === texto);
+            if (!encontrado) throw new Error(`No se encontró el botón ${texto}.`);
+            return encontrado as HTMLButtonElement;
+        };
+
+        boton('Nuevo consultorio').click();
+        fixture.detectChanges();
+        expect(fixture.nativeElement.querySelector('dialog[open][aria-label="Nuevo consultorio"]')).not.toBeNull();
+        expect(fixture.nativeElement.querySelector('#form-consultorio')).not.toBeNull();
+        const dialogoConsultorio = fixture.nativeElement.querySelector('dialog[open]');
+        dialogoConsultorio.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+        fixture.detectChanges();
+        expect(fixture.nativeElement.querySelector('dialog[open]')).toBeNull();
+
+        boton('Nueva especialidad').click();
+        fixture.detectChanges();
+        expect(fixture.nativeElement.querySelector('dialog[open][aria-label="Nueva especialidad"]')).not.toBeNull();
+        boton('Cancelar').click();
+        fixture.detectChanges();
+
+        boton('Nuevo servicio').click();
+        fixture.detectChanges();
+        expect(fixture.nativeElement.querySelector('dialog[open][aria-label="Nuevo servicio"]')).not.toBeNull();
+    });
+
     it('edita, reactiva y permite limpiar el formulario', () => {
         const component = fixture.componentInstance as unknown as {
             form: {

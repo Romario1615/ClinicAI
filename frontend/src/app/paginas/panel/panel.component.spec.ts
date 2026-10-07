@@ -46,6 +46,9 @@ describe('PanelComponent · tablero por rol', () => {
             pacientes: 0,
             pacientes_nuevos: null,
             pacientes_recurrentes: null,
+            pacientes_registrados: null,
+            pacientes_registrados_sin_cita: null,
+            cohortes_registro: null,
             citas: {},
             tendencia_diaria: [],
             por_hora: [],
@@ -79,6 +82,45 @@ describe('PanelComponent · tablero por rol', () => {
     const texto = (fixture.nativeElement as HTMLElement).textContent ?? '';
     expect(texto).toContain('Mis citas de hoy');
     expect(texto).toContain('Recetas por confirmar');
+  });
+
+  it('presenta los siete filtros dentro de una ventana accesible que puede cerrarse con Escape', () => {
+    const fixture = montar(indicadores({}), ['dashboard.leer']);
+    const elemento = fixture.nativeElement as HTMLElement;
+    const abrir = elemento.querySelector<HTMLButtonElement>('button[aria-haspopup="dialog"]');
+    expect(abrir?.textContent).toContain('Ajustar filtros');
+    abrir?.click();
+    fixture.detectChanges();
+
+    const dialogo = elemento.querySelector<HTMLDialogElement>('dialog[open]');
+    expect(dialogo?.getAttribute('aria-modal')).toBe('true');
+    expect(dialogo?.getAttribute('aria-label')).toBe('Filtros del dashboard');
+    expect(dialogo?.querySelectorAll('.filtros-dashboard input, .filtros-dashboard select').length).toBe(7);
+    expect(elemento.querySelector('.filtros-dashboard__barra')).not.toBeNull();
+
+    dialogo?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+    fixture.detectChanges();
+    expect(elemento.querySelector('dialog[open]')).toBeNull();
+  });
+
+  it('cuenta el periodo personalizado y cada filtro aplicado en el resumen de filtros', () => {
+    const fixture = montar(indicadores({}), ['dashboard.leer']);
+    const componente = fixture.componentInstance as unknown as {
+      periodo: { set(valor: string): void };
+      sedeId: { set(valor: string): void };
+      estadoCita: { set(valor: string): void };
+      cantidadFiltrosActivos: () => number;
+      hayFiltros: () => boolean;
+    };
+    expect(componente.cantidadFiltrosActivos()).toBe(0);
+    expect(componente.hayFiltros()).toBe(false);
+    componente.periodo.set('personalizado');
+    componente.sedeId.set('sede-1');
+    componente.estadoCita.set('CONFIRMED');
+    fixture.detectChanges();
+    expect(componente.cantidadFiltrosActivos()).toBe(3);
+    expect(componente.hayFiltros()).toBe(true);
+    expect((fixture.nativeElement as HTMLElement).querySelector('.filtros-dashboard__contador')?.textContent?.trim()).toBe('3');
   });
 
   it('administración ve la gestión de la clínica', () => {
@@ -150,6 +192,44 @@ describe('PanelComponent · tablero por rol', () => {
     const diaria = (fixture.nativeElement as HTMLElement).querySelector('#tendencia-diaria');
     expect(diaria?.parentElement?.querySelector('ul li')?.textContent).toContain('4');
     expect((fixture.nativeElement as HTMLElement).querySelectorAll('.tendencia__pista[aria-hidden="true"]').length).toBe(3);
+    http.verify();
+  });
+
+  it('muestra la ocupación solo con capacidad real y etiqueta el tiempo utilizado', () => {
+    const fixture = montar(indicadores({}), ['dashboard.leer']);
+    const componente = fixture.componentInstance as unknown as { cambiarPeriodo(clave: string): void };
+    componente.cambiarPeriodo('7');
+    const http = TestBed.inject(HttpTestingController);
+    const peticiones = http.match((solicitud) => solicitud.url.endsWith('/dashboard/'));
+    expect(peticiones.length).toBe(2);
+    peticiones[0].flush({
+      total_citas: 1, pacientes: 1, pacientes_nuevos: 1, pacientes_recurrentes: 0,
+      citas: { CONFIRMED: 1 }, tendencia_diaria: [], por_hora: [], por_dia_semana: [],
+      espera: { promedio_minutos: null, personas_en_espera: 0, espera_mayor_15_minutos: 0 },
+      recuperacion_turnos: { turnos_liberados: 0, turnos_recuperados: 0, promedio_minutos_para_recuperar: null },
+      ocupacion_agenda: {
+        minutos_disponibles: 210, minutos_ocupados: 45, porcentaje: 21.4,
+        detalle: 'Reservas activas frente al horario disponible; incluye pausas, feriados y bloqueos.',
+      },
+      adherencia: null, pagos: null,
+    });
+    peticiones[1].flush({
+      total_citas: 0, pacientes: 0, pacientes_nuevos: 0, pacientes_recurrentes: 0,
+      citas: {}, tendencia_diaria: [], por_hora: [], por_dia_semana: [],
+      espera: { promedio_minutos: null, personas_en_espera: 0, espera_mayor_15_minutos: 0 },
+      recuperacion_turnos: { turnos_liberados: 0, turnos_recuperados: 0, promedio_minutos_para_recuperar: null },
+      ocupacion_agenda: { minutos_disponibles: 0, minutos_ocupados: 0, porcentaje: null, detalle: 'Sin horario.' },
+      adherencia: null, pagos: null,
+    });
+    fixture.detectChanges();
+
+    const elemento = fixture.nativeElement as HTMLElement;
+    expect(elemento.querySelector('.ocupacion-agenda__valor')?.textContent).toContain('21.4');
+    expect(elemento.querySelector('progress.ocupacion-agenda__barra')?.getAttribute('aria-label'))
+      .toBe('Ocupación de agenda: 21.4 por ciento');
+    expect(elemento.querySelector('.ocupacion-agenda__tiempos')?.textContent).toContain('reservados');
+    expect(elemento.querySelector('.ocupacion-agenda__detalle')?.textContent)
+      .toContain('incluye pausas, feriados y bloqueos');
     http.verify();
   });
 
@@ -320,6 +400,103 @@ describe('PanelComponent · tablero por rol', () => {
     expect(texto).toContain('Nuevos');
     expect(texto).toContain('Recurrentes');
     expect(texto).toContain('Clasificados por su primera atención completada dentro del filtro.');
+    http.verify();
+  });
+
+  it('presenta altas por cohorte mensual y las oculta al filtrar por estado', () => {
+    const fixture = montar(indicadores({}), ['dashboard.leer']);
+    const componente = fixture.componentInstance as unknown as {
+      cambiarPeriodo(clave: string): void;
+      estadoCita: { set(valor: string): void };
+      aplicarFiltros(): void;
+    };
+    componente.cambiarPeriodo('30');
+
+    const http = TestBed.inject(HttpTestingController);
+    const periodo = http.match((solicitud) => solicitud.url.endsWith('/dashboard/'));
+    expect(periodo.length).toBe(2);
+    const base = {
+      total_citas: 14,
+      pacientes: 12,
+      pacientes_nuevos: 4,
+      pacientes_recurrentes: 8,
+      pacientes_registrados: 4,
+      pacientes_registrados_sin_cita: 2,
+      cohortes_registro: [{
+        mes: '2026-10-01',
+        registrados: 4,
+        con_cita_en_filtros: 2,
+        sin_cita_en_filtros: 2,
+      }],
+      demografia: {
+        edades: [
+          { categoria: '0-17 años', pacientes: null, suprimida: true },
+          { categoria: '18-29 años', pacientes: 0, suprimida: false },
+          { categoria: '30-44 años', pacientes: 0, suprimida: false },
+          { categoria: '45-59 años', pacientes: 5, suprimida: false },
+          { categoria: '60 o más', pacientes: 0, suprimida: false },
+          { categoria: 'Sin fecha de nacimiento', pacientes: null, suprimida: true },
+          { categoria: 'Fecha no válida', pacientes: 0, suprimida: false },
+        ],
+        sexos: [
+          { categoria: 'Femenino', pacientes: null, suprimida: true },
+          { categoria: 'Masculino', pacientes: 5, suprimida: false },
+          { categoria: 'Otro', pacientes: null, suprimida: true },
+          { categoria: 'Sin registrar', pacientes: 0, suprimida: false },
+        ],
+      },
+      retorno_30_dias: {
+        pacientes_seguimiento_completo: 12,
+        pacientes_que_regresaron: 6,
+        porcentaje: 50,
+      },
+      citas: { COMPLETED: 4 },
+      tendencia_diaria: [],
+      por_hora: [],
+      por_dia_semana: [],
+      espera: { promedio_minutos: null, personas_en_espera: 0, espera_mayor_15_minutos: 0 },
+      recuperacion_turnos: { turnos_liberados: 0, turnos_recuperados: 0, promedio_minutos_para_recuperar: null },
+      adherencia: null,
+      pagos: null,
+    };
+    periodo[0].flush(base);
+    periodo[1].flush({ ...base, total_citas: 0, pacientes_registrados: 0, pacientes_registrados_sin_cita: 0, cohortes_registro: [] });
+    fixture.detectChanges();
+
+    const elemento = fixture.nativeElement as HTMLElement;
+    expect(elemento.querySelector('.altas-pacientes')?.textContent).toContain('Registrados');
+    expect(elemento.querySelector('.altas-pacientes')?.textContent).toContain('Sin cita en los filtros');
+    expect(elemento.querySelector('.demografia')?.textContent).toContain('Perfil de pacientes');
+    expect(elemento.querySelector('.demografia')?.textContent).toContain('Sexo registrado');
+    expect(elemento.querySelector('.demografia')?.textContent).toContain('Protegido');
+    expect(elemento.querySelectorAll('.demografia__fila').length).toBe(11);
+    expect(elemento.querySelector('.retorno-30d')?.textContent).toContain('50%');
+    expect(elemento.querySelector('.retorno-30d')?.textContent).toContain('6 de 12 pacientes regresaron');
+    const filasProtegidas = Array.from(elemento.querySelectorAll('.demografia__fila'))
+      .filter((fila) => fila.textContent?.includes('Protegido'));
+    expect(filasProtegidas).toHaveLength(4);
+    expect(filasProtegidas.every((fila) => !fila.querySelector('.tendencia__pista span'))).toBe(true);
+    expect(elemento.querySelector('.cohortes-registro__tabla tbody tr')?.textContent).toContain('octubre de 2026');
+    expect(Array.from(elemento.querySelectorAll('.cohortes-registro__tabla tbody tr td')).map((celda) => celda.textContent?.trim()))
+      .toEqual(['4', '2', '2']);
+
+    componente.estadoCita.set('CONFIRMED');
+    componente.aplicarFiltros();
+    const filtradas = http.match((solicitud) => solicitud.url.endsWith('/dashboard/'));
+    expect(filtradas.length).toBe(2);
+    const sinCohortes = {
+      ...base,
+      pacientes_nuevos: null,
+      pacientes_recurrentes: null,
+      pacientes_registrados: null,
+      pacientes_registrados_sin_cita: null,
+      cohortes_registro: null,
+      retorno_30_dias: null,
+    };
+    filtradas.forEach((peticion) => peticion.flush(sinCohortes));
+    fixture.detectChanges();
+    expect(elemento.querySelector('.altas-pacientes')?.textContent).toContain('Elige “Todos los estados”');
+    expect(elemento.querySelector('.cohortes-registro')?.textContent).toContain('se oculta al filtrar por estado');
     http.verify();
   });
 
