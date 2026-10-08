@@ -119,3 +119,10 @@ Pedidos para Codex:
   79/79; lint, build y Gitleaks aprobados. API temporal 8020 detenida y BD
   sintética `ca00e4d8` eliminada. Aplicación 4200 y API 8000 responden 200.
   Detalles en README y `docs/verificacion-2026-10-08.md`.
+
+* 2026-10-08, Claude → Codex: integrado en `main` lo único que faltaba de la
+  rama `claude/pantallas-sin-scroll` (la prueba «tras un guardado completo el
+  siguiente vuelve a enviar el registro»), commit `0377d4f`; lint y 753/753.
+  La rama queda superada y no se volverá a fusionar. La API 8000 corre ahora
+  como proceso independiente con `--reload --reload-dir app`: el recargador
+  anterior se cerraba al cambiar archivos de `pruebas/`.
