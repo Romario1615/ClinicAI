@@ -1,4 +1,5 @@
 import type { MockedObject } from "vitest";
+import type { WritableSignal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { HttpErrorResponse } from '@angular/common/http';
 import { of, throwError } from 'rxjs';
@@ -61,9 +62,12 @@ describe('EquipoComponent', () => {
         etiquetasSedes(ids: readonly string[]): string;
         nombreEspecialidad(id: string): string;
         etiquetaEstado(estado: PerfilProfesional['estado_disponibilidad']): string;
+        cancelarFormulario(): void;
         mensaje: () => string;
         error: () => string;
         cargando: () => boolean;
+        formularioAbierto: () => boolean;
+        guardando: WritableSignal<boolean>;
         form: {
             nombre: string;
             apellido: string;
@@ -164,6 +168,16 @@ describe('EquipoComponent', () => {
         vm().guardar();
         expect(equipo.actualizar).toHaveBeenCalledWith('p-1', expect.objectContaining({ nombre: 'Ana María', sede_ids: ['s-2'], activo: true }));
         expect(vm().mensaje()).toBe('Perfil profesional actualizado.');
+    });
+
+    it('no cierra la ventana mientras se guarda: el resultado no se pierde', () => {
+        vm().editar(PERFIL);
+        vm().guardando.set(true);
+        vm().cancelarFormulario();
+        expect(vm().formularioAbierto()).toBe(true);
+        vm().guardando.set(false);
+        vm().cancelarFormulario();
+        expect(vm().formularioAbierto()).toBe(false);
     });
 
     it('cancela la edición y resuelve etiquetas ausentes sin fallar', () => {

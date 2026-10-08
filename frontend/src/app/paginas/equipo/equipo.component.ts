@@ -33,18 +33,19 @@ const ESTADOS: readonly { codigo: FormularioEquipo['estado_disponibilidad']; eti
   selector: 'app-equipo',
   standalone: true,
   imports: [FormsModule, IconoComponent, VentanaFlotanteComponent],
+  host: { class: 'pantalla' },
   template: `
-    <header class="encabezado">
+    <header class="encabezado pantalla__fijo">
       <div class="encabezado__texto"><p class="ceja"><app-icono nombre="equipo" [tamano]="16" /> PERSONAL DE LA CLÍNICA</p><h1>Equipo clínico</h1><p>Administre perfiles profesionales y sus sedes de atención.</p></div>
       <img src="/images/equipo-clinica-colaboracion.jpg" alt="" aria-hidden="true" fetchpriority="low" />
     </header>
-    @if (error() && !formularioAbierto()) { <p class="aviso error" role="alert">{{ error() }}</p> }
-    @if (mensaje()) { <p class="aviso" role="status">{{ mensaje() }}</p> }
-    @if (cargando()) { <p class="tarjeta" role="status">Cargando equipo…</p> }
-    <div class="contenido">
-      <section class="tarjeta lista" aria-labelledby="titulo-equipo">
+    @if (error() && !formularioAbierto()) { <p class="aviso error pantalla__fijo" role="alert">{{ error() }}</p> }
+    @if (mensaje()) { <p class="aviso pantalla__fijo" role="status">{{ mensaje() }}</p> }
+    @if (cargando()) { <p class="tarjeta pantalla__fijo" role="status">Cargando equipo…</p> }
+    <div class="contenido pantalla__resto">
+      <section class="tarjeta tarjeta--llena lista" aria-labelledby="titulo-equipo">
         <div class="lista__cabecera">
-          <div><p class="ceja">PERSONAL REGISTRADO</p><h2 id="titulo-equipo">Equipo</h2></div>
+          <div><p class="ceja">PERSONAL REGISTRADO</p><h2 id="titulo-equipo">Equipo · {{ perfiles().length }}</h2></div>
           <button class="boton boton--principal lista__agregar" type="button" (click)="abrirNuevo()" [disabled]="!sedes().length || !especialidades().length" aria-haspopup="dialog">
             <app-icono nombre="mas" [tamano]="17" /> Agregar profesional
           </button>
@@ -52,9 +53,11 @@ const ESTADOS: readonly { codigo: FormularioEquipo['estado_disponibilidad']; eti
         @if (!especialidades().length || !sedes().length) {
           <p class="ayuda">Para registrar un profesional, primero configure al menos una especialidad activa y una sede en su ámbito.</p>
         }
+        <div class="filas desplazable" tabindex="0" role="region" aria-labelledby="titulo-equipo">
         @for (perfil of perfiles(); track perfil.id) {
           <article class="fila"><div class="datos"><div class="titulo"><h3>{{ perfil.nombre }} {{ perfil.apellido }}</h3><span class="estado" [class.inactivo]="!perfil.activo">{{ perfil.activo ? etiquetaEstado(perfil.estado_disponibilidad) : 'Inactivo' }}</span></div><p>{{ nombreEspecialidad(perfil.especialidad_id) }} · {{ perfil.numero_registro_profesional || 'Sin registro profesional' }}</p><small>{{ etiquetasSedes(perfil.sede_ids) }}</small></div><button class="boton" type="button" (click)="editar(perfil)" aria-haspopup="dialog">Editar</button></article>
         } @empty { @if (!cargando()) { <p class="vacio">No hay profesionales registrados en las sedes visibles.</p> } }
+        </div>
       </section>
     </div>
 
@@ -65,6 +68,7 @@ const ESTADOS: readonly { codigo: FormularioEquipo['estado_disponibilidad']; eti
         forma="centrada"
         [anchoMaximo]="760"
         [cierraAlPulsarFuera]="false"
+        [ocupada]="guardando()"
         (cerrar)="cancelarFormulario()"
       >
         @if (error()) { <p class="aviso error" role="alert">{{ error() }}</p> }
@@ -89,7 +93,7 @@ const ESTADOS: readonly { codigo: FormularioEquipo['estado_disponibilidad']; eti
           @if (editando()) { <label class="check"><input type="checkbox" name="activo" [(ngModel)]="form.activo" /> Perfil activo</label> }
         </form>
         <div pie>
-          <button class="boton" type="button" (click)="cancelarFormulario()">Cancelar</button>
+          <button class="boton" type="button" (click)="cancelarFormulario()" [disabled]="guardando()">Cancelar</button>
           <button class="boton boton--principal" form="form-equipo" type="submit" [disabled]="cargando() || guardando() || !sedes().length || !especialidades().length">
             {{ cargando() ? 'Cargando equipo…' : guardando() ? 'Guardando…' : editando() ? 'Guardar cambios' : 'Crear perfil' }}
           </button>
@@ -100,9 +104,21 @@ const ESTADOS: readonly { codigo: FormularioEquipo['estado_disponibilidad']; eti
   changeDetection: ChangeDetectionStrategy.Eager,
   // Usa los tokens de acento definidos por el tema para mantener contraste.
   styles: [`
-    :host{display:block;padding:clamp(16px,3vw,32px);color:var(--texto)}.encabezado{position:relative;isolation:isolate;display:flex;align-items:center;min-height:clamp(170px,20vw,230px);overflow:hidden;padding:clamp(20px,3vw,32px);margin-bottom:20px;border:1px solid var(--borde);border-radius:var(--radio);background:linear-gradient(105deg,#f8fcfb 0%,#edf7f5 62%,#e3f1ef 100%)}.encabezado__texto{position:relative;z-index:2;max-width:560px}.encabezado h1,.tarjeta h2{margin:0}.encabezado p:last-child,.ayuda,.nota,.fila p,.fila small,.vacio{color:var(--texto-suave)}.encabezado img{position:absolute;z-index:0;inset:0 0 0 auto;width:min(62%,760px);height:100%;object-fit:cover;object-position:center 51%;mask-image:linear-gradient(90deg,transparent 0%,#000 32%);transform-origin:70% center;animation:equipo-ilustracion 24s ease-in-out infinite alternate}.encabezado::after{content:"";position:absolute;z-index:1;inset:-60%;pointer-events:none;background:radial-gradient(ellipse at 82% 46%,rgb(95 209 196 / 17%),transparent 34%);animation:equipo-halo 20s ease-in-out infinite alternate}.encabezado .ceja{display:flex;align-items:center;gap:var(--espacio-2)}@keyframes equipo-ilustracion{from{transform:translate3d(0,2px,0) scale(1)}to{transform:translate3d(0,-3px,0) scale(1.018)}}@keyframes equipo-halo{from{transform:translate3d(-1%,1%,0) scale(.98);opacity:.55}to{transform:translate3d(2%,-1%,0) scale(1.04);opacity:1}}
+    :host{color:var(--texto)}.encabezado{position:relative;isolation:isolate;display:flex;align-items:center;min-height:clamp(170px,20vw,230px);overflow:hidden;padding:clamp(20px,3vw,32px);border:1px solid var(--borde);border-radius:var(--radio);background:linear-gradient(105deg,#f8fcfb 0%,#edf7f5 62%,#e3f1ef 100%)}.encabezado__texto{position:relative;z-index:2;max-width:560px}.encabezado h1,.tarjeta h2{margin:0}.encabezado p:last-child,.ayuda,.nota,.fila p,.fila small,.vacio{color:var(--texto-suave)}.encabezado img{position:absolute;z-index:0;inset:0 0 0 auto;width:min(62%,760px);height:100%;object-fit:cover;object-position:center 51%;mask-image:linear-gradient(90deg,transparent 0%,#000 32%);transform-origin:70% center;animation:equipo-ilustracion 24s ease-in-out infinite alternate}.encabezado::after{content:"";position:absolute;z-index:1;inset:-60%;pointer-events:none;background:radial-gradient(ellipse at 82% 46%,rgb(95 209 196 / 17%),transparent 34%);animation:equipo-halo 20s ease-in-out infinite alternate}.encabezado .ceja{display:flex;align-items:center;gap:var(--espacio-2)}@keyframes equipo-ilustracion{from{transform:translate3d(0,2px,0) scale(1)}to{transform:translate3d(0,-3px,0) scale(1.018)}}@keyframes equipo-halo{from{transform:translate3d(-1%,1%,0) scale(.98);opacity:.55}to{transform:translate3d(2%,-1%,0) scale(1.04);opacity:1}}
     .contenido{display:grid;grid-template-columns:minmax(0,1fr);gap:18px;align-items:start}.tarjeta{background:var(--superficie);border:1px solid var(--borde);border-radius:var(--radio);padding:22px;box-shadow:var(--sombra-tarjeta,0 8px 28px #0b1f3510)}.ceja{font-size:.72rem;font-weight:750;letter-spacing:.11em;color:var(--acento-fuerte);margin:0 0 7px}.lista__cabecera{display:flex;align-items:center;justify-content:space-between;gap:var(--espacio-3);margin-bottom:var(--espacio-2)}.lista__cabecera h2{margin:0}.lista__agregar{display:inline-flex;align-items:center;gap:8px;min-height:44px}.campos{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:18px 0}.campos label,.principal{display:grid;gap:6px;min-width:0}.campos label span,.principal span,legend{font-size:.83rem;font-weight:650}.campos input,.campos select,.principal select{width:100%;min-width:0;border:1px solid var(--borde);border-radius:9px;padding:10px;background:var(--superficie);color:var(--texto);font:inherit}fieldset{border:1px solid var(--borde);border-radius:10px;padding:12px;margin:14px 0}.sede-opcion{display:inline-flex;gap:8px;align-items:center;margin:6px 12px 6px 0;font-size:.9rem}.principal{max-width:300px;margin:12px 0}.principal select{margin-top:5px}.check{display:flex;gap:8px;align-items:center;margin:12px 0;font-size:.9rem}.formulario-modal{display:grid;gap:14px}.formulario-modal .campos{margin:0}.acciones{display:flex;gap:8px;margin-top:16px}.boton{border:1px solid var(--borde);border-radius:9px;padding:9px 13px;background:var(--superficie);color:var(--texto);cursor:pointer;font:inherit}.boton.primario{background:var(--acento);border-color:var(--acento);color:var(--acento-texto)}.boton.boton--principal{background:var(--acento);border-color:var(--acento);color:var(--acento-texto)}.boton:disabled{opacity:.55;cursor:not-allowed}.nota{font-size:.8rem;line-height:1.5;margin:16px 0 0}.nota--modal{margin:0 0 var(--espacio-3)}.fila{display:flex;justify-content:space-between;gap:14px;align-items:center;padding:15px 0;border-top:1px solid var(--borde)}.datos{min-width:0}.titulo{display:flex;align-items:center;gap:10px;flex-wrap:wrap}.fila h3{margin:0;font-size:1rem}.fila p{margin:5px 0}.fila small{display:block;overflow-wrap:anywhere}.estado{border-radius:100px;padding:3px 9px;background:var(--exito-fondo,#e9f7ef);color:var(--exito,#11784a);font-size:.74rem;font-weight:700}.estado.inactivo{background:var(--peligro-fondo,#fff0ef);color:var(--peligro,#a12820)}.aviso{padding:12px 16px;border-radius:9px;background:var(--exito-fondo,#e9f7ef);color:var(--exito,#11784a)}.aviso.error{background:var(--peligro-fondo,#fff0ef);color:var(--peligro,#a12820)}
-    @media(max-width:600px){:host{padding:14px}.encabezado{min-height:190px;align-items:flex-start;padding:20px}.encabezado img{width:76%;opacity:.58;mask-image:linear-gradient(90deg,transparent 0%,#000 42%)}.campos{grid-template-columns:1fr}.tarjeta{padding:17px}.lista__cabecera{align-items:flex-start;flex-direction:column}.lista__agregar{width:100%;justify-content:center}.fila{align-items:flex-start;flex-direction:column}.fila>button{align-self:flex-end}}@media(prefers-reduced-motion:reduce){.encabezado img,.encabezado::after{animation:none}}
+    @media(max-width:600px){.encabezado{min-height:190px;align-items:flex-start;padding:20px}.encabezado img{width:76%;opacity:.58;mask-image:linear-gradient(90deg,transparent 0%,#000 42%)}.campos{grid-template-columns:1fr}.tarjeta{padding:17px}.lista__cabecera{align-items:flex-start;flex-direction:column}.lista__agregar{width:100%;justify-content:center}.fila{align-items:flex-start;flex-direction:column}.fila>button{align-self:flex-end}}@media(prefers-reduced-motion:reduce){.encabezado img,.encabezado::after{animation:none}}
+    /* Lista en rejilla: varias fichas por fila y desplazamiento dentro de la tarjeta. */
+    .filas{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,340px),1fr));column-gap:var(--espacio-4);align-content:start}
+    .lista{display:flex;flex-direction:column;min-height:0}
+    @media (min-width:821px) and (min-height:600px){
+      .encabezado{min-height:0;padding:var(--espacio-3) var(--espacio-5)}
+      .encabezado h1{font-size:1.45rem}
+      .encabezado p:last-child{margin:2px 0 0;font-size:.9rem}
+      .contenido{display:flex;align-items:stretch}
+      .lista{flex:1 1 0;min-width:0;padding:var(--espacio-4)}
+      .lista__cabecera{flex:none}
+      .fila{padding:var(--espacio-3) 0}
+    }
   `],
 })
 export class EquipoComponent implements OnInit {
@@ -194,6 +210,9 @@ export class EquipoComponent implements OnInit {
   }
 
   protected cancelarFormulario(): void {
+    // A mitad del guardado no se cierra: el resultado se perdería o se
+    // informaría con la ventana ya cerrada.
+    if (this.guardando()) return;
     this.nuevo();
     this.error.set('');
     this.mensaje.set('');
