@@ -20,97 +20,99 @@ import { ResumenModuloComponent } from '../../compartido/resumen-modulo.componen
   selector: 'app-conversaciones',
   standalone: true,
   imports: [ResumenModuloComponent, DatePipe, IconoComponent],
+  host: { class: 'pantalla' },
   template: `
-    <main class="bandeja">
-      <header class="bandeja__cabecera">
-        <div>
-          <p class="sobrelinea"><app-icono nombre="mensajes-seguros" [tamano]="15" /> COMUNICACIÓN SEGURA</p>
-          <h1>Atención de mensajes</h1>
-          <p>Conversaciones derivadas que esperan seguimiento del equipo.</p>
-        </div>
-        <button class="boton boton--secundario" type="button" (click)="cargar()" [disabled]="cargando()">
-          <app-icono nombre="reloj" [tamano]="17" /> Actualizar
-        </button>
-      </header>
-
-      <app-resumen-modulo modulo="mensajes" />
-
-      @if (error()) { <div class="aviso aviso--error" role="alert">{{ error() }}</div> }
-
-      @if (avisosTratamiento().length > 0 || cargandoAvisos() || errorAvisos()) {
-        <section class="avisos-tratamiento tarjeta" aria-labelledby="avisos-tratamiento-titulo">
-          <header><div><p class="sobrelinea">SEGUIMIENTO CLÍNICO</p><h2 id="avisos-tratamiento-titulo">Reportes de tratamiento por revisar</h2></div><span>{{ avisosTratamiento().length }}</span></header>
-          @if (errorAvisos()) { <p class="aviso aviso--error" role="alert">{{ errorAvisos() }}</p> }
-          @if (cargandoAvisos() && !avisosTratamiento().length) { <p class="vacio">Cargando reportes…</p> }
-          @for (aviso of avisosTratamiento(); track aviso.id) {
-            <article class="aviso-tratamiento">
-              <div><strong>Requiere revisión del equipo</strong><time>{{ aviso.creado_en | date:'d MMM yyyy, HH:mm':'':'es' }}</time><p>Abra el mensaje antes de confirmar su revisión. El aviso no representa una clasificación de gravedad.</p></div>
-              <div class="aviso-tratamiento__acciones">
-                <button class="boton boton--pequeno" type="button" (click)="abrirAviso(aviso)">Abrir mensaje</button>
-                @if (puedeConfirmarRevision()) {
-                  <button class="boton boton--pequeno boton--principal" type="button" [disabled]="revisandoAviso() === aviso.id" (click)="confirmarRevision(aviso)">
-                    {{ revisandoAviso() === aviso.id ? 'Guardando…' : 'Confirmar revisión' }}
-                  </button>
-                }
-              </div>
-            </article>
-          }
-          @if (!cargandoAvisos() && !avisosTratamiento().length && !errorAvisos()) { <p class="vacio">No hay reportes pendientes.</p> }
-        </section>
-      }
-
-      <div class="bandeja__cuerpo">
-        <section class="bandeja__lista tarjeta" aria-label="Conversaciones pendientes">
-          <div class="lista__cabecera"><h2>Pendientes</h2><span>{{ conversaciones().length }}</span></div>
-          @if (cargando() && !conversaciones().length) { <p class="vacio">Cargando conversaciones…</p> }
-          @else if (!conversaciones().length) {
-            <div class="vacio vacio--sin-mensajes">
-              <img class="vacio__ilustracion" src="/images/bandeja-sin-pendientes.png" alt="" aria-hidden="true" width="144" height="144" />
-              <strong>Todo al día</strong>
-              <span>No hay mensajes pendientes de atención.</span>
-            </div>
-          }
-          @for (conversacion of conversaciones(); track conversacion.id) {
-            <button class="conversacion" [class.conversacion--activa]="seleccionada()?.id === conversacion.id" type="button" (click)="abrir(conversacion)">
-              <span class="conversacion__telefono">{{ conversacion.telefono }}</span>
-              <span class="conversacion__motivo">{{ conversacion.motivo_handoff || 'Requiere revisión del equipo' }}</span>
-              <span class="conversacion__resumen">{{ conversacion.ultimo_mensaje || 'Mensaje sin texto' }}</span>
-              <time>{{ conversacion.ultima_actividad_en | date:'d MMM, HH:mm':'':'es' }}</time>
-            </button>
-          }
-          @if (conversaciones().length < total()) {
-            <button class="cargar-mas" type="button" (click)="cargarMas()" [disabled]="cargando()">Cargar más conversaciones</button>
-          }
-        </section>
-
-        <section class="bandeja__detalle tarjeta" aria-label="Detalle de conversación" aria-live="polite">
-          @if (detalle(); as hilo) {
-            <header class="detalle__cabecera">
-              <div><span class="sobrelinea">WHATSAPP · EN ESPERA</span><h2>{{ hilo.telefono }}</h2></div>
-              <span class="estado">Requiere atención</span>
-            </header>
-            <p class="detalle__motivo">{{ hilo.motivo_handoff }}</p>
-            @if (hilo.paciente_id) { <p class="detalle__paciente">Paciente vinculado: {{ hilo.paciente_id }}</p> }
-            <div class="mensajes">
-              @for (mensaje of hilo.mensajes; track mensaje.id) {
-                <article class="mensaje">
-                  <p>{{ mensaje.texto || 'Mensaje de tipo ' + mensaje.tipo }}</p>
-                  <footer><span>{{ mensaje.intencion }}</span><time>{{ mensaje.recibido_en | date:'d MMM yyyy, HH:mm':'':'es' }}</time></footer>
-                </article>
-              }
-            </div>
-            <p class="solo-lectura">La lectura queda registrada en la auditoría clínica. La respuesta por WhatsApp se habilitará cuando se configure el proveedor.</p>
-          } @else {
-            <div class="vacio"><app-icono nombre="agente" [tamano]="24" /><strong>Selecciona una conversación</strong><span>El detalle se carga de forma protegida y cada consulta queda auditada.</span></div>
-          }
-        </section>
+    <header class="bandeja__cabecera pantalla__fijo">
+      <div>
+        <p class="sobrelinea"><app-icono nombre="mensajes-seguros" [tamano]="15" /> COMUNICACIÓN SEGURA</p>
+        <h1>Atención de mensajes</h1>
+        <p>Conversaciones derivadas que esperan seguimiento del equipo.</p>
       </div>
-    </main>
+      <button class="boton boton--secundario" type="button" (click)="cargar()" [disabled]="cargando()">
+        <app-icono nombre="reloj" [tamano]="17" /> Actualizar
+      </button>
+    </header>
+
+    <app-resumen-modulo class="pantalla__fijo" modulo="mensajes" />
+
+    @if (error()) { <div class="aviso aviso--error pantalla__fijo" role="alert">{{ error() }}</div> }
+
+    <div class="bandeja__cuerpo pantalla__columnas">
+      <div class="bandeja__columna">
+        @if (avisosTratamiento().length > 0 || cargandoAvisos() || errorAvisos()) {
+          <section class="avisos-tratamiento tarjeta desplazable" tabindex="0" aria-labelledby="avisos-tratamiento-titulo">
+            <header><div><p class="sobrelinea">SEGUIMIENTO CLÍNICO</p><h2 id="avisos-tratamiento-titulo">Reportes de tratamiento por revisar</h2></div><span>{{ avisosTratamiento().length }}</span></header>
+            @if (errorAvisos()) { <p class="aviso aviso--error" role="alert">{{ errorAvisos() }}</p> }
+            @if (cargandoAvisos() && !avisosTratamiento().length) { <p class="vacio">Cargando reportes…</p> }
+            @for (aviso of avisosTratamiento(); track aviso.id) {
+              <article class="aviso-tratamiento">
+                <div><strong>Requiere revisión del equipo</strong><time>{{ aviso.creado_en | date:'d MMM yyyy, HH:mm':'':'es' }}</time><p>Abra el mensaje antes de confirmar su revisión. El aviso no representa una clasificación de gravedad.</p></div>
+                <div class="aviso-tratamiento__acciones">
+                  <button class="boton boton--pequeno" type="button" (click)="abrirAviso(aviso)">Abrir mensaje</button>
+                  @if (puedeConfirmarRevision()) {
+                    <button class="boton boton--pequeno boton--principal" type="button" [disabled]="revisandoAviso() === aviso.id" (click)="confirmarRevision(aviso)">
+                      {{ revisandoAviso() === aviso.id ? 'Guardando…' : 'Confirmar revisión' }}
+                    </button>
+                  }
+                </div>
+              </article>
+            }
+            @if (!cargandoAvisos() && !avisosTratamiento().length && !errorAvisos()) { <p class="vacio">No hay reportes pendientes.</p> }
+          </section>
+        }
+      <section class="bandeja__lista tarjeta" aria-label="Conversaciones pendientes">
+        <div class="lista__cabecera"><h2>Pendientes</h2><span>{{ conversaciones().length }}</span></div>
+        <div class="lista__cuerpo desplazable" tabindex="0" role="region" aria-label="Lista de conversaciones">
+        @if (cargando() && !conversaciones().length) { <p class="vacio">Cargando conversaciones…</p> }
+        @else if (!conversaciones().length) {
+          <div class="vacio vacio--sin-mensajes">
+            <img class="vacio__ilustracion" src="/images/bandeja-sin-pendientes.png" alt="" aria-hidden="true" width="144" height="144" />
+            <strong>Todo al día</strong>
+            <span>No hay mensajes pendientes de atención.</span>
+          </div>
+        }
+        @for (conversacion of conversaciones(); track conversacion.id) {
+          <button class="conversacion" [class.conversacion--activa]="seleccionada()?.id === conversacion.id" type="button" (click)="abrir(conversacion)">
+            <span class="conversacion__telefono">{{ conversacion.telefono }}</span>
+            <span class="conversacion__motivo">{{ conversacion.motivo_handoff || 'Requiere revisión del equipo' }}</span>
+            <span class="conversacion__resumen">{{ conversacion.ultimo_mensaje || 'Mensaje sin texto' }}</span>
+            <time>{{ conversacion.ultima_actividad_en | date:'d MMM, HH:mm':'':'es' }}</time>
+          </button>
+        }
+        @if (conversaciones().length < total()) {
+          <button class="cargar-mas" type="button" (click)="cargarMas()" [disabled]="cargando()">Cargar más conversaciones</button>
+        }
+        </div>
+      </section>
+      </div>
+
+      <section class="bandeja__detalle tarjeta" aria-label="Detalle de conversación" aria-live="polite">
+        @if (detalle(); as hilo) {
+          <header class="detalle__cabecera">
+            <div><span class="sobrelinea">WHATSAPP · EN ESPERA</span><h2>{{ hilo.telefono }}</h2></div>
+            <span class="estado">Requiere atención</span>
+          </header>
+          <p class="detalle__motivo">{{ hilo.motivo_handoff }}</p>
+          @if (hilo.paciente_id) { <p class="detalle__paciente">Paciente vinculado: {{ hilo.paciente_id }}</p> }
+          <div class="mensajes desplazable" tabindex="0" role="region" aria-label="Mensajes de la conversación">
+            @for (mensaje of hilo.mensajes; track mensaje.id) {
+              <article class="mensaje">
+                <p>{{ mensaje.texto || 'Mensaje de tipo ' + mensaje.tipo }}</p>
+                <footer><span>{{ mensaje.intencion }}</span><time>{{ mensaje.recibido_en | date:'d MMM yyyy, HH:mm':'':'es' }}</time></footer>
+              </article>
+            }
+          </div>
+          <p class="solo-lectura">La lectura queda registrada en la auditoría clínica. La respuesta por WhatsApp se habilitará cuando se configure el proveedor.</p>
+        } @else {
+          <div class="vacio"><app-icono nombre="agente" [tamano]="24" /><strong>Selecciona una conversación</strong><span>El detalle se carga de forma protegida y cada consulta queda auditada.</span></div>
+        }
+      </section>
+    </div>
   `,
   changeDetection: ChangeDetectionStrategy.Eager,
   styles: [`
-    .bandeja{max-width:1440px;margin:0 auto;padding:clamp(20px,3vw,40px);color:var(--texto)}
-    .bandeja__cabecera{display:flex;align-items:center;justify-content:space-between;gap:20px;margin-bottom:24px}
+    :host{color:var(--texto)}
+    .bandeja__cabecera{display:flex;align-items:center;justify-content:space-between;gap:20px}
     .bandeja__cabecera h1{margin:4px 0 8px;font-size:clamp(1.7rem,3vw,2.35rem)}
     .bandeja__cabecera p{margin:0;color:var(--texto-suave)}
     .sobrelinea{display:flex;align-items:center;gap:6px;font-size:.72rem;font-weight:750;letter-spacing:.1em;color:var(--acento-fuerte)}
@@ -134,6 +136,21 @@ import { ResumenModuloComponent } from '../../compartido/resumen-modulo.componen
     .avisos-tratamiento{margin-bottom:20px;padding:18px 20px;border-color:color-mix(in srgb,var(--aviso) 35%,var(--borde))}.avisos-tratamiento>header{display:flex;justify-content:space-between;align-items:center;gap:16px;margin-bottom:12px}.avisos-tratamiento h2{margin:2px 0 0;font-size:1.08rem}.avisos-tratamiento>header>span{min-width:30px;padding:4px 9px;border-radius:20px;background:var(--aviso-fondo);color:var(--aviso);font-weight:800;text-align:center}.aviso-tratamiento{display:flex;justify-content:space-between;align-items:center;gap:18px;padding:14px 0;border-top:1px solid var(--borde)}.aviso-tratamiento>div:first-child{display:grid;gap:4px}.aviso-tratamiento time{font-size:.78rem;color:var(--texto-tenue)}.aviso-tratamiento p{margin:2px 0 0;color:var(--texto-suave);font-size:.86rem}.aviso-tratamiento__acciones{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:8px}
     @media(max-width:800px){.bandeja__cuerpo{grid-template-columns:1fr}.bandeja__lista{max-height:360px;overflow:auto}.bandeja__cabecera{align-items:flex-start;flex-direction:column}}
     @media(prefers-reduced-motion:reduce){.vacio__ilustracion{animation:none}}
+    /* Pantalla de trabajo: avisos y pendientes en una columna, el hilo en la
+       otra; cada lista desplaza dentro de su tarjeta. */
+    .bandeja__columna{display:flex;flex-direction:column;gap:var(--espacio-3);min-width:0;min-height:0}
+    .bandeja__lista,.bandeja__detalle{display:flex;flex-direction:column;min-height:0}
+    .avisos-tratamiento{margin-bottom:0}
+    @media (min-width:821px) and (min-height:600px){
+      .bandeja__cuerpo{--pantalla-columnas:minmax(280px,.8fr) minmax(0,1.5fr);min-height:0;gap:var(--espacio-3)}
+      .bandeja__cabecera h1{margin:2px 0 4px;font-size:1.45rem}
+      /* La tarjeta recorta su contenido; esta tiene que desplazarlo. */
+      .avisos-tratamiento{flex:0 1 auto;max-height:42%;overflow:auto}
+      .bandeja__lista{flex:1 1 0}
+      .bandeja__lista .lista__cabecera,.detalle__cabecera,.detalle__motivo,.detalle__paciente,.solo-lectura{flex:none}
+      .mensajes{min-height:0}
+      .vacio--sin-mensajes{min-height:0}
+    }
   `],
 })
 export class ConversacionesComponent {
