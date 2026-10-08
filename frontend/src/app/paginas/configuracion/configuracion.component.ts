@@ -1,4 +1,4 @@
-import { Component, OnInit, inject, signal, ChangeDetectionStrategy } from '@angular/core';
+import { Component, OnInit, computed, inject, signal, ChangeDetectionStrategy } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 
@@ -42,8 +42,9 @@ import { AnamnesisConfiguracionComponent } from './anamnesis-configuracion.compo
   selector: 'app-configuracion',
   standalone: true,
   imports: [FormsModule, RouterLink, IconoComponent, VentanaFlotanteComponent, AgendaConfiguracionComponent, AgendaProfesionalesComponent, BloqueosAgendaComponent, SedesConfiguracionComponent, IntegracionesIaComponent, AnamnesisConfiguracionComponent],
+  host: { class: 'pantalla' },
   template: `
-    <header class="pagina-cabecera">
+    <header class="pagina-cabecera pantalla__fijo">
       <div>
         <p class="ceja">ADMINISTRACIÓN DE LA CLÍNICA</p>
         <h1>Administración de la clínica</h1>
@@ -54,7 +55,7 @@ import { AnamnesisConfiguracionComponent } from './anamnesis-configuracion.compo
       </button>
     </header>
 
-    <nav class="pestanas" aria-label="Administración">
+    <nav class="pestanas pantalla__fijo" aria-label="Administración">
       <button type="button" [class.pestanas__activa]="seccion() === 'clinica'" (click)="seccion.set('clinica')">Datos de la clínica</button>
       @if (sesion.tienePermiso(PERMISOS.sedeGestionar)) { <button type="button" [class.pestanas__activa]="seccion() === 'sedes'" (click)="seccion.set('sedes')">Sedes</button> }
       <button type="button" [class.pestanas__activa]="seccion() === 'integraciones'" (click)="seccion.set('integraciones')">Integraciones</button>
@@ -65,6 +66,9 @@ import { AnamnesisConfiguracionComponent } from './anamnesis-configuracion.compo
       <a routerLink="/usuarios">Usuarios y roles <span aria-hidden="true">↗</span></a>
     </nav>
 
+    <!-- La sección elegida desplaza dentro de este marco; la cabecera y la
+         barra de secciones no se mueven. -->
+    <div class="configuracion__seccion desplazable" tabindex="0" role="region" [attr.aria-label]="etiquetaSeccion()">
     @if (seccion() === 'clinica') {
       <section class="tarjeta ficha-clinica">
         <div class="ficha-clinica__cabecera">
@@ -270,12 +274,16 @@ import { AnamnesisConfiguracionComponent } from './anamnesis-configuracion.compo
       aplicación efectiva de cada proveedor requiere que su adaptador del servidor consuma esta
       configuración por clínica.
     </p>
+    </div>
   `,
   changeDetection: ChangeDetectionStrategy.Eager,
   styles: `
-    :host { display:block; width:100%; min-width:0; }
+    :host { width:100%; min-width:0; }
     .pagina-cabecera { display:flex; align-items:center; justify-content:space-between; gap:var(--espacio-4); margin-bottom:var(--espacio-4); }
-    .pestanas { display:flex; gap:var(--espacio-2); align-items:center; min-width:0; max-width:100%; margin-bottom:var(--espacio-4); border-bottom:1px solid var(--borde); }
+    /* Ocho secciones no caben en una fila en pantallas medianas: la barra
+       desplaza en su sitio en lugar de ensanchar la página. */
+    .pestanas { display:flex; gap:var(--espacio-2); align-items:center; min-width:0; max-width:100%; margin-bottom:var(--espacio-4); overflow-x:auto; scrollbar-width:thin; border-bottom:1px solid var(--borde); }
+    .pestanas button,.pestanas a { flex:none; white-space:nowrap; }
     .pestanas button,.pestanas a { display:inline-flex; align-items:center; min-height:44px; padding:0 var(--espacio-3); border:0; border-bottom:2px solid transparent; background:transparent; color:var(--texto-suave); font:inherit; font-weight:650; text-decoration:none; cursor:pointer; }
     .pestanas .pestanas__activa { color:var(--acento-fuerte); border-bottom-color:var(--acento); }
     .ficha-clinica { padding:var(--espacio-5); }
@@ -326,6 +334,21 @@ import { AnamnesisConfiguracionComponent } from './anamnesis-configuracion.compo
     .interruptor small { color:var(--texto-suave); }
     .interruptor--campo { margin:0; }
     .campos-dos { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:var(--espacio-3); }
+    /* Pantalla de trabajo: cabecera y barra fijas; Integraciones compacta. */
+    @media (min-width: 821px) and (min-height: 600px) {
+      .pagina-cabecera, .pestanas { margin-bottom:0; }
+      .pestanas { gap:0; }
+      .pestanas button,.pestanas a { min-height:40px; padding:0 var(--espacio-2); font-size:.92rem; }
+      .pagina-cabecera h1 { font-size:1.45rem; }
+      .pagina-cabecera p:last-child { margin-top:2px; }
+      .configuracion__seccion { padding:2px; }
+      .integraciones-banner { min-height:0; padding:var(--espacio-3) var(--espacio-5); }
+      .integraciones-banner img { width:min(45%,520px); }
+      .integraciones-banner__texto h2 { font-size:1.15rem; margin-bottom:2px; }
+      .integraciones { grid-template-columns:repeat(auto-fit,minmax(250px,1fr)); gap:var(--espacio-3); }
+      .integracion { padding:var(--espacio-4); gap:var(--espacio-2); }
+      .integracion__cabecera { padding-bottom:var(--espacio-3); margin-bottom:var(--espacio-2); }
+    }
     .quitar-secreto { display:flex; align-items:center; gap:var(--espacio-2); color:var(--peligro); font-size:.86rem; cursor:pointer; }
     .estado-credencial { margin:0; color:var(--texto-tenue); font-size:.82rem; }
     .nota-configuracion { margin:var(--espacio-4) 0 0; color:var(--texto-tenue); font-size:.85rem; }
@@ -348,6 +371,16 @@ export class ConfiguracionComponent implements OnInit {
   protected readonly error = signal('');
   protected readonly aviso = signal('');
   protected readonly seccion = signal<'clinica' | 'sedes' | 'integraciones' | 'agenda' | 'equipo' | 'bloqueos' | 'anamnesis'>('clinica');
+  /** Nombre accesible del marco que desplaza la sección elegida. */
+  protected readonly etiquetaSeccion = computed(() => ({
+    clinica: 'Datos de la clínica',
+    sedes: 'Sedes',
+    integraciones: 'Integraciones',
+    agenda: 'Agenda y feriados',
+    equipo: 'Disponibilidad del equipo',
+    bloqueos: 'Bloqueos',
+    anamnesis: 'Anamnesis',
+  })[this.seccion()]);
   protected readonly clinica = signal<DatosClinica | null>(null);
   protected readonly cargandoClinica = signal(false);
   protected readonly guardandoClinica = signal(false);
