@@ -21,6 +21,7 @@ import { AyudaService, type Manual, type SeccionManual } from './ayuda.service';
 
 /** Nombre visible de cada pantalla, igual que en la navegación. */
 const PANTALLAS: Readonly<Record<string, string>> = {
+  '/analitica': 'Analítica IA',
   '/panel': 'Panel',
   '/plataforma/clinicas': 'Clínicas',
   '/usuarios': 'Usuarios y roles',

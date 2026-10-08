@@ -205,11 +205,14 @@ class ServicioPeriodontograma:
         self, principal: Principal, paciente_id: uuid.UUID, id_registro: uuid.UUID
     ) -> bytes:
         fila = await self.obtener(principal, paciente_id, id_registro)
+        paciente, profesional, clinica = await self.repo.identificacion(fila)
         resumen = self.salida(fila, principal, await self.repo.ultima_version(fila.raiz_id)).resumen
         lineas = [
-            f"Paciente: {paciente_id}",
+            clinica,
+            f"Paciente: {paciente}",
             f"Examen: {fila.fecha_examen} | Versión {fila.version}",
-            f"Profesional: {fila.profesional_id}",
+            f"Profesional: {profesional}",
+            f"Registro: {fila.id}",
             f"Estado: {'Anulado' if fila.anulado else 'Registro de mediciones'}",
             f"Sondeados: {resumen.sitios_sondados}/{resumen.sitios_posibles}",
             f"Profundidad media: {resumen.profundidad_media} mm",
@@ -230,7 +233,7 @@ class ServicioPeriodontograma:
                     return "--" if v is None else "Sí" if v else "No"
 
                 lineas.append(
-                    f"{sitio}: PS {ps if ps is not None else '--'} | MG {mg if mg is not None else '--'} | NIC {nic} | Sangrado {indicador(valores.get('sangrado'))} | Placa {indicador(valores.get('placa'))}"
+                    f"{sitio}: PS {ps if ps is not None else '--'} | MG {mg if mg is not None else '--'} | NIC {nic} | Sangrado {indicador(valores.get('sangrado'))} | Placa {indicador(valores.get('placa'))} | Supuración {indicador(valores.get('supuracion'))}"
                 )
             if pieza.get("nota"):
                 lineas.append(pieza["nota"])

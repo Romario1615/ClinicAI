@@ -1,3 +1,4 @@
+import { FotosRegistroComponent } from '../../compartido/fotos-registro.component';
 /**
  * Base de conocimiento. Conectada al backend real.
  *
@@ -169,7 +170,7 @@ import { VentanaFlotanteComponent } from '../../compartido/ventana-flotante.comp
 @Component({
   selector: 'app-conocimiento',
   standalone: true,
-  imports: [ResumenModuloComponent,
+  imports: [FotosRegistroComponent,ResumenModuloComponent,
     NgTemplateOutlet,
     FormsModule,
     CargandoComponent,

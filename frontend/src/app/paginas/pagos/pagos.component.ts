@@ -1,3 +1,6 @@
+import { CapturaFotosComponent, type FotoSeleccionada } from '../../compartido/captura-fotos.component';
+import { FotosRegistroComponent } from '../../compartido/fotos-registro.component';
+import { FotosRegistroService } from '../../nucleo/servicios/fotos-registro.service';
 /**
  * Pagos: registrar uno pendiente y revisar los que llegan.
  *
@@ -70,7 +73,7 @@ function sumarDias(fecha: string, dias: number): string {
 @Component({
   selector: 'app-pagos',
   standalone: true,
-  imports: [FormsModule, SelectorPacienteComponent, ResumenModuloComponent, VentanaFlotanteComponent, IconoComponent, PestanasComponent],
+  imports: [CapturaFotosComponent,FotosRegistroComponent,FormsModule, SelectorPacienteComponent, ResumenModuloComponent, VentanaFlotanteComponent, IconoComponent, PestanasComponent],
   host: { class: 'pantalla' },
   template: `
     <header class="modulo-cabecera pantalla__fijo"><div class="modulo-cabecera__texto"><p class="ceja">ADMINISTRACIÓN</p><h1><app-icono nombre="balance-clinico" [tamano]="28" /> Pagos</h1><p>Registro de efectivo y transferencias en USD. La confirmación la realiza el personal autorizado.</p></div><img class="modulo-cabecera__imagen" src="/images/pagos-administrativos.png" alt="" aria-hidden="true" loading="lazy" /></header>
@@ -129,6 +132,7 @@ function sumarDias(fecha: string, dias: number): string {
             <p class="ayuda-demo">{{ cargo.total_acordado === null ? 'Cargo histórico: indique el total acordado para conciliarlo.' : 'Abono para un cargo de ' + moneda(cargo.total_acordado) + '.' }} Disponible para nuevos abonos: {{ cargo.saldo_no_asignado === null ? 'total por conciliar' : moneda(cargo.saldo_no_asignado) }}.</p>
           }
           <p class="ayuda-demo">Registre solo la referencia administrativa. No introduzca tarjetas, claves ni códigos de seguridad.</p>
+          <app-captura-fotos titulo="Imágenes del comprobante o respaldo" [ocupada]="ocupado()" (cambiadas)="fotos=$event" />
           @if (formulario.invalid) {
             <p class="ayuda-demo" role="status">Para registrar: elija al paciente y una cita, indique el total pactado y el importe del abono.</p>
           }
@@ -219,6 +223,7 @@ function sumarDias(fecha: string, dias: number): string {
         <section class="historial" aria-label="Comprobantes adjuntos">
           <h3>Comprobantes</h3>
           @if (avisoComprobante()) { <p class="aviso-ok" role="status">{{ avisoComprobante() }}</p> }
+          <app-fotos-registro tipo="pago" [registroId]="pago.id" [puedeEditar]="sesion.tienePermiso('pago.registrar')" />
           @if (comprobantesCargando()) { <p role="status">Cargando comprobantes…</p> }
           @if (!comprobantesCargando() && comprobantes().length === 0) { <p>No hay archivos adjuntos.</p> }
           @for (comprobante of comprobantes(); track comprobante.id) {
@@ -368,6 +373,8 @@ function sumarDias(fecha: string, dias: number): string {
   `,
 })
 export class PagosComponent {
+  protected readonly operacionFotos = inject(FotosRegistroService).operacion<{id:string}>();
+  protected fotos:readonly FotoSeleccionada[]=[];
   private readonly api = inject(OperacionesService);
   private readonly agenda = inject(ApiService);
   private readonly catalogo = inject(CatalogoService);
@@ -436,6 +443,7 @@ export class PagosComponent {
     if (!this.puedeRegistrarPago()) return;
     this.error.set('');
     this.aviso.set('');
+    this.operacionFotos.reiniciar(); this.fotos=[];
     this.formularioAbonoAbierto.set(true);
     if (this.citaContexto) this.agenda.cita(this.citaContexto).subscribe({
       next: cita => { this.citas.set([cita]); this.citaId = cita.id; this.seleccionarCita(cita.id); },
@@ -832,7 +840,7 @@ export class PagosComponent {
     }
   }
 
-  private enviar<T = Pago>(ruta: string, datos: unknown, exito: string, alCompletar?: () => void): void {
+  private enviar<T extends {id:string} = Pago>(ruta: string, datos: unknown, exito: string, alCompletar?: () => void): void {
     if (this.ocupado()) return;
     const cuerpo = JSON.stringify({ ruta, datos });
     if (this.cuerpoAnterior && cuerpo !== this.cuerpoAnterior) this.clave = crypto.randomUUID();
@@ -840,7 +848,9 @@ export class PagosComponent {
     this.ocupado.set(true);
     this.error.set('');
     this.aviso.set('');
-    this.api.guardar<T>(ruta, datos, this.clave).subscribe({
+    const peticion=this.api.guardar<T>(ruta, datos, this.clave);
+    const operacion = ruta === '/pagos/' || ruta === '/pagos/cargos/' ? this.operacionFotos.guardar(ruta === '/pagos/' ? 'pago' : 'cargo', peticion, this.fotos) : peticion;
+    operacion.subscribe({
       next: () => {
         this.ocupado.set(false);
         this.revisando.set(null);

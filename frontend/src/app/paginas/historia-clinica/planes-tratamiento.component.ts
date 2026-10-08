@@ -55,6 +55,8 @@ type AccionAbierta =
   styleUrl: './planes-tratamiento.component.scss',
 })
 export class PlanesTratamientoComponent {
+  protected puedeCargarFotos():boolean {return this.sesion.tienePermiso(PERMISOS.imagenClinicaCargar);}
+
   protected readonly operacionFotos=inject(FotosRegistroService).operacion<PlanTratamiento>();
   protected fotos:readonly FotoSeleccionada[]=[];
   private readonly api = inject(ApiService);

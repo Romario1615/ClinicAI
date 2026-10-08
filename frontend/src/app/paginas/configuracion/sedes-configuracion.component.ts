@@ -1,6 +1,7 @@
 import { Component, OnInit, inject, signal, ChangeDetectionStrategy } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { CapturaFotosComponent, type FotoSeleccionada } from '../../compartido/captura-fotos.component';
+import { FotosRegistroComponent } from '../../compartido/fotos-registro.component';
 import { FotosRegistroService } from '../../nucleo/servicios/fotos-registro.service';
 
 import { IconoComponent } from '../../compartido/icono.component';
@@ -11,7 +12,7 @@ import { CatalogoService, type DatosSede, type SedeGestion } from '../../nucleo/
 @Component({
   selector: 'app-sedes-configuracion',
   standalone: true,
-  imports: [FormsModule, IconoComponent, VentanaFlotanteComponent, CapturaFotosComponent],
+  imports: [FotosRegistroComponent,FormsModule, IconoComponent, VentanaFlotanteComponent, CapturaFotosComponent],
   template: `
     <section class="sedes-cabecera" aria-labelledby="sedes-titulo">
       <div>
@@ -39,7 +40,7 @@ import { CatalogoService, type DatosSede, type SedeGestion } from '../../nucleo/
         <article class="tarjeta sede">
           <header class="sede__cabecera">
             <span class="sede__icono"><app-icono nombre="sala-clinica" [tamano]="21" /></span>
-            <div class="sede__titulo"><h3>{{ sede.nombre }}</h3><p>{{ sede.zona_horaria }}</p></div>
+            <div class="sede__titulo"><h3>{{ sede.nombre }}</h3><app-fotos-registro tipo="sede" [registroId]="sede.id" [puedeEditar]="true" /><p>{{ sede.zona_horaria }}</p></div>
             @if (editando() !== sede.id) {
               <button class="boton" type="button" (click)="editar(sede)">Editar sede</button>
             }

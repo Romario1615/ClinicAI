@@ -32,7 +32,7 @@
  * esta ficha la abre personal con permiso, y comprobar el documento en el
  * mostrador es precisamente cómo se verifica una identidad.
  */
-import { Component, computed, inject, input, type OnInit, output, signal, ChangeDetectionStrategy } from '@angular/core';
+import { Component, computed, inject, input, type OnInit, output, signal, viewChild, ElementRef, ChangeDetectionStrategy } from '@angular/core';
 import { Router } from '@angular/router';
 
 import {
@@ -67,6 +67,7 @@ import { AtencionPacienteComponent } from './atencion-paciente.component';
 import { EditorPacienteComponent } from '../paginas/pacientes/editor-paciente.component';
 import { PeriodontogramaComponent } from '../paginas/historia-clinica/periodontograma.component';
 import { VentanaFlotanteComponent } from './ventana-flotante.component';
+import { AgentePacienteComponent } from './agente-paciente.component';
 
 /** Traducción del nivel de verificación, con lo que implica para quien atiende. */
 const VERIFICACION: Record<string, { etiqueta: string; consecuencia: string; alerta: boolean }> = {
@@ -130,6 +131,7 @@ const DETALLE_CLINICO: Partial<Record<Pestana, string>> = {
   selector: 'app-ficha-paciente',
   standalone: true,
   imports: [
+    AgentePacienteComponent,
     PeriodontogramaComponent,
     VentanaFlotanteComponent,
     AtencionPacienteComponent,
@@ -147,7 +149,7 @@ const DETALLE_CLINICO: Partial<Record<Pestana, string>> = {
     RecorridoPacienteComponent,
   ],
   template: `
-    <div class="ficha" [class.ficha--embebida]="sinCabecera()" [attr.aria-label]="'Ficha de ' + nombre()">
+    <div class="ficha" [class.ficha--embebida]="sinCabecera()" [class.ficha--con-agente]="agenteAbierto()" [attr.aria-label]="'Ficha de ' + nombre()">
       <!-- ============ Identidad: foto, documento y lo urgente ============ -->
       <aside class="ficha__lado">
         <div class="ficha__foto">
@@ -213,6 +215,9 @@ const DETALLE_CLINICO: Partial<Record<Pestana, string>> = {
 
       <!-- ===================== Contenido por pestañas ===================== -->
       <section class="ficha__principal">
+        @if (paciente() && puedeUsarAgente()) {
+          <div class="ficha__agente-acceso"><span>Apoyo para {{ nombre() }}</span><button #botonAgente class="boton boton--principal" type="button" [attr.aria-expanded]="agenteAbierto()" (click)="agenteAbierto.set(!agenteAbierto())">{{ agenteAbierto() ? 'Ocultar agente' : 'Agente del paciente' }}</button></div>
+        }
         @if (cargando()) {
           <p class="ficha__aviso" role="status">Cargando la ficha…</p>
         } @else if (error()) {
@@ -433,6 +438,9 @@ const DETALLE_CLINICO: Partial<Record<Pestana, string>> = {
           </div>
         }
       </section>
+      @if (agenteAbierto()) {
+        <aside class="ficha__agente"><app-agente-paciente [pacienteId]="pacienteId()" [nombre]="nombre()" [citaId]="citaParaAtencion()" [zona]="zona()" (cerrar)="cerrarAgente()" (actualizado)="actualizarCitasAgente()" /></aside>
+      }
     </div>
     @if (editandoDatos() && paciente(); as p) {
       <app-editor-paciente [paciente]="p" (cerrar)="editandoDatos.set(false)" (guardado)="editandoDatos.set(false); recargarDatos()" />
@@ -448,6 +456,17 @@ const DETALLE_CLINICO: Partial<Record<Pestana, string>> = {
   `,
   changeDetection: ChangeDetectionStrategy.Eager,
   styles: `
+    .ficha__agente-acceso { display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; padding:12px 20px; border-bottom:1px solid var(--borde); }
+    .ficha.ficha--con-agente { grid-template-columns:220px minmax(0,1fr) minmax(310px,36%); }
+    .ficha__agente { min-height:0; min-width:0; overflow-y:auto; border-left:1px solid var(--borde); }
+    @media (max-width:1100px) {
+      .ficha.ficha--con-agente { grid-template-columns:minmax(0,1fr) minmax(300px,42%); }
+      .ficha--con-agente .ficha__lado { display:none; }
+    }
+    @media (max-width:700px) {
+      .ficha.ficha--con-agente { grid-template-columns:minmax(0,1fr); height:auto; overflow:visible; }
+      .ficha__agente { min-height:580px; border-left:0; border-top:1px solid var(--borde); }
+    }
     .ficha__registrar { display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 20px;flex-wrap:wrap; }
     .ficha {
       position: relative;
@@ -851,6 +870,13 @@ export class FichaPacienteComponent implements OnInit {
   protected readonly citaElegidaId = signal<string | null | undefined>(undefined);
   protected readonly citaParaAtencion = computed(() => this.citaElegidaId() === undefined ? this.citaInicial() : this.citaElegidaId() ?? null);
   protected readonly editandoDatos = signal(false);
+  protected readonly agenteAbierto = signal(false);
+  private readonly botonAgente = viewChild<ElementRef<HTMLButtonElement>>('botonAgente');
+  protected cerrarAgente(): void {
+    this.agenteAbierto.set(false);
+    this.botonAgente()?.nativeElement.focus();
+  }
+  protected readonly puedeUsarAgente = computed(() => this.sesion.tienePermiso('paciente.leer_administrativo'));
   /**
    * Cierto cuando va dentro de una ventana flotante, que ya pone su título
    * (el nombre) y su botón de cerrar.
@@ -1096,6 +1122,12 @@ export class FichaPacienteComponent implements OnInit {
   }
 
   protected recargarDatos(): void { this.cargar(); }
+  protected actualizarCitasAgente(): void {
+    this.api.citas({ paciente_id: this.pacienteId(), limite: 50 }).subscribe({
+      next: (pagina) => this.citas.set([...pagina.elementos].sort((a,b) => Date.parse(b.inicio)-Date.parse(a.inicio))),
+      error: () => this.avisoClinico.set('La acción fue procesada. Actualice la ficha para consultar el estado de la agenda.'),
+    });
+  }
   private cargar(): void {
     const id = this.pacienteId();
     this.cargando.set(true);

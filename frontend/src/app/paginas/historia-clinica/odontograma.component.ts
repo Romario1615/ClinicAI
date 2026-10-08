@@ -13,7 +13,7 @@
  * inmutables en la base de datos; una versión antigua se consulta en solo
  * lectura.
  */
-import { Component, computed, effect, inject, input, signal, ChangeDetectionStrategy } from '@angular/core';
+import { Component, computed, effect, inject, input, signal, viewChild, ChangeDetectionStrategy } from '@angular/core';
 import { DatePipe, NgTemplateOutlet } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 
@@ -46,6 +46,9 @@ import {
   nombreHallazgoCara,
 } from './odontograma.vocabulario';
 import { falloClinicoLegible } from '../../nucleo/utilidades/acceso-clinico';
+import { CapturaFotosComponent, type FotoSeleccionada } from '../../compartido/captura-fotos.component';
+import { FotosRegistroComponent } from '../../compartido/fotos-registro.component';
+import { FotosRegistroService } from '../../nucleo/servicios/fotos-registro.service';
 
 /** Herramienta activa de la paleta. */
 export type Herramienta = 'SELECCIONAR' | 'BORRAR' | HallazgoCara | HallazgoPieza;
@@ -74,7 +77,7 @@ const ES_HALLAZGO_PIEZA = new Set<string>(HALLAZGOS_PIEZA.map((h) => h.codigo));
 @Component({
   selector: 'app-odontograma',
   standalone: true,
-  imports: [FormsModule, DatePipe, NgTemplateOutlet, HistorialPiezaComponent, IconoComponent, VentanaFlotanteComponent],
+  imports: [CapturaFotosComponent, FotosRegistroComponent, FormsModule, DatePipe, NgTemplateOutlet, HistorialPiezaComponent, IconoComponent, VentanaFlotanteComponent],
   templateUrl: './odontograma.component.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './odontograma.component.scss',
@@ -84,6 +87,11 @@ export class OdontogramaComponent {
 
   private readonly api = inject(ApiService);
   private readonly sesion = inject(SesionService);
+  protected readonly operacionFotos = inject(FotosRegistroService).operacion<Odontograma>();
+  protected fotos: readonly FotoSeleccionada[] = [];
+  private readonly capturaFotos = viewChild(CapturaFotosComponent);
+  protected readonly puedeLeerFotos = this.sesion.tienePermiso(PERMISOS.imagenClinicaLeer);
+  protected readonly puedeCargarFotos = this.sesion.tienePermiso(PERMISOS.imagenClinicaCargar);
 
   protected readonly puedeEditar = this.sesion.tienePermiso(PERMISOS.odontogramaEscribir);
   protected readonly puedeLeerSensible = this.sesion.tienePermiso(PERMISOS.historiaLeerSensible);
@@ -177,6 +185,7 @@ export class OdontogramaComponent {
   }
 
   protected seleccionarVersion(valor: string): void {
+    if(this.guardando() || this.operacionFotos.guardado) return;
     const elegida = this.versiones().find((version) => version.version === Number(valor));
     if (!elegida) return;
     this.actual.set(elegida);
@@ -351,8 +360,11 @@ export class OdontogramaComponent {
           this.nivelSensibilidad(),
         )
       : this.api.crearOdontograma(this.pacienteId(), contenido, this.nivelSensibilidad());
-    peticion.subscribe({
+    this.operacionFotos.guardar('odontograma',peticion,this.fotos).subscribe({
       next: () => {
+        this.fotos=[];
+        this.capturaFotos()?.limpiar();
+        this.operacionFotos.reiniciar();
         this.guardando.set(false);
         this.motivo.set('');
         // `cargar()` limpia el aviso al empezar: el aviso va después o no se ve.
@@ -410,7 +422,7 @@ export class OdontogramaComponent {
   }
 
   private actualizarPiezaDe(codigo: number, estado: EstadoPiezaOdontograma): void {
-    if (!this.puedeGuardar()) return;
+    if (!this.puedeGuardar() || this.operacionFotos.guardado) return;
     this.borrador.update((actual) => ({ ...actual, [String(codigo)]: estado }));
     this.error.set(null);
     this.aviso.set('');

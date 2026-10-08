@@ -58,6 +58,7 @@ const ESTADO = { url: '/agenda' } as RouterStateSnapshot;
 
 /** Cada sección de trabajo y el permiso que debe bastar para entrar. */
 const MATRIZ_RUTAS: readonly (readonly [string, readonly string[]])[] = [
+  ['/analitica', [PERMISOS.metricasLeer]],
   ['/agenda', [PERMISOS.agendaLeer]],
   ['/pacientes', [PERMISOS.pacienteLeer]],
   ['/lista-espera', [PERMISOS.listaEsperaGestionar]],

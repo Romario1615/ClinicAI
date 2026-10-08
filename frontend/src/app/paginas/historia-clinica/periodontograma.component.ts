@@ -19,6 +19,8 @@ import { SITIOS_PERIO, compararPeriodontogramas, piezaVacia, sitioVacio, type Pe
 @Component({selector:'app-periodontograma', standalone:true, imports:[FormsModule, DatePipe, DecimalPipe, NgTemplateOutlet, VentanaFlotanteComponent, IndicePlacaComponent, CapturaFotosComponent, FotosRegistroComponent],
   templateUrl:'./periodontograma.component.html', styleUrl:'./periodontograma.component.scss'})
 export class PeriodontogramaComponent {
+  protected puedeCargarFotos():boolean {return this.sesion.tienePermiso(PERMISOS.imagenClinicaCargar);}
+
   private readonly http = inject(HttpClient);
   private readonly config = inject(CONFIGURACION);
   private readonly sesion = inject(SesionService);

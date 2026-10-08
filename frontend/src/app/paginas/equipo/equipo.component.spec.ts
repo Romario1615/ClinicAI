@@ -1,3 +1,4 @@
+import { PROVEEDORES_PRUEBA } from '../../nucleo/pruebas/sesion-sintetica';
 import type { MockedObject } from "vitest";
 import type { WritableSignal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
@@ -43,7 +44,7 @@ describe('EquipoComponent', () => {
         equipo.actualizar.mockReturnValue(of(PERFIL));
         TestBed.configureTestingModule({
             imports: [EquipoComponent],
-            providers: [
+            providers: [...PROVEEDORES_PRUEBA,
                 { provide: CatalogoService, useValue: catalogo },
                 { provide: EquipoService, useValue: equipo },
             ],
@@ -114,7 +115,7 @@ describe('EquipoComponent', () => {
 
     it('abre la edición con los datos del profesional y restablece el formulario al cancelar con Escape', async () => {
         const elemento = fixture.nativeElement as HTMLElement;
-        elemento.querySelector<HTMLButtonElement>('.fila button')?.click();
+        elemento.querySelector<HTMLButtonElement>('.fila > button[aria-haspopup="dialog"]')?.click();
         fixture.detectChanges();
         await fixture.whenStable();
         fixture.detectChanges();

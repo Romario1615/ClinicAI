@@ -33,7 +33,7 @@ from app.modulos.odontologia.periodontograma_modelos import Periodontograma
 from app.modulos.organizacion.modelos import Clinica, Consultorio, Especialidad, Sede, Servicio
 from app.modulos.pacientes.modelos import Paciente
 from app.modulos.pacientes.repositorio import RepositorioPacientes
-from app.modulos.pagos.modelos import Pago
+from app.modulos.pagos.modelos import CargoPago, Pago
 from app.modulos.profesionales.ambito_clinico import autores_en_ambito
 from app.modulos.profesionales.modelos import Profesional
 from app.modulos.promociones.modelos import CampanaPromocion
@@ -66,6 +66,7 @@ DESTINOS = {
     "consultorio": DestinoFoto(Consultorio, ("sede.gestionar",), ("sede.gestionar",)),
     "gasto": DestinoFoto(Gasto, ("gasto.leer",), ("gasto.registrar",)),
     "pago": DestinoFoto(Pago, ("pago.leer",), ("pago.registrar", "pago.validar")),
+    "cargo": DestinoFoto(CargoPago, ("pago.leer",), ("pago.registrar", "pago.validar")),
     "cita": DestinoFoto(Cita, ("agenda.leer",), ("cita.crear", "cita.reprogramar")),
     "paciente": DestinoFoto(
         Paciente, ("paciente.leer_administrativo",), ("paciente.editar", "paciente.crear")
@@ -140,11 +141,15 @@ class RepositorioFotosRegistro:
                 consulta = self.filtrar_clinico(consulta, modelo, tipo, principal)
             if hasattr(modelo, "sede_id") and not principal.ambito.todas_las_sedes:
                 consulta = consulta.where(modelo.sede_id.in_(principal.ambito.sedes))
-            if tipo == "sede" and not principal.ambito.todas_las_sedes:
+            if (
+                tipo == "sede"
+                and not principal.ambito.todas_las_sedes
+                and "superadministrador" not in principal.roles
+            ):
                 consulta = consulta.where(Sede.id.in_(principal.ambito.sedes))
-            if tipo == "pago":
+            if tipo in {"pago", "cargo"}:
                 consulta = consulta.where(
-                    Pago.cita_id.in_(
+                    modelo.cita_id.in_(
                         RepositorioAgenda(self.sesion)
                         .consulta_autorizada(principal)
                         .with_only_columns(Cita.id)
@@ -161,7 +166,7 @@ class RepositorioFotosRegistro:
         if tipo == "clinica":
             if "superadministrador" not in principal.roles:
                 consulta = consulta.where(Clinica.id == principal.clinica_id)
-        else:
+        elif not (tipo in {"usuario", "sede"} and "superadministrador" in principal.roles):
             consulta = consulta.where(modelo.clinica_id == principal.clinica_id)
         return consulta
 

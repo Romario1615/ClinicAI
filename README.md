@@ -1,5 +1,42 @@
 # ClinicAI — Plataforma de gestión clínica
 
+## Ficha con agente, periodontograma, analítica y fotos (2026-10-08)
+
+- **Pacientes → Ver ficha → Agente del paciente:** consultas sobre esa persona
+  junto al historial; citas, disponibilidad, pagos de lectura y protocolos
+  según permisos. Reservar, confirmar, cancelar o reprogramar pide
+  **Confirmar acción**. El servidor fija paciente, clínica y ámbito del
+  operador. **Resumen clínico** es local y solo aparece con acceso clínico.
+  Para gestionar una cita desde una ficha sin cita seleccionada, pulse
+  **Mis citas → Usar esta cita**; después prepare y confirme la acción.
+- **Odontología → Periodoncia:** periodontograma de 32 piezas, seis sitios por
+  pieza, profundidad, margen, NIC, sangrado, placa, supuración, movilidad y
+  furcación. Historial inmutable, comparación, corrección/anulación con motivo,
+  fotografías y PDF. El índice de placa sigue disponible en esa pestaña.
+- **Analítica IA:** vistas descriptiva, predictiva y prescriptiva con datos
+  autorizados, modelos locales, evaluación temporal y error visible. Los
+  estados comienzan a acumular observaciones al consultar la pantalla; no se
+  inventa historia ni se presentan pronósticos sin datos suficientes.
+- **Formularios y detalles:** fotografías de perfiles y adjuntos de registros
+  clínicos y administrativos, incluidos pagos, cargos, catálogos, sedes,
+  profesionales, roles, campañas y documentos de conocimiento. Archivo/cámara
+  compatible, almacenamiento privado cifrado y reintentos sin duplicar el
+  registro creado. Los adjuntos visuales de conocimiento no se indexan con OCR.
+- **Ayuda:** seis manuales independientes ampliados y filtrados por permisos;
+  los roles personalizados conservan su manual propio.
+
+Aplicar `cd backend; .venv/Scripts/python.exe -m alembic upgrade head` antes de
+iniciar API y worker: esta ampliación incorpora las migraciones `032`–`035`.
+Las APIs externas siguen pendientes de configuración; el panel declara el
+modo local y WhatsApp conserva su sandbox.
+
+[Decisiones de herramientas y fotos](docs/decisiones/0023-periodontograma-analitica-y-fotos.md)
+· [Agente de la ficha](docs/decisiones/0024-agente-en-la-ficha.md)
+· [Evidencia y límites de esta ampliación](docs/verificacion-2026-10-08.md#agente-periodontograma-analitica-y-fotografias).
+
+Las cifras de revisiones anteriores describen esas entregas; el informe
+enlazado distingue las corridas completas y focalizadas de esta ampliación.
+
 ## Portada y gestión con IA (2026-10-08)
 
 - **Identidad visual:** portada a pantalla completa con núcleo IA, conexiones y partículas SVG; azul profundo, cobalto y cian compartidos por navegación, panel, botones y ventanas de vidrio. Los formularios y datos conservan fondos claros. La preferencia de movimiento reducido detiene las animaciones y el contraste aumentado elimina el fondo decorativo.
@@ -10,7 +47,7 @@
 
 [Diseño y recursos](docs/recursos-visuales.md#identidad-de-ia-2026-10-08) · [Verificación de esta entrega](docs/verificacion-2026-10-08.md).
 
-**Verificación actual:** 2 030 pruebas backend aprobadas (tres llamadas optativas
+**Verificación del rediseño inicial:** 2 030 pruebas backend aprobadas (tres llamadas optativas
 a Anthropic omitidas), 689 frontend en 94 archivos y mínimos de cobertura
 cumplidos. Lint, build, Ruff, Mypy, Bandit y Gitleaks aprobados. Chromium revisó
 la portada en cuatro tamaños, los seis roles, sus manuales y el faciograma

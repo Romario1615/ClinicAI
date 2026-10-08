@@ -2,6 +2,7 @@ import { Component, OnInit, inject, signal, ChangeDetectionStrategy } from '@ang
 import { FormsModule } from '@angular/forms';
 import { CapturaFotosComponent, type FotoSeleccionada } from '../../compartido/captura-fotos.component';
 import { FotosRegistroService } from '../../nucleo/servicios/fotos-registro.service';
+import { FotosRegistroComponent } from '../../compartido/fotos-registro.component';
 
 import { VentanaFlotanteComponent } from '../../compartido/ventana-flotante.component';
 import { EditorRegistroComponent } from '../../compartido/editor-registro.component';
@@ -22,7 +23,7 @@ import {
 @Component({
   selector: 'app-plataforma',
   standalone: true,
-  imports: [FormsModule, VentanaFlotanteComponent, EditorRegistroComponent, CapturaFotosComponent],
+  imports: [FormsModule, VentanaFlotanteComponent, EditorRegistroComponent, CapturaFotosComponent, FotosRegistroComponent],
   host: { class: 'pantalla' },
   template: `
     <header class="encabezado pantalla__fijo">
@@ -50,7 +51,7 @@ import {
       <div class="desplazable" tabindex="0" role="region" aria-label="Organizaciones registradas">
       @for (clinica of clinicas(); track clinica.id) {
         <article class="fila">
-          <div class="datos"><strong>{{ clinica.nombre }}</strong>
+          <div class="datos"><strong>{{ clinica.nombre }}</strong><app-fotos-registro tipo="clinica" [registroId]="clinica.id" [puedeEditar]="true" />
             <span>{{ clinica.correo || 'Sin correo institucional' }}</span>
             <span>{{ clinica.cantidad_sedes }} sedes · {{ clinica.cantidad_usuarios }} cuentas</span>
           </div>
@@ -74,7 +75,7 @@ import {
         @if (cargandoSedes()) { <p role="status">Cargando sedes…</p> }
         <div class="desplazable" tabindex="0" role="region" [attr.aria-label]="'Sedes de ' + nombreClinicaSedes()">
         @for (sede of sedes(); track sede.id) {
-          <article class="fila"><div class="datos"><strong>{{ sede.nombre }}</strong>
+          <article class="fila"><div class="datos"><strong>{{ sede.nombre }}</strong><app-fotos-registro tipo="sede" [registroId]="sede.id" [puedeEditar]="true" />
             <span>{{ sede.direccion || 'Dirección no registrada' }} · {{ sede.zona_horaria || 'Zona horaria heredada' }}</span>
             @if (sede.telefono) { <span>{{ sede.telefono }}</span> }
           </div><span class="etiqueta">{{ sede.activa ? 'Activa' : 'Inactiva' }}</span></article>
@@ -89,6 +90,7 @@ import {
         @if (errorSedes()) { <p class="mensaje mensaje--error" role="alert">{{ errorSedes() }}</p> }
         <p>Si no indicas otra zona horaria, la sede heredará la de la clínica.</p>
         <form id="formulario-sede-plataforma" (ngSubmit)="crearSede()">
+          <fieldset [disabled]="ocupadoSede() || !!operacionFotosSede.guardado" style="border:0;padding:0;margin:0">
           <div class="campos">
             <label>Nombre de la sede<input name="nombreSede" [(ngModel)]="formSede.nombre" required maxlength="200" /></label>
             <label>Dirección<input name="direccionSede" [(ngModel)]="formSede.direccion" maxlength="500" /></label>
@@ -100,8 +102,8 @@ import {
               <option value="Europe/Madrid">España · Madrid</option>
             </select></label>
           </div>
-        </form>
-        <div pie class="acciones"><button class="boton" type="button" (click)="cerrarNuevaSede()" [disabled]="ocupadoSede()">Cancelar</button><button class="boton boton--principal" type="submit" form="formulario-sede-plataforma" [disabled]="ocupadoSede() || !formSede.nombre.trim()">{{ ocupadoSede() ? 'Guardando…' : 'Crear sede' }}</button></div>
+        </fieldset><app-captura-fotos titulo="Fotografías de la sede" [ocupada]="ocupadoSede()" (cambiadas)="fotosSede=$event" /></form>
+        <div pie class="acciones"><button class="boton" type="button" (click)="cerrarNuevaSede()" [disabled]="ocupadoSede()">Cancelar</button><button class="boton boton--principal" type="submit" form="formulario-sede-plataforma" [disabled]="ocupadoSede() || !formSede.nombre.trim()">{{ ocupadoSede() ? 'Guardando…' : operacionFotosSede.guardado ? 'Completar fotos' : 'Crear sede' }}</button></div>
       </app-ventana-flotante>
     }
 
@@ -116,7 +118,7 @@ import {
       <div class="desplazable" tabindex="0" role="region" aria-label="Accesos del personal">
       @for (usuario of usuarios(); track usuario.id) {
         <article class="fila">
-          <div class="datos"><strong>{{ usuario.nombre }} {{ usuario.apellido }}</strong>
+          <div class="datos"><strong>{{ usuario.nombre }} {{ usuario.apellido }}</strong>@if(usuario.clinica_id){<app-fotos-registro tipo="usuario" [registroId]="usuario.id" [puedeEditar]="true" />}
             <span>{{ usuario.correo }} · {{ usuario.clinica_nombre }}</span>
             <span class="etiquetas">{{ usuario.roles.join(' · ') || 'Sin roles' }}</span>
             @if (!usuario.roles.includes('Superadministrador')) { <span>{{ resumenSedes(usuario) }}</span> }
@@ -210,7 +212,7 @@ import {
             @if (!cargandoSedesNuevoUsuario() && sedesNuevoUsuarioSeleccionadas().size === 0) { <p class="mensaje mensaje--error" role="alert">Selecciona al menos una sede para crear la cuenta.</p> }
           }
         }
-        </form>
+        <app-captura-fotos titulo="Fotografía del personal" [perfil]="true" [ocupada]="ocupadoUsuario()" (cambiadas)="fotosUsuario=$event" /></form>
         <div pie class="acciones"><button class="boton" type="button" (click)="cerrarNuevoUsuario()" [disabled]="ocupadoUsuario()">Cancelar</button><button class="boton boton--principal" type="submit" form="formulario-nuevo-usuario-plataforma" [disabled]="ocupadoUsuario() || !clinicaNuevaUsuarioId || rolesNuevoUsuarioSeleccionados().size === 0 || (!todasLasSedesNuevoUsuario() && sedesNuevoUsuarioSeleccionadas().size === 0)">{{ ocupadoUsuario() ? 'Guardando…' : 'Crear cuenta y asignar módulos' }}</button></div>
       </app-ventana-flotante>
     }
@@ -297,6 +299,10 @@ import {
   `],
 })
 export class PlataformaComponent implements OnInit {
+  protected readonly operacionFotosSede=inject(FotosRegistroService).operacion<SedePlataforma>();
+  protected readonly operacionFotosUsuario=inject(FotosRegistroService).operacion<UsuarioPlataforma>();
+  protected fotosSede:readonly FotoSeleccionada[]=[];
+  protected fotosUsuario:readonly FotoSeleccionada[]=[];
   protected readonly operacionFotos = inject(FotosRegistroService).operacion<ClinicaPlataforma>();
   protected fotos: readonly FotoSeleccionada[] = [];
   private readonly api = inject(ApiService);
@@ -360,6 +366,7 @@ export class PlataformaComponent implements OnInit {
   }
 
   protected abrirNuevaSede(): void {
+    this.operacionFotosSede.reiniciar(); this.fotosSede=[];
     if (!this.clinicaSedesId()) return;
     this.errorSedes.set(''); this.avisoSede.set('');
     this.formSede = this.formularioSedeVacio();
@@ -374,6 +381,7 @@ export class PlataformaComponent implements OnInit {
   }
 
   protected abrirNuevoUsuario(): void {
+    this.operacionFotosUsuario.reiniciar(); this.fotosUsuario=[];
     if (!this.tieneClinicasActivas()) return;
     this.errorUsuarios.set(''); this.avisoUsuario.set('');
     this.nuevoUsuario = { nombre: '', apellido: '', correo: '', contrasena_inicial: '' };
@@ -454,7 +462,7 @@ export class PlataformaComponent implements OnInit {
       telefono: this.formSede.telefono?.trim() || null,
       zona_horaria: this.formSede.zona_horaria,
     };
-    this.api.crearSedePlataforma(clinicaId, datos).subscribe({
+    this.operacionFotosSede.guardar('sede',this.api.crearSedePlataforma(clinicaId, datos),this.fotosSede).subscribe({
       next: (sede) => {
         this.sedes.update((actuales) => [...actuales, sede].sort((a, b) => a.nombre.localeCompare(b.nombre)));
         this.clinicas.update((actuales) => actuales.map((clinica) => clinica.id === clinicaId
@@ -613,7 +621,7 @@ export class PlataformaComponent implements OnInit {
       this.ocupadoUsuario.set(false);
       return;
     }
-    this.api.crearUsuarioPlataforma(datos).subscribe({
+    this.operacionFotosUsuario.guardar('usuario',this.api.crearUsuarioPlataforma(datos),this.fotosUsuario).subscribe({
       next: (creado) => {
         this.usuarios.update((actuales) => [...actuales, creado].sort((a, b) => a.clinica_nombre.localeCompare(b.clinica_nombre) || a.apellido.localeCompare(b.apellido)));
         this.clinicas.update((actuales) => actuales.map((clinica) => clinica.id === creado.clinica_id

@@ -123,18 +123,30 @@ test('ficha por cita, presupuesto PDF, versiones y entrega privada sandbox', asy
 });
 
 test('faciograma en la ficha conserva la cita, versiona zonas y descarga PDF en escritorio y móvil', async ({ page, request }) => {
-  const paciente = await pacienteConNotas(request);
-  const admin = await request.post(`${API}/autenticacion/sesion-local`, { data: { codigo_rol: 'administrador_clinica' } });
-  const headers = { Authorization: `Bearer ${(await admin.json()).token_acceso}` };
-  const catalogo = await (await request.get(`${API}/catalogo/especialidades/modulos-historia`, { headers })).json();
-  const profesional = await request.post(`${API}/autenticacion/sesion-local`, { data: { codigo_rol: 'profesional' } });
+  test.setTimeout(60_000);
+  const accesos = await (await request.get(`${API}/autenticacion/accesos-locales`)).json();
+  const estetica = accesos.especialidades_profesionales.find((e: { nombre: string }) => /dermatolog/i.test(e.nombre));
+  expect(estetica).toBeTruthy();
+  const profesional = await request.post(`${API}/autenticacion/sesion-local`, { data: { codigo_rol: 'profesional', especialidad_id: estetica.id } });
+  expect(profesional.ok()).toBeTruthy();
   const cabeceras = { Authorization: `Bearer ${(await profesional.json()).token_acceso}` };
   const disponibles = await (await request.get(`${API}/historia/especialidades`, { headers: cabeceras })).json();
   const propia = disponibles.find((e: { propia: boolean }) => e.propia);
-  const configurada = catalogo.especialidades.find((e: { id: string }) => e.id === propia.id);
-  const activar = await request.put(`${API}/catalogo/especialidades/${propia.id}/modulos-historia`, { headers, data: { modulos: [...new Set([...configurada.modulos, 'faciograma'])], motivo: 'Habilitación sintética E2E' } });
-  expect(activar.ok(), await activar.text()).toBeTruthy();
-  await acceder(page, 'profesional');
+  expect(propia.id).toBe(estetica.id);
+  const listado = await (await request.get(`${API}/pacientes/?limite=100`, { headers: cabeceras })).json();
+  let encontrada: {id:string; numero_documento:string} | null = null;
+  for (const persona of listado.elementos) {
+    const acceso = await (await request.get(`${API}/pacientes/${persona.id}/acceso-clinico`, { headers: cabeceras })).json();
+    if (!acceso.acceso_clinico) continue;
+    const contextos = await (await request.get(`${API}/pacientes/${persona.id}/contextos-atencion`, { headers: cabeceras })).json();
+    if (contextos.some((c: { especialidad_id:string }) => c.especialidad_id===propia.id)) { encontrada=persona;break; }
+  }
+  if (!encontrada) throw new Error('Prepare un paciente sintético con una cita de Dermatología.');
+  const paciente = encontrada;
+  await page.goto('/acceso');
+  await page.getByRole('combobox', { name:'Especialidad del profesional' }).selectOption(estetica.id);
+  await page.getByRole('button', { name:/profesional de salud/i }).click();
+  await page.waitForURL(/\/(panel|agenda)/);
   await irA(page, 'Pacientes');
   const busqueda = page.getByRole('form', { name: 'Buscar pacientes' });
   await busqueda.getByRole('textbox', { name: /buscar por nombre/i }).fill(paciente.numero_documento!);
@@ -158,7 +170,7 @@ test('faciograma en la ficha conserva la cita, versiona zonas y descarga PDF en 
   await zona.focus(); await page.keyboard.press('Enter');
   await ventana.getByLabel('Observación de la zona').fill('Seguimiento estético sintético');
   await ventana.getByLabel('Estado de la zona', { exact: true }).selectOption('PLANIFICADO');
-  await ventana.getByRole('button', { name: 'Agregar al registro' }).click();
+  await ventana.getByRole('button', { name: 'Actualizar zona', exact: true }).click();
   const titulo = `Faciograma E2E ${randomUUID().slice(0, 8)}`;
   await ventana.getByLabel('Título', { exact: true }).fill(titulo);
   const sede = ventana.getByLabel('Sede del registro', { exact: true }); if (!(await sede.inputValue())) await sede.selectOption({ index: 1 });
@@ -170,7 +182,7 @@ test('faciograma en la ficha conserva la cita, versiona zonas y descarga PDF en 
   ventana = page.getByRole('dialog', { name: 'Editar registro facial' });
   await ventana.getByRole('button', { name: 'Mentón: PLANIFICADO' }).click();
   await ventana.getByLabel('Estado de la zona', { exact: true }).selectOption('REALIZADO');
-  await ventana.getByRole('button', { name: 'Agregar al registro' }).click();
+  await ventana.getByRole('button', { name: 'Actualizar zona', exact: true }).click();
   await ventana.getByLabel('Motivo del registro o modificación').fill('Actualización estética sintética');
   await ventana.getByRole('button', { name: 'Guardar versión' }).click();
   await expect(tarjeta).toContainText('v2');

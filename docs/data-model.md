@@ -639,3 +639,20 @@ sobre las tablas operativas en caliente.
 | Sin datos financieros sensibles | ausencia de columnas para ello |
 | Auditoría no alterable | privilegios revocados de `UPDATE`/`DELETE` |
 | Sin fugas en RAG | metadatos desnormalizados en `knowledge_chunks` + filtro en `WHERE` |
+# Ampliación 2026-10-08: controles, observaciones, fotos y agente
+
+| Tabla | Migración | Conservación y alcance |
+|---|---|---|
+| `periodontograma` | `032` | Clínica, paciente, sede, profesional, cita opcional, fecha, sensibilidad, raíz/versión anterior, motivo y mediciones JSONB de seis sitios. Versiones inmutables y anulación versionada. |
+| `foto_registro` | `033` | Registro padre tipado, clínica, paciente cuando es clínico, autor, MIME, tamaño, hash, clave del objeto cifrado y retirada con motivo. El contenido no se almacena como URL pública. |
+| `captura_indicadores` | `034` | Observación diaria de estados; identidad de clínica y actor, huella de ámbito y valores autorizados. Las series no mezclan sesiones con permisos distintos. |
+| `sesion_agente_paciente` | `035` | Operador y paciente fijos, contexto administrativo JSONB, memoria de herramientas, propuesta con vencimiento y sesión de dos horas. Sin transcripción clínica compartida. |
+
+Las mediciones no observadas permanecen nulas. Los porcentajes usan sitios
+realmente evaluados. El margen gingival se registra con signo y NIC = PS + MG
+solo con los dos valores. Corregir conserva el examen original. Adjuntar a
+una versión histórica no está permitido. La retirada de una foto no elimina
+la historia clínica ni sus referencias.
+
+El agente reutiliza las tablas de agenda, pagos, auditoría, idempotencia y
+outbox; la memoria contextual no constituye un segundo historial clínico.

@@ -1,3 +1,4 @@
+import { PROVEEDORES_PRUEBA } from '../../nucleo/pruebas/sesion-sintetica';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { of } from 'rxjs';
 
@@ -94,7 +95,7 @@ describe('PlataformaComponent', () => {
 
     TestBed.configureTestingModule({
       imports: [PlataformaComponent],
-      providers: [{ provide: ApiService, useValue: api }],
+      providers: [...PROVEEDORES_PRUEBA,{ provide: ApiService, useValue: api }],
     });
     fixture = TestBed.createComponent(PlataformaComponent);
     fixture.detectChanges();

@@ -138,7 +138,7 @@
           </select>
         </label>
       }
-        <app-captura-fotos titulo="Fotografías del plan" [ocupada]="guardando()" (cambiadas)="fotos=$event" />
+        @if(puedeCargarFotos()){<app-captura-fotos titulo="Fotografías del plan" [ocupada]="guardando()" (cambiadas)="fotos=$event" />}
       </form>
       @if (error()) {
         <p class="aviso-error" role="alert">{{ error() }}</p>

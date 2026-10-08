@@ -43,6 +43,9 @@ una persona. No use herramientas para esta respuesta. Maximo tres frases."""
 
 #: Busca en la base de conocimiento publicada; devuelve (titulo, fragmento).
 BuscadorConocimiento = Callable[[str], Awaitable[list[tuple[str, str]]]]
+InvocadorHerramienta = Callable[
+    [str, dict[str, Any], ContextoHerramienta], Awaitable[ResultadoHerramienta]
+]
 
 
 @dataclass(frozen=True)
@@ -229,6 +232,7 @@ async def _turno_tipado(
     clasificador: ClasificadorIntencion,
     umbrales: tuple[float, float],
     buscar_conocimiento: BuscadorConocimiento | None,
+    invocar: InvocadorHerramienta = despachar,
 ) -> tuple[ResultadoHerramienta, list[str]] | None:
     """Segunda barrera y atajos con un modelo de decision (JEV o reglas).
 
@@ -245,7 +249,7 @@ async def _turno_tipado(
         argumentos = dict(atajo.argumentos)
         if atajo.herramienta == "get_patient_appointments":
             argumentos["paciente_id"] = negocio["paciente_id"]
-        return await despachar(atajo.herramienta, argumentos, contexto), [atajo.herramienta]
+        return await invocar(atajo.herramienta, argumentos, contexto), [atajo.herramienta]
     if tipada.proveedor == "jev" and tipada.confianza < umbral_intencion:
         return ResultadoHerramienta(exito=True, mensaje=MENSAJE_ACLARACION, codigo="ACLARACION"), []
     if (
@@ -271,11 +275,12 @@ async def ejecutar_turno(
     umbral_clinico: float = 0.35,
     umbral_intencion: float = 0.85,
     buscar_conocimiento: BuscadorConocimiento | None = None,
+    invocar: InvocadorHerramienta = despachar,
 ) -> tuple[ResultadoHerramienta, list[str]]:
     resultado: ResultadoHerramienta | None = None
     limite = evaluar(texto)
     if limite.deriva:
-        resultado = await despachar("handoff_to_human", {"motivo": limite.motivo}, contexto)
+        resultado = await invocar("handoff_to_human", {"motivo": limite.motivo}, contexto)
         return resultado, ["handoff_to_human"]
     invocaciones: list[str] = []
 
@@ -289,6 +294,7 @@ async def ejecutar_turno(
             clasificador=clasificador,
             umbrales=(umbral_clinico, umbral_intencion),
             buscar_conocimiento=buscar_conocimiento,
+            invocar=invocar,
         )
         if tipado is not None:
             return tipado
@@ -309,12 +315,14 @@ async def ejecutar_turno(
         argumentos = dict(decision.argumentos)
         if decision.herramienta in {"hold_slot", "get_patient_appointments"}:
             argumentos["paciente_id"] = negocio["paciente_id"]
-        resultado = await despachar(decision.herramienta, argumentos, contexto)
+        resultado = await invocar(decision.herramienta, argumentos, contexto)
         invocaciones.append(decision.herramienta)
+        if resultado.codigo == "CONFIRMACION_PENDIENTE":
+            return resultado, invocaciones
         if resultado.requiere_humano:
             if decision.herramienta != "handoff_to_human":
-                await despachar("handoff_to_human", {"motivo": "NO_COMPRENDIDO"}, contexto)
+                await invocar("handoff_to_human", {"motivo": "NO_COMPRENDIDO"}, contexto)
                 invocaciones.append("handoff_to_human")
             return resultado, invocaciones
-    resultado = await despachar("handoff_to_human", {"motivo": "NO_COMPRENDIDO"}, contexto)
+    resultado = await invocar("handoff_to_human", {"motivo": "NO_COMPRENDIDO"}, contexto)
     return resultado, [*invocaciones, "handoff_to_human"]

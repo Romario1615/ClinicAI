@@ -217,7 +217,9 @@ class HoldSlot(Herramienta):
                 servicio_id=datos.servicio_id,
                 sede_id=datos.sede_id,
                 inicio=datos.inicio,
-                origen=OrigenCita.WHATSAPP,
+                origen=OrigenCita.PANEL
+                if contexto.principal.origen == "WEB" and not contexto.principal.es_agente
+                else OrigenCita.WHATSAPP,
                 clave_idempotencia=_clave(contexto, "hold", datos.inicio),
             ),
             principal=contexto.principal,

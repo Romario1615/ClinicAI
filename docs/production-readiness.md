@@ -141,3 +141,21 @@ No se declarará el sistema listo hasta que **todas** se cumplan con evidencia:
 | 2026‑09‑12 | 6 (conocimiento y RAG) | **No preparado.** Base de conocimiento con pgvector, búsqueda híbrida con los filtros de autorización dentro del SQL, ciclo de vida del documento y defensa anti inyección, con 80 pruebas `rag`. El arnés de evaluación destapó **dos fallos propios que se tapaban mutuamente**: el umbral de similitud no se aplicaba —la búsqueda nunca habría podido decir «no tengo información aprobada»— y la consulta textual unía los términos con `AND`, así que casi nunca coincidía. Corregidos y medidos: Hit@3 100 %, y una pregunta sin documentación devuelve **0** resultados (antes: el corpus entero). **La calidad se midió con el proveedor simulado, no con un modelo real** (E‑9) |
 | 2026‑10‑05 | Recordatorios | **Parcial.** Los avisos de citas y de tomas de pautas fijas ya se programan de forma durable y el cron los materializa en el outbox. Suspensión y registro de toma invalidan avisos pendientes; los de medicación exigen consentimiento propio y no contienen el nombre del medicamento. Verificados contra PostgreSQL aislado. La entrega real a Meta sigue pendiente
 | 2026‑10‑07 | 1, 9, 11 | **No preparado.** Interfaz de vidrio líquido con movimiento (Motion, diferido) y gráficos en movimiento; centro de Ayuda con un manual por rol (tarea 11.1); libro de gastos de solo anulación y flujo de caja en base de caja (ADR‑0021). Verificado en local con pruebas unitarias, de API, de componente y E2E. No cambia ningún bloqueo externo: legal, proveedores reales, monitoreo y despliegue siguen pendientes; el rendimiento del vidrio no se midió en la tableta real (E‑14) |
+# Estado de la ampliación 2026-10-08
+
+El agente por paciente, periodontograma, analítica local y fotografías privadas
+se verifican en desarrollo con datos sintéticos y PostgreSQL real. Véase
+[evidencia de ejecución](verificacion-2026-10-08.md#agente-periodontograma-analitica-y-fotografias).
+La entrega local no declara el producto preparado para producción.
+
+Para desplegar: aplicar `alembic upgrade head` (`032`–`035`), actualizar API y
+worker juntos, conservar el almacén cifrado de archivos y sus claves. Validar
+roles, especialidades y ámbitos reales del cliente; el acceso por botones se
+mantiene limitado al desarrollo. Configurar proveedores desde la interfaz y
+verificar cada integración con credenciales del cliente antes de habilitar envíos.
+
+En producción, respaldar base y objetos cifrados y practicar restauración.
+Para revertir aplicación, preservar las tablas clínicas y las fotos. El
+`downgrade` de estas migraciones elimina las tablas incorporadas: usarlo solo
+en un entorno descartable o con recuperación planificada; la reversión se
+comprueba en bases temporales. La sesión del agente no sustituye el historial.

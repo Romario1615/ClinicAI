@@ -82,6 +82,9 @@
           diagnóstico.
         </p>
       </fieldset>
+      <app-captura-fotos titulo="Fotografías de respaldo de la campaña" [ocupada]="trabajando()" (cambiadas)="fotos=$event" />
+      <p class="campo__ayuda">Estos adjuntos son privados. La imagen que se enviará por WhatsApp se configura en el detalle del borrador.</p>
+      @if(operacionFotos.guardado){<p role="status">El borrador ya existe. Reintente para completar únicamente sus fotografías.</p>}
     </form>
     <div pie class="acciones acciones--final">
       <button class="boton" type="button" (click)="cerrarCreacion()">Cancelar</button>
@@ -137,6 +140,7 @@
         </span>
       </header>
 
+      <app-fotos-registro tipo="campana" [registroId]="campana.id" [puedeEditar]="true" />
       <div class="detalle__cuerpo">
         <!-- Vista previa con la forma de un chat: así lo verá el paciente. -->
         <div class="vista-previa" aria-label="Vista previa del mensaje">

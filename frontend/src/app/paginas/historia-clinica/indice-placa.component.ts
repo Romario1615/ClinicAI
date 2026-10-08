@@ -6,10 +6,11 @@
  * vista previa y la serie de controles anteriores para ver la evolución.
  * Los registros no se editan: un control equivocado se compensa con otro.
  */
-import { Component, computed, effect, inject, input, signal, ChangeDetectionStrategy } from '@angular/core';
+import { Component, computed, effect, inject, input, signal, viewChild, ChangeDetectionStrategy } from '@angular/core';
 import { DatePipe, DecimalPipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { CapturaFotosComponent, type FotoSeleccionada } from '../../compartido/captura-fotos.component';
+import { FotosRegistroComponent } from '../../compartido/fotos-registro.component';
 import { FotosRegistroService } from '../../nucleo/servicios/fotos-registro.service';
 
 import { ApiService, FalloApi } from '../../nucleo/servicios/api.service';
@@ -32,7 +33,7 @@ const NOMBRES_CARA: Record<string, string> = {
 @Component({
   selector: 'app-indice-placa',
   standalone: true,
-  imports: [CapturaFotosComponent,DatePipe, DecimalPipe, FormsModule],
+  imports: [FotosRegistroComponent,CapturaFotosComponent,DatePipe, DecimalPipe, FormsModule],
   template: `
     <section class="placa" aria-labelledby="titulo-placa">
       <!-- Cabecera en una fila: explicación, evolución y último control. En la
@@ -69,6 +70,7 @@ const NOMBRES_CARA: Record<string, string> = {
         <p class="exito" role="status">{{ exito() }}</p>
       }
 
+      @if(puedeLeerFotos()) { <details><summary>Fotos de controles anteriores</summary>@for(r of serie();track r.id){<p>{{r.creado_en|date:'mediumDate'}}</p><app-fotos-registro tipo="placa" [registroId]="r.id" [puedeEditar]="puedeCargarFotos() && puedeEscribir()" />}</details> }
       @if (puedeEscribir()) {
         <div class="tarjeta placa__registro">
           <div class="placa__arcadas">
@@ -97,7 +99,7 @@ const NOMBRES_CARA: Record<string, string> = {
               </div>
             }
           </div>
-          <app-captura-fotos titulo="Fotos del control de placa" [ocupada]="guardando()" (cambiadas)="fotos=$event" />
+          @if(puedeCargarFotos()){<app-captura-fotos titulo="Fotos del control de placa" [ocupada]="guardando()" (cambiadas)="fotos=$event" />}
           <div class="placa__pie">
             <label class="campo placa__observacion">
               <span class="campo__etiqueta">Observación (opcional)</span>
@@ -162,6 +164,10 @@ const NOMBRES_CARA: Record<string, string> = {
   `,
 })
 export class IndicePlacaComponent {
+  private readonly captura=viewChild(CapturaFotosComponent);
+  protected puedeLeerFotos():boolean {return this.sesion.tienePermiso(PERMISOS.imagenClinicaLeer);}
+  protected puedeCargarFotos():boolean {return this.sesion.tienePermiso(PERMISOS.imagenClinicaCargar);}
+
   protected readonly operacionFotos=inject(FotosRegistroService).operacion<RegistroPlaca>();
   protected fotos:readonly FotoSeleccionada[]=[];
   private readonly api = inject(ApiService);
@@ -264,7 +270,7 @@ export class IndicePlacaComponent {
         next: (registro) => {
           this.guardando.set(false);
           this.serie.update((serie) => [registro, ...serie]);
-          this.operacionFotos.reiniciar(); this.fotos=[];
+          this.operacionFotos.reiniciar(); this.fotos=[]; this.captura()?.limpiar();
           this.evaluadas.set(new Set());
           this.placa.set(new Map());
           this.observacion = '';

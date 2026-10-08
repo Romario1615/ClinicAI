@@ -1,3 +1,5 @@
+import { CapturaFotosComponent, type FotoSeleccionada } from '../../compartido/captura-fotos.component';
+import { FotosRegistroService } from '../../nucleo/servicios/fotos-registro.service';
 /**
  * Carga de documentos a la base de conocimiento.
  *
@@ -65,7 +67,7 @@ type Origen = 'archivo' | 'texto';
 @Component({
   selector: 'app-cargar-documento',
   standalone: true,
-  imports: [FormsModule, IconoComponent],
+  imports: [CapturaFotosComponent,FormsModule, IconoComponent],
   host: { '(document:keydown.escape)': 'cerrar()' },
   template: `
     <div class="dialogo">
@@ -130,6 +132,7 @@ type Origen = 'archivo' | 'texto';
           </div>
         } @else {
           <form (ngSubmit)="enviar()" #formulario="ngForm" novalidate>
+            <fieldset [disabled]="enviando() || !!ingestaGuardada()" style="border:0;margin:0;padding:0;min-width:0">
             @if (!documento()) {
               <label class="campo">
                 <span class="campo__etiqueta">Título</span>
@@ -266,13 +269,16 @@ type Origen = 'archivo' | 'texto';
               datos de pacientes: este contenido se usa para responder consultas.
             </p>
 
+            </fieldset>
+            <app-captura-fotos titulo="Imágenes de referencia del documento" [ocupada]="enviando()" (cambiadas)="fotos=$event" />
+            @if(ingestaGuardada()){<p role="status">El contenido ya está guardado. Complete sus fotos para finalizar.</p>}
             @if (aviso()) {
               <p class="aviso-error" role="alert">{{ aviso() }}</p>
             }
             @if (error(); as fallo) {
               <div class="aviso-error" role="alert">
                 <p class="carga__error-titulo">{{ fallo.message }}</p>
-                @if (documentoCreadoId()) {
+                @if (documentoCreadoId() && !ingestaGuardada()) {
                   <p class="carga__error-detalle">
                     El documento se creó como borrador, pero el contenido no se guardó. Al
                     reintentar solo se sube el contenido.
@@ -456,6 +462,9 @@ type Origen = 'archivo' | 'texto';
   `,
 })
 export class CargarDocumentoComponent {
+  private readonly fotosApi=inject(FotosRegistroService);
+  protected fotos:readonly FotoSeleccionada[]=[];
+  protected readonly ingestaGuardada=signal<RespuestaIngesta|null>(null);
   private readonly api = inject(ApiService);
 
   /** Documento existente: si llega, el dialogo sube una version nueva. */
@@ -592,6 +601,7 @@ export class CargarDocumentoComponent {
     this.enviando.set(true);
     this.error.set(null);
 
+    if(this.ingestaGuardada()){this.ingestaCompletada(this.ingestaGuardada()!);return;}
     const existente = this.documento()?.id ?? this.documentoCreadoId();
     if (existente) {
       this.subirContenido(existente);
@@ -651,9 +661,14 @@ export class CargarDocumentoComponent {
   }
 
   private ingestaCompletada(respuesta: RespuestaIngesta): void {
-    this.resultado.set(respuesta);
-    this.enviando.set(false);
-    this.cargado.emit(respuesta);
+    const id=this.documento()?.id ?? this.documentoCreadoId();
+    if(!id){this.enviando.set(false);return;}
+    this.ingestaGuardada.set(respuesta);
+    this.fotosApi.finalizar('conocimiento',{id},this.fotos).subscribe(r=>{
+      this.enviando.set(false);
+      if(r.fallo){this.error.set(new FalloApi('FOTOS_PENDIENTES','Documento e ingesta guardados. Reintente únicamente las fotografías: '+r.fallo,503));return;}
+      this.resultado.set(respuesta);this.cargado.emit(respuesta);
+    });
   }
 
   protected cerrar(): void {

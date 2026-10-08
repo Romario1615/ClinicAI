@@ -1,7 +1,9 @@
+import { FalloApi } from '../../nucleo/servicios/api.service';
 import { HttpErrorResponse } from '@angular/common/http';
 import { Component, OnInit, inject, signal, ChangeDetectionStrategy } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { CapturaFotosComponent, type FotoSeleccionada } from '../../compartido/captura-fotos.component';
+import { FotosRegistroComponent } from '../../compartido/fotos-registro.component';
 import { FotosRegistroService } from '../../nucleo/servicios/fotos-registro.service';
 
 import { IconoComponent } from '../../compartido/icono.component';
@@ -34,7 +36,7 @@ const ESTADOS: readonly { codigo: FormularioEquipo['estado_disponibilidad']; eti
 @Component({
   selector: 'app-equipo',
   standalone: true,
-  imports: [FormsModule, IconoComponent, VentanaFlotanteComponent, CapturaFotosComponent],
+  imports: [FotosRegistroComponent,FormsModule, IconoComponent, VentanaFlotanteComponent, CapturaFotosComponent],
   host: { class: 'pantalla' },
   template: `
     <header class="encabezado pantalla__fijo">
@@ -57,7 +59,7 @@ const ESTADOS: readonly { codigo: FormularioEquipo['estado_disponibilidad']; eti
         }
         <div class="filas desplazable" tabindex="0" role="region" aria-labelledby="titulo-equipo">
         @for (perfil of perfiles(); track perfil.id) {
-          <article class="fila"><div class="datos"><div class="titulo"><h3>{{ perfil.nombre }} {{ perfil.apellido }}</h3><span class="estado" [class.inactivo]="!perfil.activo">{{ perfil.activo ? etiquetaEstado(perfil.estado_disponibilidad) : 'Inactivo' }}</span></div><p>{{ nombreEspecialidad(perfil.especialidad_id) }} · {{ perfil.numero_registro_profesional || 'Sin registro profesional' }}</p><small>{{ etiquetasSedes(perfil.sede_ids) }}</small></div><button class="boton" type="button" (click)="editar(perfil)" aria-haspopup="dialog">Editar</button></article>
+          <article class="fila"><div class="datos"><div class="titulo"><h3>{{ perfil.nombre }} {{ perfil.apellido }}</h3><span class="estado" [class.inactivo]="!perfil.activo">{{ perfil.activo ? etiquetaEstado(perfil.estado_disponibilidad) : 'Inactivo' }}</span></div><p>{{ nombreEspecialidad(perfil.especialidad_id) }} · {{ perfil.numero_registro_profesional || 'Sin registro profesional' }}</p><small>{{ etiquetasSedes(perfil.sede_ids) }}</small><app-fotos-registro tipo="profesional" [registroId]="perfil.id" [puedeEditar]="true" /></div><button class="boton" type="button" (click)="editar(perfil)" aria-haspopup="dialog">Editar</button></article>
         } @empty { @if (!cargando()) { <p class="vacio">No hay profesionales registrados en las sedes visibles.</p> } }
         </div>
       </section>
@@ -232,5 +234,5 @@ export class EquipoComponent implements OnInit {
 
   private vacio(): FormularioEquipo { return { especialidad_id: '', nombre: '', apellido: '', numero_registro_profesional: '', telefono_whatsapp: '', correo_calendario: '', estado_disponibilidad: 'DISPONIBLE', acepta_pacientes_nuevos: true, minutos_preparacion_propio: 0, activo: true, sede_ids: [], sede_principal_id: '' }; }
   private fallar(texto: string): void { this.error.set(texto); }
-  private mensajeError(error: unknown, alternativo: string): string { return error instanceof HttpErrorResponse && typeof error.error?.mensaje === 'string' ? error.error.mensaje : error instanceof Error ? error.message : alternativo; }
+  private mensajeError(error: unknown, alternativo: string): string { return error instanceof HttpErrorResponse && typeof error.error?.mensaje === 'string' ? error.error.mensaje : error instanceof FalloApi ? error.message : alternativo; }
 }

@@ -1,6 +1,7 @@
 import { Component, computed, inject, signal, ChangeDetectionStrategy } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { CapturaFotosComponent, type FotoSeleccionada } from '../../compartido/captura-fotos.component';
+import { FotosRegistroComponent } from '../../compartido/fotos-registro.component';
 import { FotosRegistroService } from '../../nucleo/servicios/fotos-registro.service';
 import { forkJoin, of } from 'rxjs';
 
@@ -21,7 +22,7 @@ const TIPOS: readonly { readonly valor: TipoConsultorio; readonly etiqueta: stri
 ];
 
 @Component({
-  selector: 'app-catalogo', standalone: true, imports: [CapturaFotosComponent, FormsModule, ModulosEspecialidadComponent, VentanaFlotanteComponent, PestanasComponent],
+  selector: 'app-catalogo', standalone: true, imports: [FotosRegistroComponent,CapturaFotosComponent, FormsModule, ModulosEspecialidadComponent, VentanaFlotanteComponent, PestanasComponent],
   host: { class: 'pantalla', role: 'region', 'aria-label': 'Catálogo de la clínica' },
   template: `
     <header class="modulo-cabecera pantalla__fijo"><div class="modulo-cabecera__texto"><p class="ceja">CONFIGURACIÓN</p><h1>Catálogo de la clínica</h1><p>Sedes, consultorios, servicios y profesionales disponibles para su sesión.</p></div><img class="modulo-cabecera__imagen" src="/images/catalogo-clinica.png" alt="" aria-hidden="true" loading="lazy" /></header>
@@ -49,7 +50,7 @@ const TIPOS: readonly { readonly valor: TipoConsultorio; readonly etiqueta: stri
             <div class="rejilla desplazable" tabindex="0" role="region" aria-labelledby="titulo-consultorios">@for (sala of consultorios(); track sala.id) { <article class="tarjeta"><span class="etiqueta">{{ etiquetaTipo(sala.tipo) }}</span><h3>{{ sala.nombre }}</h3><p>Capacidad: {{ sala.capacidad }}</p></article> } @empty { <p>No hay consultorios disponibles.</p> }</div>
           } @else if (sedeSeleccionada()) {
             <div class="tabla-envoltorio desplazable" tabindex="0" role="region" aria-labelledby="titulo-consultorios"><table class="tabla"><thead><tr><th>Consultorio</th><th>Tipo</th><th>Capacidad</th><th>Estado</th><th>Acciones</th></tr></thead><tbody>
-              @for (sala of consultorios(); track sala.id) { <tr><td>{{ sala.nombre }}</td><td>{{ etiquetaTipo(sala.tipo) }}</td><td>{{ sala.capacidad }}</td><td><span class="estado" [class.inactivo]="!sala.activo">{{ sala.activo ? 'Activo' : 'Inactivo' }}</span></td><td class="acciones-fila"><button class="boton compacto" type="button" (click)="editar(sala)">Editar</button><button class="boton compacto" type="button" (click)="cambiarEstado(sala)">{{ sala.activo ? 'Desactivar' : 'Activar' }}</button></td></tr> }
+              @for (sala of consultorios(); track sala.id) { <tr><td>{{ sala.nombre }}</td><td>{{ etiquetaTipo(sala.tipo) }}</td><td>{{ sala.capacidad }}</td><td><span class="estado" [class.inactivo]="!sala.activo">{{ sala.activo ? 'Activo' : 'Inactivo' }}</span></td><td class="acciones-fila"><app-fotos-registro tipo="consultorio" [registroId]="sala.id" [puedeEditar]="true" /><button class="boton compacto" type="button" (click)="editar(sala)">Editar</button><button class="boton compacto" type="button" (click)="cambiarEstado(sala)">{{ sala.activo ? 'Desactivar' : 'Activar' }}</button></td></tr> }
               @empty { <tr><td colspan="5">No hay consultorios registrados en esta sede.</td></tr> }
             </tbody></table></div>
           } @else { <p class="ayuda">Seleccione una sede para consultar y administrar sus consultorios.</p> }
@@ -60,7 +61,7 @@ const TIPOS: readonly { readonly valor: TipoConsultorio; readonly etiqueta: stri
         <section class="gestion catalogo-admin panel-catalogo" role="tabpanel" id="catalogo-panel-especialidades" aria-labelledby="catalogo-pestana-especialidades" [hidden]="vistaActiva() !== 'especialidades'">
           <div class="seccion-cabecera"><div><p class="ceja">ORGANIZACIÓN CLÍNICA</p><h2 id="titulo-especialidades">Especialidades</h2><p>Organice las áreas de atención y mantenga actualizado su catálogo.</p></div><button class="boton boton--principal" type="button" (click)="abrirNuevaEspecialidad()">Nueva especialidad</button></div>
           <div class="tabla-envoltorio desplazable" tabindex="0" role="region" aria-labelledby="titulo-especialidades"><table class="tabla"><thead><tr><th>Especialidad</th><th>Código</th><th>Estado</th><th>Acciones</th></tr></thead><tbody>
-            @for (esp of especialidadesGestion(); track esp.id) { <tr><td>{{ esp.nombre }}<small class="descripcion">{{ esp.descripcion }}</small></td><td>{{ esp.codigo || '—' }}</td><td><span class="estado" [class.inactivo]="!esp.activa">{{ esp.activa ? 'Activa' : 'Inactiva' }}</span></td><td class="acciones-fila"><button class="boton compacto" type="button" (click)="editarEspecialidad(esp)">Editar</button><button class="boton compacto" type="button" (click)="cambiarEstadoEspecialidad(esp)">{{ esp.activa ? 'Desactivar' : 'Activar' }}</button></td></tr> } @empty { <tr><td colspan="4">Aún no hay especialidades registradas.</td></tr> }
+            @for (esp of especialidadesGestion(); track esp.id) { <tr><td>{{ esp.nombre }}<small class="descripcion">{{ esp.descripcion }}</small></td><td>{{ esp.codigo || '—' }}</td><td><span class="estado" [class.inactivo]="!esp.activa">{{ esp.activa ? 'Activa' : 'Inactiva' }}</span></td><td class="acciones-fila"><app-fotos-registro tipo="especialidad" [registroId]="esp.id" [puedeEditar]="true" /><button class="boton compacto" type="button" (click)="editarEspecialidad(esp)">Editar</button><button class="boton compacto" type="button" (click)="cambiarEstadoEspecialidad(esp)">{{ esp.activa ? 'Desactivar' : 'Activar' }}</button></td></tr> } @empty { <tr><td colspan="4">Aún no hay especialidades registradas.</td></tr> }
           </tbody></table></div>
         </section>
         <div class="panel-catalogo desplazable" role="tabpanel" tabindex="0" id="catalogo-panel-modulos" aria-labelledby="catalogo-pestana-modulos" [hidden]="vistaActiva() !== 'modulos'">
@@ -72,7 +73,7 @@ const TIPOS: readonly { readonly valor: TipoConsultorio; readonly etiqueta: stri
         <section class="gestion catalogo-admin panel-catalogo" role="tabpanel" id="catalogo-panel-servicios" aria-labelledby="catalogo-pestana-servicios" [hidden]="vistaActiva() !== 'servicios'">
           <div class="seccion-cabecera"><div><p class="ceja">OFERTA CLÍNICA</p><h2 id="titulo-servicios">Servicios</h2><p>Configure duración, preparación, precio y requisitos de agenda.</p></div><button class="boton boton--principal" type="button" (click)="abrirNuevoServicio()">Nuevo servicio</button></div>
           <div class="tabla-envoltorio desplazable" tabindex="0" role="region" aria-labelledby="titulo-servicios"><table class="tabla"><thead><tr><th>Servicio</th><th>Especialidad</th><th>Duración</th><th>Precio</th><th>Estado</th><th>Acciones</th></tr></thead><tbody>
-            @for (s of serviciosGestion(); track s.id) { <tr><td>{{ s.nombre }}</td><td>{{ nombreEspecialidad(s.especialidad_id) }}</td><td>{{ s.duracion_minutos }} min</td><td>{{ s.precio === null ? 'Consultar' : s.moneda + ' ' + s.precio }}</td><td><span class="estado" [class.inactivo]="!s.activo">{{ s.activo ? 'Activo' : 'Inactivo' }}</span></td><td class="acciones-fila"><button class="boton compacto" type="button" (click)="editarServicio(s)">Editar</button><button class="boton compacto" type="button" (click)="cambiarEstadoServicio(s)">{{ s.activo ? 'Desactivar' : 'Activar' }}</button></td></tr> } @empty { <tr><td colspan="6">Aún no hay servicios registrados.</td></tr> }
+            @for (s of serviciosGestion(); track s.id) { <tr><td>{{ s.nombre }}</td><td>{{ nombreEspecialidad(s.especialidad_id) }}</td><td>{{ s.duracion_minutos }} min</td><td>{{ s.precio === null ? 'Consultar' : s.moneda + ' ' + s.precio }}</td><td><span class="estado" [class.inactivo]="!s.activo">{{ s.activo ? 'Activo' : 'Inactivo' }}</span></td><td class="acciones-fila"><app-fotos-registro tipo="servicio" [registroId]="s.id" [puedeEditar]="true" /><button class="boton compacto" type="button" (click)="editarServicio(s)">Editar</button><button class="boton compacto" type="button" (click)="cambiarEstadoServicio(s)">{{ s.activo ? 'Desactivar' : 'Activar' }}</button></td></tr> } @empty { <tr><td colspan="6">Aún no hay servicios registrados.</td></tr> }
           </tbody></table></div>
         </section>
       } @else {

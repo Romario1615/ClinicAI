@@ -125,7 +125,7 @@
           </details>
         }
 
-        <div class="resumen">
+        <div class="resumen" role="region" tabindex="0" aria-label="Estados de los documentos">
           @for (fila of resumen(); track fila.estado) {
             <div class="resumen__celda" [class.resumen__celda--activa]="fila.recuperable">
               <span class="resumen__cantidad">{{ fila.cantidad }}</span>
@@ -146,9 +146,7 @@
                 <th scope="col">Estado</th>
                 <th scope="col">Versión</th>
                 <th scope="col">Vigencia</th>
-                @if (puedeCargar() || puedeAprobar()) {
-                  <th scope="col"><span class="solo-lectores">Acciones</span></th>
-                }
+                <th scope="col"><span class="solo-lectores">Acciones</span></th>
               </tr>
             </thead>
             <tbody>
@@ -173,9 +171,9 @@
                   </td>
                   <td class="numerico">{{ documento.version_vigente ?? '—' }}</td>
                   <td class="vigencia">{{ vigencia(documento) }}</td>
-                  @if (puedeCargar() || puedeAprobar()) {
-                    <td class="celda-acciones">
+                  <td class="celda-acciones">
                       <div class="acciones">
+                        <app-fotos-registro tipo="conocimiento" [registroId]="documento.id" [puedeEditar]="puedeCargar()" />
                         @if (puedeCargar()) {
                           @for (accion of acciones(documento); track accion.destino) {
                             <button
@@ -223,8 +221,7 @@
                           }
                         }
                       </div>
-                    </td>
-                  }
+                  </td>
                 </tr>
               }
             </tbody>

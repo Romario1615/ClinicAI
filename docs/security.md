@@ -556,3 +556,26 @@ un profesional jurídico junto con la clínica, antes de operar con pacientes re
   repositorio.
 * La cadena de custodia de los respaldos depende del entorno de producción, todavía por
   definir.
+# Ampliación 2026-10-08: agente contextual y recursos privados
+
+| Recurso | Autorización adicional y ámbito |
+|---|---|
+| `/asistente/pacientes/{id}/sesiones` | Personal autenticado con `paciente.leer_administrativo`; paciente accesible en clínica/ámbito; sesión exclusiva del operador. |
+| Sesión: `/contexto`, `/cita`, `/mensajes` | Revalidación de paciente, operador, vencimiento y huella de permisos. Agenda/cita dentro de los filtros del operador. No se acepta otra persona desde el mensaje. |
+| Sesión: `/confirmar` | Propuesta vigente y coincidente; permiso de la herramienta y validación del servicio. Las escrituras operativas requieren confirmación humana; claves de idempotencia. |
+| Resumen clínico del agente | Permiso clínico, relación asistencial, especialidad/autor y sensibilidad mediante el asistente local. Auditoría. Contenido excluido del contexto LLM y caché persistida. |
+| Periodontogramas y PDF | `odontograma.leer` / `odontograma.escribir`, módulo Periodoncia compatible, relación asistencial y filtros de autor/especialidad. Corrección solo del autor autorizado. N3 exige lectura sensible. |
+| Analítica | `dashboard.leer`, consultas por ámbito y permisos de cada módulo. Las capturas se separan por clínica, actor y huella completa de autorización. Sin acceso clínico individual adicional. |
+| Fotos del registro | Permiso de lectura/escritura del padre. En clínica: permiso de imágenes, relación asistencial, módulo y autor para cargar; N3 exige permiso sensible. En Conocimiento: sensibilidad del ámbito RAG y ACL del documento. |
+
+Superadministración administra fotos de clínicas, sedes y personal entre
+clínicas; los pacientes y registros clínicos conservan el ámbito de la sesión.
+Listados y descargas comprueban el registro padre, la clínica y el identificador
+de foto. Los archivos se sanean, se cifran y se sirven con `private, no-store`,
+`nosniff` y política de contenido restringida. No se publican claves ni rutas
+del almacén. Cámara/archivo no evitan los controles del servidor.
+
+Las herramientas del agente pasan por los servicios existentes y conservan
+la restricción de exclusión contra reservas simultáneas y el outbox. No hay
+herramientas para diagnosticar, prescribir, cambiar tratamientos o borrar
+historia. Documentos recuperados siguen siendo datos citados, nunca instrucciones.

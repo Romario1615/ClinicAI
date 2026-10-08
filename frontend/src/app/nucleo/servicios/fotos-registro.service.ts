@@ -17,6 +17,7 @@ export class OperacionConFotos<T extends {id:string}> {
   guardar(tipo:string,crear:Observable<T>,fotos:readonly FotoSeleccionada[]):Observable<T>{
     return defer(()=>this.registro?of(this.registro):crear).pipe(tap(r=>{this.registro=r;}),concatMap(r=>this.api.finalizar(tipo,r,fotos)),map(resultado=>{
       if(resultado.fallo) throw new FalloApi('FOTOS_PENDIENTES',`El registro ya se guardó. Algunas fotos siguen pendientes: ${resultado.fallo} Reintente Guardar para completar las fotos.`,503);
+      this.registro=null;
       return resultado.registro;
     }));
   }

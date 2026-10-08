@@ -507,3 +507,42 @@ uv run pip-audit --strict --desc -r requisitos.txt
 * **Las pruebas de seguridad no se desactivan.** Las que verifican que la IA no puede
   escribir en la base ni tomar decisiones clínicas, menos que ninguna.
 * Ninguna prueba usa datos reales de pacientes. Nunca.
+# Verificación de agente contextual y ampliación clínica (2026-10-08)
+
+Los recorridos usan exclusivamente datos sintéticos. PostgreSQL se comprueba
+en una base exclusiva; no se ejecutan escrituras de pruebas en la clínica local.
+
+- Backend: periodontograma y sus seis sitios, nulos, sensibilidad, autoría,
+  versiones, anulación y PDF; modelos locales y observaciones separadas por
+  permisos; fotos privadas, contenido falso, ACL, clínica ajena, autor y
+  versiones históricas; sesiones del agente por operador/paciente, claves,
+  cambio de accesos, vencimiento, confirmación, cancelación, reserva y
+  reprogramación, intentos de argumentos ajenos, límites clínicos y caché sin
+  resumen clínico. Regresión del flujo WhatsApp y herramientas existentes.
+- Frontend: panel contextual y botones por permiso, clave conservada al
+  reintentar, confirmación/descartado, cambio de persona y persistencia del
+  contexto al actualizar citas, fechas e importes legibles, captura y galerías.
+- Chromium: `18-periodontograma-analitica-agente.spec.ts` ejecuta la ficha real
+  del profesional y recepción, captura de seis sitios/foto/PDF, los tres
+  análisis, axe y ancho móvil. El resumen sigue al lado del historial.
+- Migraciones: `upgrade`, `downgrade -4`, `upgrade` y `alembic check` en la
+  base temporal de los recorridos; limpieza exclusiva al terminar.
+
+```powershell
+# Dentro de backend, con PostgreSQL de pruebas configurado
+.venv/Scripts/python.exe -m pytest --no-cov -q pruebas/api/test_agente_paciente_api.py pruebas/api/test_fotos_registro_api.py
+.venv/Scripts/python.exe -m ruff check app pruebas
+.venv/Scripts/python.exe -m mypy app
+# Frontend: conservar los mínimos de cobertura
+cd ../frontend
+npm.cmd run test:ci
+npm.cmd run lint
+npm.cmd run build
+# API real aislada preparada y frontend arriba
+cd ../pruebas-e2e
+npx.cmd playwright test escenarios/18-periodontograma-analitica-agente.spec.ts
+```
+
+Las cifras y los comandos de la ejecución concreta están en el informe de
+verificación. La corrida completa anterior del backend y las focalizadas
+actuales se registran por separado; no se suman como si fueran una sola corrida.

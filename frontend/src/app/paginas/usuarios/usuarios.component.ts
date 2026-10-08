@@ -23,6 +23,7 @@ import { Component, computed, inject, signal, ChangeDetectionStrategy } from '@a
 import { DatePipe, NgTemplateOutlet } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { CapturaFotosComponent, type FotoSeleccionada } from '../../compartido/captura-fotos.component';
+import { FotosRegistroComponent } from '../../compartido/fotos-registro.component';
 import { FotosRegistroService } from '../../nucleo/servicios/fotos-registro.service';
 
 import { FalloApi } from '../../nucleo/servicios/api.service';
@@ -100,7 +101,7 @@ const CATEGORIAS: Record<string, string> = {
   standalone: true,
   imports: [
     EditorRegistroComponent,
-    FormsModule, CapturaFotosComponent,
+    FormsModule, CapturaFotosComponent, FotosRegistroComponent,
     DatePipe,
     NgTemplateOutlet,
     MatrizAccesosComponent,
@@ -392,6 +393,7 @@ const CATEGORIAS: Record<string, string> = {
         @case ('rol-ver') {
           <app-ventana-flotante ceja="Rol" [titulo]="v.rol.nombre" forma="centrada" [anchoMaximo]="720" (cerrar)="cerrarVentana()">
             <p class="campo__ayuda">{{ v.rol.descripcion || 'Sin descripción.' }} · {{ personasCon(v.rol) }} persona(s) con este rol.</p>
+            <app-fotos-registro tipo="rol" [registroId]="v.rol.id" [puedeEditar]="puedeCrearRol() && !v.rol.es_sistema" />
             @for (grupo of permisosDeRol(v.rol); track grupo.nombre) {
               <section class="ver-grupo">
                 <h3>{{ grupo.nombre }}</h3>

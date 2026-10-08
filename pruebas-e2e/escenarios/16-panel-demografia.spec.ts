@@ -34,6 +34,7 @@ test('el perfil de pacientes contiene textos y barras sin solaparlos en escritor
   });
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await acceder(page, 'administradora');
+  await page.getByRole('tab', { name:'Pacientes', exact:true }).click();
   const tarjeta = page.getByRole('region', { name: 'Perfil de pacientes', exact: true });
   await expect(tarjeta.locator('.demografia__fila')).toHaveCount(11);
   await expect(tarjeta).toContainText('123456');

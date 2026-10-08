@@ -48,6 +48,7 @@ from app.mensajeria import rutas as rutas_whatsapp
 from app.modulos.agenda import bloqueos_rutas as rutas_bloqueos_agenda
 from app.modulos.agenda import recorrido_rutas as rutas_recorrido
 from app.modulos.agenda import rutas as rutas_agenda
+from app.modulos.asistente import paciente_rutas as rutas_agente_paciente
 from app.modulos.asistente import rutas as rutas_asistente
 from app.modulos.automatizaciones import rutas as rutas_automatizaciones
 from app.modulos.ayuda import rutas as rutas_ayuda
@@ -330,6 +331,7 @@ def _registrar_rutas_del_equipo(aplicacion: FastAPI) -> None:
     aplicacion.include_router(rutas_especialidades_historia.enrutador, prefix=PREFIJO_API)
     aplicacion.include_router(rutas_recorrido.enrutador, prefix=PREFIJO_API)
     aplicacion.include_router(rutas_asistente.enrutador, prefix=PREFIJO_API)
+    aplicacion.include_router(rutas_agente_paciente.enrutador, prefix=PREFIJO_API)
     aplicacion.include_router(rutas_ayuda.enrutador, prefix=PREFIJO_API)
     aplicacion.include_router(rutas_gastos.enrutador, prefix=PREFIJO_API)
     aplicacion.include_router(rutas_revision_riesgo.enrutador, prefix=PREFIJO_API)

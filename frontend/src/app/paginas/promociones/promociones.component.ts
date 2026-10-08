@@ -20,6 +20,9 @@ import { FormsModule } from '@angular/forms';
 
 import { IconoComponent } from '../../compartido/icono.component';
 import { VentanaFlotanteComponent } from '../../compartido/ventana-flotante.component';
+import { CapturaFotosComponent, type FotoSeleccionada } from '../../compartido/captura-fotos.component';
+import { FotosRegistroComponent } from '../../compartido/fotos-registro.component';
+import { FotosRegistroService } from '../../nucleo/servicios/fotos-registro.service';
 import { ApiService, FalloApi } from '../../nucleo/servicios/api.service';
 import type { Campana, EstadoCampana } from '../../nucleo/servicios/api.service';
 import { CatalogoService } from '../../nucleo/servicios/catalogo.service';
@@ -40,7 +43,7 @@ import { ResumenModuloComponent } from '../../compartido/resumen-modulo.componen
 @Component({
   selector: 'app-promociones',
   standalone: true,
-  imports: [ResumenModuloComponent, DatePipe, FormsModule, IconoComponent, VentanaFlotanteComponent],
+  imports: [CapturaFotosComponent, FotosRegistroComponent, ResumenModuloComponent, DatePipe, FormsModule, IconoComponent, VentanaFlotanteComponent],
   templateUrl: './promociones.component.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './promociones.component.scss',
@@ -49,6 +52,8 @@ export class PromocionesComponent {
   private readonly api = inject(ApiService);
   private readonly catalogo = inject(CatalogoService);
   private readonly sesion = inject(SesionService);
+  protected readonly operacionFotos = inject(FotosRegistroService).operacion<Campana>();
+  protected fotos: readonly FotoSeleccionada[] = [];
 
   protected readonly campanas = signal<readonly Campana[]>([]);
   protected readonly sedes = signal<readonly Sede[]>([]);
@@ -111,6 +116,8 @@ export class PromocionesComponent {
   //  Crear
   // ======================================================================
   protected abrirCreacion(): void {
+    this.operacionFotos.reiniciar();
+    this.fotos = [];
     this.nombre = '';
     this.texto = '';
     this.plantillaMeta = 'promocion_clinica';
@@ -134,15 +141,16 @@ export class PromocionesComponent {
     };
     this.trabajando.set(true);
     this.error.set('');
-    this.api
-      .crearCampana({
+    const peticion = this.api.crearCampana({
         nombre: this.nombre.trim(),
         texto: this.texto.trim(),
         plantilla_meta: this.plantillaMeta.trim() || 'promocion_clinica',
         segmento,
-      })
-      .subscribe({
+      });
+    this.operacionFotos.guardar('campana',peticion,this.fotos).subscribe({
         next: (campana) => {
+          this.fotos = [];
+          this.operacionFotos.reiniciar();
           this.trabajando.set(false);
           this.creando.set(false);
           this.nombre = '';

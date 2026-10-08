@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import uuid
+from dataclasses import replace
 from datetime import datetime
 from typing import Annotated
 
@@ -59,7 +60,7 @@ async def auditar(
         [
             construir_entrada(
                 accion=accion,
-                principal=principal,
+                principal=replace(principal, clinica_id=fila.clinica_id),
                 ahora=reloj.ahora(),
                 entidad_tipo="foto_registro",
                 entidad_id=fila.id,
@@ -86,16 +87,7 @@ async def listar(
         tipo,
         id_registro,
         servicio.clinica_destino(tipo, destino),
-        niveles=tuple(
-            n.value
-            for n in NivelSensibilidad
-            if principal.ambito.cubre_nivel(n)
-            and (
-                n != NivelSensibilidad.CLINICO_SENSIBLE
-                or tipo == "conocimiento"
-                or principal.tiene_permiso("historia_clinica.leer_sensible")
-            )
-        ),
+        niveles=servicio.niveles_permitidos(principal, tipo),
     )
     for fila in filas:
         await auditar(fila, AccionAuditada.IMAGEN_CONSULTADA, principal, reloj, auditor)

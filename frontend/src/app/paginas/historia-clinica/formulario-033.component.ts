@@ -1,6 +1,7 @@
 import { CommonModule } from '@angular/common';
 import { Component, effect, inject, input, signal, ChangeDetectionStrategy } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { FotosRegistroComponent } from '../../compartido/fotos-registro.component';
 import { CapturaFotosComponent, type FotoSeleccionada } from '../../compartido/captura-fotos.component';
 import { FotosRegistroService } from '../../nucleo/servicios/fotos-registro.service';
 import { catchError, forkJoin, of, type Observable, type OperatorFunction } from 'rxjs';
@@ -70,12 +71,15 @@ export function nuevoFormulario033(): Formulario033DatosApi {
 @Component({
   selector: 'app-formulario-033',
   standalone: true,
-  imports: [CapturaFotosComponent,CommonModule, FormsModule, CargandoComponent, VentanaFlotanteComponent],
+  imports: [FotosRegistroComponent,CapturaFotosComponent,CommonModule, FormsModule, CargandoComponent, VentanaFlotanteComponent],
   templateUrl: './formulario-033.component.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './formulario-033.component.scss',
 })
 export class Formulario033Component {
+  protected puedeLeerFotos():boolean {return this.sesion.tienePermiso(PERMISOS.imagenClinicaLeer);}
+  protected puedeCargarFotos():boolean {return this.sesion.tienePermiso(PERMISOS.imagenClinicaCargar);}
+
   protected readonly operacionFotos = inject(FotosRegistroService).operacion<Formulario033Api>();
   protected fotos: readonly FotoSeleccionada[] = [];
   readonly pacienteId = input.required<string>();

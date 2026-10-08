@@ -1,3 +1,5 @@
+import { PERMISOS } from '../../nucleo/servicios/configuracion';
+import { FotosRegistroComponent } from '../../compartido/fotos-registro.component';
 import { Component, effect, inject, input, signal, untracked, ChangeDetectionStrategy } from '@angular/core';
 import { DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -43,7 +45,7 @@ interface RespuestaAnamnesis {
 @Component({
   selector: 'app-anamnesis-captura',
   standalone: true,
-  imports: [CapturaFotosComponent,DatePipe, FormsModule, IconoComponent, VentanaFlotanteComponent],
+  imports: [FotosRegistroComponent,CapturaFotosComponent,DatePipe, FormsModule, IconoComponent, VentanaFlotanteComponent],
   template: `
     <section class="captura" aria-labelledby="titulo-captura-anamnesis">
       <header class="captura__cabecera">
@@ -110,7 +112,7 @@ interface RespuestaAnamnesis {
             }
             <!-- Junto a las acciones: es donde se mira al pulsar «Guardar». -->
             @if (error()) { <p class="captura__error" role="alert">{{ error() }}</p> }
-            <app-captura-fotos titulo="Fotos de la evaluación" [ocupada]="guardando()" (cambiadas)="fotos=$event" />
+            @if(puedeCargarFotos()){<app-captura-fotos titulo="Fotos de la evaluación" [ocupada]="guardando()" (cambiadas)="fotos=$event" />}
           </form>
           <div pie>
             <button class="boton" type="button" (click)="v.solicitarCierre()" [disabled]="guardando()">Cancelar</button>
@@ -130,6 +132,7 @@ interface RespuestaAnamnesis {
           @for (respuesta of respuestas(); track respuesta.id) {
             <article class="captura-anterior">
               <header><div><strong>{{ respuesta.plantilla }} · v{{ respuesta.version_plantilla }}</strong><span>{{ respuesta.registrada_en | date:'dd/MM/yyyy HH:mm' }}</span></div><span class="sensibilidad" [class.sensibilidad--n3]="respuesta.nivel_sensibilidad === 'N3'">{{ respuesta.nivel_sensibilidad }}</span></header>
+              @if(puedeLeerFotos()){<app-fotos-registro tipo="anamnesis" [registroId]="respuesta.id" />}
               <dl>@for (pregunta of respuesta.preguntas; track pregunta.id) { <div><dt>{{ pregunta.etiqueta }}</dt><dd>{{ valorLegible(respuesta.respuestas[pregunta.id]) }}</dd></div> }</dl>
             </article>
           }
@@ -180,6 +183,9 @@ interface RespuestaAnamnesis {
   `,
 })
 export class AnamnesisCapturaComponent {
+  protected puedeLeerFotos():boolean {return this.sesion.tienePermiso(PERMISOS.imagenClinicaLeer);}
+  protected puedeCargarFotos():boolean {return this.sesion.tienePermiso(PERMISOS.imagenClinicaCargar);}
+
   protected readonly operacionFotos = inject(FotosRegistroService).operacion<RespuestaAnamnesis>();
   protected fotos: readonly FotoSeleccionada[] = [];
   private readonly operaciones = inject(OperacionesService);

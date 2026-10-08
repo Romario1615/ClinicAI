@@ -45,6 +45,7 @@
               @if (puedeCorregir(formulario)) { <button [id]="'formulario-033-corregir-' + formulario.raiz_id" class="boton boton--pequeno" type="button" (click)="corregir(formulario)">Crear corrección</button> }
             </div>
           </div>
+          @if(puedeLeerFotos()){<app-fotos-registro tipo="formulario033" [registroId]="formulario.id" [puedeEditar]="puedeCorregir(formulario) && puedeCargarFotos()" />}
           <p class="registro__motivo"><strong>Motivo de consulta:</strong> {{ formulario.datos.motivo_consulta }}</p>
           <details class="detalle-completo">
             <summary>Ver contenido completo del formulario</summary>
@@ -285,7 +286,7 @@
         <!-- Al final, junto a «Guardar»: la captura es larga y quien pulsa
              guardar está mirando aquí, no arriba del todo. -->
         @if (error()) { <p class="aviso-error" role="alert">{{ error() }}</p> }
-      <app-captura-fotos titulo="Fotografías del formulario 033" [ocupada]="guardando()" (cambiadas)="fotos=$event" />
+      @if(puedeCargarFotos()){<app-captura-fotos titulo="Fotografías del formulario 033" [ocupada]="guardando()" (cambiadas)="fotos=$event" />}
 </form>
       <div pie class="acciones">
           <p class="ayuda">El formulario contiene información clínica sensible y cada consulta o cambio queda auditado.</p>

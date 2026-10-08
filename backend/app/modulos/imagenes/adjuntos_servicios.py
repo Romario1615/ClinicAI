@@ -27,6 +27,19 @@ MAX_FOTOS = 20
 
 
 class ServicioFotosRegistro:
+    @staticmethod
+    def niveles_permitidos(principal: Principal, tipo: str) -> tuple[str, ...]:
+        # Las imágenes asistenciales siguen la sensibilidad de la historia:
+        # permiso clínico y permiso adicional N3. El nivel del ámbito RAG
+        # conserva su control independiente para documentos de conocimiento.
+        if DESTINOS[tipo].clinico:
+            return (
+                ("N2", "N3")
+                if principal.tiene_permiso("historia_clinica.leer_sensible")
+                else ("N2",)
+            )
+        return tuple(n.value for n in NivelSensibilidad if principal.ambito.cubre_nivel(n))
+
     def __init__(self, sesion: AsyncSession, reloj: Reloj):
         self.sesion, self.reloj = sesion, reloj
         self.repo = RepositorioFotosRegistro(sesion, reloj.ahora())
@@ -154,7 +167,7 @@ class ServicioFotosRegistro:
         fila = await self.repo.obtener(id_foto, clinica_id)
         if fila is None or fila.tipo_registro != tipo or fila.registro_id != id_registro:
             raise RecursoNoEncontrado("La fotografía no está disponible.")
-        if not principal.ambito.cubre_nivel(NivelSensibilidad(fila.nivel_sensibilidad)):
+        if fila.nivel_sensibilidad not in self.niveles_permitidos(principal, tipo):
             raise RecursoNoEncontrado("La fotografía no está disponible.")
         if (
             fila.paciente_id is not None

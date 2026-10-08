@@ -1,3 +1,4 @@
+import { PROVEEDORES_PRUEBA } from '../../nucleo/pruebas/sesion-sintetica';
 import type { MockedObject } from "vitest";
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { By } from '@angular/platform-browser';
@@ -29,7 +30,7 @@ describe('SedesConfiguracionComponent', () => {
 
         TestBed.configureTestingModule({
             imports: [SedesConfiguracionComponent],
-            providers: [{ provide: CatalogoService, useValue: catalogo }],
+            providers: [...PROVEEDORES_PRUEBA,{ provide: CatalogoService, useValue: catalogo }],
         });
         fixture = TestBed.createComponent(SedesConfiguracionComponent);
         fixture.detectChanges();
@@ -43,7 +44,7 @@ describe('SedesConfiguracionComponent', () => {
     });
 
     it('edita la sede en una ventana Liquid Glass y persiste los cambios', async () => {
-        const editar = fixture.debugElement.query(By.css('.sede__cabecera button'));
+        const editar = fixture.debugElement.query(By.css('.sede__cabecera > button'));
         expect(editar).not.toBeNull();
         editar.triggerEventHandler('click');
         fixture.detectChanges();
@@ -73,7 +74,7 @@ describe('SedesConfiguracionComponent', () => {
     });
 
     it('cierra sin modificar datos cuando se cancela', async () => {
-        const editar = fixture.debugElement.query(By.css('.sede__cabecera button'));
+        const editar = fixture.debugElement.query(By.css('.sede__cabecera > button'));
         editar.triggerEventHandler('click');
         fixture.detectChanges();
         await fixture.whenStable();
@@ -92,7 +93,7 @@ describe('SedesConfiguracionComponent', () => {
 
     it('conserva el diálogo abierto y muestra el error de API si el guardado falla', async () => {
         catalogo.actualizarSede.mockReturnValue(throwError(() => new Error('fallo')));
-        const editar = fixture.debugElement.query(By.css('.sede__cabecera button'));
+        const editar = fixture.debugElement.query(By.css('.sede__cabecera > button'));
         expect(editar).not.toBeNull();
         editar.triggerEventHandler('click');
         fixture.detectChanges();

@@ -47,8 +47,11 @@ test('administración crea, edita y desactiva un perfil profesional', async ({ p
   await altaAcceso.getByLabel('Correo', { exact: true }).fill(`profesional-${sufijo}@example.invalid`);
   await altaAcceso.getByLabel('Contraseña inicial').fill('Inicial!Segura123');
   await altaAcceso.locator('.opciones .opcion').filter({ hasText: /^Profesional/ }).locator('input').check();
-  await altaAcceso.getByLabel('Perfil profesional').selectOption({ label: `${nombre} Pruebas` });
-  const perfilId = await altaAcceso.getByLabel('Perfil profesional').inputValue();
+  const selectorPerfil = altaAcceso.getByLabel('Perfil profesional');
+  const opcionPerfil = selectorPerfil.locator('option').filter({ hasText: `${nombre} Pruebas` });
+  await expect(opcionPerfil).toHaveCount(1);
+  const perfilId = (await opcionPerfil.getAttribute('value'))!;
+  await selectorPerfil.selectOption(perfilId);
   await altaAcceso.getByRole('button', { name: 'Crear cuenta y dar acceso' }).click();
   await expect(page.locator('.exito[role="status"]')).toContainText('Cuenta creada y acceso concedido.');
   const cuenta = page.locator('tbody tr').filter({ hasText: `profesional-${sufijo}@example.invalid` });

@@ -25,7 +25,7 @@ import { VentanaFlotanteComponent } from './ventana-flotante.component';
         }
         @if(estado()===null){<app-captura-fotos titulo="Imagen del registro" [perfil]="tipo()==='usuario'" [ocupada]="ocupado()" (cambiadas)="fotos=$event" />}
       </form>
-      @if(tipo()==='clinica' && estado()===null){<app-fotos-registro tipo="clinica" [registroId]="registroId()" [puedeEditar]="true" />}
+      @if(estado()===null){<app-fotos-registro [tipo]="tipo()" [registroId]="registroId()" [puedeEditar]="true" />}
       <div pie class="acciones"><button class="boton" type="button" (click)="cancelar()" [disabled]="ocupado()">Cancelar</button><button class="boton boton--principal" type="submit" form="editar-registro" [disabled]="ocupado() || cargando() || formulario.invalid">{{ ocupado() ? 'Guardando…' : 'Guardar cambios' }}</button></div>
     </app-ventana-flotante>
   `,
@@ -73,7 +73,7 @@ export class EditorRegistroComponent implements OnInit {
     const datos = this.estado() !== null ? { activo: this.estado(), motivo: this.motivo } : Object.fromEntries(this.campos().map(c => [c.clave, this.datos[c.clave] || null]));
     this.ocupado.set(true); this.error.set('');
     const peticion=this.api.guardar(this.ruta() + (this.estado() === null ? '/datos' : '/estado'), datos, crypto.randomUUID(), true).pipe(map(()=>({id:this.registroId()})));
-    this.operacionFotos.guardar(this.tipo()==='usuario'?'perfil_usuario':'clinica',peticion,this.estado()===null?this.fotos:[]).subscribe({
+    this.operacionFotos.guardar(this.tipo()==='usuario' && !this.ruta().startsWith('/plataforma/')?'perfil_usuario':this.tipo(),peticion,this.estado()===null?this.fotos:[]).subscribe({
       next: () => { this.ocupado.set(false); this.guardado.emit(); },
       error: error => { this.ocupado.set(false); this.error.set(error.message); },
     });

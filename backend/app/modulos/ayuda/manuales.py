@@ -129,6 +129,50 @@ _RECEPCION = ManualSistema(
     ),
     secciones=(
         _s(
+            "recepcion.agente-ficha",
+            "Coordinar turnos con el agente de una persona",
+            "/pacientes",
+            "Acompañar la atención administrativa manteniendo una única ficha como contexto.",
+            (
+                "En Pacientes, abra Ver ficha y pulse Agente del paciente para consultar sus citas y cobros autorizados.",
+                "En Más gestiones, configure sede, servicio, responsable y fechas si necesita buscar un horario; elija un turno ofrecido.",
+                "Compruebe el nombre de la persona, el horario y el motivo antes de pulsar Confirmar acción; Descartar conserva la agenda.",
+            ),
+            ("Este apoyo de recepción no muestra resúmenes clínicos ni ejecuta prescripciones.",),
+            requiere=("paciente.leer_administrativo",),
+        ),
+        _s(
+            "recepcion.fotos-administrativas",
+            "Adjuntar identificación y respaldos de recepción",
+            "/pacientes",
+            "Registrar fotografías administrativas junto con los datos de atención.",
+            (
+                "Al dar de alta a una persona, elija su foto de perfil o use Tomar foto en un dispositivo compatible.",
+                "Antes de confirmar una reserva, adjunte sus imágenes administrativas; en una serie quedan en la primera cita.",
+                "Para consultar los respaldos de una cita, abra su detalle y pulse Fotos y adjuntos.",
+            ),
+            (
+                "Recepción conserva fotografías administrativas; las mediciones e imágenes clínicas requieren permisos asistenciales.",
+                "Si falla la carga, el aviso informa que la reserva ya existe: reintente Guardar para completar solo las fotografías.",
+            ),
+            requiere=("paciente.crear", "cita.crear"),
+        ),
+        _s(
+            "recepcion.analitica",
+            "Anticipar el trabajo de la recepción",
+            "/analitica",
+            "Examinar demanda y ausencias de los turnos que recepción puede gestionar.",
+            (
+                "Entre en Analítica IA y elija historial, horizonte y sede permitida.",
+                "Consulte Descriptivo para los volúmenes registrados y Predictivo para las estimaciones de futuras fechas.",
+                "En Prescriptivo revise propuestas de contacto y confirme cualquier acción en Agenda con la persona responsable.",
+            ),
+            (
+                "Falta historial significa que todavía no hay datos suficientes para estimar; los días no observados no se inventan.",
+            ),
+            requiere=("dashboard.leer",),
+        ),
+        _s(
             "recepcion.atencion-documentos",
             "Preparar la atención y autorizar el canal documental",
             "/pacientes",
@@ -351,6 +395,72 @@ _PROFESIONAL = ManualSistema(
         "La firma electrónica con validez jurídica todavía no está implementada.",
     ),
     secciones=(
+        _s(
+            "profesional.agente-ficha",
+            "Apoyarse en el agente mientras revisa el expediente",
+            "/pacientes",
+            "Consultar la información autorizada y gestionar la agenda sin abandonar el historial.",
+            (
+                "Desde la ficha de la persona atendida, mantenga abierta Historia y recetas y despliegue Agente del paciente.",
+                "Use Resumen clínico para revisar lo registrado dentro de su especialidad y relación asistencial; Protocolos consulta únicamente documentos aprobados y vigentes.",
+                "Escoja una cita propia de esta ficha antes de preparar cambios; revise la propuesta y confirme expresamente la operación.",
+            ),
+            (
+                "El resumen clínico se procesa localmente: no se incorpora al contexto del modelo externo.",
+                "Las decisiones sobre diagnósticos, medicamentos y tratamientos siguen bajo su responsabilidad profesional.",
+            ),
+            requiere=("paciente.leer_administrativo",),
+        ),
+        _s(
+            "profesional.periodontograma",
+            "Medir y conservar controles periodontales",
+            "/pacientes",
+            "El profesional dental documenta seis sitios por pieza sin alterar controles anteriores.",
+            (
+                "Abra la ficha del paciente, seleccione la cita de atención y elija Periodontograma en las herramientas de su especialidad dental.",
+                "Pulse Nuevo examen, confirme la fecha y la sede, y seleccione una pieza permanente para abrir sus seis sitios vestibulares y palatinos o linguales.",
+                "Ingrese profundidad, margen gingival firmado, sangrado, placa y supuración; marque Sin evaluar cuando no haya medición. El NIC se calcula como profundidad más margen.",
+                "Registre movilidad, furcación, ausencia o implante según corresponda; pulse Aplicar pieza, escriba el motivo y guarde el examen.",
+                "Para corregir su último control, abra Corregir / anular y conserve el motivo; Anular control conserva el original con una nueva versión.",
+                "Elija otro control en Comparar con para los sitios comunes y use Descargar PDF para conservar el registro completo.",
+            ),
+            (
+                "Periodontograma e índice de placa pertenecen a odontología; el facegrama se ofrece en salud estética según los módulos concedidos.",
+                "El margen es positivo apical y negativo coronal. Los colores ordenan profundidades y no emiten un diagnóstico.",
+                "Solo el autor corrige un control vigente; N3 necesita permiso sensible y no se puede rebajar al corregir.",
+            ),
+            requiere=("paciente.leer_administrativo", "odontograma.escribir"),
+        ),
+        _s(
+            "profesional.fotos-registro",
+            "Conservar evidencia visual de la consulta",
+            "/historia-clinica",
+            "Asociar fotografías a la versión clínica que realmente documentan.",
+            (
+                "En el editor de evolución, receta propia o evaluación, seleccione archivos JPEG, PNG o WebP o capture desde la cámara del dispositivo.",
+                "Revise la vista previa y añada una descripción antes de guardar; cada imagen debe ocupar como máximo 10 MB.",
+                "En el registro guardado abra Fotos y adjuntos para ampliar sus imágenes; no adjunte evidencia a controles periodontales ya corregidos.",
+            ),
+            (
+                "Las imágenes mantienen clínica, paciente, especialidad y sensibilidad del registro; una fotografía no amplía el acceso del profesional.",
+            ),
+            requiere=("historia_clinica.leer", "imagen_clinica.cargar"),
+        ),
+        _s(
+            "profesional.analitica-local",
+            "Revisar la evolución operativa de su consulta",
+            "/analitica",
+            "Separar observaciones, estimaciones y propuestas administrativas de su ámbito profesional.",
+            (
+                "Desde Analítica IA, examine los gráficos de atención y espera de sus turnos autorizados.",
+                "En la vista predictiva abra Datos y metodología para comprobar las fechas de evaluación y el error frente a la referencia.",
+                "Use las sugerencias administrativas como preparación de una revisión propia; ningún gráfico cambia un tratamiento ni indica una dosis.",
+            ),
+            (
+                "El entrenamiento necesita al menos 56 días de historia y 42 observaciones válidas; una banda empírica representa errores observados, no certeza clínica.",
+            ),
+            requiere=("dashboard.leer",),
+        ),
         _s(
             "profesional.ficha-integral",
             "Trabajar desde la atención de origen",
@@ -628,6 +738,51 @@ _ASISTENTE = ManualSistema(
     ),
     secciones=(
         _s(
+            "asistente.agente-ficha",
+            "Preparar la atención con apoyo del agente contextual",
+            "/pacientes",
+            "Ayudar al responsable con consultas permitidas sobre la persona que está atendiendo.",
+            (
+                "Abra la ficha asignada y active el panel Agente del paciente para conservar visible el recorrido de atención.",
+                "Consulte el resumen disponible o las citas según las autorizaciones de su cuenta; si una función no aparece, solicite al responsable revisarla.",
+                "Ante un cambio administrativo permitido, lea la propuesta completa y elija confirmarla o descartarla; una sesión nueva pierde los borradores pendientes.",
+            ),
+            (
+                "El panel no otorga herramientas dentales o estéticas de otra especialidad ni permite cambiar registros de otro autor.",
+            ),
+            requiere=("paciente.leer_administrativo",),
+        ),
+        _s(
+            "asistente.periodoncia-lectura",
+            "Preparar la consulta con el control dental disponible",
+            "/pacientes",
+            "Consultar mediciones dentales de su ámbito como apoyo al especialista.",
+            (
+                "Busque al paciente en Pacientes y abra las herramientas que su especialidad habilita.",
+                "Si está concedida Periodoncia, seleccione el control periodontal y cambie entre las vistas vestibular y palatina o lingual.",
+                "Consulte tabla, historial y PDF para preparar la revisión con el autor; la ausencia de un valor significa que no fue evaluado.",
+            ),
+            (
+                "El asistente consulta el periodontograma y el plan; los botones para registrar, corregir o anular requieren permiso de escritura del profesional.",
+            ),
+            requiere=("paciente.leer_administrativo", "odontograma.leer"),
+        ),
+        _s(
+            "asistente.fotos-perfil",
+            "Fotografiar la identificación al preparar la atención",
+            "/pacientes",
+            "Mantener una identificación visual administrativa sin editar mediciones clínicas.",
+            (
+                "En el alta de paciente, use Elegir foto para un archivo de identificación o Tomar foto para una cámara compatible.",
+                "Confirme que la vista previa corresponde a la persona seleccionada y guarde la ficha.",
+                "Las evidencias asistenciales generales se registran en Imágenes clínicas cuando su módulo y relación asistencial lo permiten.",
+            ),
+            (
+                "Una fotografía de perfil es administrativa; no sustituye el consentimiento ni acredita la identidad por sí sola.",
+            ),
+            requiere=("paciente.crear",),
+        ),
+        _s(
             "asistente.contexto",
             "Comprobar la atención asignada antes del seguimiento",
             "/pacientes",
@@ -776,6 +931,54 @@ _ADMINISTRADOR = ManualSistema(
         "Guardar una credencial no demuestra que el servicio externo esté conectado.",
     ),
     secciones=(
+        _s(
+            "administrador.agente-ficha",
+            "Supervisar gestiones del agente desde una ficha",
+            "/pacientes",
+            "Coordinar operaciones de la clínica con confirmación humana y permisos vigentes.",
+            (
+                "Localice al paciente desde el listado y despliegue su agente para verificar exclusivamente las citas y pagos de esa ficha.",
+                "Para una reserva nueva, complete el contexto de búsqueda y seleccione uno de los horarios que devuelve la agenda interna.",
+                "Autorice la propuesta después de revisar paciente, horario y motivo; si cambian sus accesos, abra una conversación nueva.",
+            ),
+            (
+                "Administración utiliza datos operativos; este panel no agrega lectura clínica a su rol.",
+                "Funciones locales indica que todavía no se ha configurado un proveedor conversacional para la clínica.",
+            ),
+            requiere=("paciente.leer_administrativo",),
+        ),
+        _s(
+            "administrador.aprendizaje",
+            "Supervisar indicadores y aprendizaje de la clínica",
+            "/analitica",
+            "Dirigir revisiones operativas con series calculadas de registros autorizados.",
+            (
+                "Seleccione un rango de 90, 180 o 365 días y un horizonte de 7, 14 o 30 días en Analítica IA.",
+                "Descriptivo muestra datos observados; Predictivo informa modelo, observaciones y error; Prescriptivo presenta acciones administrativas para revisión humana.",
+                "Compare el error del modelo con la referencia y trate En evaluación como un resultado experimental.",
+                "Actualice regularmente el análisis para capturar pagos pendientes, alertas y otros estados; los días sin captura permanecen desconocidos y un cambio de ámbito inicia una serie distinta.",
+            ),
+            (
+                "Los algoritmos se ajustan localmente sin claves de proveedor y no ejecutan recomendaciones.",
+                "Cobros y gastos se muestran solo con permiso financiero; los filtros por especialidad no atribuyen gastos generales a un especialista.",
+            ),
+            requiere=("dashboard.leer",),
+        ),
+        _s(
+            "administrador.respaldos",
+            "Completar registros de gestión con fotografías",
+            "/gastos",
+            "Conservar respaldos de gastos y referencias visuales del catálogo y del equipo.",
+            (
+                "En Registrar gasto agregue fotografías del comprobante y describa su contenido antes de confirmar.",
+                "Desde la tabla de gastos abra Fotos y adjuntos para ampliar o retirar una imagen con un motivo de ocho caracteres como mínimo.",
+                "En los formularios de personal, servicios, especialidades y consultorios utilice el selector de fotografías para acompañar el registro administrativo.",
+            ),
+            (
+                "Se admiten hasta veinte imágenes vigentes por registro; la retirada conserva trazabilidad y no elimina el historial del gasto.",
+            ),
+            requiere=("gasto.leer", "gasto.registrar"),
+        ),
         _s(
             "administracion.crud-cuentas",
             "Actualizar identidad y retirar acceso del personal",
@@ -1071,6 +1274,48 @@ _AUDITOR = ManualSistema(
     ),
     secciones=(
         _s(
+            "auditor.agente-ficha",
+            "Examinar consultas del agente sin alterar la agenda",
+            "/pacientes",
+            "Revisar los datos administrativos del expediente dentro del ámbito de auditoría.",
+            (
+                "Entre en una ficha autorizada y active su agente para solicitar Mis citas o Mis pagos, conservando el contexto de esa persona.",
+                "Compruebe la selección de cita y los estados devueltos; los controles de reserva, cancelación o reprogramación requieren permisos adicionales.",
+                "Consulte Auditoría para contrastar la apertura y las consultas del agente con el operador responsable.",
+            ),
+            (
+                "No obtiene el contenido del historial ni del resumen clínico por tener permiso de auditoría.",
+            ),
+            requiere=("paciente.leer_administrativo",),
+        ),
+        _s(
+            "auditor.evidencia-analitica",
+            "Contrastar el origen de las estimaciones operativas",
+            "/analitica",
+            "Inspeccionar series agregadas y evidencia temporal sin acceder al contenido clínico.",
+            (
+                "Abra Analítica IA dentro de su sede y compruebe las definiciones de cada indicador visible.",
+                "Expanda Datos y metodología y contraste los valores observados con las tablas de evaluación y pronóstico.",
+                "Registre si el modelo fue evaluado localmente, es experimental o carece de historial; las recomendaciones quedan sujetas a una persona autorizada.",
+            ),
+            (
+                "Los gráficos de aprendizaje no conceden lectura del periodontograma, recetas o fotos clínicas al auditor.",
+            ),
+            requiere=("dashboard.leer",),
+        ),
+        _s(
+            "auditor.fotos-gastos",
+            "Consultar los respaldos visuales del libro de gastos",
+            "/gastos",
+            "Revisar evidencia administrativa manteniendo sus límites de lectura.",
+            (
+                "Localice el gasto por fecha y categoría y pulse Fotos y adjuntos en su fila.",
+                "Amplíe las imágenes autorizadas y compruebe su descripción; solicite el rastro de retirada para investigar una evidencia anulada.",
+            ),
+            ("El permiso de lectura del gasto no permite adjuntar ni retirar comprobantes.",),
+            requiere=("gasto.leer",),
+        ),
+        _s(
             "auditoria.trazabilidad-registros",
             "Revisar bajas y emisiones documentales",
             "/usuarios",
@@ -1207,6 +1452,51 @@ _SUPERADMINISTRADOR = ManualSistema(
     ),
     secciones=(
         _s(
+            "superadministrador.agente-ficha",
+            "Comprobar el apoyo contextual en la clínica activa",
+            "/pacientes",
+            "Verificar el funcionamiento operativo del agente sin ampliar el acceso entre clínicas.",
+            (
+                "Seleccione una ficha accesible de la clínica de su sesión y abra Agente del paciente para probar las consultas permitidas.",
+                "Revise el indicador de configuración del proveedor y contraste sus operaciones de agenda con los datos de esa clínica.",
+                "Confirme cada propuesta administrativa expresamente; abrir el panel de otra persona inicia una conversación separada.",
+            ),
+            (
+                "La administración global no concede acceso clínico ni permite reutilizar la sesión del agente de otro operador.",
+            ),
+            requiere=("paciente.leer_administrativo",),
+        ),
+        _s(
+            "superadministrador.identidad-visual",
+            "Registrar la imagen administrativa de una organización",
+            "/plataforma/clinicas",
+            "Acompañar el alta de clínica con sus referencias visuales.",
+            (
+                "Desde Plataforma abra Nueva clínica y complete la organización y su sede principal.",
+                "Añada logo o fotografías de las instalaciones, compruebe las vistas previas y confirme la creación.",
+                "Si una fotografía falla, conserve el aviso y reintente su carga sin crear otra clínica.",
+            ),
+            (
+                "El acceso de plataforma no concede lectura de fotos de pacientes ni mediciones de una especialidad.",
+            ),
+            rol="superadministrador",
+        ),
+        _s(
+            "superadministrador.analitica-plataforma",
+            "Revisar el análisis desde la organización asignada",
+            "/analitica",
+            "Controlar la disponibilidad del análisis de la clínica activa sin mezclar organizaciones.",
+            (
+                "Entre en Analítica IA usando la organización autorizada de la sesión y verifique el corte y la zona horaria del resultado.",
+                "Compruebe que cada gráfico declara su definición y que los indicadores aún sin historia muestran un estado de datos insuficientes.",
+                "Configure los permisos administrativos del cliente desde Plataforma si necesita conceder o retirar acceso a estos módulos.",
+            ),
+            (
+                "La analítica no es un panel global que combine datos de todas las clínicas del servidor.",
+            ),
+            requiere=("dashboard.leer",),
+        ),
+        _s(
             "plataforma.crud",
             "Editar organizaciones y gestionar bajas de cuentas",
             "/plataforma/clinicas",
@@ -1303,6 +1593,51 @@ MANUALES_SISTEMA: Final[dict[str, ManualSistema]] = {
 # manual de un rol propio se arma con las capacidades que su lista de
 # permisos habilita, y con nada mas.
 CAPACIDADES: Final[tuple[Seccion, ...]] = (
+    _s(
+        "capacidad.agente-contextual",
+        "Utilizar apoyo acotado a un expediente",
+        "/pacientes",
+        "Asistir las consultas de una sola persona con las capacidades efectivas de la cuenta.",
+        (
+            "En una ficha habilitada, abra el agente contextual y utilice las consultas disponibles según su rol personalizado.",
+            "Cuando exista una propuesta de cambio, examine sus datos antes de aprobarla; el servidor vuelve a validar sus autorizaciones.",
+            "Si aparece un error de carga, use Reintentar gestión; una propuesta vence cinco minutos después de prepararse.",
+        ),
+        (
+            "Los permisos de esta cuenta y la especialidad determinan los datos accesibles; el mensaje escrito no puede ampliarlos.",
+        ),
+        requiere=("paciente.leer_administrativo",),
+    ),
+    _s(
+        "capacidad.analitica-local",
+        "Analizar observaciones y pronósticos del ámbito",
+        "/analitica",
+        "Estudiar indicadores autorizados con modelos locales y evaluación cronológica.",
+        (
+            "Defina historial y horizonte antes de alternar entre los tres tipos de análisis.",
+            "Compruebe muestras, cortes temporales y error antes de usar cualquier estimación.",
+            "Revise las propuestas en el módulo original; cada sugerencia requiere intervención humana.",
+        ),
+        (
+            "Los estados diarios se capturan al consultar el análisis y no se reconstruyen para días sin observación.",
+        ),
+        requiere=("dashboard.leer",),
+    ),
+    _s(
+        "capacidad.periodontograma",
+        "Capturar el examen periodontal de seis sitios",
+        "/pacientes",
+        "Registrar un examen dental versionado cuando la especialidad y los permisos lo habilitan.",
+        (
+            "Desde la ficha seleccione atención y abra Periodontograma si figura entre sus herramientas concedidas.",
+            "Complete las mediciones por pieza, aplique sus cambios e indique un motivo para confirmar el examen.",
+            "Use corrección para una nueva versión, comparación para sitios comunes y PDF para exportar.",
+        ),
+        (
+            "La edición pertenece al autor y al módulo de periodoncia, y no está disponible en salud estética.",
+        ),
+        requiere=("paciente.leer_administrativo", "odontograma.escribir"),
+    ),
     _s(
         "capacidad.panel",
         "Seguimiento operativo",

@@ -39,8 +39,9 @@ Artefactos locales: `tmp/qa-20261007/faciograma-browser-final.log`,
 ## Alcance
 
 Estas pruebas usan datos sintéticos. No prueban entrega real a WhatsApp, modelos
-externos ni validez institucional de los PDFs. Periodoncia incluye el índice de
-placa existente; el periodontograma clínico completo mantiene su trabajo pendiente.
+externos ni validez institucional de los PDFs. En esa revisión Periodoncia
+incluía el índice de placa; el periodontograma completo se implementó después
+y su evidencia se registra en la ampliación al final de este informe.
 El PDF facial conserva el esquema vectorial y las observaciones; la nueva
 ilustración anatómica se usa en la pantalla.
 
@@ -108,3 +109,142 @@ y cambio de preferencia de movimiento.
 
 Evidencia local: `frontend-ia-cobertura.log`, `build-ia-final.log`,
 `lint-ia-final.log` e `ia-local-browser.log`, dentro de `tmp/qa-20261007/`.
+<a id="agente-periodontograma-analitica-y-fotografias"></a>
+
+# Agente, periodontograma, analítica y fotografías
+
+## 1. Alcance implementado
+
+Ficha con **Agente del paciente** junto al historial, herramientas operativas
+existentes y confirmación humana. Periodontograma versionado de 32 piezas,
+seis sitios, fotos y PDF. Analítica descriptiva/predictiva/prescriptiva con
+aprendizaje local y datos reales del ámbito. Captura y galerías privadas de
+registros clínicos y administrativos. Manuales propios de cada rol.
+
+## 2. Archivos y organización
+
+`modulos/asistente/paciente_*`, `ia/conversacion.py`, migración `035` y
+`compartido/agente-paciente.*`; periodontograma en `modulos/odontologia` y
+`paginas/historia-clinica`; observaciones en `modulos/dashboard`, fotografías
+en `modulos/imagenes`, formularios y galería compartida. Se extrajeron el
+repositorio de capturas y la huella de ámbito; el encabezado del Panel tiene
+su propio componente para conservar los presupuestos de estilos.
+
+## 3. Decisiones
+
+[ADR-0023](decisiones/0023-periodontograma-analitica-y-fotos.md) y
+[ADR-0024](decisiones/0024-agente-en-la-ficha.md): conservar versiones, datos
+ausentes y filtros; modelos locales verificables; fotos privadas; paciente
+fijo, permisos del operador y confirmación antes de una escritura operativa.
+
+## 4. Pruebas backend ejecutadas
+
+La corrida completa previa al agente aprobó **2.082 pruebas** y omitió tres
+llamadas optativas a un proveedor externo, en **16 min 2 s**, con PostgreSQL
+temporal y `pytest --no-cov -q -n 2 --dist=loadfile`. La base exclusiva se eliminó.
+Después, la revisión focalizada del agente y los módulos afectados aprobó
+**168 pruebas**, en **2 min 49 s**, con `--no-cov -q -n 1 --dist=loadfile`, incluyendo
+regresiones del agente de WhatsApp y sus servicios. No se presentan como una
+sola ejecución global actualizada. Los manuales ampliados aprobaron **26 casos**.
+
+## 5. Pruebas frontend ejecutadas
+
+`npm.cmd run test:ci -- --runner-config='../tmp/qa-20261007/vitest-ia.mjs'`:
+**743 pruebas aprobadas en 102 archivos**, en **8 min 18 s**, con un trabajador
+por la memoria disponible. Una primera corrida detectó cuatro selectores de
+pruebas que pulsaban Fotos en lugar de Editar; se corrigió la selección del
+botón explícito y se repitió la batería.
+
+## 6. Recorridos de navegador
+
+Chromium con API 8020 y PostgreSQL exclusivo: **4/4**, en **49,3 s**, archivo
+`18-periodontograma-analitica-agente.spec.ts`. Ficha profesional con historial,
+resumen local, citas y cierre; recepción sin lectura clínica; periodontograma
+con PS/MG/sangrado, foto privada, persistencia, PDF y móvil; tres análisis.
+Axe WCAG A/AA sin incidencias en los estados revisados.
+
+## 7. Cobertura
+
+En la corrida frontend de 743 casos: sentencias **85,11 %**, ramas **71,92 %**,
+funciones **80,65 %**, líneas **87,42 %**. No se rebajaron mínimos. Las corridas
+backend citadas usaron `--no-cov`; no se atribuye una medición nueva de cobertura.
+
+## 8. Calidad estática
+
+Ruff, formato y Mypy aprobados: **397 archivos formateados**, **253 fuentes
+tipadas**. Bandit con umbral de severidad media/alta sin hallazgos. Lint y build
+frontend aprobados sin advertencias de presupuesto. El encabezado y selector
+del Panel se extrajeron en componentes; se conservó el límite de 14 kB.
+
+## 9. Fallos corregidos
+
+La auditoría del agente utiliza el origen WEB admitido por la base; los apartados
+desde el personal se identifican como PANEL y WhatsApp conserva su origen.
+Las lecturas de fotos clínicas aplican los permisos clínicos de sensibilidad,
+conservando el control independiente del ámbito RAG y ACL de Conocimiento.
+Un recorrido detectó una foto correctamente guardada que no se mostraba: se
+añadió regresión de listado y descarga. Se corrigió un selector de caché de
+prueba que mezclaba operaciones incompletas con la respuesta terminada.
+La selección de cita se explica antes de preparar cambios y se retira al
+cancelarla. La sesión de un operador no puede reutilizarla otro usuario de
+la misma clínica. Se añadieron pruebas específicas de ambos comportamientos.
+
+## 10. Riesgos pendientes
+
+Carga, DAST, restauración real, accesibilidad manual y comportamiento del LLM
+externo siguen pendientes. Modelos con historia insuficiente no pronostican;
+sus recomendaciones administrativas requieren revisión humana.
+
+## 11. Credenciales faltantes
+
+No se añadieron claves externas. Las funciones locales operan con PostgreSQL;
+LLM libre, WhatsApp real, calendarios y otros servicios se verifican después
+de configurar credenciales del cliente. Sandbox no acredita entrega externa.
+
+## 12. Entorno de revisión
+
+Frontend local 4200 y API local 8000; pruebas de navegador dirigidas a 8020.
+Los datos de pruebas son sintéticos y se alojan en bases exclusivas. El acceso
+por botones sigue restringido al entorno de desarrollo.
+
+## 13. Producción
+
+Configurar dominios, autenticación definitiva, roles y ámbitos del cliente,
+proveedores y almacén cifrado; verificar integraciones con sus credenciales.
+Esta revisión local no cierra la fase de producción.
+
+## 14. Migraciones y despliegue
+
+`032`–`035`: tablas aditivas de periodontograma, fotografías, observaciones y
+sesiones. Se comprobó upgrade/downgrade de las cuatro y `alembic check` en
+base temporal. La base local conserva los datos existentes y está en `035`.
+Actualizar API y worker con el mismo código y conservar archivos cifrados.
+
+## 15. Reversión
+
+Revertir código preservando las tablas y archivos incorporados. El downgrade
+elimina las tablas de esta ampliación y se utiliza aquí solo en una base
+descartable; no es una operación de reversión de historia clínica en producción.
+
+## 16. Respaldo y restauración
+
+Conservar base, objetos cifrados y claves administradas por el cliente. El
+script de respaldo exige una clave externa; no se inventó una ni se declara
+una nueva restauración operativa en esta revisión.
+
+## 17. Evidencia y siguientes verificaciones
+
+Registros en `tmp/qa-20261007`: `backend-periodontograma-total.log`,
+`backend-agente-final-168.log`, `backend-agente-manuales.log`,
+`frontend-agente-total-verificado.log`, `e2e-agente-4.log`,
+`e2e-agente-confirmacion-corregido.log`, `frontend-agente-build-verificado.log`,
+`frontend-agente-lint-verificado.log` y salidas finales de Ruff/Mypy/Bandit.
+Las imágenes `agente-en-ficha.png`, `periodontograma-fotos.png`,
+`periodontograma-movil.png` y `analitica-predictiva.png` usan datos sintéticos.
+La revisión final de cambios posteriores se añade debajo.
+
+## 18. Preparación
+
+Funcionalidad local verificada en los recorridos indicados. Continúan abiertas
+las integraciones externas y las verificaciones de preparación operativa;
+no se declara el producto listo para producción.

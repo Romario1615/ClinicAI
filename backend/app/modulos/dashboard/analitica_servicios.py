@@ -15,7 +15,8 @@ from app.modulos.dashboard.aprendizaje import (
     PuntoSerie,
     pronosticar,
 )
-from app.modulos.dashboard.capturas import NOMBRES, capturar_y_leer
+from app.modulos.dashboard.capturas import NOMBRES
+from app.modulos.dashboard.capturas_repositorio import capturar_y_leer
 from app.nucleo.autorizacion import Principal
 
 DEFINICIONES = {

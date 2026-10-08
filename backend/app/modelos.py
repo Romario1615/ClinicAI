@@ -28,6 +28,7 @@ from app.modulos.agenda.modelos import (
     OrigenCita,
     TipoBloqueo,
 )
+from app.modulos.asistente.paciente_modelos import SesionAgentePaciente
 from app.modulos.auditoria.modelos import Auditoria
 from app.modulos.conocimiento.modelos import (
     EstadoDocumento,
@@ -259,6 +260,7 @@ __all__ = [
     "Sede",
     "Servicio",
     "Sesion",
+    "SesionAgentePaciente",
     "SesionDemo",
     "SeveridadAlergia",
     "SeveridadAlerta",

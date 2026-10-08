@@ -313,6 +313,8 @@
         } @else {
           <p>Aún no hay un odontograma. Pinte los hallazgos y cree la primera versión.</p>
         }
+        @if(puedeCargarFotos){<app-captura-fotos titulo="Fotografías del examen odontológico" [ocupada]="guardando()" (cambiadas)="fotos=$event" />}
+        @if(operacionFotos.guardado){<p role="status">La versión ya está guardada. Reintente para completar sus fotografías.</p>}
         <button class="boton boton--principal" type="button" [disabled]="guardando()" (click)="guardar()">
           {{ guardando() ? 'Guardando…' : actual() ? 'Guardar nueva versión' : 'Crear odontograma' }}
         </button>
@@ -330,5 +332,6 @@
       </p>
     }
     @if (aviso()) { <p class="odontograma__aviso" role="status">{{ aviso() }}</p> }
+    @if(actual();as registro){@if(puedeLeerFotos){<app-fotos-registro tipo="odontograma" [registroId]="registro.id" [puedeEditar]="puedeCargarFotos && puedeGuardar()" />}}
   }
 </section>

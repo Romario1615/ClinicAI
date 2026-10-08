@@ -144,3 +144,25 @@ No son defectos. Se listan para que no se «arreglen» por error.
 | 9 · Pagos y finanzas | parcial | Libro de gastos de solo anulación y flujo de caja por periodo (ADR‑0021, E‑15) implementados el 2026‑10‑07. Cargos con total pactado, vencimiento manual opcional, filtro de vencidos basado en saldo impago, pagos parciales, saldos por cita, historial inmutable y comprobantes cifrados están implementados. Pagos permite exportar un CSV diario agregado por fecha local, estado y método, con doble permiso (`pago.leer` + `reporte.exportar`), alcance de sede en SQL y auditoría; no incluye pacientes. La campana muestra un aviso interno con el recuento de saldos vencidos; requiere `pago.leer`, refresca al abrirse y hereda el ámbito del listado API. No envía recordatorios a pacientes. Los cargos históricos no heredan vencimientos; alguien autorizado debe fijarlos o conciliarlos. ClamAV se exige en producción; el entorno local declara los comprobantes `NO_DISPONIBLE`. El plan dental propuesto/aceptado se puede imprimir como presupuesto con importes y datos de clínica/paciente, pero la vigencia y las condiciones aún no se configuran ni persisten. Presupuestos administrativos fuera del plan, avisos externos, saldos consolidados por paciente, reportes detallados Excel/PDF, facturación SRI, contabilidad y conciliación bancaria siguen pendientes. |
 | 11 · Ayuda | **implementada** | Manual por rol del sistema y por rol propio, filtrado por los permisos vigentes (tarea 11.1). Mantenimiento manual del contenido (E‑16) |
 | 10 · Producción | **no preparada** | Persisten bloqueos legales, verificación de proveedores externos, monitoreo no activo, DAST/escaneo de imágenes y procedimientos operativos sin ensayo. La cobertura automática actual supera sus umbrales. Ver [preparación para producción](production-readiness.md). |
+# Ampliación 2026-10-08
+
+- El agente de la ficha utiliza funciones locales mientras no se configure un
+  proveedor conversacional. Sus consultas y operaciones persisten en PostgreSQL;
+  no equivale a una conversación libre con un proveedor externo probado.
+- Se conservan pendientes las credenciales y verificaciones reales de LLM,
+  Meta WhatsApp, Google Calendar y otros servicios externos. Sandbox no es entrega.
+- El resumen clínico autorizado permanece local; el agente no diagnostica,
+  prescribe ni cambia historia o tratamientos. Sus pagos son de lectura.
+- Las propuestas caducan a los cinco minutos y las sesiones a las dos horas.
+  Los cambios de permisos requieren abrir otra conversación.
+- La analítica requiere historia suficiente y compara errores con una referencia.
+  La banda de errores es empírica, no un intervalo de confianza validado. Un
+  modelo que empeora la referencia se identifica como experimental.
+- Los indicadores de estado empiezan a observarse al consultar Analítica IA;
+  no hay captura histórica retroactiva ni un proceso diario automático nuevo.
+- Fotografías: JPEG/PNG/WebP, hasta 10 MB y veinte por registro; la cámara
+  nativa depende del equipo. Adjuntos de Conocimiento sin OCR ni indexación RAG.
+- Cada especialidad conserva sus herramientas. El periodontograma usa dientes
+  permanentes y sus colores describen rangos de medición, no diagnósticos.
+- Estas pruebas locales no cierran la preparación de producción: carga, DAST,
+  restauración operativa y revisión manual de accesibilidad siguen pendientes.

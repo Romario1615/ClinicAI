@@ -99,3 +99,23 @@ class RepositorioPeriodontograma:
 
     async def cita(self, principal: Principal, id_registro: uuid.UUID) -> Cita | None:
         return await RepositorioAgenda(self.sesion).obtener_cita(id_registro, principal=principal)
+
+    async def identificacion(self, fila: Periodontograma) -> tuple[str, str, str]:
+        paciente = (
+            await self.sesion.execute(
+                select(Paciente.nombre, Paciente.apellido).where(
+                    Paciente.id == fila.paciente_id, Paciente.clinica_id == fila.clinica_id
+                )
+            )
+        ).one()
+        profesional = (
+            await self.sesion.execute(
+                select(Profesional.nombre, Profesional.apellido).where(
+                    Profesional.id == fila.profesional_id, Profesional.clinica_id == fila.clinica_id
+                )
+            )
+        ).one()
+        clinica = await self.sesion.scalar(
+            select(Clinica.nombre).where(Clinica.id == fila.clinica_id)
+        )
+        return " ".join(paciente), " ".join(profesional), str(clinica or "Clínica")

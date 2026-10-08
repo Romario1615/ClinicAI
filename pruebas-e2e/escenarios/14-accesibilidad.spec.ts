@@ -7,7 +7,7 @@ import { expect, test } from '../apoyo/prueba';
 
 const ETIQUETAS_WCAG = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'];
 const RUTAS_MENU = [
-  '/panel', '/plataforma/clinicas', '/usuarios', '/agenda', '/pacientes', '/lista-espera',
+  '/panel', '/analitica', '/plataforma/clinicas', '/usuarios', '/agenda', '/pacientes', '/lista-espera',
   '/historia-clinica', '/medicamentos', '/conocimiento', '/delegaciones', '/equipo',
   '/promociones', '/catalogo', '/pagos', '/gastos', '/conversaciones', '/agente-demo', '/seguridad',
   '/asistente', '/automatizaciones', '/configuracion', '/ayuda',
@@ -48,10 +48,13 @@ test.describe('Accesibilidad WCAG 2.2 AA', () => {
   });
 
   test('panel de seguimiento y agenda para recepción', async ({ page }) => {
+    // Cuatro auditorías axe y ventanas a varios tamaños dentro de este recorrido.
+    test.setTimeout(60_000);
     await acceder(page, 'recepcion');
     await expect(page.getByRole('heading', { name: 'Panel de seguimiento' })).toBeVisible();
     await exigirSinIncidencias(page);
 
+    await page.getByRole('tab', { name: 'Cifras del periodo', exact: true }).click();
     await page.getByRole('button', { name: /Ajustar filtros/ }).click();
     const filtros = page.getByRole('dialog', { name: 'Filtros del dashboard' });
     await expect(filtros).toBeVisible();
@@ -90,6 +93,8 @@ test.describe('Accesibilidad WCAG 2.2 AA', () => {
   });
 
   test('administración de clínica', async ({ page }) => {
+    // Varias ventanas de configuración: cada una conserva su auditoría completa.
+    test.setTimeout(60_000);
     await acceder(page, 'administradora');
     await irA(page, 'Configuración');
     await expect(page.getByRole('heading', { name: 'Administración de la clínica' })).toBeVisible();
