@@ -21,6 +21,7 @@ import { SesionService } from '../../nucleo/servicios/sesion.service';
 import type { Cita, Paciente, Sede } from '../../nucleo/modelos/dominio';
 import { ResumenModuloComponent } from '../../compartido/resumen-modulo.component';
 import { IconoComponent } from '../../compartido/icono.component';
+import { PestanasComponent, type OpcionPestana } from '../../compartido/pestanas.component';
 
 /** El listado trae además a quién y para cuándo. */
 export interface PagoListado extends Pago {
@@ -69,24 +70,34 @@ function sumarDias(fecha: string, dias: number): string {
 @Component({
   selector: 'app-pagos',
   standalone: true,
-  imports: [FormsModule, SelectorPacienteComponent, ResumenModuloComponent, VentanaFlotanteComponent, IconoComponent],
+  imports: [FormsModule, SelectorPacienteComponent, ResumenModuloComponent, VentanaFlotanteComponent, IconoComponent, PestanasComponent],
+  host: { class: 'pantalla' },
   template: `
-    <header class="modulo-cabecera"><div class="modulo-cabecera__texto"><p class="ceja">ADMINISTRACIÓN</p><h1><app-icono nombre="balance-clinico" [tamano]="28" /> Pagos</h1><p>Registro de efectivo y transferencias en USD. La confirmación la realiza el personal autorizado.</p></div><img class="modulo-cabecera__imagen" src="/images/pagos-administrativos.png" alt="" aria-hidden="true" loading="lazy" /></header>
+    <header class="modulo-cabecera pantalla__fijo"><div class="modulo-cabecera__texto"><p class="ceja">ADMINISTRACIÓN</p><h1><app-icono nombre="balance-clinico" [tamano]="28" /> Pagos</h1><p>Registro de efectivo y transferencias en USD. La confirmación la realiza el personal autorizado.</p></div><img class="modulo-cabecera__imagen" src="/images/pagos-administrativos.png" alt="" aria-hidden="true" loading="lazy" /></header>
 
-    <app-resumen-modulo modulo="pagos" />
-    <div class="cabecera-pagina">
-      <h2>Pagos · {{ total() }}</h2>
+    <app-resumen-modulo class="pantalla__fijo" modulo="pagos" />
+    <div class="barra-pagos pantalla__fijo">
+      @if (vistas().length > 1) {
+        <app-pestanas grupo="pagos" etiqueta="Vistas de pagos" [opciones]="vistas()" [activa]="vistaActiva()" (activaChange)="vista.set($event)" />
+      } @else {
+        <h2>Pagos · {{ total() }}</h2>
+      }
       <div class="acciones-cabecera">
         @if (sesion.tienePermiso('pago.registrar')) {
           <button class="boton boton--principal" type="button" (click)="abrirRegistro()">Registrar un abono</button>
         }
-        <button class="boton" type="button" (click)="cargar()" [disabled]="ocupado()">Actualizar</button>
+        @if (puedeLeerPagos() && puedeExportar()) {
+          <button class="boton" type="button" (click)="exportarAbierto.set(true)" aria-haspopup="dialog">Exportar movimientos</button>
+        }
+        <button class="boton" type="button" (click)="cargar()" [disabled]="ocupado() || cargandoCargos()">Actualizar</button>
       </div>
     </div>
-    @if (puedeLeerPagos() && puedeExportar()) {
-      <section class="tarjeta reporte-pagos" aria-labelledby="titulo-reporte-pagos">
-        <div><p class="ceja">ANÁLISIS FINANCIERO</p><h2 id="titulo-reporte-pagos">Exportar movimientos</h2>
-          <p>Resumen por día local, estado y método. No incluye nombres ni datos de pacientes.</p></div>
+    @if (error() && !revisando() && !formularioAbonoAbierto()) { <p class="aviso-error pantalla__fijo" role="alert">{{ error() }}</p> }
+    @if (aviso()) { <p class="aviso-ok pantalla__fijo" role="status">{{ aviso() }}</p> }
+    @if (exportarAbierto() && puedeLeerPagos() && puedeExportar()) {
+      <app-ventana-flotante ceja="Análisis financiero" titulo="Exportar movimientos" forma="centrada" [anchoMaximo]="560"
+        [ocupada]="exportandoReporte()" [error]="errorReporte()" (cerrar)="cerrarExportar()">
+        <p class="reporte-pagos__ayuda">Resumen por día local, estado y método. No incluye nombres ni datos de pacientes.</p>
         <form class="reporte-pagos__formulario" (ngSubmit)="exportarReporte()">
           <label class="campo"><span class="campo__etiqueta">Desde</span><input class="campo__control" type="date" name="reporte-desde" [(ngModel)]="reporteDesde" required /></label>
           <label class="campo"><span class="campo__etiqueta">Hasta (exclusivo)</span><input class="campo__control" type="date" name="reporte-hasta" [(ngModel)]="reporteHasta" required /></label>
@@ -97,9 +108,8 @@ function sumarDias(fecha: string, dias: number): string {
             {{ exportandoReporte() ? 'Preparando…' : 'Descargar CSV' }}
           </button>
         </form>
-        @if (errorReporte()) { <p class="aviso-error" role="alert">{{ errorReporte() }}</p> }
         @if (avisoReporte()) { <p class="aviso-ok" role="status">{{ avisoReporte() }}</p> }
-      </section>
+      </app-ventana-flotante>
     }
     @if (formularioAbonoAbierto() && sesion.tienePermiso('pago.registrar')) {
       <app-ventana-flotante ceja="Gestión financiera" titulo="Registrar un abono" forma="centrada" [anchoMaximo]="720" [cierraAlPulsarFuera]="false" (cerrar)="cerrarRegistro()">
@@ -131,67 +141,70 @@ function sumarDias(fecha: string, dias: number): string {
         </div>
       </app-ventana-flotante>
     }
-    @if (sesion.tienePermiso('pago.leer')) {
-      <section class="tarjeta cargos" aria-labelledby="titulo-cargos">
-        <div class="cabecera-pagina"><div><p class="ceja">TOTALES PACTADOS</p><h2 id="titulo-cargos">Cargos y saldos · {{ totalCargos() }}</h2></div><button class="boton" type="button" (click)="cargarCargos()" [disabled]="cargandoCargos()">Actualizar</button></div>
-        <div class="filtros" role="group" aria-label="Filtrar cargos por vencimiento">
-          @for (f of filtrosCargos; track f.clave) { <button type="button" class="filtro" [attr.aria-pressed]="soloVencidos() === f.clave" (click)="filtrarCargos(f.clave)">{{ f.texto }}</button> }
+    <div class="pantalla__resto">
+      <section class="pagos-lista" role="tabpanel" id="pagos-panel-pagos" aria-labelledby="pagos-pestana-pagos" [hidden]="vistaActiva() !== 'pagos'">
+        <div class="filtros" role="group" aria-label="Filtrar por estado">
+          @for (f of filtros; track f.clave) {
+            <button type="button" class="filtro" [attr.aria-pressed]="estadoFiltro() === f.clave" (click)="filtrar(f.clave)">{{ f.texto }}</button>
+          }
         </div>
-        @if (errorCargos()) { <p class="aviso-error" role="alert">{{ errorCargos() }}</p> }
-        @if (cargandoCargos()) { <p role="status">Cargando cargos…</p> }
-        @if (!cargandoCargos() && cargos().length === 0) { <p>No hay cargos registrados. Al crear el primero, indique el total acordado con el paciente.</p> }
-        @if (cargos().length > 0) {
-          <div class="tabla-envoltorio tabla-cargos" tabindex="0" role="region" aria-label="Cargos y saldos; desplazamiento horizontal de columnas"><table class="tabla">
-            <thead><tr><th>Paciente</th><th>Cita</th><th>Total</th><th>Confirmado</th><th>Por cobrar</th><th>Vencimiento</th><th>Disponible para abonos</th><th>Acción</th></tr></thead>
-            <tbody>@for (cargo of cargos(); track cargo.id) {
-              <tr><td>{{ cargo.paciente || 'Paciente' }}</td><td class="numerico">{{ cargo.cita_inicio ? fecha(cargo.cita_inicio) : '—' }}</td>
-                <td class="numerico">{{ cargo.total_acordado === null ? 'Por conciliar' : moneda(cargo.total_acordado) }}</td>
-                <td class="numerico">{{ moneda(cargo.total_confirmado) }}</td>
-                <td class="numerico">{{ cargo.saldo_pendiente === null ? '—' : moneda(cargo.saldo_pendiente) }}</td>
-                <td>{{ cargo.fecha_vencimiento || 'Sin fecha' }} @if (cargo.vencido) { <span class="estado estado--vencido">Vencido</span> }</td>
-                <td class="numerico">{{ cargo.saldo_no_asignado === null ? '—' : moneda(cargo.saldo_no_asignado) }}</td>
-                <td>@if (cargo.total_acordado === null && puedeValidar()) { <button class="boton boton--pequeno" type="button" (click)="abrirConciliacion(cargo)">Conciliar total</button> } @if (cargo.fecha_vencimiento === null && puedeValidar()) { <button class="boton boton--pequeno" type="button" (click)="abrirVencimiento(cargo)">Fijar vencimiento</button> }</td></tr>
-            }</tbody>
-          </table></div>
+
+        @if (cargando()) { <p role="status">Cargando pagos…</p> }
+        @if (!cargando() && pagos().length === 0) { <p class="tarjeta">No hay pagos con este filtro.</p> }
+        @if (pagos().length > 0) {
+          <div class="tabla-envoltorio tabla-pagos desplazable" tabindex="0" role="region" aria-label="Pagos">
+            <table class="tabla">
+              <thead><tr><th>Paciente</th><th>Cita</th><th>Importe</th><th>Método</th><th>Estado</th><th>Referencia</th><th class="accion"><span class="solo-lectores">Acciones</span></th></tr></thead>
+              <tbody>
+                @for (p of pagos(); track p.id) {
+                  <tr>
+                    <td>{{ p.paciente || 'Paciente' }}</td>
+                    <td class="numerico">{{ p.cita_inicio ? fecha(p.cita_inicio) : '—' }}</td>
+                    <td class="numerico">{{ moneda(p.importe) }}</td>
+                    <td>{{ p.metodo === 'EFECTIVO' ? 'Efectivo' : 'Transferencia' }}</td>
+                    <td><span class="estado" [attr.data-estado]="p.estado">{{ estado(p.estado) }}</span></td>
+                    <td>{{ p.referencia || '—' }}</td>
+                    <td class="accion">
+                      <button class="boton boton--pequeno" type="button" (click)="abrirCambio(p)">
+                        {{ puedeRevisar(p) ? 'Revisar' : 'Historial' }}
+                      </button>
+                    </td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
         }
-        <div class="acciones-demo"><button class="boton" type="button" (click)="moverCargos(-1)" [disabled]="paginaCargos() === 0 || cargandoCargos()">Anterior</button><span>Página {{ paginaCargos() + 1 }}</span><button class="boton" type="button" (click)="moverCargos(1)" [disabled]="(paginaCargos() + 1) * 25 >= totalCargos() || cargandoCargos()">Siguiente</button></div>
+        <div class="acciones-demo"><button class="boton" (click)="mover(-1)" [disabled]="pagina() === 0 || cargando()">Anterior</button><span>Página {{ pagina() + 1 }}</span><button class="boton" (click)="mover(1)" [disabled]="(pagina() + 1) * 25 >= total() || cargando()">Siguiente</button></div>
       </section>
-    }
-    @if (error() && !revisando() && !formularioAbonoAbierto()) { <p class="aviso-error" role="alert">{{ error() }}</p> }
-    @if (aviso()) { <p class="aviso-ok" role="status">{{ aviso() }}</p> }
-    <div class="filtros" role="group" aria-label="Filtrar por estado">
-      @for (f of filtros; track f.clave) {
-        <button type="button" class="filtro" [attr.aria-pressed]="estadoFiltro() === f.clave" (click)="filtrar(f.clave)">{{ f.texto }}</button>
+
+      @if (sesion.tienePermiso('pago.leer')) {
+        <section class="tarjeta tarjeta--llena cargos" role="tabpanel" id="pagos-panel-cargos" aria-labelledby="pagos-pestana-cargos" [hidden]="vistaActiva() !== 'cargos'">
+          <div class="cargos__cabecera"><p class="ceja">TOTALES PACTADOS</p><h2 id="titulo-cargos">Cargos y saldos · {{ totalCargos() }}</h2></div>
+          <div class="filtros" role="group" aria-label="Filtrar cargos por vencimiento">
+            @for (f of filtrosCargos; track f.clave) { <button type="button" class="filtro" [attr.aria-pressed]="soloVencidos() === f.clave" (click)="filtrarCargos(f.clave)">{{ f.texto }}</button> }
+          </div>
+          @if (errorCargos()) { <p class="aviso-error" role="alert">{{ errorCargos() }}</p> }
+          @if (cargandoCargos()) { <p role="status">Cargando cargos…</p> }
+          @if (!cargandoCargos() && cargos().length === 0) { <p>No hay cargos registrados. Al crear el primero, indique el total acordado con el paciente.</p> }
+          @if (cargos().length > 0) {
+            <div class="tabla-envoltorio tabla-cargos desplazable" tabindex="0" role="region" aria-label="Cargos y saldos"><table class="tabla">
+              <thead><tr><th>Paciente</th><th>Cita</th><th>Total</th><th>Confirmado</th><th>Por cobrar</th><th>Vencimiento</th><th>Disponible para abonos</th><th>Acción</th></tr></thead>
+              <tbody>@for (cargo of cargos(); track cargo.id) {
+                <tr><td>{{ cargo.paciente || 'Paciente' }}</td><td class="numerico">{{ cargo.cita_inicio ? fecha(cargo.cita_inicio) : '—' }}</td>
+                  <td class="numerico">{{ cargo.total_acordado === null ? 'Por conciliar' : moneda(cargo.total_acordado) }}</td>
+                  <td class="numerico">{{ moneda(cargo.total_confirmado) }}</td>
+                  <td class="numerico">{{ cargo.saldo_pendiente === null ? '—' : moneda(cargo.saldo_pendiente) }}</td>
+                  <td>{{ cargo.fecha_vencimiento || 'Sin fecha' }} @if (cargo.vencido) { <span class="estado estado--vencido">Vencido</span> }</td>
+                  <td class="numerico">{{ cargo.saldo_no_asignado === null ? '—' : moneda(cargo.saldo_no_asignado) }}</td>
+                  <td>@if (cargo.total_acordado === null && puedeValidar()) { <button class="boton boton--pequeno" type="button" (click)="abrirConciliacion(cargo)">Conciliar total</button> } @if (cargo.fecha_vencimiento === null && puedeValidar()) { <button class="boton boton--pequeno" type="button" (click)="abrirVencimiento(cargo)">Fijar vencimiento</button> }</td></tr>
+              }</tbody>
+            </table></div>
+          }
+          <div class="acciones-demo"><button class="boton" type="button" (click)="moverCargos(-1)" [disabled]="paginaCargos() === 0 || cargandoCargos()">Anterior</button><span>Página {{ paginaCargos() + 1 }}</span><button class="boton" type="button" (click)="moverCargos(1)" [disabled]="(paginaCargos() + 1) * 25 >= totalCargos() || cargandoCargos()">Siguiente</button></div>
+        </section>
       }
     </div>
-
-    @if (cargando()) { <p role="status">Cargando pagos…</p> }
-    @if (!cargando() && pagos().length === 0) { <p class="tarjeta">No hay pagos con este filtro.</p> }
-    @if (pagos().length > 0) {
-      <div class="tabla-envoltorio tabla-pagos">
-        <table class="tabla">
-          <thead><tr><th>Paciente</th><th>Cita</th><th>Importe</th><th>Método</th><th>Estado</th><th>Referencia</th><th class="accion"><span class="solo-lectores">Acciones</span></th></tr></thead>
-          <tbody>
-            @for (p of pagos(); track p.id) {
-              <tr>
-                <td>{{ p.paciente || 'Paciente' }}</td>
-                <td class="numerico">{{ p.cita_inicio ? fecha(p.cita_inicio) : '—' }}</td>
-                <td class="numerico">{{ moneda(p.importe) }}</td>
-                <td>{{ p.metodo === 'EFECTIVO' ? 'Efectivo' : 'Transferencia' }}</td>
-                <td><span class="estado" [attr.data-estado]="p.estado">{{ estado(p.estado) }}</span></td>
-                <td>{{ p.referencia || '—' }}</td>
-                <td class="accion">
-                  <button class="boton boton--pequeno" type="button" (click)="abrirCambio(p)">
-                    {{ puedeRevisar(p) ? 'Revisar' : 'Historial' }}
-                  </button>
-                </td>
-              </tr>
-            }
-          </tbody>
-        </table>
-      </div>
-    }
-    <div class="acciones-demo"><button class="boton" (click)="mover(-1)" [disabled]="pagina() === 0 || cargando()">Anterior</button><span>Página {{ pagina() + 1 }}</span><button class="boton" (click)="mover(1)" [disabled]="(pagina() + 1) * 25 >= total() || cargando()">Siguiente</button></div>
 
     @if (revisando(); as pago) {
       <app-ventana-flotante [ceja]="puedeRevisar(pago) ? 'Revisar pago' : 'Historial de pago'" [titulo]="moneda(pago.importe) + ' · ' + (pago.paciente || 'Paciente')" forma="centrada"
@@ -286,7 +299,6 @@ function sumarDias(fecha: string, dias: number): string {
   `,
   changeDetection: ChangeDetectionStrategy.Eager,
   styles: `
-    .cargos { margin-bottom: var(--espacio-5); }
     .acciones-cabecera { display: flex; flex-wrap: wrap; gap: var(--espacio-2); }
     .formulario-abono { display: grid; gap: var(--espacio-3); }
     .formulario-abono .formulario-demo { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--espacio-3); }
@@ -296,13 +308,34 @@ function sumarDias(fecha: string, dias: number): string {
     .formulario-abono .acciones-demo { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: var(--espacio-2); }
     .formulario-abono .ayuda-demo { margin: 0; }
     @media (max-width: 600px) { .formulario-abono .formulario-demo { grid-template-columns: 1fr; } .formulario-abono .acciones-demo > .boton { flex: 1 1 auto; } }
-    .cargos .cabecera-pagina { margin-top: 0; }
-    .reporte-pagos { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: end; gap: var(--espacio-4); margin-bottom: var(--espacio-5); }
-    .reporte-pagos h2 { margin: 0; }
-    .reporte-pagos p:not(.ceja) { margin: 5px 0 0; color: var(--texto-suave); }
+    .barra-pagos { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--espacio-3); }
+    .barra-pagos h2 { margin: 0; }
+    .cargos__cabecera h2 { margin: 0; font-size: 1.05rem; }
+    .reporte-pagos__ayuda { margin: 0 0 var(--espacio-3); color: var(--texto-suave); }
     .reporte-pagos__formulario { display: flex; align-items: end; flex-wrap: wrap; gap: var(--espacio-2); }
-    .reporte-pagos__formulario .campo { min-width: 150px; }
-    @media (max-width: 760px) { .reporte-pagos { grid-template-columns: 1fr; } .reporte-pagos__formulario { align-items: stretch; } }
+    .reporte-pagos__formulario .campo { flex: 1 1 150px; min-width: 150px; margin: 0; }
+    @media (max-width: 760px) { .reporte-pagos__formulario { align-items: stretch; } }
+
+    /* Las clases de reparto fijan display; sin !important el atributo hidden
+       perdería y se verían las dos vistas a la vez. */
+    [role='tabpanel'][hidden] { display: none !important; }
+    /* Fechas e importes en una sola línea: filas más bajas, más filas a la vista. */
+    .tabla-pagos td.numerico,
+    .tabla-cargos td.numerico { white-space: nowrap; }
+    .pagos-lista { display: flex; flex-direction: column; min-width: 0; }
+    .pagos-lista > .acciones-demo,
+    .cargos > .acciones-demo { display: flex; align-items: center; justify-content: flex-end; gap: var(--espacio-2); margin-top: var(--espacio-2); }
+
+    @media (min-width: 821px) and (min-height: 600px) {
+      .pagos-lista,
+      .cargos { flex: 1 1 0; min-height: 0; }
+      .pagos-lista > :not(.tabla-pagos),
+      .cargos > :not(.tabla-cargos) { flex: none; }
+      .filtros { margin: 0 0 var(--espacio-2); }
+      /* La cabecera de la tabla se queda a la vista mientras se desplaza. */
+      .tabla-pagos thead th,
+      .tabla-cargos thead th { position: sticky; top: 0; z-index: 1; background: var(--superficie-elevada); }
+    }
     .ceja { margin: 0 0 3px; color: var(--texto-suave); font-size: .72rem; font-weight: 750; letter-spacing: .1em; }
     .cargos .tabla { min-width: 1040px; }
     .filtros { display: flex; flex-wrap: wrap; gap: 6px; margin: var(--espacio-2) 0 var(--espacio-3); }
@@ -433,6 +466,24 @@ export class PagosComponent {
     CONFIRMED: ['REFUND_PENDING'],
     REFUND_PENDING: [],
   };
+
+  /** Pagos y cargos no caben a la vez sin desplazar la pantalla: uno por pestaña. */
+  protected readonly vistas = computed<readonly OpcionPestana[]>(() => [
+    { clave: 'pagos', etiqueta: 'Pagos', cuenta: this.total() },
+    ...(this.puedeLeerPagos() ? [{ clave: 'cargos', etiqueta: 'Cargos y saldos', cuenta: this.totalCargos() }] : []),
+  ]);
+  protected readonly vista = signal('pagos');
+  protected readonly vistaActiva = computed(() =>
+    this.vistas().some((opcion) => opcion.clave === this.vista()) ? this.vista() : 'pagos',
+  );
+  protected readonly exportarAbierto = signal(false);
+
+  protected cerrarExportar(): void {
+    if (this.exportandoReporte()) return;
+    this.exportarAbierto.set(false);
+    this.errorReporte.set('');
+    this.avisoReporte.set('');
+  }
 
   constructor() {
     this.cargar();

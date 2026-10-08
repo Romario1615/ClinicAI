@@ -141,6 +141,28 @@ describe('PagosComponent', () => {
         expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:reporte-pagos');
     });
 
+    it('abre la exportación en una ventana flotante y no ocupa la pantalla de trabajo', () => {
+        montar(['pago.leer', 'reporte.exportar']);
+        const raiz = fixture.nativeElement as HTMLElement;
+        expect(raiz.querySelector('.reporte-pagos__formulario')).toBeNull();
+        const abrir = [...raiz.querySelectorAll('button')].find((boton) => boton.textContent?.trim() === 'Exportar movimientos');
+        abrir?.click();
+        fixture.detectChanges();
+        const dialogo = document.querySelector('dialog.capa');
+        expect(dialogo?.textContent).toContain('Exportar movimientos');
+        expect(dialogo?.querySelector('.reporte-pagos__formulario')).not.toBeNull();
+    });
+
+    it('reparte pagos y cargos en pestañas y muestra una sola a la vez', () => {
+        montar(['pago.leer']);
+        const raiz = fixture.nativeElement as HTMLElement;
+        const visibles = () => [...raiz.querySelectorAll<HTMLElement>('[role="tabpanel"]')].filter((panel) => !panel.hidden).map((panel) => panel.id);
+        expect(visibles()).toEqual(['pagos-panel-pagos']);
+        raiz.querySelector<HTMLElement>('#pagos-pestana-cargos')?.click();
+        fixture.detectChanges();
+        expect(visibles()).toEqual(['pagos-panel-cargos']);
+    });
+
     it('no ofrece exportación financiera sin el permiso de reportes', () => {
         montar(['pago.leer']);
         expect((fixture.nativeElement as HTMLElement).textContent).not.toContain('Exportar movimientos');
