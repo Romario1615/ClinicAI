@@ -107,15 +107,14 @@ const CATEGORIAS: Record<string, string> = {
     FotoPersonaComponent,
     IconoComponent,
   ],
+  host: { class: 'pantalla' },
   template: `
-    <header class="encabezado">
+    <header class="encabezado pantalla__fijo">
       <div>
         <p class="ceja"><app-icono nombre="escudo" [tamano]="16" /> ADMINISTRACIÓN DE ACCESOS</p>
         <h1>Usuarios y roles</h1>
         <p class="encabezado__sub">Quién entra a la clínica, con qué rol y qué puede hacer cada rol.</p>
       </div>
-    </header>
-
     <div class="acciones" role="group" aria-label="Acciones de usuarios y roles">
       @if (puedeCrearRol()) {
         <button class="boton" type="button" (click)="abrir({ tipo: 'rol-nuevo' })">Crear rol</button>
@@ -126,17 +125,18 @@ const CATEGORIAS: Record<string, string> = {
         </button>
       }
     </div>
+    </header>
 
-    <app-resumen-modulo modulo="usuarios" />
+    <app-resumen-modulo class="pantalla__fijo" modulo="usuarios" />
 
     @if (aviso()) {
-      <p class="exito" role="status">{{ aviso() }}</p>
+      <p class="exito pantalla__fijo" role="status">{{ aviso() }}</p>
     }
     @if (error() && !ventana()) {
-      <p class="aviso-error" role="alert">{{ error() }}</p>
+      <p class="aviso-error pantalla__fijo" role="alert">{{ error() }}</p>
     }
 
-    <div class="pestanas" role="tablist" aria-label="Secciones de usuarios y roles">
+    <div class="pestanas pantalla__fijo" role="tablist" aria-label="Secciones de usuarios y roles">
       @for (tab of pestanas; track tab.clave) {
         <button
           type="button"
@@ -154,9 +154,10 @@ const CATEGORIAS: Record<string, string> = {
       }
     </div>
 
+    <div class="pantalla__resto">
     @switch (pestana()) {
       @case ('personal') {
-        <section class="tarjeta seccion" aria-label="Personal con acceso">
+        <section class="tarjeta tarjeta--llena seccion" aria-label="Personal con acceso">
           <div class="filtros">
             <label class="campo filtros__buscar">
               <span class="solo-lectores">Buscar persona</span>
@@ -179,7 +180,7 @@ const CATEGORIAS: Record<string, string> = {
           } @else if (personal().length === 0) {
             <p class="vacio">Ninguna persona coincide con la búsqueda.</p>
           } @else {
-            <div class="tabla-envoltorio">
+            <div class="tabla-envoltorio desplazable" tabindex="0" role="region" aria-label="Personal con acceso">
               <table class="tabla">
                 <thead>
                   <tr>
@@ -247,7 +248,7 @@ const CATEGORIAS: Record<string, string> = {
       }
 
       @case ('roles') {
-        <section class="roles" aria-label="Roles de la clínica">
+        <section class="roles desplazable" tabindex="0" aria-label="Roles de la clínica">
           @for (rol of roles(); track rol.id) {
             <article class="tarjeta rol">
               <div class="rol__cabecera">
@@ -271,9 +272,12 @@ const CATEGORIAS: Record<string, string> = {
       }
 
       @case ('matriz') {
-        <app-matriz-accesos [roles]="roles()" />
+        <div class="desplazable" tabindex="0" role="region" aria-label="Matriz de accesos">
+          <app-matriz-accesos [roles]="roles()" />
+        </div>
       }
     }
+    </div>
 
     @if (datosUsuario(); as u) {
       <app-editor-registro tipo="usuario" [ruta]="'/usuarios/' + u.id" [inicial]="u" titulo="Editar usuario" (cerrar)="datosUsuario.set(null)" (guardado)="datosUsuario.set(null); cargar()" />
@@ -437,7 +441,6 @@ const CATEGORIAS: Record<string, string> = {
   `,
   changeDetection: ChangeDetectionStrategy.Eager,
   styles: `
-    :host { display: grid; gap: var(--espacio-4); }
     :host > * { min-width: 0; }
     .encabezado {
       position: relative;
@@ -474,7 +477,20 @@ const CATEGORIAS: Record<string, string> = {
       from { transform: translate3d(-2%, 0, 0) scale(.96); opacity: .55; }
       to { transform: translate3d(2%, 1%, 0) scale(1.04); opacity: .9; }
     }
+    .encabezado .acciones { position: relative; z-index: 1; margin-left: auto; }
     .acciones { display: flex; justify-content: flex-end; gap: var(--espacio-2); flex-wrap: wrap; }
+    /* Pantalla de trabajo: cabecera baja, filtros fijos y la tabla, los roles
+       o la matriz desplazando dentro de su marco. */
+    .seccion > .filtros { flex: none; }
+    @media (min-width: 821px) and (min-height: 600px) {
+      .encabezado { min-height: 0; padding: var(--espacio-3) var(--espacio-5); }
+      .encabezado h1 { font-size: 1.45rem; }
+      .roles { align-content: start; }
+      .tabla thead th { position: sticky; top: 0; z-index: 1; background: var(--superficie-elevada); }
+      /* Filas de una o dos líneas: la persona no se parte en cuatro. */
+      .tabla td:first-child { min-width: 17rem; }
+      .estado { white-space: nowrap; }
+    }
     .encabezado h1 { margin: 2px 0 4px; }
     .encabezado__sub { margin: 0; color: var(--texto-suave); }
     .ceja { display: flex; align-items: center; gap: 7px; margin: 0; color: var(--acento); font-size: 0.75rem; font-weight: 700; letter-spacing: 0.1em; }
