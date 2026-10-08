@@ -1,4 +1,4 @@
-<header class="portada">
+<header class="portada pantalla__fijo">
   <div class="portada__texto">
     <p class="ceja"><app-icono nombre="documento-verificado" [tamano]="16" /> CONOCIMIENTO CLÍNICO</p>
     <h1>Base de conocimiento</h1>
@@ -7,6 +7,9 @@
       puede responder, y solo cuando el documento está aprobado.
     </p>
   </div>
+  <button type="button" class="boton portada__flujo" (click)="flujoAbierto.set(true)" aria-haspopup="dialog">
+    ¿Cómo llega un documento al agente?
+  </button>
   @if (puedeCargar()) {
     <button type="button" class="boton boton--principal portada__accion" (click)="abrirCarga()">
       <app-icono nombre="subir" [tamano]="18" />
@@ -15,304 +18,344 @@
   }
 </header>
 
-<app-resumen-modulo modulo="conocimiento" />
+<app-resumen-modulo class="pantalla__fijo" modulo="conocimiento" />
 
-<ol class="flujo" aria-label="Cómo llega un documento al agente">
-  <li class="flujo__paso"><span class="flujo__num">1</span><app-icono nombre="subir" [tamano]="17" /> Cargar <small>borrador</small></li>
-  <li class="flujo__paso"><span class="flujo__num">2</span><app-icono nombre="revision-documental" [tamano]="17" /> Revisar <small>en revisión</small></li>
-  <li class="flujo__paso"><span class="flujo__num">3</span><app-icono nombre="escudo" [tamano]="17" /> Aprobar <small>quien no lo cargó</small></li>
-  <li class="flujo__paso flujo__paso--fin">
-    <span class="flujo__num">4</span><app-icono nombre="respuesta-documentada" [tamano]="17" /> Responde consultas <small>aprobado o publicado</small>
-  </li>
-</ol>
+<!-- El flujo se ve siempre en pantallas holgadas; en las bajas se abre
+     desde la portada, en una ventana, para dejar el alto a la lista. -->
+<ng-template #pasosFlujo>
+  <ol class="flujo" aria-label="Cómo llega un documento al agente">
+    <li class="flujo__paso"><span class="flujo__num">1</span><app-icono nombre="subir" [tamano]="17" /> Cargar <small>borrador</small></li>
+    <li class="flujo__paso"><span class="flujo__num">2</span><app-icono nombre="revision-documental" [tamano]="17" /> Revisar <small>en revisión</small></li>
+    <li class="flujo__paso"><span class="flujo__num">3</span><app-icono nombre="escudo" [tamano]="17" /> Aprobar <small>quien no lo cargó</small></li>
+    <li class="flujo__paso flujo__paso--fin">
+      <span class="flujo__num">4</span><app-icono nombre="respuesta-documentada" [tamano]="17" /> Responde consultas <small>aprobado o publicado</small>
+    </li>
+  </ol>
+</ng-template>
+<div class="flujo-fijo pantalla__fijo"><ng-container [ngTemplateOutlet]="pasosFlujo" /></div>
 
-<!-- ===================== Buscador ===================== -->
-<section class="tarjeta buscador" aria-label="Buscar en la base de conocimiento">
-  <form (ngSubmit)="buscar()">
-    <label class="campo">
-      <span class="campo__etiqueta">¿Qué necesita consultar?</span>
-      <div class="buscador__fila">
-        <input
+@if (flujoAbierto()) {
+  <app-ventana-flotante ceja="Conocimiento clínico" titulo="Cómo llega un documento al agente" forma="centrada" [anchoMaximo]="760" (cerrar)="flujoAbierto.set(false)">
+    <ng-container [ngTemplateOutlet]="pasosFlujo" />
+    <p class="flujo__explicacion">Solo los documentos aprobados o publicados y vigentes responden consultas. Un borrador no responde, aunque diga exactamente lo que se busca.</p>
+  </app-ventana-flotante>
+}
+
+@if (mensajeAccion()) {
+  <p class="exito pantalla__fijo" role="status">{{ mensajeAccion() }}</p>
+}
+@if (errorAccion(); as fallo) {
+  <div class="aviso-error pantalla__fijo" role="alert">
+    {{ fallo.message }}
+    @if (fallo.correlacionId) {
+      <span class="ayuda-demo">· Referencia: {{ fallo.correlacionId }}</span>
+    }
+  </div>
+}
+
+<!-- Documentos y consulta, lado a lado: cada uno llena el alto y desplaza
+     dentro de su tarjeta. Antes iban apilados y la pantalla medía 3500 px. -->
+<div class="pantalla__columnas conocimiento__columnas">
+  <section class="tarjeta tarjeta--llena listado" aria-labelledby="titulo-documentos">
+    <div class="listado__cabecera">
+      <h2 id="titulo-documentos">Documentos · {{ total() }}</h2>
+      <label class="campo campo--en-linea">
+        <span class="campo__etiqueta">Estado</span>
+        <select
           class="campo__control"
-          name="consulta"
-          autocomplete="off"
-          placeholder="Por ejemplo: cuántas horas de ayuno para el examen de sangre"
-          [(ngModel)]="consulta"
+          name="estado"
+          [ngModel]="filtroEstado()"
+          (ngModelChange)="cambiarFiltro($event)"
+        >
+          <option value="">Todos</option>
+          @for (clave of ordenEstados; track clave) {
+            <option [value]="clave">{{ estado(clave).texto }}</option>
+          }
+        </select>
+      </label>
+    </div>
+
+    @if (cargando()) {
+      <app-cargando mensaje="Cargando documentos..." />
+    } @else if (error()) {
+      <app-error
+        titulo="No se pudo cargar el listado"
+        [mensaje]="error()!.message"
+        [codigo]="error()!.codigo"
+        [correlacion]="error()!.correlacionId ?? ''"
+        (reintentar)="cargar()"
+      />
+    } @else if (documentos().length === 0) {
+      <div class="tarjeta vacio-carga">
+        <app-vacio
+          titulo="No hay documentos"
+          detalle="No hay ningún documento en su ámbito con ese estado."
         />
-        <button class="boton boton--principal" type="submit" [disabled]="consultaCorta()">
-          Buscar
-        </button>
-        @if (consultaAplicada()) {
-          <button class="boton" type="button" (click)="limpiarBusqueda()">Limpiar</button>
+        @if (puedeCargar() && !filtroEstado()) {
+          <button type="button" class="boton boton--principal" (click)="abrirCarga()">
+            <app-icono nombre="subir" [tamano]="18" />
+            Cargar el primer documento
+          </button>
         }
-      </div>
-      <span class="campo__ayuda">
-        Solo se consultan documentos <strong>aprobados o publicados y vigentes</strong>. Un
-        borrador no responde, aunque diga exactamente lo que busca.
-      </span>
-    </label>
-  </form>
-</section>
-
-@if (buscando()) {
-  <app-cargando mensaje="Buscando en los documentos aprobados..." />
-}
-
-@if (errorBusqueda()) {
-  <app-error
-    titulo="No se pudo completar la búsqueda"
-    [mensaje]="errorBusqueda()!.message"
-    [codigo]="errorBusqueda()!.codigo"
-    [correlacion]="errorBusqueda()!.correlacionId ?? ''"
-    (reintentar)="buscar()"
-  />
-}
-
-@if (respuesta(); as datos) {
-  <section class="respuesta" aria-label="Resultado de la búsqueda">
-    @if (!datos.hay_fuente) {
-      <!-- Esto es lo único que importa de verdad en esta pantalla: cuando no
-           hay fuente aprobada NO se muestran los resultados más parecidos. Un
-           extracto «casi relacionado» presentado como respuesta es como
-           alguien acaba repitiéndole a un paciente algo que la clínica nunca
-           aprobó. -->
-      <div class="tarjeta sin-fuente">
-        <h2>No hay información aprobada sobre esto</h2>
-        <p class="sin-fuente__mensaje">{{ datos.mensaje }}</p>
-        <p class="sin-fuente__nota">
-          No se muestran resultados aproximados a propósito. Si existiera un documento
-          parecido, enseñarlo aquí llevaría a repetirle al paciente algo que la clínica no
-          ha aprobado. Derive la consulta a un profesional.
-        </p>
       </div>
     } @else {
-      <p class="recuento">
-        <strong>{{ datos.resultados.length }}</strong> fragmento(s) de
-        <strong>{{ datos.documentos_citados.length }}</strong> documento(s) aprobado(s)
-        responden a «{{ consultaAplicada() }}».
+      <!-- Aviso, resumen y tabla comparten un marco: lo que no cabe se
+           desplaza dentro de la tarjeta, nunca la pantalla. -->
+      <div class="listado__cuerpo desplazable" tabindex="0" role="region" aria-labelledby="titulo-documentos">
+        <!-- Documentos marcados por la detección de inyección. Van arriba y
+             separados: aprobar uno sin mirarlo es como una instrucción hostil
+             entra en el corpus que alimenta al agente. -->
+        @if (marcados().length > 0) {
+          <details class="tarjeta marcados">
+            <summary>
+              <h3>{{ marcados().length }} documento(s) esperan revisión de seguridad</h3>
+              <span class="marcados__resumen">La aprobación está bloqueada hasta revisarlos. Ver por qué y cuáles.</span>
+            </summary>
+            <p>
+              Al ingerir su texto se detectó algo que parece un intento de dar instrucciones al
+              sistema. <strong>La aprobación está bloqueada</strong> hasta que una persona lo
+              revise. No es necesariamente un ataque —puede ser una cita o un ejemplo—, pero
+              tiene que mirarlo alguien.
+            </p>
+            <ul>
+              @for (documento of marcados(); track documento.id) {
+                <li>{{ documento.titulo }}</li>
+              }
+            </ul>
+          </details>
+        }
+
+        <div class="resumen">
+          @for (fila of resumen(); track fila.estado) {
+            <div class="resumen__celda" [class.resumen__celda--activa]="fila.recuperable">
+              <span class="resumen__cantidad">{{ fila.cantidad }}</span>
+              <span class="resumen__etiqueta">{{ fila.etiqueta }}</span>
+              <span class="resumen__nota">
+                {{ fila.recuperable ? 'responde consultas' : 'no responde' }}
+              </span>
+            </div>
+          }
+        </div>
+
+        <div class="tabla-envoltorio">
+          <table class="tabla">
+            <thead>
+              <tr>
+                <th scope="col">Título</th>
+                <th scope="col">Tipo</th>
+                <th scope="col">Estado</th>
+                <th scope="col">Versión</th>
+                <th scope="col">Vigencia</th>
+                @if (puedeCargar() || puedeAprobar()) {
+                  <th scope="col"><span class="solo-lectores">Acciones</span></th>
+                }
+              </tr>
+            </thead>
+            <tbody>
+              @for (documento of documentos(); track documento.id) {
+                <tr [class.fila-marcada]="documento.requiere_revision">
+                  <td>
+                    {{ documento.titulo }}
+                    @if (documento.requiere_revision) {
+                      <span class="marca-revision" title="Bloqueado hasta revisión de seguridad">
+                        revisión pendiente
+                      </span>
+                    }
+                  </td>
+                  <td>{{ tipo(documento.tipo) }}</td>
+                  <td>
+                    <span
+                      [class]="'estado estado--' + estado(documento.status).tono"
+                      [title]="estado(documento.status).detalle"
+                    >
+                      {{ estado(documento.status).texto }}
+                    </span>
+                  </td>
+                  <td class="numerico">{{ documento.version_vigente ?? '—' }}</td>
+                  <td class="vigencia">{{ vigencia(documento) }}</td>
+                  @if (puedeCargar() || puedeAprobar()) {
+                    <td class="celda-acciones">
+                      <div class="acciones">
+                        @if (puedeCargar()) {
+                          @for (accion of acciones(documento); track accion.destino) {
+                            <button
+                              type="button"
+                              class="boton boton--pequeno"
+                              [class.boton--principal]="accion.principal"
+                              [disabled]="cambiando() === documento.id"
+                              (click)="cambiarEstado(documento, accion)"
+                            >
+                              {{ accion.texto }}
+                            </button>
+                          }
+                          @if (documento.status !== 'ARCHIVED' && documento.status !== 'APPROVED' && documento.status !== 'PUBLISHED') {
+                            <button
+                              type="button"
+                              class="boton boton--pequeno boton--plano"
+                              [disabled]="cambiando() === documento.id"
+                              (click)="abrirCarga(documento)"
+                            >
+                              <app-icono nombre="subir" [tamano]="16" />
+                              Versión nueva
+                            </button>
+                          } @else if (documento.status === 'APPROVED' || documento.status === 'PUBLISHED') {
+                            <small class="tenue">Retírelo a borrador antes de cargar otra versión; deberá revisarse y aprobarse de nuevo.</small>
+                          }
+                        }
+                        @if (puedeAprobar()) {
+                          <button
+                            type="button"
+                            class="boton boton--pequeno boton--plano"
+                            [attr.aria-expanded]="documentoPermisos() === documento.id"
+                            [disabled]="guardandoPermisos()"
+                            (click)="gestionarPermisos(documento)"
+                          >
+                            {{ documentoPermisos() === documento.id ? 'Cerrar accesos' : 'Accesos' }}
+                          </button>
+                          @if (documento.requiere_revision) {
+                            <button
+                              type="button"
+                              class="boton boton--pequeno"
+                              (click)="documentoRiesgo.set(documento)"
+                            >
+                              Revisar riesgo
+                            </button>
+                          }
+                        }
+                      </div>
+                    </td>
+                  }
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <p class="pie-listado">
+        Mostrando {{ documentos().length }} de {{ total() }} documentos de su ámbito.
       </p>
-
-      @for (resultado of datos.resultados; track resultado.document_id + '-' + resultado.indice_fragmento) {
-        <article class="tarjeta fragmento">
-          <header class="fragmento__cabecera">
-            <h3>{{ tituloDe(resultado.document_id) }}</h3>
-            <span class="fragmento__meta">
-              versión {{ resultado.version }} · fragmento {{ resultado.indice_fragmento + 1 }}
-            </span>
-          </header>
-
-          <!-- Interpolación, nunca innerHTML: el texto de un documento es dato
-               citado, no instrucción ni marcado. Un innerHTML aquí convertiría
-               un PDF subido por cualquiera en ejecución de código en la sesión
-               de quien lo lee (ADR-0014). -->
-          <blockquote class="fragmento__texto">{{ resultado.extracto }}</blockquote>
-
-          <footer class="fragmento__pie">
-            <!-- Identificador interno del fragmento. Se muestra para que una
-                 consulta se pueda rastrear hasta su origen exacto en una
-                 revision, no porque sea legible. -->
-            <span class="fragmento__referencia" title="Identificador del fragmento citado">
-              ref. {{ resultado.referencia }}
-            </span>
-            @if (origen(resultado)) {
-              <span class="fragmento__origen">Encontrado {{ origen(resultado) }}</span>
-            }
-          </footer>
-        </article>
-      }
     }
   </section>
-}
 
-<!-- ===================== Documentos ===================== -->
-<section class="listado" aria-label="Documentos de la base de conocimiento">
-  @if (mensajeAccion()) {
-    <p class="exito" role="status">{{ mensajeAccion() }}</p>
-  }
-  @if (errorAccion(); as fallo) {
-    <div class="aviso-error" role="alert">
-      {{ fallo.message }}
-      @if (fallo.correlacionId) {
-        <span class="ayuda-demo">· Referencia: {{ fallo.correlacionId }}</span>
-      }
-    </div>
-  }
-
-  <div class="listado__cabecera">
-    <h2>Documentos</h2>
-    <label class="campo campo--en-linea">
-      <span class="campo__etiqueta">Estado</span>
-      <select
-        class="campo__control"
-        name="estado"
-        [ngModel]="filtroEstado()"
-        (ngModelChange)="cambiarFiltro($event)"
-      >
-        <option value="">Todos</option>
-        @for (clave of ordenEstados; track clave) {
-          <option [value]="clave">{{ estado(clave).texto }}</option>
-        }
-      </select>
-    </label>
-  </div>
-
-  @if (cargando()) {
-    <app-cargando mensaje="Cargando documentos..." />
-  } @else if (error()) {
-    <app-error
-      titulo="No se pudo cargar el listado"
-      [mensaje]="error()!.message"
-      [codigo]="error()!.codigo"
-      [correlacion]="error()!.correlacionId ?? ''"
-      (reintentar)="cargar()"
-    />
-  } @else if (documentos().length === 0) {
-    <div class="tarjeta vacio-carga">
-      <app-vacio
-        titulo="No hay documentos"
-        detalle="No hay ningún documento en su ámbito con ese estado."
-      />
-      @if (puedeCargar() && !filtroEstado()) {
-        <button type="button" class="boton boton--principal" (click)="abrirCarga()">
-          <app-icono nombre="subir" [tamano]="18" />
-          Cargar el primer documento
-        </button>
-      }
-    </div>
-  } @else {
-    <!-- Documentos marcados por la detección de inyección. Van arriba y
-         separados: aprobar uno sin mirarlo es como una instrucción hostil
-         entra en el corpus que alimenta al agente. -->
-    @if (marcados().length > 0) {
-      <div class="tarjeta marcados">
-        <h3>{{ marcados().length }} documento(s) esperan revisión de seguridad</h3>
-        <p>
-          Al ingerir su texto se detectó algo que parece un intento de dar instrucciones al
-          sistema. <strong>La aprobación está bloqueada</strong> hasta que una persona lo
-          revise. No es necesariamente un ataque —puede ser una cita o un ejemplo—, pero
-          tiene que mirarlo alguien.
-        </p>
-        <ul>
-          @for (documento of marcados(); track documento.id) {
-            <li>{{ documento.titulo }}</li>
+  <!-- ===================== Buscador ===================== -->
+  <section class="tarjeta tarjeta--llena consulta" aria-label="Buscar en la base de conocimiento">
+    <form (ngSubmit)="buscar()">
+      <label class="campo">
+        <span class="campo__etiqueta">¿Qué necesita consultar?</span>
+        <div class="buscador__fila">
+          <input
+            class="campo__control"
+            name="consulta"
+            autocomplete="off"
+            placeholder="Por ejemplo: cuántas horas de ayuno para el examen de sangre"
+            [(ngModel)]="consulta"
+          />
+          <button class="boton boton--principal" type="submit" [disabled]="consultaCorta()">
+            Buscar
+          </button>
+          @if (consultaAplicada()) {
+            <button class="boton" type="button" (click)="limpiarBusqueda()">Limpiar</button>
           }
-        </ul>
-      </div>
-    }
-
-    <div class="resumen">
-      @for (fila of resumen(); track fila.estado) {
-        <div class="resumen__celda" [class.resumen__celda--activa]="fila.recuperable">
-          <span class="resumen__cantidad">{{ fila.cantidad }}</span>
-          <span class="resumen__etiqueta">{{ fila.etiqueta }}</span>
-          <span class="resumen__nota">
-            {{ fila.recuperable ? 'responde consultas' : 'no responde' }}
-          </span>
         </div>
+        <span class="campo__ayuda">
+          Solo se consultan documentos <strong>aprobados o publicados y vigentes</strong>. Un
+          borrador no responde, aunque diga exactamente lo que busca.
+        </span>
+      </label>
+    </form>
+
+    <div class="desplazable consulta__resultados" tabindex="0" role="region" aria-label="Resultados de la consulta">
+      @if (buscando()) {
+        <app-cargando mensaje="Buscando en los documentos aprobados..." />
+      }
+
+      @if (errorBusqueda()) {
+        <app-error
+          titulo="No se pudo completar la búsqueda"
+          [mensaje]="errorBusqueda()!.message"
+          [codigo]="errorBusqueda()!.codigo"
+          [correlacion]="errorBusqueda()!.correlacionId ?? ''"
+          (reintentar)="buscar()"
+        />
+      }
+
+      @if (respuesta(); as datos) {
+        <section class="respuesta" aria-label="Resultado de la búsqueda">
+          @if (!datos.hay_fuente) {
+            <!-- Esto es lo único que importa de verdad en esta pantalla: cuando no
+                 hay fuente aprobada NO se muestran los resultados más parecidos. Un
+                 extracto «casi relacionado» presentado como respuesta es como
+                 alguien acaba repitiéndole a un paciente algo que la clínica nunca
+                 aprobó. -->
+            <div class="tarjeta sin-fuente">
+              <h2>No hay información aprobada sobre esto</h2>
+              <p class="sin-fuente__mensaje">{{ datos.mensaje }}</p>
+              <p class="sin-fuente__nota">
+                No se muestran resultados aproximados a propósito. Si existiera un documento
+                parecido, enseñarlo aquí llevaría a repetirle al paciente algo que la clínica no
+                ha aprobado. Derive la consulta a un profesional.
+              </p>
+            </div>
+          } @else {
+            <p class="recuento">
+              <strong>{{ datos.resultados.length }}</strong> fragmento(s) de
+              <strong>{{ datos.documentos_citados.length }}</strong> documento(s) aprobado(s)
+              responden a «{{ consultaAplicada() }}».
+            </p>
+
+            @for (resultado of datos.resultados; track resultado.document_id + '-' + resultado.indice_fragmento) {
+              <article class="tarjeta fragmento">
+                <header class="fragmento__cabecera">
+                  <h3>{{ tituloDe(resultado.document_id) }}</h3>
+                  <span class="fragmento__meta">
+                    versión {{ resultado.version }} · fragmento {{ resultado.indice_fragmento + 1 }}
+                  </span>
+                </header>
+
+                <!-- Interpolación, nunca innerHTML: el texto de un documento es dato
+                     citado, no instrucción ni marcado. Un innerHTML aquí convertiría
+                     un PDF subido por cualquiera en ejecución de código en la sesión
+                     de quien lo lee (ADR-0014). -->
+                <blockquote class="fragmento__texto">{{ resultado.extracto }}</blockquote>
+
+                <footer class="fragmento__pie">
+                  <!-- Identificador interno del fragmento. Se muestra para que una
+                       consulta se pueda rastrear hasta su origen exacto en una
+                       revision, no porque sea legible. -->
+                  <span class="fragmento__referencia" title="Identificador del fragmento citado">
+                    ref. {{ resultado.referencia }}
+                  </span>
+                  @if (origen(resultado)) {
+                    <span class="fragmento__origen">Encontrado {{ origen(resultado) }}</span>
+                  }
+                </footer>
+              </article>
+            }
+          }
+        </section>
+      }
+      @if (!buscando() && !errorBusqueda() && !respuesta()) {
+        <p class="consulta__vacio">Los fragmentos aprobados que respondan a su consulta aparecerán aquí, con su documento, versión y referencia.</p>
       }
     </div>
+  </section>
+</div>
 
-    <div class="tabla-envoltorio">
-      <table class="tabla">
-        <thead>
-          <tr>
-            <th scope="col">Título</th>
-            <th scope="col">Tipo</th>
-            <th scope="col">Estado</th>
-            <th scope="col">Versión</th>
-            <th scope="col">Vigencia</th>
-            @if (puedeCargar() || puedeAprobar()) {
-              <th scope="col"><span class="solo-lectores">Acciones</span></th>
-            }
-          </tr>
-        </thead>
-        <tbody>
-          @for (documento of documentos(); track documento.id) {
-            <tr [class.fila-marcada]="documento.requiere_revision">
-              <td>
-                {{ documento.titulo }}
-                @if (documento.requiere_revision) {
-                  <span class="marca-revision" title="Bloqueado hasta revisión de seguridad">
-                    revisión pendiente
-                  </span>
-                }
-              </td>
-              <td>{{ tipo(documento.tipo) }}</td>
-              <td>
-                <span
-                  [class]="'estado estado--' + estado(documento.status).tono"
-                  [title]="estado(documento.status).detalle"
-                >
-                  {{ estado(documento.status).texto }}
-                </span>
-              </td>
-              <td class="numerico">{{ documento.version_vigente ?? '—' }}</td>
-              <td class="vigencia">{{ vigencia(documento) }}</td>
-              @if (puedeCargar() || puedeAprobar()) {
-                <td class="celda-acciones">
-                  <div class="acciones">
-                    @if (puedeCargar()) {
-                      @for (accion of acciones(documento); track accion.destino) {
-                        <button
-                          type="button"
-                          class="boton boton--pequeno"
-                          [class.boton--principal]="accion.principal"
-                          [disabled]="cambiando() === documento.id"
-                          (click)="cambiarEstado(documento, accion)"
-                        >
-                          {{ accion.texto }}
-                        </button>
-                      }
-                      @if (documento.status !== 'ARCHIVED' && documento.status !== 'APPROVED' && documento.status !== 'PUBLISHED') {
-                        <button
-                          type="button"
-                          class="boton boton--pequeno boton--plano"
-                          [disabled]="cambiando() === documento.id"
-                          (click)="abrirCarga(documento)"
-                        >
-                          <app-icono nombre="subir" [tamano]="16" />
-                          Versión nueva
-                        </button>
-                      } @else if (documento.status === 'APPROVED' || documento.status === 'PUBLISHED') {
-                        <small class="tenue">Retírelo a borrador antes de cargar otra versión; deberá revisarse y aprobarse de nuevo.</small>
-                      }
-                    }
-                    @if (puedeAprobar()) {
-                      <button
-                        type="button"
-                        class="boton boton--pequeno boton--plano"
-                        [attr.aria-expanded]="documentoPermisos() === documento.id"
-                        [disabled]="guardandoPermisos()"
-                        (click)="gestionarPermisos(documento)"
-                      >
-                        {{ documentoPermisos() === documento.id ? 'Cerrar accesos' : 'Accesos' }}
-                      </button>
-                      @if (documento.requiere_revision) {
-                        <button
-                          type="button"
-                          class="boton boton--pequeno"
-                          (click)="documentoRiesgo.set(documento)"
-                        >
-                          Revisar riesgo
-                        </button>
-                      }
-                    }
-                  </div>
-                </td>
-              }
-            </tr>
-          }
-        </tbody>
-      </table>
-    </div>
-
-    @if (documentoPermisos()) {
-      <section class="tarjeta permisos-documento" aria-label="Accesos del documento">
+@if (documentoPermisos()) {
+  <app-ventana-flotante
+    ceja="Acceso por documento"
+    titulo="Accesos del documento"
+    forma="centrada"
+    [anchoMaximo]="860"
+    [cierraAlPulsarFuera]="false"
+    [ocupada]="guardandoPermisos()"
+    [error]="errorPermisos()"
+    (cerrar)="cerrarPermisos()"
+  >
+    <section class="permisos-documento" aria-label="Accesos del documento">
         <header class="permisos-documento__cabecera">
-          <div>
-            <p class="ceja">ACCESO POR DOCUMENTO</p>
-            <h3>¿Quién puede consultar este contenido?</h3>
-          </div>
+          <h3>¿Quién puede consultar este contenido?</h3>
           <span class="permisos-documento__estado">
             {{ permisosDocumento().length ? permisosDocumento().length + ' reglas' : 'Alcance general' }}
           </span>
@@ -325,9 +368,6 @@
           heredados de sus roles.
         </p>
 
-        @if (errorPermisos()) {
-          <p class="aviso-error" role="alert">{{ errorPermisos() }}</p>
-        }
 
         @if (cargandoPermisos()) {
           <app-cargando mensaje="Cargando roles y permisos del documento..." />
@@ -411,6 +451,7 @@
           </div>
 
           <footer class="permisos-documento__pie">
+            <button type="button" class="boton" (click)="cerrarPermisos()" [disabled]="guardandoPermisos()">Cerrar</button>
             <button
               type="button"
               class="boton boton--principal"
@@ -421,14 +462,9 @@
             </button>
           </footer>
         }
-      </section>
-    }
-
-    <p class="pie-listado">
-      Mostrando {{ documentos().length }} de {{ total() }} documentos de su ámbito.
-    </p>
-  }
-</section>
+    </section>
+  </app-ventana-flotante>
+}
 
 @if (dialogo() !== undefined) {
   <app-cargar-documento [documento]="dialogo() ?? null" (cerrado)="cerrarCarga()" />

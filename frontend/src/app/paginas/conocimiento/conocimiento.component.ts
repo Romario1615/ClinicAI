@@ -163,11 +163,14 @@ const TIPOS_PRINCIPAL: Readonly<Record<TipoPrincipalDocumento, string>> = {
   ESPECIALIDAD: 'Especialidad',
 };
 
+import { NgTemplateOutlet } from '@angular/common';
 import { ResumenModuloComponent } from '../../compartido/resumen-modulo.component';
+import { VentanaFlotanteComponent } from '../../compartido/ventana-flotante.component';
 @Component({
   selector: 'app-conocimiento',
   standalone: true,
-  imports: [ResumenModuloComponent, 
+  imports: [ResumenModuloComponent,
+    NgTemplateOutlet,
     FormsModule,
     CargandoComponent,
     ErrorComponent,
@@ -175,7 +178,9 @@ import { ResumenModuloComponent } from '../../compartido/resumen-modulo.componen
     IconoComponent,
     CargarDocumentoComponent,
     RevisionRiesgoComponent,
+    VentanaFlotanteComponent,
   ],
+  host: { class: 'pantalla' },
   templateUrl: './conocimiento.component.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './conocimiento.component.scss',
@@ -203,6 +208,8 @@ export class ConocimientoComponent {
 
   // --- Acceso por documento ---
   protected readonly documentoPermisos = signal<string | null>(null);
+  /** Explicación del flujo en ventana, para pantallas sin alto para la tira. */
+  protected readonly flujoAbierto = signal(false);
   protected readonly permisosDocumento = signal<readonly PermisoDocumento[]>([]);
   protected readonly opcionesPermisos = signal<OpcionesPermisosDocumento | null>(null);
   protected readonly cargandoPermisos = signal(false);
@@ -374,6 +381,13 @@ export class ConocimientoComponent {
     });
   }
 
+  /** Cierra la ventana de accesos; a mitad del guardado no, para no perder el resultado. */
+  protected cerrarPermisos(): void {
+    if (this.guardandoPermisos()) return;
+    this.documentoPermisos.set(null);
+    this.errorPermisos.set(null);
+  }
+
   protected opcionesTipo(tipo = this.tipoPrincipalNuevo) {
     const opciones = this.opcionesPermisos();
     if (!opciones) return [];
@@ -453,6 +467,9 @@ export class ConocimientoComponent {
       next: (respuesta) => {
         this.permisosDocumento.set([...respuesta.permisos]);
         this.guardandoPermisos.set(false);
+        // La ventana se cierra para que el aviso se vea: dentro del listado,
+        // con el modal abierto, quedaba tapado.
+        this.cerrarPermisos();
         this.mensajeAccion.set('Accesos del documento actualizados y auditados.');
       },
       error: (fallo: FalloApi) => {

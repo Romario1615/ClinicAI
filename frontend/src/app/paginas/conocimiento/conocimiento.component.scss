@@ -37,7 +37,27 @@
 }
 
 .portada__texto,
-.portada__accion { position: relative; z-index: 1; }
+.portada__accion,
+.portada__flujo { position: relative; z-index: 1; }
+
+/* Solo aparece cuando la tira del flujo se esconde por falta de alto. */
+.portada__flujo {
+  display: none;
+  margin-left: auto;
+  color: #fff;
+  /* Fondo opaco: el botón cae sobre la parte clara de la imagen. */
+  background: rgb(8 43 48 / 88%);
+  border-color: rgb(255 255 255 / 55%);
+}
+
+.portada__flujo:hover:not(:disabled) {
+  background: rgb(8 43 48 / 100%);
+}
+
+.flujo__explicacion {
+  margin: var(--espacio-3) 0 0;
+  color: var(--texto-suave);
+}
 
 .portada .ceja { display:flex; align-items:center; gap:var(--espacio-2); color:#a8e5d9; }
 
@@ -47,6 +67,7 @@
 
 .portada h1 {
   margin-bottom: var(--espacio-2);
+  color: #fff;
 }
 
 .portada__sub {
@@ -423,9 +444,25 @@
 }
 
 .marcados h3 {
-  margin: 0 0 var(--espacio-2);
+  display: inline;
+  margin: 0;
   font-size: 1rem;
   color: var(--aviso);
+}
+
+.marcados summary {
+  cursor: pointer;
+}
+
+.marcados__resumen {
+  display: block;
+  margin-top: 2px;
+  color: var(--texto-suave);
+  font-size: 0.85rem;
+}
+
+.marcados[open] summary {
+  margin-bottom: var(--espacio-2);
 }
 
 .marcados ul {
@@ -533,4 +570,157 @@ tbody td:first-child {
   margin-top: var(--espacio-3);
   color: var(--texto-suave);
   font-size: 0.9rem;
+}
+
+/* ----- Pantalla de trabajo -----
+   Documentos y consulta lado a lado. En escritorio la portada y el flujo se
+   compactan y cada columna desplaza dentro de su tarjeta. */
+.conocimiento__columnas {
+  --pantalla-columnas: minmax(0, 1.55fr) minmax(0, 1fr);
+}
+
+.listado,
+.consulta {
+  min-width: 0;
+}
+
+.consulta__vacio {
+  margin: 0;
+  color: var(--texto-suave);
+  font-size: 0.9rem;
+}
+
+.consulta__resultados .respuesta {
+  margin-bottom: 0;
+}
+
+@media (min-width: 821px) and (min-height: 600px) {
+  .portada {
+    flex-wrap: nowrap;
+    gap: var(--espacio-3);
+    min-height: 0;
+    margin-bottom: 0;
+    padding: var(--espacio-3) var(--espacio-5);
+  }
+
+  .portada__texto {
+    min-width: 0;
+  }
+
+  .portada__flujo {
+    min-height: 36px;
+    padding: 4px var(--espacio-3);
+    font-size: 0.85rem;
+    white-space: nowrap;
+  }
+
+  .portada h1 {
+    margin-bottom: var(--espacio-1);
+    font-size: 1.45rem;
+  }
+
+  .portada__sub {
+    font-size: 0.88rem;
+    line-height: 1.4;
+  }
+
+  .flujo {
+    margin: 0;
+  }
+
+  .flujo__paso {
+    padding: var(--espacio-1) var(--espacio-3);
+    font-size: 0.85rem;
+  }
+
+  .flujo__paso small {
+    flex-basis: auto;
+    padding-left: 0;
+    margin-top: 0;
+  }
+
+  .listado > :not(.listado__cuerpo),
+  .consulta > form {
+    flex: none;
+  }
+
+  .listado__cabecera {
+    margin-bottom: 0;
+  }
+
+  .marcados {
+    margin-bottom: var(--espacio-3);
+    padding: var(--espacio-3) var(--espacio-4);
+  }
+
+  .marcados p {
+    margin: 0;
+    font-size: 0.85rem;
+    line-height: 1.45;
+  }
+
+  .resumen {
+    gap: var(--espacio-2);
+    margin-bottom: var(--espacio-3);
+  }
+
+  /* Tira de una fila: cifra, estado y si responde, sin tarjetas altas. */
+  .resumen {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: thin;
+  }
+
+  .resumen__celda {
+    flex: 1 0 auto;
+    padding: var(--espacio-1) var(--espacio-3);
+    box-shadow: none;
+    white-space: nowrap;
+  }
+
+  .resumen__cantidad {
+    display: inline;
+    margin-right: var(--espacio-1);
+    font-size: 1.15rem;
+  }
+
+  .resumen__etiqueta {
+    display: inline;
+    font-size: 0.82rem;
+  }
+
+  .resumen__nota {
+    font-size: 0.72rem;
+  }
+
+  .listado__cabecera h2 {
+    font-size: 1.15rem;
+  }
+
+  .pie-listado {
+    margin: 0;
+    font-size: 0.82rem;
+  }
+
+  .buscador__fila .campo__control {
+    flex-basis: 12rem;
+  }
+
+  /* En pantallas de escritorio bajas o estrechas la descripción cede su
+     alto a la lista; el título y la acción siguen a la vista. */
+  @media (max-width: 1180px), (max-height: 800px) {
+    .portada__sub {
+      display: none;
+    }
+  }
+
+  @media (max-height: 800px) {
+    .flujo-fijo {
+      display: none;
+    }
+
+    .portada__flujo {
+      display: inline-flex;
+    }
+  }
 }

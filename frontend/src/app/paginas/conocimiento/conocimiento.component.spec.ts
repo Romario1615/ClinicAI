@@ -304,6 +304,9 @@ describe('ConocimientoComponent', () => {
         solicitud.flush({ document_id: doc.id, permisos });
         fixture.detectChanges();
         expect(texto()).toContain('Accesos del documento actualizados y auditados.');
+        // La ventana se cierra para que el aviso no quede tapado por el modal.
+        expect(fixture.componentInstance['documentoPermisos']()).toBeNull();
+        expect(document.querySelector('dialog.capa')).toBeNull();
     });
 
     it('filtrar por estado vuelve a pedir el listado con ese filtro', () => {
