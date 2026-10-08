@@ -7,6 +7,18 @@ auditoría.
 
 > **Estado actual:** las fases 0 y 0b están documentadas; las fases funcionales 1 a 9 siguen en desarrollo y verificación. La lista de espera permite reagendar, encadenar turnos con un límite y resolver aceptaciones concurrentes; rollback y diez respuestas HTTP simultáneas ya están probados contra PostgreSQL. La fase 10 de preparación para producción no está cerrada.
 
+## Especialidad y área de cada rol (2026-10-07)
+
+- **Acceso por roles:** cada botón indica la especialidad real de la cuenta profesional o el área de trabajo del puesto: gestión global, administración de clínica, recepción y agenda, asistencia clínica o auditoría y cumplimiento. Al volver a esta pantalla se consultan las etiquetas actuales.
+- **Sesión:** la especialidad aparece junto al nombre y rol en la cabecera. En teléfonos, pulse la foto para consultar **Mi perfil**, con su nombre, rol y especialidad/área.
+- **Usuarios y roles → Personal:** nueva columna **Especialidad / área** y búsqueda por especialidad. La pestaña Roles resume las especialidades de sus integrantes activos; las cuentas pueden compartir un rol y tener especialidades diferentes.
+- **Asignar un profesional:** el desplegable muestra **nombre · especialidad**. La especialidad se configura en su ficha de **Profesionales**; administración vincula esa ficha al asignar accesos. Un profesional sin perfil vigente se identifica como **Sin especialidad asignada**.
+- **Backend:** `accesos-locales`, `autenticacion/yo`, `usuarios` y `usuarios/profesionales` incluyen `especialidad`. El listado local y el inicio de sesión comparten la selección de cuenta. La consulta valida que usuario, perfil y especialidad pertenezcan a la misma clínica y que el perfil/especialidad estén vigentes. Los permisos y ámbitos siguen resolviéndose en el servidor. Este cambio usa el modelo existente y no requiere migración.
+- **Ayuda:** los manuales de administración y del profesional explican respectivamente dónde configurar y cómo comprobar su especialidad.
+
+Verificado: **64 pruebas backend y 642 frontend**, lint/build aprobados y revisión
+visual con axe en escritorio, tableta y móvil. [Evidencia de esta ampliación](docs/verificacion-2026-10-07.md#especialidad-y-área-de-los-roles).
+
 ## Gestión de registros, faciograma y documentos (2026-10-07)
 
 Rama de trabajo consolidada: **`main`**, con el historial de

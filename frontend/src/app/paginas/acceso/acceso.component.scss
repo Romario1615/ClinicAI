@@ -421,10 +421,13 @@
   display: grid;
   flex: 1;
   gap: 0.2rem;
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .acceso__rol-texto strong { font-size: 0.96rem; }
 .acceso__rol-texto small { color: var(--texto-suave); font-size: 0.8rem; }
+.acceso__rol-texto .acceso__rol-especialidad { color: #12645e; font-weight: 550; }
 .acceso__rol-flecha { color: #14736d; font-size: 1.3rem; }
 
 .acceso__local-nota,

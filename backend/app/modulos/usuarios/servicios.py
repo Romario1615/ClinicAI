@@ -38,6 +38,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modulos.organizacion.modelos import Clinica
 from app.modulos.profesionales.modelos import Profesional
+from app.modulos.usuarios.especialidades import especialidades_de_usuarios
 from app.modulos.usuarios.modelos import (
     AmbitoAsignacion,
     HistorialAcceso,
@@ -139,10 +140,10 @@ class ServicioAutenticacion:
         self._cifrador = cifrador
         self._permite_acceso_local_demo = permite_acceso_local_demo
 
-    async def roles_acceso_local(self) -> list[str]:
-        """Lista roles con cuentas sinteticas disponibles para acceso local."""
+    async def _usuarios_acceso_local(self) -> dict[str, Usuario]:
+        """El listado y el ingreso eligen la misma cuenta sintetica por rol."""
         if not self._permite_acceso_local_demo:
-            return []
+            return {}
 
         roles_habilitados = (
             "superadministrador",
@@ -153,7 +154,7 @@ class ServicioAutenticacion:
             "profesional",
         )
         consulta = (
-            select(Rol.codigo)
+            select(Rol.codigo, Usuario)
             .join(UsuarioRol, UsuarioRol.rol_id == Rol.id)
             .join(Usuario, Usuario.id == UsuarioRol.usuario_id)
             .where(
@@ -163,10 +164,31 @@ class ServicioAutenticacion:
                 Usuario.activo.is_(True),
                 Usuario.apellido.contains("[SINTETICO]"),
             )
-            .distinct()
+            .order_by(Usuario.correo, Usuario.id)
         )
-        disponibles = set((await self._sesion.execute(consulta)).scalars())
-        return [codigo for codigo in roles_habilitados if codigo in disponibles]
+        disponibles: dict[str, Usuario] = {}
+        for codigo, usuario in await self._sesion.execute(consulta):
+            disponibles.setdefault(codigo, usuario)
+        return {
+            codigo: disponibles[codigo] for codigo in roles_habilitados if codigo in disponibles
+        }
+
+    async def roles_acceso_local(self) -> list[str]:
+        """Lista roles con cuentas sinteticas disponibles para acceso local."""
+        return list(await self._usuarios_acceso_local())
+
+    async def detalles_accesos_locales(self) -> list[tuple[str, str | None]]:
+        usuarios = await self._usuarios_acceso_local()
+        especialidades = await especialidades_de_usuarios(
+            self._sesion, [u.id for u in usuarios.values()]
+        )
+        return [(codigo, especialidades.get(u.id)) for codigo, u in usuarios.items()]
+
+    async def especialidad_usuario(self, usuario: Usuario) -> str | None:
+        especialidades = await especialidades_de_usuarios(
+            self._sesion, [usuario.id], clinica_id=usuario.clinica_id
+        )
+        return especialidades.get(usuario.id)
 
     async def iniciar_sesion_rol_local(
         self,
@@ -182,28 +204,11 @@ class ServicioAutenticacion:
         `[SINTETICO]`. El acceso solo se habilita en local/desarrollo desde la
         configuracion de la aplicacion.
         """
-        if codigo_rol not in await self.roles_acceso_local():
+        usuario = (await self._usuarios_acceso_local()).get(codigo_rol)
+        if usuario is None:
             raise RecursoNoEncontrado("El acceso local solicitado no esta disponible.")
 
         ahora = self._reloj.ahora()
-        usuario = (
-            await self._sesion.execute(
-                select(Usuario)
-                .join(UsuarioRol, UsuarioRol.usuario_id == Usuario.id)
-                .join(Rol, Rol.id == UsuarioRol.rol_id)
-                .where(
-                    Rol.codigo == codigo_rol,
-                    Rol.es_sistema.is_(True),
-                    Rol.clinica_id.is_(None),
-                    Usuario.activo.is_(True),
-                    Usuario.apellido.contains("[SINTETICO]"),
-                )
-                .order_by(Usuario.correo)
-                .limit(1)
-            )
-        ).scalar_one_or_none()
-        if usuario is None:
-            raise RecursoNoEncontrado("El acceso local solicitado no esta disponible.")
 
         usuario.ultimo_acceso_en = ahora
         usuario.intentos_fallidos = 0

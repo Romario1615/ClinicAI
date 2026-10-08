@@ -4,6 +4,54 @@ Rama de trabajo: `claude/friendly-gates-o240sb`. Base de esta revisión:
 `727c9f5`. Se conserva el diseño de pantallas de trabajo, pestañas y ventanas
 incorporado desde GitHub. Todos los datos de esta ejecución son sintéticos.
 
+## Especialidad y área de los roles
+
+Esta ampliación se realiza en `main`. El acceso local indica la especialidad de
+la cuenta que efectivamente abrirá cada rol. Los puestos administrativos y de
+apoyo muestran su área de trabajo. La cabecera y la ventana Mi perfil presentan
+ese contexto; Personal incorpora Especialidad / área y búsqueda por especialidad.
+Las tarjetas de Roles agrupan las especialidades de sus integrantes activos y
+el selector Perfil profesional identifica nombre y especialidad.
+
+La fuente es el perfil profesional y el catálogo existentes. La consulta en lote
+comprueba la pertenencia de usuario, perfil y especialidad a la misma clínica,
+excluyendo perfiles/especialidades inactivos o anulados. El acceso y el listado
+comparten la selección de cuenta sintética. La pantalla de ingreso consulta de
+nuevo sus etiquetas al abrirse; los permisos y ámbitos se resuelven en el backend.
+Los manuales de administración y profesional incluyen las instrucciones propias
+de cada rol.
+
+| Comprobación | Resultado |
+|---|---|
+| API de especialidades, autenticación, usuarios y Ayuda | 64/64, 138,66 s; PostgreSQL exclusivo, eliminado al terminar |
+| Frontend completo | 642/642 en 90 archivos, 173,88 s; dos trabajadores de Vitest |
+| Cobertura frontend | Sentencias 86,28 %; ramas 73,84 %; funciones 81,62 %; líneas 88,76 % |
+| Backend estático | Ruff, formato y mypy aprobados; Bandit sin hallazgos medios/altos en Usuarios |
+| Lint y build | Aprobados, 464,02 kB iniciales, sin avisos de presupuesto |
+| Secretos | Gitleaks sobre los cambios preparados: sin hallazgos |
+| Chromium: acceso a 1440, 768 y 390 px | Seis roles con especialidad/área, sin desbordamiento horizontal; axe WCAG 2 A/AA y 2.1 A/AA sin incidencias |
+| Chromium: sesión profesional y administrativa | Especialidad visible en la sesión y Mi perfil móvil; columna de Personal visible y axe sin incidencias |
+
+Las 11 nuevas pruebas API verifican tres nombres distintos de especialidad,
+actualización del catálogo, ausencia de autenticación, aislamiento entre clínicas
+y seis casos de perfiles o especialidades no vigentes/ajenos. Las pruebas de
+componentes comprueban agrupación de especialidades por rol, búsqueda, contexto de
+la sesión y actualización de etiquetas al volver al acceso.
+
+Logs y capturas locales: `tmp/qa-20261007/backend-especialidades.log`,
+`frontend-especialidades-definitivo.log`, `build-especialidades-definitivo.log`,
+`lint-especialidades-definitivo.log`, `visual-especialidades-definitivo.log`,
+`roles-especialidad-1440.png`, `roles-especialidad-768.png`,
+`roles-especialidad-390.png`, `personal-especialidades.png` y
+`perfil-especialidad-movil.png`. Las ejecuciones completas de backend/E2E de las
+secciones anteriores corresponden a sus commits; esta ampliación registra su
+regresión focalizada y la suite completa del frontend.
+
+La primera ejecución concurrente del frontend excedió los tiempos de dos pruebas
+existentes (Panel y Ficha). La repetición limita a dos los trabajadores de Vitest
+mediante una configuración temporal; conserva los tiempos originales y los
+umbrales de cobertura del proyecto.
+
 ## Cambios realizados
 
 - La barra de fecha de Agenda reparte sus controles en varias líneas en móvil.

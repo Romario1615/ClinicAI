@@ -358,6 +358,7 @@ _PROFESIONAL = ManualSistema(
             "Reunir la atención clínica en la ficha conservando sede y especialidad.",
             (
                 "Abra la ficha del paciente desde su cita o desde Pacientes y elija Atención y documentos.",
+                "Compruebe la especialidad indicada bajo su rol al elegir el acceso local y junto a su nombre en la sesión; corresponde a su perfil profesional.",
                 "Seleccione la cita de referencia: sus notas nuevas y documentos conservarán esa cita y sede.",
                 "Use las secciones habilitadas para su especialidad: evolución, piezas dentales, imágenes, planes y recetas.",
             ),
@@ -836,6 +837,7 @@ _ADMINISTRADOR = ManualSistema(
                 "En Usuarios y roles, cree la cuenta con correo y una contraseña inicial.",
                 "Asigne el rol y limite las sedes si la persona no trabaja en todas.",
                 "Para un profesional, vincule la cuenta a su ficha del equipo clínico.",
+                "Compruebe Especialidad / área en Personal; el selector Perfil profesional muestra la especialidad de cada ficha. Para cambiarla, edite esa ficha en Profesionales.",
             ),
             (
                 "La persona deberá cambiar la contraseña inicial en su primer ingreso.",

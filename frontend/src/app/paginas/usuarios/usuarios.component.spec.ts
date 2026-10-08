@@ -10,7 +10,7 @@ import { BASE, PROVEEDORES_PRUEBA, iniciarSesionCon } from '../../nucleo/pruebas
 
 const USUARIOS = [
     { id: 'u1', correo: 'ana@example.invalid', nombre: 'Ana', apellido: 'Uno', activo: true, roles: ['Recepcion'], profesional_id: null, ultimo_acceso_en: null },
-    { id: 'u2', correo: 'beto@example.invalid', nombre: 'Beto', apellido: 'Dos', activo: false, roles: ['Profesional'], profesional_id: 'p1', ultimo_acceso_en: '2026-10-05T10:00:00Z' },
+    { id: 'u2', correo: 'beto@example.invalid', nombre: 'Beto', apellido: 'Dos', activo: false, roles: ['Profesional'], profesional_id: 'p1', especialidad: 'Odontología', ultimo_acceso_en: '2026-10-05T10:00:00Z' },
 ];
 const ROLES = [
     { id: 'r1', codigo: 'recepcion', nombre: 'Recepcion', descripcion: 'Agenda', es_sistema: true, permisos: ['agenda.leer', 'cita.crear'] },
@@ -76,6 +76,20 @@ describe('UsuariosComponent', () => {
         expect((fixture.nativeElement as HTMLElement).textContent).toContain('Del sistema');
         c.pestana.set('matriz');
         fixture.detectChanges();
+    });
+
+    it('muestra el área o especialidad y permite buscar por ella', () => {
+        montar(['usuario.leer']);
+        expect(c.especialidadUsuario(USUARIOS[0])).toBe('Área: Recepción y agenda');
+        expect(c.especialidadUsuario(USUARIOS[1])).toBe('Especialidad: Odontología');
+        c.verInactivos = true;
+        c.busqueda = 'odontología';
+        fixture.detectChanges();
+        expect(c.personal().map((u: { id: string }) => u.id)).toEqual(['u2']);
+        expect((fixture.nativeElement as HTMLElement).textContent).toContain('Especialidad: Odontología');
+        expect(c.especialidadesRol(ROLES[1])).toContain('Sin especialidad asignada');
+        c.usuarios.set(USUARIOS.map(u => ({ ...u, activo: true })));
+        expect(c.especialidadesRol(ROLES[1])).toBe('Especialidades del equipo: Odontología');
     });
 
     it('da acceso a una persona validando datos, rol y perfil profesional', () => {

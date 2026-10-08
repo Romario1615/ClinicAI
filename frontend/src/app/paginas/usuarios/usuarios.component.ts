@@ -34,6 +34,7 @@ import { EditorRegistroComponent } from '../../compartido/editor-registro.compon
 import { FotoPersonaComponent } from '../../compartido/foto-persona.component';
 import { MatrizAccesosComponent } from './matriz-accesos.component';
 import { IconoComponent, type NombreIcono } from '../../compartido/icono.component';
+import { areaDelRol, especialidadDelRol } from '../../nucleo/utilidades/especialidad-rol';
 
 interface UsuarioClinica {
   readonly id: string;
@@ -43,6 +44,7 @@ interface UsuarioClinica {
   readonly activo: boolean;
   readonly roles: readonly string[];
   readonly profesional_id: string | null;
+  readonly especialidad?: string | null;
   readonly ultimo_acceso_en: string | null;
 }
 
@@ -65,6 +67,7 @@ interface ProfesionalClinica {
   readonly id: string;
   readonly nombre: string;
   readonly apellido: string;
+  readonly especialidad?: string | null;
 }
 
 type Pestana = 'personal' | 'roles' | 'matriz';
@@ -157,7 +160,7 @@ const CATEGORIAS: Record<string, string> = {
           <div class="filtros">
             <label class="campo filtros__buscar">
               <span class="solo-lectores">Buscar persona</span>
-              <input class="campo__control" type="search" placeholder="Buscar por nombre o correo" [(ngModel)]="busqueda" />
+              <input class="campo__control" type="search" placeholder="Buscar por nombre, correo o especialidad" [(ngModel)]="busqueda" />
             </label>
             <label class="campo">
               <span class="solo-lectores">Filtrar por rol</span>
@@ -182,6 +185,7 @@ const CATEGORIAS: Record<string, string> = {
                   <tr>
                     <th scope="col">Persona</th>
                     <th scope="col">Roles</th>
+                    <th scope="col">Especialidad / área</th>
                     <th scope="col">Estado</th>
                     <th scope="col">Último acceso</th>
                     <th scope="col"><span class="solo-lectores">Acciones</span></th>
@@ -204,6 +208,7 @@ const CATEGORIAS: Record<string, string> = {
                           @for (rol of usuario.roles; track rol) { <span class="etiqueta">{{ rol }}</span> }
                         </span>
                       </td>
+                      <td class="especialidad-persona">{{ especialidadUsuario(usuario) }}</td>
                       <td>
                         <span class="estado" [class.estado--activo]="usuario.activo">
                           {{ usuario.activo ? 'Con acceso' : 'Sin acceso' }}
@@ -252,6 +257,7 @@ const CATEGORIAS: Record<string, string> = {
                 </span>
               </div>
               <p class="rol__descripcion">{{ rol.descripcion || 'Sin descripción.' }}</p>
+              <p class="rol__especialidad">{{ especialidadesRol(rol) }}</p>
               <p class="rol__cifras">
                 <strong class="numerico">{{ personasCon(rol) }}</strong> persona(s) ·
                 <strong class="numerico">{{ rol.permisos.length }}</strong> permisos
@@ -412,7 +418,7 @@ const CATEGORIAS: Record<string, string> = {
         @for (rol of roles(); track rol.id) {
           <label class="opcion" [class.opcion--marcada]="rolesSeleccionados().has(rol.id)">
             <input type="checkbox" [checked]="rolesSeleccionados().has(rol.id)" (change)="alternarRol(rol.id, $any($event.target).checked)" />
-            <span><strong>{{ rol.nombre }}</strong><small>{{ rol.descripcion || rol.permisos.length + ' permisos' }}</small></span>
+            <span><strong>{{ rol.nombre }}</strong><small>{{ especialidadesRol(rol) }}</small><small>{{ rol.descripcion || rol.permisos.length + ' permisos' }}</small></span>
           </label>
         }
       </div>
@@ -421,10 +427,10 @@ const CATEGORIAS: Record<string, string> = {
           <select class="campo__control" name="perfilProfesional" [(ngModel)]="profesionalId" required>
             <option value="">Seleccione un profesional</option>
             @for (profesional of profesionales(); track profesional.id) {
-              <option [value]="profesional.id">{{ profesional.nombre }} {{ profesional.apellido }}</option>
+              <option [value]="profesional.id">{{ profesional.nombre }} {{ profesional.apellido }} · {{ profesional.especialidad || 'Sin especialidad asignada' }}</option>
             }
           </select>
-          <span class="campo__ayuda">El rol Profesional se vincula a su ficha de profesional (agenda, firma y relación con pacientes).</span>
+          <span class="campo__ayuda">La especialidad se toma de este perfil profesional. Para cambiarla, edite su ficha en Profesionales. El rol determina sus permisos.</span>
         </label>
       }
     </ng-template>
@@ -511,6 +517,8 @@ const CATEGORIAS: Record<string, string> = {
     .rol__cabecera { display: flex; justify-content: space-between; gap: var(--espacio-2); align-items: start; }
     .rol h2 { margin: 0; font-size: 1.05rem; }
     .rol__descripcion { margin: 0; color: var(--texto-suave); font-size: 0.88rem; }
+    .rol__especialidad { margin: 0; font-size: 0.85rem; color: var(--texto); overflow-wrap: anywhere; }
+    .especialidad-persona { max-width: 240px; white-space: normal; overflow-wrap: anywhere; font-size: 0.85rem; }
     .rol__cifras { margin: 0; font-size: 0.88rem; }
     .rol .boton { justify-self: start; }
     .insignia { padding: 2px 8px; border-radius: 999px; background: var(--superficie-hundida); color: var(--texto-suave); font-size: 0.72rem; font-weight: 700; white-space: nowrap; }
@@ -607,7 +615,7 @@ export class UsuariosComponent {
       .filter((u) => this.verInactivosMarcado() || u.activo)
       .filter((u) => !rol || u.roles.includes(rol))
       .filter(
-        (u) => !texto || `${u.nombre} ${u.apellido} ${u.correo}`.toLowerCase().includes(texto),
+        (u) => !texto || `${u.nombre} ${u.apellido} ${u.correo} ${u.especialidad ?? ''}`.toLowerCase().includes(texto),
       )
       .sort((a, b) => Number(b.activo) - Number(a.activo) || a.apellido.localeCompare(b.apellido));
   });
@@ -697,6 +705,19 @@ export class UsuariosComponent {
 
   protected personasCon(rol: RolClinica): number {
     return this.usuarios().filter((u) => u.activo && u.roles.includes(rol.nombre)).length;
+  }
+
+  protected especialidadUsuario(usuario: UsuarioClinica): string {
+    const codigos = this.roles().filter(r => usuario.roles.includes(r.nombre)).map(r => r.codigo);
+    return especialidadDelRol(usuario.especialidad, codigos);
+  }
+
+  protected especialidadesRol(rol: RolClinica): string {
+    const especialidades = [...new Set(this.usuarios()
+      .filter(u => u.activo && u.roles.includes(rol.nombre) && u.especialidad)
+      .map(u => u.especialidad!))].sort((a, b) => a.localeCompare(b));
+    if (especialidades.length) return `Especialidades del equipo: ${especialidades.join(' · ')}`;
+    return rol.codigo === 'profesional' ? 'Sin especialidad asignada en el equipo activo' : `Área: ${areaDelRol(rol.codigo)}`;
   }
 
   /** Permisos de un rol, con su descripción, agrupados por módulo. */

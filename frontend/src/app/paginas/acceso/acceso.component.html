@@ -30,7 +30,7 @@
       @if (modoAccesoLocal()) {
         <p class="acceso__ceja acceso__ceja--formulario">ACCESO LOCAL</p>
         <h1>Elige un rol</h1>
-        <p class="acceso__intro">Entra directamente a las vistas disponibles para revisar el sistema.</p>
+        <p class="acceso__intro">Elige tu rol y revisa la especialidad o área de trabajo de la cuenta.</p>
         <div class="acceso__roles" role="group" aria-label="Ingresar como un rol">
           @for (rol of rolesLocales(); track rol.codigo) {
             <button
@@ -64,7 +64,8 @@
               </span>
               <span class="acceso__rol-texto">
                 <strong>{{ rol.nombre }}</strong>
-                <small>{{ enviando() ? 'Conectando…' : 'Entrar a este espacio' }}</small>
+                <small class="acceso__rol-especialidad">{{ especialidadDelRol(rol.especialidad, [rol.codigo]) }}</small>
+                @if (enviando()) { <small role="status">Conectando…</small> }
               </span>
               <span class="acceso__rol-flecha" aria-hidden="true">→</span>
             </button>
