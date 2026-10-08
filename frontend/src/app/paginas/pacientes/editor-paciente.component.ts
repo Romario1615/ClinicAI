@@ -31,9 +31,10 @@ import { FotosRegistroService } from '../../nucleo/servicios/fotos-registro.serv
       forma="centrada"
       [anchoMaximo]="640"
       [cierraAlPulsarFuera]="false"
+      [ocupada]="ocupado()"
       (cerrar)="cerrar.emit()"
     >
-      <form #formulario="ngForm" (ngSubmit)="guardar()" novalidate>
+      <form id="formulario-editor-paciente" #formulario="ngForm" (ngSubmit)="guardar()" novalidate>
         <p class="campo__ayuda formulario__leyenda">Los campos con <span class="obligatorio">*</span> son obligatorios.</p>
         <div class="rejilla-campos">
           <label class="campo">
@@ -136,12 +137,15 @@ import { FotosRegistroService } from '../../nucleo/servicios/fotos-registro.serv
           <p class="aviso-error" role="alert">{{ error() }}</p>
         }
 
-        <div class="acciones acciones--final">
+        <app-captura-fotos titulo="Foto de perfil" [perfil]="true" [ocupada]="ocupado()" (cambiadas)="fotos=$event" />
+      </form>
+        <div pie class="acciones acciones--final">
           <button type="button" class="boton" (click)="cerrar.emit()" [disabled]="ocupado()">
             Cancelar
           </button>
           <button
             type="submit"
+            form="formulario-editor-paciente"
             class="boton boton--principal"
             [disabled]="ocupado()"
             (click)="intentado.set(true)"
@@ -149,8 +153,6 @@ import { FotosRegistroService } from '../../nucleo/servicios/fotos-registro.serv
             {{ ocupado() ? 'Guardando…' : 'Guardar paciente' }}
           </button>
         </div>
-        <app-captura-fotos titulo="Foto de perfil" [perfil]="true" [ocupada]="ocupado()" (cambiadas)="fotos=$event" />
-      </form>
     </app-ventana-flotante>
   `,
   changeDetection: ChangeDetectionStrategy.Eager,
@@ -165,11 +167,6 @@ import { FotosRegistroService } from '../../nucleo/servicios/fotos-registro.serv
       margin-bottom: 0;
     }
 
-    .acciones {
-      margin-top: var(--espacio-5);
-      padding-top: var(--espacio-4);
-      border-top: 1px solid var(--borde);
-    }
   `,
 })
 export class EditorPacienteComponent implements OnChanges {

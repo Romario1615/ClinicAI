@@ -95,9 +95,10 @@ interface Configuracion {
         [titulo]="esp.nombre"
         forma="centrada"
         [anchoMaximo]="520"
+        [ocupada]="guardando()"
         (cerrar)="editando.set(null)"
       >
-        <form class="formulario" (ngSubmit)="guardar(esp)">
+        <form id="formulario-modulos-especialidad" class="formulario" (ngSubmit)="guardar(esp)">
           <fieldset class="modulos">
             <legend>Se activan al revisar desde {{ esp.nombre }}</legend>
             @for (modulo of catalogoDisponible(esp); track modulo.codigo) {
@@ -125,13 +126,13 @@ interface Configuracion {
             />
           </label>
           @if (errorCambio()) { <p class="campo__error" role="alert">{{ errorCambio() }}</p> }
-          <div class="pie">
-            <button class="boton" type="button" (click)="editando.set(null)">Cancelar</button>
-            <button class="boton boton--principal" type="submit" [disabled]="guardando()">
+        </form>
+          <div pie class="pie">
+            <button class="boton" type="button" (click)="editando.set(null)" [disabled]="guardando()">Cancelar</button>
+            <button class="boton boton--principal" type="submit" form="formulario-modulos-especialidad" [disabled]="guardando()">
               {{ guardando() ? 'Guardando…' : 'Guardar módulos' }}
             </button>
           </div>
-        </form>
       </app-ventana-flotante>
     }
   `,

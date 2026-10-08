@@ -40,8 +40,8 @@
   </div></div>}
 </ng-template>
 @if(editor()) {
-  <app-ventana-flotante titulo="Registrar examen periodontal" [ocupada]="ocupado()" [error]="error()" [cambiosSinGuardar]="true" (cerrar)="editor.set(false)">
-    <form (ngSubmit)="guardar()" class="perio__editor"><fieldset [disabled]="ocupado() || operacionFotos.guardado"><div class="perio__filtros"><label>Fecha del examen <input type="date" name="fecha" [(ngModel)]="fecha" required /></label><label>Sede<select name="sede" [(ngModel)]="sede" [disabled]="corrigiendo() || !!citaId()"><option value="">Sin sede (ámbito completo)</option>@for(s of sedes();track s.id){<option [value]="s.id">{{s.nombre}}</option>}</select></label><label>Sensibilidad<select name="nivel" [(ngModel)]="nivel"><option>N2</option><option>N3</option></select></label></div>
+  <app-ventana-flotante titulo="Registrar examen periodontal" forma="centrada" [anchoMaximo]="1100" [ocupada]="ocupado()" [error]="error()" [cambiosSinGuardar]="true" (cerrar)="editor.set(false)">
+    <form id="formulario-periodontograma" (ngSubmit)="guardar()" class="perio__editor"><fieldset [disabled]="ocupado() || operacionFotos.guardado"><div class="perio__filtros"><label>Fecha del examen <input type="date" name="fecha" [(ngModel)]="fecha" required /></label><label>Sede<select name="sede" [(ngModel)]="sede" [disabled]="corrigiendo() || !!citaId()"><option value="">Sin sede (ámbito completo)</option>@for(s of sedes();track s.id){<option [value]="s.id">{{s.nombre}}</option>}</select></label><label>Sensibilidad<select name="nivel" [(ngModel)]="nivel"><option>N2</option><option>N3</option></select></label></div>
       @if(piezaElegida(); as codigo) {<fieldset class="perio__pieza"><legend>Pieza {{codigo}}</legend><div class="perio__acciones"><label><input type="checkbox" name="ausente" [(ngModel)]="pieza.ausente" /> Ausente</label><label><input type="checkbox" name="implante" [(ngModel)]="pieza.implante" [disabled]="pieza.ausente" /> Implante</label></div>
         @if(!pieza.ausente) {
           @if(!pieza.implante) {<div class="perio__filtros"><label>Movilidad<select name="movilidad" [(ngModel)]="pieza.movilidad"><option [ngValue]="null">Sin evaluar</option>@for(n of [0,1,2,3]; track n) {<option [ngValue]="n">{{n}}</option>}</select></label><label>Furcación<select name="furcacion" [(ngModel)]="pieza.furcacion"><option [ngValue]="null">Sin evaluar</option>@for(n of [0,1,2,3]; track n) {<option [ngValue]="n">{{n}}</option>}</select></label></div>}
@@ -56,7 +56,7 @@
       </fieldset>
       @if(operacionFotos.guardado){<p role="status">Examen guardado. Puede reintentar las fotografías pendientes.</p>}
       @if(puedeCargarFotos()){<app-captura-fotos titulo="Fotografías del examen" [ocupada]="ocupado()" (cambiadas)="fotos=$event" />}
-      <div class="perio__acciones"><button type="submit" class="boton boton--primario" [disabled]="ocupado() || motivo.trim().length<8 || !!piezaElegida()">Guardar examen</button>@if(corrigiendo() && !operacionFotos.guardado) {<button type="button" class="boton" [disabled]="ocupado() || motivo.trim().length<8" (click)="guardar(true)">Anular control con motivo</button>}</div>
     </form>
+    <div pie class="perio__acciones"><button type="submit" form="formulario-periodontograma" class="boton boton--primario" [disabled]="ocupado() || motivo.trim().length<8 || !!piezaElegida()">Guardar examen</button>@if(corrigiendo() && !operacionFotos.guardado) {<button type="button" class="boton" [disabled]="ocupado() || motivo.trim().length<8" (click)="guardar(true)">Anular control con motivo</button>}</div>
   </app-ventana-flotante>
 }

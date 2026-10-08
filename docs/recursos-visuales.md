@@ -5,8 +5,10 @@
 La interfaz comparte azul profundo, cobalto y cian. La portada y el panel usan
 fondos oscuros; datos, formularios y ventanas conservan vidrio claro. Los
 recursos anteriores se conservan para sus módulos y estados complementarios.
-`acceso-equipo.png` y `panel-clinicai-dental-network-v1.jpg` ya no se usan en las
-portadas: la composición actual es nativa de SVG y CSS, adaptable a toda la ventana.
+El acceso recupera **`acceso-equipo.png`**, la imagen original del equipo en
+la clínica, con una capa azul de contraste. Sobre ella se mantienen las
+partículas y la red de IA en SVG/CSS. El panel conserva su composición nativa;
+`panel-clinicai-dental-network-v1.jpg` permanece como recurso histórico.
 
 - `frontend/src/app/compartido/fondo-ia.component.ts`: conexiones y 24 partículas
   con posiciones estables. Sin imágenes, azar, eventos de puntero ni ciclos de

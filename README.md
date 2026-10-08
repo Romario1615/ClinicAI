@@ -1,5 +1,33 @@
 # ClinicAI — Plataforma de gestión clínica
 
+## Fondo de acceso y formularios flotantes (2026-10-08)
+
+- **Inicio de sesión:** conserva la imagen original `acceso-equipo.png`, con
+  una capa azul para leer los textos y las conexiones y partículas de IA.
+- **Formularios largos:** ventanas de vidrio limitadas al alto disponible;
+  solo se desplazan los campos, con **Guardar/Cancelar** en un pie fijo.
+  En móvil ocupan la pantalla y las acciones se acomodan en varias líneas.
+- **Pacientes, gastos, pagos y periodontograma:** acciones fuera del cuerpo
+  desplazable, vinculadas al formulario para conservar su validación y envío.
+  El editor periodontal amplía su ancho en escritorio para sus seis sitios.
+- **Conocimiento → Cargar documento:** usa la ventana compartida, con foco,
+  Escape, estado de ingesta y fotos. **Ficha → Agente → Más gestiones →
+  Configurar búsqueda** también abre sus parámetros en una ventana.
+- **Agente demo → Preparar conversación:** abre los parámetros sin desplazar
+  el listado. La conversación conserva su comportamiento anterior.
+
+Se revisaron las 65 declaraciones de formularios: 50 usan la ventana
+compartida y las restantes son accesos, verificaciones públicas, búsquedas,
+filtros breves o campos para mensajes. Los formularios flotantes conservan
+las acciones de envío en el pie. La evidencia de navegador y las corridas
+completas de esta revisión se registran en
+[Verificación del fondo y los formularios](docs/verificacion-2026-10-08.md#fondo-de-acceso-y-formularios-flotantes).
+
+**Verificado:** 752 pruebas frontend con cobertura y 79/79 recorridos
+completos de Chromium, incluidos los seis tamaños del acceso y de los
+formularios. Lint, build y revisión de secretos aprobados. Aplicación local:
+[http://localhost:4200/acceso](http://localhost:4200/acceso).
+
 ## Ficha con agente, periodontograma, analítica y fotos (2026-10-08)
 
 - **Pacientes → Ver ficha → Agente del paciente:** consultas sobre esa persona

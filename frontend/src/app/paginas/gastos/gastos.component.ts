@@ -272,7 +272,7 @@ function aFallo(error: unknown, mensaje: string): FalloApi {
 
     @if (altaAbierta()) {
       <app-ventana-flotante ceja="Gastos" titulo="Registrar gasto" forma="centrada" [anchoMaximo]="560" [cierraAlPulsarFuera]="false" [ocupada]="guardando()" (cerrar)="altaAbierta.set(false)">
-        <form #formAlta="ngForm" (ngSubmit)="registrar(formAlta.valid)" novalidate>
+        <form id="formulario-gasto" #formAlta="ngForm" (ngSubmit)="registrar(formAlta.valid)" novalidate>
           <div class="formulario-demo">
             <label class="campo">
               <span class="campo__etiqueta">Fecha</span>
@@ -328,19 +328,19 @@ function aFallo(error: unknown, mensaje: string): FalloApi {
           @if (falloAlta(); as fallo) {
             <p class="aviso-error" role="alert">{{ fallo.message }}</p>
           }
-          <div class="acciones acciones--final">
-            <button type="button" class="boton" (click)="altaAbierta.set(false)">Cancelar</button>
-            <button type="submit" class="boton boton--principal" [disabled]="guardando()">
+        </form>
+          <div pie class="acciones acciones--final">
+            <button type="button" class="boton" (click)="altaAbierta.set(false)" [disabled]="guardando()">Cancelar</button>
+            <button type="submit" form="formulario-gasto" class="boton boton--principal" [disabled]="guardando()">
               {{ guardando() ? 'Guardando…' : 'Registrar gasto' }}
             </button>
           </div>
-        </form>
       </app-ventana-flotante>
     }
 
     @if (anulando(); as gasto) {
-      <app-ventana-flotante ceja="Gastos" titulo="Anular gasto" forma="centrada" [anchoMaximo]="480" [cierraAlPulsarFuera]="false" (cerrar)="anulando.set(null)">
-        <form (ngSubmit)="anular(gasto)" novalidate>
+      <app-ventana-flotante ceja="Gastos" titulo="Anular gasto" forma="centrada" [anchoMaximo]="480" [cierraAlPulsarFuera]="false" [ocupada]="guardando()" (cerrar)="anulando.set(null)">
+        <form id="formulario-anular-gasto" (ngSubmit)="anular(gasto)" novalidate>
           <p>
             <strong>{{ gasto.descripcion }}</strong> · {{ dinero(gasto.importe) }} · {{ fechaCorta(gasto.fecha) }}
           </p>
@@ -352,11 +352,11 @@ function aFallo(error: unknown, mensaje: string): FalloApi {
           @if (falloAnulacion(); as fallo) {
             <p class="aviso-error" role="alert">{{ fallo.message }}</p>
           }
-          <div class="acciones acciones--final">
-            <button type="button" class="boton" (click)="anulando.set(null)">Cancelar</button>
-            <button type="submit" class="boton boton--peligro" [disabled]="guardando() || motivo.trim().length < 5">Anular gasto</button>
-          </div>
         </form>
+          <div pie class="acciones acciones--final">
+            <button type="button" class="boton" (click)="anulando.set(null)" [disabled]="guardando()">Cancelar</button>
+            <button type="submit" form="formulario-anular-gasto" class="boton boton--peligro" [disabled]="guardando() || motivo.trim().length < 5">Anular gasto</button>
+          </div>
       </app-ventana-flotante>
     }
   `,

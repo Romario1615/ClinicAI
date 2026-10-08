@@ -42,7 +42,7 @@ export interface RevisionRiesgo {
   standalone: true,
   imports: [FormsModule, VentanaFlotanteComponent],
   template: `
-    <app-ventana-flotante ceja="Revisión de seguridad" [titulo]="documento().titulo" forma="centrada" [anchoMaximo]="720" (cerrar)="cerrar.emit()">
+    <app-ventana-flotante ceja="Revisión de seguridad" [titulo]="documento().titulo" forma="centrada" [anchoMaximo]="720" [ocupada]="guardando()" (cerrar)="cerrar.emit()">
       @if (cargando()) {
         <p role="status">Cargando el contenido marcado…</p>
       } @else if (revision()) {
@@ -69,20 +69,22 @@ export interface RevisionRiesgo {
         @if (r.revisado) {
           <p class="riesgo__hecho" role="status">Ya revisado. Nota: {{ r.nota_revision }}</p>
         } @else {
-          <form class="riesgo__form" (ngSubmit)="marcar(r)">
+          <form id="formulario-revision-riesgo" class="riesgo__form" (ngSubmit)="marcar(r)">
             <label class="campo">
               <span class="campo__etiqueta">Nota de revisión</span>
               <textarea class="campo__control" name="nota-riesgo" rows="2" maxlength="1000" [(ngModel)]="nota"
                 placeholder="Por qué el texto es aceptable"></textarea>
               <span class="campo__ayuda">Mínimo {{ minimoNota }} caracteres. Queda en la auditoría.</span>
             </label>
-            <button class="boton boton--principal" type="submit" [disabled]="guardando() || !notaValida()">
-              Marcar como revisado
-            </button>
           </form>
         }
       }
       @if (error()) { <p class="campo__error" role="alert">{{ error() }}</p> }
+      <div pie class="acciones acciones--final">
+        @if (revision() && !revision()?.revisado) {
+          <button class="boton boton--principal" type="submit" form="formulario-revision-riesgo" [disabled]="guardando() || !notaValida()">Marcar como revisado</button>
+        }
+      </div>
     </app-ventana-flotante>
   `,
   changeDetection: ChangeDetectionStrategy.Eager,

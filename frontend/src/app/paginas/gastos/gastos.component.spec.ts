@@ -130,6 +130,7 @@ describe('GastosComponent', () => {
     // escucha lo que se escribe.
     await fixture.whenStable();
     const ventana = raiz.querySelector('app-ventana-flotante') as HTMLElement;
+    expect(ventana.querySelector<HTMLButtonElement>('.ventana__pie button[type="submit"]')?.form?.id).toBe('formulario-gasto');
     const escribir = (nombre: string, valor: string) => {
       const campo = ventana.querySelector<HTMLInputElement>(`[name="${nombre}"]`)!;
       campo.value = valor;

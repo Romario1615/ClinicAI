@@ -993,6 +993,22 @@ td.acciones {
   justify-content: flex-end;
 }
 
+/* Acciones proyectadas fuera del cuerpo desplazable de los formularios. */
+app-ventana-flotante [pie] {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--espacio-3);
+  min-width: 0;
+  width: 100%;
+  margin: 0;
+}
+
+app-ventana-flotante [pie] > .boton {
+  max-width: 100%;
+  white-space: normal;
+}
+
 /* Acciones separadas: lo destructivo lejos de lo habitual, para que no se
    pulse por inercia. */
 .acciones--separadas {

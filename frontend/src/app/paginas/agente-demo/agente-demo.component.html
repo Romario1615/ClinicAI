@@ -10,9 +10,14 @@
 } @else {
   @if (error()) { <p class="aviso-error pantalla__fijo" role="alert">{{ error() }}</p> }
   @if (!sesionId()) {
-    <section class="tarjeta editor-demo desplazable" tabindex="0" aria-labelledby="preparar-demo">
+    <section class="tarjeta editor-demo pantalla__fijo" aria-labelledby="preparar-demo">
       <h2 id="preparar-demo">Prepare una conversación</h2>
-      <form (ngSubmit)="iniciar()">
+      <p>Seleccione el paciente y los parámetros de la agenda para iniciar.</p>
+      <button type="button" class="boton boton--principal" aria-haspopup="dialog" (click)="preparando.set(true)">Preparar conversación</button>
+    </section>
+    @if (preparando()) {
+      <app-ventana-flotante titulo="Preparar conversación" ceja="Agente demo" forma="centrada" [anchoMaximo]="900" [ocupada]="ocupado()" [error]="error()" [cierraAlPulsarFuera]="false" (cerrar)="preparando.set(false)">
+      <form id="formulario-conversacion-demo" (ngSubmit)="iniciar()">
         <fieldset class="preparar" [disabled]="ocupado()">
           <div class="preparar__quien">
           <label>Asistente<select name="modo" [(ngModel)]="modo">
@@ -37,12 +42,16 @@
           </div>
           <p class="ayuda-demo">Se consultarán siete días en la zona {{ zona() }}.</p>
           @if (!profesionales().length && !cargandoProfesionales()) { <p>No hay profesionales disponibles para esta sede y servicio.</p> }
-          <button class="boton boton--principal" type="submit" [disabled]="!paciente() || !profesionalId || !fecha || ocupado() || cargandoProfesionales()">{{ ocupado() ? 'Iniciando…' : 'Iniciar simulación' }}</button>
           </div>
         </fieldset>
       </form>
       @if (error()) { <button class="boton" type="button" (click)="cargar()" [disabled]="ocupado()">Recargar catálogo</button> }
-    </section>
+      <div pie class="acciones acciones--final">
+        <button type="button" class="boton" (click)="preparando.set(false)" [disabled]="ocupado()">Cancelar</button>
+        <button class="boton boton--principal" type="submit" form="formulario-conversacion-demo" [disabled]="!paciente() || !profesionalId || !fecha || ocupado() || cargandoProfesionales()">{{ ocupado() ? 'Iniciando…' : 'Iniciar simulación' }}</button>
+      </div>
+      </app-ventana-flotante>
+    }
   } @else {
     <section class="tarjeta tarjeta--llena conversacion" aria-labelledby="conversacion-demo">
       <div class="cabecera-pagina">

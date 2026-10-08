@@ -556,3 +556,33 @@ npx.cmd playwright test escenarios/18-periodontograma-analitica-agente.spec.ts
 Las cifras y los comandos de la ejecución concreta están en el informe de
 verificación. La corrida completa anterior del backend y las focalizadas
 actuales se registran por separado; no se suman como si fueran una sola corrida.
+
+## Fondo de acceso y formularios flotantes (2026-10-08)
+
+- Inventario de plantillas con el compilador de Angular: 65 declaraciones de
+  formulario, 50 dentro de `app-ventana-flotante`. Se revisan también los
+  campos repetidos y los componentes hijos; las 15 restantes corresponden a
+  acceso/verificación, filtros, búsquedas y mensajes. No quedan botones de
+  envío dentro del cuerpo desplazable de los formularios flotantes.
+- Pruebas unitarias: asociación nativa `button.form`, proyección al pie,
+  validación de campos, búsqueda contextual, cierre durante solicitudes,
+  error dentro del diálogo y conservación de parámetros del simulador.
+- `20-acceso-formularios.spec.ts`: carga y decodificación de la imagen
+  original, axe del acceso, pacientes, gastos, conocimiento, cuentas, roles,
+  clínicas, contexto del agente y editor periodontal. Mide límites de
+  ventana, pie y botones; mantiene el pie al desplazar los campos; comprueba
+  el formulario asociado en seis tamaños: 1440×900, 1280×600, 900×500,
+  844×390, 390×844 y 320×568.
+- La regresión completa conserva los recorridos reales de crear pacientes,
+  ingesta, simulación, revisión de pagos y examen periodontal con fotos/PDF.
+  Las escrituras se ejecutan exclusivamente en la base sintética temporal.
+
+```powershell
+cd frontend
+npm.cmd run test:ci
+npm.cmd run lint
+npm.cmd run build
+cd ../pruebas-e2e
+# Definir URL_API para la API de la base temporal antes de ejecutar.
+npx.cmd playwright test escenarios/20-acceso-formularios.spec.ts
+```

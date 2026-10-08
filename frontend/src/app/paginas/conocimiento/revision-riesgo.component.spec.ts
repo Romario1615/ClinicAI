@@ -58,6 +58,8 @@ describe('RevisionRiesgoComponent', () => {
         const boton = (fixture.nativeElement as HTMLElement).querySelector<HTMLButtonElement>('button[type=submit]');
         // Sin nota suficiente no se puede marcar.
         expect(boton?.disabled).toBe(true);
+        expect(boton?.closest('.ventana__pie')).not.toBeNull();
+        expect(boton?.form?.id).toBe('formulario-revision-riesgo');
     });
 
     it('envía la versión y la nota, y avisa al terminar', () => {

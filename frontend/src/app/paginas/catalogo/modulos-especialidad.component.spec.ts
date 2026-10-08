@@ -53,6 +53,7 @@ describe('ModulosEspecialidadComponent', () => {
         const derm = c.especialidades()[1];
         c.abrir(derm);
         fixture.detectChanges();
+        expect((fixture.nativeElement as HTMLElement).querySelector<HTMLButtonElement>('.ventana__pie button[type="submit"]')?.form?.id).toBe('formulario-modulos-especialidad');
         c.alternar('odontograma');
         expect(c.elegidos().has('odontograma')).toBe(false);
         c.alternar('imagenes');

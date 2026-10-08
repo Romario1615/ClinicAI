@@ -5,6 +5,7 @@ import { forkJoin } from 'rxjs';
 import { SelectorPacienteComponent } from '../../compartido/selector-paciente.component';
 import { InsigniaEstadoComponent } from '../../compartido/insignia-estado.component';
 import { CargandoComponent } from '../../compartido/estados.component';
+import { VentanaFlotanteComponent } from '../../compartido/ventana-flotante.component';
 import { CatalogoService } from '../../nucleo/servicios/catalogo.service';
 import { OperacionesService } from '../../nucleo/servicios/operaciones.service';
 import { FalloApi } from '../../nucleo/servicios/api.service';
@@ -24,7 +25,7 @@ interface Mensaje { autor: 'Usted' | 'Asistente'; texto: string; respuesta?: Res
 
 @Component({
   selector: 'app-agente-demo', standalone: true,
-  imports: [FormsModule, SelectorPacienteComponent, InsigniaEstadoComponent, CargandoComponent],
+  imports: [FormsModule, SelectorPacienteComponent, InsigniaEstadoComponent, CargandoComponent, VentanaFlotanteComponent],
   host: { class: 'pantalla' },
   templateUrl: './agente-demo.component.html', changeDetection: ChangeDetectionStrategy.Eager,
  styleUrl: './agente-demo.component.scss',
@@ -47,6 +48,7 @@ export class AgenteDemoComponent {
   protected readonly ocupado = signal(false);
   protected readonly error = signal('');
   protected readonly sesionId = signal('');
+  protected readonly preparando = signal(false);
   protected readonly mensajes = signal<Mensaje[]>([]);
   protected readonly requiereHumano = signal(false);
   protected readonly respuestaActual = signal<RespuestaDemo | null>(null);
@@ -102,7 +104,7 @@ export class AgenteDemoComponent {
     this.ocupado.set(true); this.error.set('');
     this.api.guardar<RespuestaDemo>('/agente-demo/sesiones', datos, this.apertura.clave).subscribe({
       next: respuesta => {
-        this.sesionId.set(respuesta.sesion_id); this.recibir(respuesta); this.ocupado.set(false);
+        this.sesionId.set(respuesta.sesion_id); this.preparando.set(false); this.recibir(respuesta); this.ocupado.set(false);
       },
       error: (e: unknown) => { this.error.set(this.mensajeError(e)); this.ocupado.set(false); },
     });

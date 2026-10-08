@@ -250,6 +250,7 @@ test('el simulador reserva, confirma y muestra la cita real', async ({ page, req
   try {
     await acceder(page, 'recepcion');
     await irA(page, 'Agente demo');
+    await page.getByRole('button', { name: 'Preparar conversación', exact: true }).click();
     await seleccionarPaciente(page, datos.paciente);
     await page.getByRole('combobox', { name: 'Sede', exact: true }).selectOption(datos.sede.id);
     await page.getByRole('combobox', { name: 'Servicio', exact: true }).selectOption(datos.servicio.id);

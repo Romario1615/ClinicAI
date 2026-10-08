@@ -9,6 +9,7 @@ import { SesionService } from '../nucleo/servicios/sesion.service';
 import { CatalogoService } from '../nucleo/servicios/catalogo.service';
 import { type Especialidad, type Profesional, type Sede, type Servicio } from '../nucleo/modelos/dominio';
 import { formatearFechaHora, instanteLocal } from '../nucleo/utilidades/fechas';
+import { VentanaFlotanteComponent } from './ventana-flotante.component';
 
 interface PropuestaAgente {id:string;titulo:string;nombre:string;argumentos:Record<string,unknown>;expira_en:string}
 interface RespuestaAgente {sesion_id:string;paciente_id:string;expira_en:string;texto:string;datos:Record<string,unknown>;requiere_humano:boolean;modo:'local'|'configurado';propuesta:PropuestaAgente|null}
@@ -18,7 +19,7 @@ interface TurnoAgente {inicio:string;fin?:string}
 interface PagoAgente {importe:string;moneda:string;estado:string;cita:string}
 interface ElementoAgente {titulo:string;detalle:string|null}
 
-@Component({selector:'app-agente-paciente',standalone:true,imports:[FormsModule],templateUrl:'./agente-paciente.component.html',styleUrl:'./agente-paciente.component.scss'})
+@Component({selector:'app-agente-paciente',standalone:true,imports:[FormsModule, VentanaFlotanteComponent],templateUrl:'./agente-paciente.component.html',styleUrl:'./agente-paciente.component.scss'})
 export class AgentePacienteComponent {
   readonly pacienteId=input.required<string>();
   readonly nombre=input('Paciente');
@@ -95,10 +96,12 @@ export class AgentePacienteComponent {
   protected elegir(cita:string):void{const r=this.respuesta();if(r)this.solicitar(`${this.base()}/sesiones/${r.sesion_id}/cita`,{cita_id:cita});}
   protected cancelarCita():void{if(this.motivo.trim())this.enviar(`cancelar: ${this.motivo.trim()}`);}
   protected configurar():void{
-    this.configurando.set(!this.configurando());if(!this.configurando())return;
+    if(this.ocupado() || this.respuesta()?.propuesta)return;
+    this.error.set('');this.configurando.set(true);
     this.catalogo.sedes().pipe(takeUntilDestroyed(this.destruir)).subscribe({next:s=>this.sedes.set(s),error:e=>this.error.set(e.message)});
     this.catalogo.especialidades().pipe(takeUntilDestroyed(this.destruir)).subscribe({next:e=>this.especialidades.set(e),error:e=>this.error.set(e.message)});
   }
+  protected cerrarContexto():void{if(!this.ocupado())this.configurando.set(false);}
   protected cambiarEspecialidad():void{
     this.servicio='';this.profesional='';this.servicios.set([]);this.profesionales.set([]);if(!this.especialidad)return;
     const especialidad=this.especialidad,sede=this.sede;

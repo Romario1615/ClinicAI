@@ -14,6 +14,30 @@ describe('AgentePacienteComponent',()=>{
   function iniciar(){f.detectChanges();const r=http.expectOne(RUTA);expect(r.request.method).toBe('POST');expect(r.request.headers.has('Idempotency-Key')).toBe(true);r.flush(respuesta());f.detectChanges();}
   function boton(texto:string){const b=Array.from(f.nativeElement.querySelectorAll('button')) as HTMLButtonElement[];const encontrado=b.find(x=>x.textContent?.trim()===texto);expect(encontrado).toBeDefined();encontrado!.click();f.detectChanges();return encontrado!;}
   function decir(texto='Mis citas',r=respuesta()){boton(texto);http.expectOne(`${RUTA}/hilo-1/mensajes`).flush(r);f.detectChanges();}
+  function configurar(){
+    iniciar();boton('Configurar búsqueda');
+    http.expectOne(`${BASE}/catalogo/sedes`).flush([{id:'s-1',nombre:'Sede sintética',zona_horaria:'America/Guayaquil'}]);
+    http.expectOne(`${BASE}/catalogo/especialidades`).flush([{id:'odo',nombre:'Odontología'}]);f.detectChanges();
+  }
+  it('abre los parámetros en un diálogo con acciones fuera del área desplazable',async()=>{
+    configurar();await f.whenStable();f.detectChanges();const raiz=f.nativeElement as HTMLElement;const dialogo=raiz.querySelector('dialog[open]');
+    expect(dialogo?.getAttribute('aria-label')).toBe('Configurar búsqueda de citas');
+    const aplicar=dialogo?.querySelector<HTMLButtonElement>('.ventana__pie button[type="submit"]');
+    expect(aplicar?.form?.id).toBe('formulario-contexto-agente');expect(aplicar?.disabled).toBe(true);
+    expect(dialogo?.querySelector('form button[type="submit"]')).toBeNull();
+    boton('Cancelar');expect(raiz.querySelector('dialog')).toBeNull();expect(raiz.querySelector('.agente__compositor')).not.toBeNull();
+  });
+  it('impide cerrar durante la aplicación y muestra el fallo dentro del diálogo',()=>{
+    configurar();const c=f.componentInstance;
+    c['sede']='s-1';c['especialidad']='odo';c['servicio']='srv';c['profesional']='prof';c['desde']='2026-10-09T08:00';c['hasta']='2026-10-10T08:00';
+    c['guardarContexto']();f.detectChanges();
+    const r=http.expectOne(`${RUTA}/hilo-1/contexto`);expect(r.request.body.desde).toBe('2026-10-09T13:00:00.000Z');
+    c['cerrarContexto']();expect(c['configurando']()).toBe(true);
+    r.flush({codigo:'PRUEBA',mensaje:'Intervalo no disponible'},{status:422,statusText:'Invalid'});f.detectChanges();
+    expect(f.nativeElement.querySelector('dialog [role="alert"]').textContent).toContain('Intervalo no disponible');
+    c['guardarContexto']();http.expectOne(`${RUTA}/hilo-1/contexto`).flush(respuesta());f.detectChanges();
+    expect(f.nativeElement.querySelector('dialog')).toBeNull();
+  });
   it('abre solo el paciente recibido y declara modo local',()=>{iniciar();expect(f.nativeElement.textContent).toContain('Paciente Sintético');expect(f.nativeElement.textContent).toContain('IA externa pendiente');expect(f.nativeElement.querySelector('[name="paciente"]')).toBeNull();});
   it('mantiene la conversación al refrescar la cita de la ficha',()=>{iniciar();f.componentRef.setInput('citaId','cita-actualizada');f.detectChanges();http.expectNone(RUTA);expect(f.nativeElement.textContent).toContain('Ficha vinculada');});
   it('abre otra sesión al cambiar de paciente y usa su nueva ruta',()=>{iniciar();f.componentRef.setInput('pacienteId','pac-2');f.detectChanges();http.expectOne(`${BASE}/asistente/pacientes/pac-2/sesiones`).flush(respuesta({paciente_id:'pac-2'}));f.detectChanges();boton('Mis citas');http.expectOne(`${BASE}/asistente/pacientes/pac-2/sesiones/hilo-1/mensajes`).flush(respuesta());});

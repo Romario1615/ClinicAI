@@ -207,6 +207,7 @@ function localizar(huella: HuellaDeControl | null): HTMLElement | null {
       z-index: 60;
       width: 100%;
       height: 100%;
+      height: 100dvh;
       max-width: none;
       max-height: none;
       margin: 0;
@@ -251,7 +252,6 @@ function localizar(huella: HuellaDeControl | null): HTMLElement | null {
       width: 100%;
       max-height: 100%;
       min-height: 0;
-      min-height: 0;
       border: 1px solid var(--vidrio-borde, var(--borde));
       border-radius: var(--radio-vidrio, var(--radio));
       /* Vidrio denso: una ficha se lee durante minutos, así que el panel es
@@ -283,6 +283,7 @@ function localizar(huella: HuellaDeControl | null): HTMLElement | null {
 
     .ventana__cabecera {
       display: flex;
+      flex: 0 0 auto;
       align-items: flex-start;
       gap: var(--espacio-3);
       padding: var(--espacio-4);
@@ -325,6 +326,8 @@ function localizar(huella: HuellaDeControl | null): HTMLElement | null {
 
     .ventana__pie {
       display: flex;
+      flex: 0 0 auto;
+      flex-wrap: wrap;
       gap: var(--espacio-3);
       padding: var(--espacio-3) var(--espacio-4);
       border-top: 1px solid var(--vidrio-separador, var(--borde));
@@ -352,6 +355,7 @@ function localizar(huella: HuellaDeControl | null): HTMLElement | null {
 
     .ventana__descarte {
       display: flex;
+      flex: 0 0 auto;
       flex-wrap: wrap;
       align-items: center;
       justify-content: space-between;

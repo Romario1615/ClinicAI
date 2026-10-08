@@ -20,6 +20,15 @@ describe('PeriodontogramaComponent',()=>{
   const ruta=`${BASE}/odontologia/pacientes/p/periodontogramas`;
   function montar(registros:Periodontograma[]=[],escribir=true){iniciarSesionCon(escribir?['odontograma.leer','odontograma.escribir']:['odontograma.leer']);const f=TestBed.createComponent(PeriodontogramaComponent);f.componentRef.setInput('pacienteId','p');f.detectChanges();http.expectOne(ruta).flush(registros);f.detectChanges();return f;}
   beforeEach(()=>{TestBed.configureTestingModule({imports:[PeriodontogramaComponent],providers:PROVEEDORES_PRUEBA});http=TestBed.inject(HttpTestingController);});afterEach(()=>http.verify());
+  it('deja Guardar examen fijo y el editor de los seis sitios dentro del cuerpo',()=>{
+    const f=montar();f.componentInstance['nuevo']();http.expectOne(`${BASE}/catalogo/sedes`).flush([]);f.detectChanges();
+    const raiz=f.nativeElement as HTMLElement;
+    const boton=raiz.querySelector<HTMLButtonElement>('.ventana__pie button[type="submit"]');
+    expect(boton?.form?.id).toBe('formulario-periodontograma');
+    f.componentInstance['abrirPieza'](16);f.detectChanges();
+    expect(raiz.querySelectorAll('.ventana__cuerpo .perio__sitio')).toHaveLength(6);
+    expect(boton?.disabled).toBe(true);
+  });
   it('abre seis sitios por pieza y guarda una observación con su sede',()=>{
     const f=montar();
     // eslint-disable-next-line @typescript-eslint/no-explicit-any

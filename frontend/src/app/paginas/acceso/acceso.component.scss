@@ -23,7 +23,10 @@
   gap: 2rem;
   padding: clamp(2rem, 4.5vw, 4.5rem);
   color: var(--marca-texto);
-  background: radial-gradient(ellipse at 80% 42%, #193971 0%, transparent 58%), radial-gradient(ellipse at 0% 100%, #242252 0%, transparent 54%), linear-gradient(145deg, #101c38, #0a1329);
+  background:
+    linear-gradient(145deg, rgb(10 19 41 / 91%) 0%, rgb(16 28 56 / 62%) 48%, rgb(10 19 41 / 86%) 100%),
+    url('/images/acceso-equipo.png') 72% center / cover,
+    #101c38;
 }
 .acceso__marca::before {
   content: '';

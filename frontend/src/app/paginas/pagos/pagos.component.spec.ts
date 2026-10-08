@@ -231,6 +231,8 @@ describe('PagosComponent', () => {
         fixture.detectChanges();
         expect(document.querySelector('dialog.capa')?.textContent).toContain('Comprobante enviado por WhatsApp');
         expect(c.nuevoEstado).toBe('UNDER_REVIEW');
+        const boton = (fixture.nativeElement as HTMLElement).querySelector<HTMLButtonElement>('.ventana__pie button[form="formulario-revision-pago"]');
+        expect(boton?.form?.id).toBe('formulario-revision-pago');
         c.nuevoEstado = 'CONFIRMED';
         c.comentario = 'Transferencia verificada';
         c.cambiar();
@@ -274,6 +276,8 @@ describe('PagosComponent', () => {
         http.expectOne(`${BASE}/pagos/pg1/historial`).flush({ elementos: [] });
         http.expectOne(`${BASE}/pagos/pg1/comprobantes`).flush({ elementos: [] });
         const archivo = new File(['imagen'], 'transferencia.png', { type: 'image/png' });
+        fixture.detectChanges();
+        expect((fixture.nativeElement as HTMLElement).querySelector<HTMLButtonElement>('.ventana__pie button[form="formulario-comprobante-pago"]')?.form?.id).toBe('formulario-comprobante-pago');
         c.archivoComprobante = archivo;
         c.adjuntar({ ...PAGO, estado: 'PENDING' });
         const peticion = http.expectOne({ method: 'POST', url: `${BASE}/pagos/pg1/comprobantes` });

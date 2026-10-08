@@ -11,8 +11,8 @@ import { FotosRegistroService } from '../../nucleo/servicios/fotos-registro.serv
  *
  * Solo referencias administrativas: nunca tarjetas, claves ni códigos.
  */
-import { Component, computed, inject, signal, ChangeDetectionStrategy } from '@angular/core';
-import { FormsModule } from '@angular/forms';
+import { Component, computed, inject, signal, viewChild, ChangeDetectionStrategy } from '@angular/core';
+import { FormsModule, NgForm } from '@angular/forms';
 import { ActivatedRoute } from '@angular/router';
 
 import { SelectorPacienteComponent } from '../../compartido/selector-paciente.component';
@@ -101,16 +101,18 @@ function sumarDias(fecha: string, dias: number): string {
       <app-ventana-flotante ceja="Análisis financiero" titulo="Exportar movimientos" forma="centrada" [anchoMaximo]="560"
         [ocupada]="exportandoReporte()" [error]="errorReporte()" (cerrar)="cerrarExportar()">
         <p class="reporte-pagos__ayuda">Resumen por día local, estado y método. No incluye nombres ni datos de pacientes.</p>
-        <form class="reporte-pagos__formulario" (ngSubmit)="exportarReporte()">
+        <form id="formulario-exportar-pagos" class="reporte-pagos__formulario" (ngSubmit)="exportarReporte()">
           <label class="campo"><span class="campo__etiqueta">Desde</span><input class="campo__control" type="date" name="reporte-desde" [(ngModel)]="reporteDesde" required /></label>
           <label class="campo"><span class="campo__etiqueta">Hasta (exclusivo)</span><input class="campo__control" type="date" name="reporte-hasta" [(ngModel)]="reporteHasta" required /></label>
           @if (sedesReporte().length > 0) {
             <label class="campo"><span class="campo__etiqueta">Sede</span><select class="campo__control" name="reporte-sede" [(ngModel)]="reporteSedeId"><option value="">Todas mis sedes</option>@for (sede of sedesReporte(); track sede.id) { <option [value]="sede.id">{{ sede.nombre }}</option> }</select></label>
           }
-          <button class="boton boton--principal" type="submit" [disabled]="exportandoReporte() || !reporteDesde || !reporteHasta || reporteHasta <= reporteDesde">
+        </form>
+        <div pie class="acciones acciones--final">
+          <button class="boton boton--principal" type="submit" form="formulario-exportar-pagos" [disabled]="exportandoReporte() || !reporteDesde || !reporteHasta || reporteHasta <= reporteDesde">
             {{ exportandoReporte() ? 'Preparando…' : 'Descargar CSV' }}
           </button>
-        </form>
+        </div>
         @if (avisoReporte()) { <p class="aviso-ok" role="status">{{ avisoReporte() }}</p> }
       </app-ventana-flotante>
     }
@@ -238,12 +240,11 @@ function sumarDias(fecha: string, dias: number): string {
           }
           @if (errorComprobantes()) { <p class="campo__error" role="alert">{{ errorComprobantes() }}</p> }
           @if (sesion.tienePermiso('pago.registrar') && (pago.estado === 'PENDING' || pago.estado === 'REJECTED')) {
-            <form class="adjuntar" (submit)="$event.preventDefault(); adjuntar(pago)">
+            <form id="formulario-comprobante-pago" class="adjuntar" (submit)="$event.preventDefault(); adjuntar(pago)">
               <label class="campo"><span class="campo__etiqueta">Agregar comprobante</span>
                 <input type="file" accept="application/pdf,image/jpeg,image/png,image/webp" (change)="seleccionarArchivo($event)" />
               </label>
               <p class="ayuda-demo">PDF, JPEG, PNG o WebP. Máximo configurado por la clínica. En producción requiere análisis antivirus.</p>
-              <button class="boton" type="submit" [disabled]="!archivoComprobante || ocupado()">Subir archivo</button>
             </form>
           }
         </section>
@@ -261,7 +262,7 @@ function sumarDias(fecha: string, dias: number): string {
           @if (errorHistorial()) { <p class="campo__error" role="alert">{{ errorHistorial() }}</p> }
         </section>
         @if (puedeRevisar(pago)) {
-        <form #revision="ngForm" (ngSubmit)="cambiar()">
+        <form id="formulario-revision-pago" #revision="ngForm" (ngSubmit)="cambiar()">
           <label class="campo"><span class="campo__etiqueta">Nuevo estado</span>
             <select class="campo__control" name="estado" [(ngModel)]="nuevoEstado" required>
               @for (e of transiciones[pago.estado]; track e) { <option [value]="e">{{ estado(e) }}</option> }
@@ -272,33 +273,38 @@ function sumarDias(fecha: string, dias: number): string {
               placeholder="Ej.: transferencia verificada en el banco"></textarea>
           </label>
           @if (error()) { <p class="campo__error" role="alert">{{ error() }}</p> }
-          <div class="pie">
-            <button type="button" class="boton" (click)="cerrarRevision()">Cerrar</button>
-            <button class="boton boton--principal" [disabled]="revision.invalid || ocupado()">Guardar revisión</button>
-          </div>
         </form>
         }
+        <div pie class="pie">
+          <button type="button" class="boton" (click)="cerrarRevision()" [disabled]="ocupado()">Cerrar</button>
+          @if (sesion.tienePermiso('pago.registrar') && (pago.estado === 'PENDING' || pago.estado === 'REJECTED')) {
+            <button class="boton" type="submit" form="formulario-comprobante-pago" [disabled]="!archivoComprobante || ocupado()">Subir archivo</button>
+          }
+          @if (puedeRevisar(pago)) {
+            <button type="submit" form="formulario-revision-pago" class="boton boton--principal" [disabled]="!formRevision()?.valid || ocupado()">Guardar revisión</button>
+          }
+        </div>
       </app-ventana-flotante>
     }
 
     @if (cargoConciliando(); as cargo) {
       <app-ventana-flotante ceja="Revisión financiera" titulo="Conciliar total pactado" forma="centrada" [anchoMaximo]="480" [cierraAlPulsarFuera]="false" (cerrar)="cerrarConciliacion()">
         <p>Los registros migrados no tienen un total estimado. Confirme el importe acordado en la historia de la clínica.</p>
-        <form (ngSubmit)="conciliarCargo()">
+        <form id="formulario-conciliar-cargo" (ngSubmit)="conciliarCargo()">
           <label class="campo"><span class="campo__etiqueta">Total pactado (USD)</span><input class="campo__control" type="number" name="total-conciliado" [(ngModel)]="totalConciliacion" min="0.01" max="9999999999" step="0.01" required /></label>
           @if (errorConciliacion()) { <p class="campo__error" role="alert">{{ errorConciliacion() }}</p> }
-          <div class="pie"><button class="boton" type="button" (click)="cerrarConciliacion()">Cancelar</button><button class="boton boton--principal" [disabled]="!totalConciliacion || totalConciliacion <= 0 || ocupado()">Fijar total</button></div>
         </form>
+        <div pie class="pie"><button class="boton" type="button" (click)="cerrarConciliacion()" [disabled]="ocupado()">Cancelar</button><button type="submit" form="formulario-conciliar-cargo" class="boton boton--principal" [disabled]="!totalConciliacion || totalConciliacion <= 0 || ocupado()">Fijar total</button></div>
       </app-ventana-flotante>
     }
     @if (cargoVencimiento(); as cargo) {
       <app-ventana-flotante ceja="Revisión financiera" titulo="Fijar fecha de vencimiento" forma="centrada" [anchoMaximo]="480" [cierraAlPulsarFuera]="false" (cerrar)="cerrarVencimiento()">
         <p>Esta fecha se guardará en la zona horaria local de la sede. Una vez fijada, no se puede cambiar.</p>
-        <form (ngSubmit)="fijarVencimiento()">
+        <form id="formulario-vencimiento-cargo" (ngSubmit)="fijarVencimiento()">
           <label class="campo"><span class="campo__etiqueta">Fecha de vencimiento</span><input class="campo__control" type="date" name="fecha-vencimiento-cargo" [(ngModel)]="fechaVencimientoConciliacion" required /></label>
           @if (errorVencimiento()) { <p class="campo__error" role="alert">{{ errorVencimiento() }}</p> }
-          <div class="pie"><button class="boton" type="button" (click)="cerrarVencimiento()">Cancelar</button><button class="boton boton--principal" [disabled]="!fechaVencimientoConciliacion || ocupado()">Guardar fecha</button></div>
         </form>
+        <div pie class="pie"><button class="boton" type="button" (click)="cerrarVencimiento()" [disabled]="ocupado()">Cancelar</button><button type="submit" form="formulario-vencimiento-cargo" class="boton boton--principal" [disabled]="!fechaVencimientoConciliacion || ocupado()">Guardar fecha</button></div>
       </app-ventana-flotante>
     }
   `,
@@ -373,6 +379,7 @@ function sumarDias(fecha: string, dias: number): string {
   `,
 })
 export class PagosComponent {
+  protected readonly formRevision = viewChild<NgForm>('revision');
   protected readonly operacionFotos = inject(FotosRegistroService).operacion<{id:string}>();
   protected fotos:readonly FotoSeleccionada[]=[];
   private readonly api = inject(OperacionesService);

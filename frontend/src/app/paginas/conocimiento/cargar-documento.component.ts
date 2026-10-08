@@ -29,10 +29,11 @@ import { FotosRegistroService } from '../../nucleo/servicios/fotos-registro.serv
  * binarios: un PDF o un DOCX necesitan extraccion en el servidor, que todavia
  * no existe. Mientras tanto se puede pegar el texto copiado del documento.
  */
-import { Component, computed, inject, input, output, signal, ChangeDetectionStrategy } from '@angular/core';
-import { FormsModule } from '@angular/forms';
+import { Component, computed, inject, input, output, signal, viewChild, ChangeDetectionStrategy } from '@angular/core';
+import { FormsModule, NgForm } from '@angular/forms';
 
 import { IconoComponent } from '../../compartido/icono.component';
+import { VentanaFlotanteComponent } from '../../compartido/ventana-flotante.component';
 import { ApiService, FalloApi } from '../../nucleo/servicios/api.service';
 import type {
   Documento,
@@ -67,22 +68,10 @@ type Origen = 'archivo' | 'texto';
 @Component({
   selector: 'app-cargar-documento',
   standalone: true,
-  imports: [CapturaFotosComponent,FormsModule, IconoComponent],
-  host: { '(document:keydown.escape)': 'cerrar()' },
+  imports: [CapturaFotosComponent,FormsModule, IconoComponent, VentanaFlotanteComponent],
   template: `
-    <div class="dialogo">
-      <section
-        class="tarjeta dialogo__panel carga"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="carga-titulo"
-      >
-        <header class="carga__cabecera">
-          <span class="carga__icono"><app-icono nombre="subir" [tamano]="22" /></span>
-          <div>
-            <h2 id="carga-titulo">
-              {{ documento() ? 'Subir versión nueva' : 'Cargar documento' }}
-            </h2>
+    <app-ventana-flotante ceja="Base de conocimiento" [titulo]="documento() ? 'Subir versión nueva' : 'Cargar documento'"
+      forma="centrada" [anchoMaximo]="680" [ocupada]="enviando()" [cierraAlPulsarFuera]="false" (cerrar)="cerrar()">
             <p class="carga__sub">
               @if (documento(); as doc) {
                 {{ doc.titulo }} · sigue en su estado actual mientras se revisa.
@@ -90,17 +79,6 @@ type Origen = 'archivo' | 'texto';
                 Entra como borrador. Responde consultas solo después de aprobarse.
               }
             </p>
-          </div>
-          <button
-            type="button"
-            class="boton boton--plano carga__cerrar"
-            (click)="cerrar()"
-            [disabled]="enviando()"
-          >
-            <app-icono nombre="cerrar" [tamano]="20" />
-            <span class="solo-lectores">Cerrar</span>
-          </button>
-        </header>
 
         @if (resultado(); as res) {
           <div class="carga__hecho" role="status">
@@ -124,14 +102,9 @@ type Origen = 'archivo' | 'texto';
                 documentos destinados a producción.
               </p>
             }
-            <div class="acciones acciones--final">
-              <button type="button" class="boton boton--principal" (click)="cerrar()">
-                Listo
-              </button>
-            </div>
           </div>
         } @else {
-          <form (ngSubmit)="enviar()" #formulario="ngForm" novalidate>
+          <form id="formulario-cargar-documento" (ngSubmit)="enviar()" #formulario="ngForm" novalidate>
             <fieldset [disabled]="enviando() || !!ingestaGuardada()" style="border:0;margin:0;padding:0;min-width:0">
             @if (!documento()) {
               <label class="campo">
@@ -290,64 +263,34 @@ type Origen = 'archivo' | 'texto';
               </div>
             }
 
-            <div class="acciones acciones--final">
+          </form>
+        }
+        <div pie class="acciones acciones--final">
+          @if (resultado()) {
+            <button type="button" class="boton boton--principal" (click)="cerrar()">Listo</button>
+          } @else {
               <button type="button" class="boton" (click)="cerrar()" [disabled]="enviando()">
                 Cancelar
               </button>
               <button
                 type="submit"
+                form="formulario-cargar-documento"
                 class="boton boton--principal"
-                [disabled]="enviando() || !puedeEnviar() || (!documento() && !formulario.form.valid)"
+                [disabled]="enviando() || !puedeEnviar() || (!documento() && !formCarga()?.valid)"
               >
                 <app-icono nombre="subir" [tamano]="18" />
                 {{ enviando() ? 'Procesando…' : documento() ? 'Subir versión' : 'Cargar documento' }}
               </button>
-            </div>
-          </form>
-        }
-      </section>
-    </div>
+          }
+        </div>
+    </app-ventana-flotante>
   `,
   changeDetection: ChangeDetectionStrategy.Eager,
   styles: `
-    .dialogo {
-      overflow-y: auto;
-      align-items: flex-start;
-      padding-top: 6vh;
-    }
-    .carga {
-      max-width: 620px;
-      padding: var(--espacio-5) var(--espacio-6) var(--espacio-6);
-      box-shadow: 0 24px 60px rgb(16 42 46 / 25%);
-    }
-    .carga__cabecera {
-      display: flex;
-      align-items: flex-start;
-      gap: var(--espacio-3);
-      margin-bottom: var(--espacio-5);
-    }
-    .carga__cabecera h2 {
-      margin: 0;
-    }
-    .carga__icono {
-      display: inline-grid;
-      place-items: center;
-      width: 44px;
-      height: 44px;
-      flex: 0 0 auto;
-      border-radius: 12px;
-      background: var(--acento-suave);
-      color: var(--acento);
-    }
     .carga__sub {
       margin: 2px 0 0;
       font-size: 0.9rem;
       color: var(--texto-suave);
-    }
-    .carga__cerrar {
-      margin-left: auto;
-      min-width: var(--toque-minimo);
-      padding: 0;
     }
     .carga__dos {
       display: grid;
@@ -452,9 +395,6 @@ type Origen = 'archivo' | 'texto';
       color: var(--aviso);
     }
     @media (max-width: 560px) {
-      .carga {
-        padding: var(--espacio-4);
-      }
       .carga__dos {
         grid-template-columns: 1fr;
       }
@@ -462,6 +402,7 @@ type Origen = 'archivo' | 'texto';
   `,
 })
 export class CargarDocumentoComponent {
+  protected readonly formCarga = viewChild<NgForm>('formulario');
   private readonly fotosApi=inject(FotosRegistroService);
   protected fotos:readonly FotoSeleccionada[]=[];
   protected readonly ingestaGuardada=signal<RespuestaIngesta|null>(null);

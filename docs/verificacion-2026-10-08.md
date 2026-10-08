@@ -286,3 +286,76 @@ La revisión final de cambios posteriores se añade debajo.
 Funcionalidad local verificada en los recorridos indicados. Continúan abiertas
 las integraciones externas y las verificaciones de preparación operativa;
 no se declara el producto listo para producción.
+
+## Fondo de acceso y formularios flotantes
+
+Revisión posterior al commit `1e23937`, a petición de conservar la imagen
+original del acceso y contener los formularios que exceden la pantalla.
+
+### Cambios
+
+- Se restaura `acceso-equipo.png` en el panel de marca del acceso, bajo una
+  capa azul que permite leer el contenido. Se mantienen la red y partículas.
+- La ventana compartida usa el alto dinámico del viewport, encabezado y pie
+  sin contracción, cuerpo desplazable y acciones que se acomodan al ancho.
+- Se ajustan los pies de pacientes, gastos, pagos, módulos por especialidad,
+  revisión de riesgo y periodontograma. Los botones siguen asociados al
+  formulario mediante su `id`, con validación y envío nativos.
+- Carga de conocimiento, preparación del simulador y parámetros del agente
+  pasan a la ventana compartida. Los errores quedan dentro y las peticiones
+  pendientes impiden cerrar los editores incorporados.
+
+### Inventario y comprobación visual
+
+Inventario de plantillas con el compilador de Angular: **65 declaraciones**;
+**50** están dentro de `app-ventana-flotante` y no contienen botones de envío
+en su cuerpo desplazable. Las otras 15 son acceso/cambio de contraseña,
+verificación de enlaces públicos, filtros, búsquedas y mensajes. El recuento
+describe plantillas; los campos repetidos generan varios controles en uso.
+También se revisaron los editores especializados y los componentes hijos.
+
+`20-acceso-formularios.spec.ts`: **6/6 recorridos**, 45 segundos. Carga y
+decodifica la imagen original, ejecuta axe en el acceso y mide ocho
+formularios en seis tamaños (**48 comprobaciones de geometría**):
+1440×900, 1280×600, 900×500, 844×390, 390×844 y 320×568. Verifica límites de
+ventana/pie/botones, asociación al formulario y pie inmóvil al desplazar los
+campos. Incluye los seis sitios de una pieza del periodontograma y cierre
+de la búsqueda del agente sin perder la ficha.
+
+Capturas sintéticas en `tmp/qa-20261007/acceso-fondo-conservado.png` y
+`periodontograma-ventana-formulario.png`; inventario en
+`formularios-auditoria.json` y corrida en `e2e-formularios-verificado.log`.
+La primera corrida de este escenario usó dos etiquetas de menú incorrectas;
+se ajustaron al texto real y se repitieron sus seis recorridos completos.
+
+### Pruebas y compilación
+
+- **Frontend completo:** 752/752 pruebas, 103 archivos, 269,50 segundos.
+  Cobertura: 84,95 % sentencias, 71,84 % ramas, 80,58 % funciones y
+  87,37 % líneas; mínimos configurados cumplidos.
+  Registro: `frontend-formularios-total-final.log`.
+- **Lint y build de producción:** aprobados, sin avisos de presupuesto;
+  paquete inicial 467,66 kB. Registros: `frontend-formularios-lint.log` y
+  `frontend-formularios-build.log`.
+- **Chromium completo:** 79/79 recorridos, 11,6 minutos, sin reintentos.
+  Registro: `e2e-formularios-total.log`. Incluye los seis roles, accesibilidad
+  de sus rutas, creación y actualización de registros, reservas, pagos,
+  conocimiento, fotografías, faciograma, periodontograma, PDF y WhatsApp
+  sandbox; también los seis recorridos nuevos de fondo y formularios.
+- **Secretos:** Gitleaks del índice aprobado, con registro e informe JSON
+  en `gitleaks-formularios-indice.log` y `gitleaks-formularios-indice.json`.
+- El primer bloque focalizado detectó ajustes necesarios en la proyección
+  del pie condicional de Conocimiento; se corrigió la ventana y se mantuvo
+  la prueba. Los nuevos fixtures del simulador se ajustaron al tipo del
+  documento y a la URL exacta del catálogo, antes de repetir la suite completa.
+
+### Entorno
+
+Frontend local 4200 y API local 8000 responden HTTP 200. Los recorridos de
+esta revisión usan exclusivamente la API temporal 8020 y la base sintética
+`clinicai_e2e_20261007_ca00e4d8`. Sin proveedores externos configurados.
+Al finalizar se verificaron los procesos de esa API, se detuvieron únicamente
+su lanzador y su proceso 8020 y se eliminó esta base temporal; el estado quedó
+con `limpiado: true`. La aplicación 4200, API 8000 y base de desarrollo se
+conservaron. No se repite en este bloque la suite unitaria del backend;
+su evidencia anterior permanece separada de esta revisión del frontend.

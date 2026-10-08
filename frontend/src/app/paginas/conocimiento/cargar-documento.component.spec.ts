@@ -66,6 +66,24 @@ describe('CargarDocumentoComponent', () => {
         return (fixture.nativeElement as HTMLElement).textContent ?? '';
     }
 
+    it('contiene el formulario en un diálogo nativo y mantiene la carga en su pie', () => {
+        const dialogo = (fixture.nativeElement as HTMLElement).querySelector('dialog[open]');
+        expect(dialogo?.getAttribute('aria-label')).toBe('Cargar documento');
+        const boton = dialogo?.querySelector<HTMLButtonElement>('.ventana__pie button[type="submit"]');
+        expect(boton?.form?.id).toBe('formulario-cargar-documento');
+        expect(dialogo?.querySelector('form button[type="submit"]')).toBeNull();
+        expect(dialogo?.querySelector('.ventana__cuerpo app-captura-fotos')).not.toBeNull();
+    });
+
+    it('Escape no interrumpe una ingesta en curso', () => {
+        const cerrado = vi.fn(); componente.cerrado.subscribe(cerrado);
+        c.enviando.set(true); fixture.detectChanges();
+        const dialogo = (fixture.nativeElement as HTMLElement).querySelector('dialog')!;
+        dialogo.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+        expect(cerrado).not.toHaveBeenCalled();
+        expect(dialogo.querySelector<HTMLButtonElement>('.ventana__cerrar')?.disabled).toBe(true);
+    });
+
     it('lee un .txt, propone el título y crea el documento antes de subir el texto', async () => {
         await c.leer(archivo('preparacion_ecografia.txt', 'Ayuno de 8 horas antes del examen.'));
         expect(c.titulo).toBe('preparacion ecografia');

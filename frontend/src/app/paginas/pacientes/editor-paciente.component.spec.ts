@@ -81,6 +81,14 @@ describe('EditorPacienteComponent', () => {
   }
 
   describe('alta', () => {
+    it('mantiene Guardar paciente en el pie y vinculado a su formulario', () => {
+      abrir();
+      const raiz = fixture.nativeElement as HTMLElement;
+      const boton = raiz.querySelector<HTMLButtonElement>('.ventana__pie button[type="submit"]');
+      expect(boton?.form?.id).toBe('formulario-editor-paciente');
+      expect(raiz.querySelector('form button[type="submit"]')).toBeNull();
+      expect(raiz.querySelector('.ventana__cuerpo app-captura-fotos')).not.toBeNull();
+    });
     it('envia POST con el cuerpo limpio de espacios', () => {
       abrir();
       escribir({ nombre: '  Ana  ', apellido: ' Perez ', tipo: 'CEDULA', numero: ' 9900000002 ' });
