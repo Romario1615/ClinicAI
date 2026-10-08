@@ -54,8 +54,9 @@ function normalizar(texto: string): string {
   selector: 'app-ayuda',
   standalone: true,
   imports: [RouterLink, IconoComponent, GraficoRedComponent, CargandoComponent, ErrorComponent, VacioComponent],
+  host: { class: 'pantalla' },
   template: `
-    <header class="modulo-cabecera ayuda__cabecera">
+    <header class="modulo-cabecera ayuda__cabecera pantalla__fijo">
       <div class="modulo-cabecera__texto">
         <p class="ceja"><app-icono nombre="ayuda" [tamano]="16" /> AYUDA Y DOCUMENTACIÓN</p>
         <h1>Su manual de trabajo</h1>
@@ -68,9 +69,10 @@ function normalizar(texto: string): string {
     </header>
 
     @if (cargando()) {
-      <app-cargando mensaje="Preparando su manual…" />
+      <app-cargando class="pantalla__fijo" mensaje="Preparando su manual…" />
     } @else if (error(); as fallo) {
       <app-error
+        class="pantalla__fijo"
         titulo="No se pudo cargar la ayuda"
         [mensaje]="fallo.message"
         [codigo]="fallo.codigo"
@@ -79,12 +81,13 @@ function normalizar(texto: string): string {
       />
     } @else if (manuales().length === 0) {
       <app-vacio
+        class="pantalla__fijo"
         titulo="Su cuenta no tiene roles vigentes"
         detalle="Pida a la administración de la clínica que le asigne un rol; su manual aparecerá aquí."
       />
     } @else {
       @if (manuales().length > 1) {
-        <div class="ayuda__pestanas" role="tablist" aria-label="Manuales de sus roles">
+        <div class="ayuda__pestanas pantalla__fijo" role="tablist" aria-label="Manuales de sus roles">
           @for (manual of manuales(); track manual.rol_codigo; let indice = $index) {
             <button
               type="button"
@@ -104,13 +107,15 @@ function normalizar(texto: string): string {
       }
 
       @if (activo(); as manual) {
+        <!-- Dos columnas: el rol y sus límites a un lado, las tareas al otro.
+             Cada una desplaza dentro; la pantalla no se mueve. -->
         <section
-          class="ayuda__manual"
+          class="ayuda__manual pantalla__columnas"
           [id]="'manual-' + manual.rol_codigo"
           [attr.role]="manuales().length > 1 ? 'tabpanel' : null"
           [attr.aria-labelledby]="manuales().length > 1 ? 'pestana-' + manual.rol_codigo : 'titulo-manual'"
         >
-          <div class="rejilla ayuda__resumen">
+          <div class="ayuda__resumen desplazable" tabindex="0" role="region" aria-label="El rol y sus límites">
             <article class="tarjeta ayuda__intro">
               <p class="ceja">{{ manual.tipo === 'SISTEMA' ? 'ROL DEL SISTEMA' : 'ROL DE SU CLÍNICA' }}</p>
               <h2 id="titulo-manual">{{ manual.titulo }}</h2>
@@ -135,6 +140,7 @@ function normalizar(texto: string): string {
             </article>
           </div>
 
+          <div class="ayuda__columna-tareas">
           <div class="ayuda__barra">
             <h2 class="ayuda__subtitulo">
               Tareas <span class="ayuda__cuenta numerico">{{ seccionesVisibles().length }}</span>
@@ -151,6 +157,7 @@ function normalizar(texto: string): string {
             </label>
           </div>
 
+          <div class="ayuda__lista-tareas desplazable" tabindex="0" role="region" aria-label="Tareas del manual">
           @if (seccionesVisibles().length === 0) {
             <app-vacio
               titulo="Ninguna tarea coincide"
@@ -201,6 +208,8 @@ function normalizar(texto: string): string {
               }
             </ol>
           }
+          </div>
+          </div>
         </section>
       }
     }
@@ -242,8 +251,21 @@ function normalizar(texto: string): string {
       box-shadow: inset 0 1px 0 rgb(255 255 255 / 30%), 0 6px 16px -8px rgb(11 110 106 / 60%);
     }
     .ayuda__resumen {
-      grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr));
-      margin-bottom: var(--espacio-5);
+      display: grid;
+      gap: var(--espacio-3);
+      align-content: start;
+    }
+    .ayuda__manual {
+      --pantalla-columnas: minmax(0, 1fr) minmax(0, 1.7fr);
+    }
+    .ayuda__columna-tareas {
+      display: flex;
+      flex-direction: column;
+      min-width: 0;
+      min-height: 0;
+    }
+    .ayuda__barra {
+      flex: none;
     }
     .ayuda__intro h2,
     .ayuda__limites h2 {
@@ -420,6 +442,31 @@ function normalizar(texto: string): string {
       }
       .ayuda__cuerpo {
         padding-left: var(--espacio-5);
+      }
+    }
+    /* Escritorio: cabecera baja, pestañas sin margen y las listas llenan el
+       alto de su columna. */
+    @media (min-width: 821px) and (min-height: 600px) {
+      .ayuda__cabecera p:last-child {
+        font-size: 0.88rem;
+      }
+      /* El gráfico guarda su proporción: con 160 px de ancho mide unos 90 de
+         alto y deja de ser lo que fija el alto de la cabecera. */
+      .ayuda__grafico {
+        flex-basis: 160px;
+        max-width: 160px;
+      }
+      .ayuda__pestanas {
+        margin-bottom: 0;
+      }
+      .ayuda__resumen .tarjeta {
+        padding: var(--espacio-4);
+      }
+      .ayuda__tarea summary {
+        padding: var(--espacio-3) var(--espacio-4);
+      }
+      .ayuda__cuerpo {
+        padding: 0 var(--espacio-4) var(--espacio-4) calc(var(--espacio-4) + 44px);
       }
     }
   `,
