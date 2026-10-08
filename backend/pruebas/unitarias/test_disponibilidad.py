@@ -37,6 +37,7 @@ from app.modulos.agenda.disponibilidad import (
     MotivoNoDisponible,
     Ocupacion,
     calcular_disponibilidad,
+    calcular_huecos_libres,
     generar_turnos_en_hueco,
     granularidad_incompatible,
     hay_solapamiento,
@@ -928,3 +929,50 @@ class TestPropiedades:
         for i in range(len(huecos) - 1):
             assert huecos[i].fin <= huecos[i + 1].inicio, "Los huecos deben estar ordenados."
             assert not huecos[i].se_solapa_con(huecos[i + 1])
+
+    @settings(max_examples=200, deadline=None)
+    @given(
+        franjas=st.lists(_franja_valida(), min_size=1, max_size=3),
+        duracion=_duraciones,
+        buffer_minutos=_buffers,
+        ocupaciones=st.lists(_ocupacion_del_dia(), max_size=6),
+    )
+    def test_los_huecos_libres_contienen_cada_turno_y_no_pisan_ocupaciones(
+        self,
+        franjas: list[FranjaLocal],
+        duracion: int,
+        buffer_minutos: int,
+        ocupaciones: list[Ocupacion],
+    ) -> None:
+        """`calcular_huecos_libres` es coherente con `calcular_disponibilidad`.
+
+        La validacion de series comprueba contencion en los huecos en lugar
+        de pertenencia a la rejilla.  Para que no sea ni mas estricta ni mas
+        laxa que la oferta: todo turno ofrecido cabe en un hueco, y ningun
+        hueco se solapa con una ocupacion ni sale de las franjas.
+        """
+        desde, hasta = _rango_del_dia(MIERCOLES)
+        resultado = calcular_disponibilidad(
+            desde=desde,
+            hasta=hasta,
+            zona=GUAYAQUIL,
+            franjas=franjas,
+            duracion_minutos=duracion,
+            minutos_preparacion=buffer_minutos,
+            ocupaciones=ocupaciones,
+        )
+        huecos = calcular_huecos_libres(
+            desde=desde,
+            hasta=hasta,
+            zona=GUAYAQUIL,
+            franjas=franjas,
+            ocupaciones=ocupaciones,
+        )
+        atencion = proyectar_franjas(franjas, dia=MIERCOLES, zona=GUAYAQUIL)
+
+        for turno in resultado.turnos:
+            assert any(hueco.contiene(turno.intervalo) for hueco in huecos)
+        for hueco in huecos:
+            assert any(franja.contiene(hueco) for franja in atencion)
+            for ocupacion in ocupaciones:
+                assert not hueco.se_solapa_con(ocupacion.intervalo)

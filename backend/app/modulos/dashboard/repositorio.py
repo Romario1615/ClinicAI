@@ -22,7 +22,10 @@ from app.modulos.dashboard.esquemas import (
     ResumenRecuperacionTurnos,
     Retorno30Dias,
 )
-from app.modulos.dashboard.ocupacion_agenda import resumir_ocupacion_agenda
+from app.modulos.dashboard.ocupacion_agenda import (
+    ocupacion_no_calculada,
+    resumir_ocupacion_agenda,
+)
 from app.modulos.historia.modelos import (
     AlertaAdherencia,
     NotaEvolucion,
@@ -528,6 +531,9 @@ async def resumir(
     *,
     ahora: datetime,
     incluir_metricas_pacientes: bool = True,
+    # False omite la ocupación de agenda, que recorre cada día del periodo por
+    # profesional: los análisis local y con IA no la usan.
+    incluir_ocupacion: bool = True,
 ) -> ResumenDashboard:
     consulta = (
         RepositorioAgenda(sesion)
@@ -747,15 +753,19 @@ async def resumir(
             turnos_recuperados=recuperacion[1],
             promedio_minutos_para_recuperar=recuperacion[2],
         ),
-        ocupacion_agenda=await resumir_ocupacion_agenda(
-            sesion,
-            principal,
-            filtro,
-            sede_id=sede_id,
-            profesional_id=profesional_id,
-            especialidad_id=especialidad_id,
-            servicio_id=servicio_id,
-            estado=estado,
+        ocupacion_agenda=(
+            await resumir_ocupacion_agenda(
+                sesion,
+                principal,
+                filtro,
+                sede_id=sede_id,
+                profesional_id=profesional_id,
+                especialidad_id=especialidad_id,
+                servicio_id=servicio_id,
+                estado=estado,
+            )
+            if incluir_ocupacion
+            else ocupacion_no_calculada()
         ),
         adherencia=adherencia,
         pagos=pagos,

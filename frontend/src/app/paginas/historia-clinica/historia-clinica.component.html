@@ -238,8 +238,11 @@
                     {{ incluirHistorico() ? 'Ocultar versiones anteriores' : 'Ver versiones anteriores' }}
                   </button>
                 }
+                <!-- Los disparadores llevan id: se ocultan mientras el editor
+                     está abierto y, al cerrarlo, la ventana devuelve el foco al
+                     que se recrea con el mismo id. -->
                 @if (puedeEscribirNotas() && !notasDenegadas() && editando() === undefined) {
-                  <button class="boton boton--principal boton--pequeno" type="button" (click)="editando.set(null)">
+                  <button id="historia-nueva-nota" class="boton boton--principal boton--pequeno" type="button" (click)="editando.set(null)">
                     Nueva nota
                   </button>
                 }
@@ -346,7 +349,12 @@
                          solo mostrara la versión vigente, esa garantía existiría en la
                          base de datos y no le serviría de nada a quien la audita. -->
                     @if (puedeEscribirNotas() && editando() === undefined) {
-                      <button class="boton boton--plano boton--pequeno nota__corregir" type="button" (click)="editando.set(historia.vigente)">
+                      <button
+                        [id]="'historia-corregir-' + historia.raizId"
+                        class="boton boton--plano boton--pequeno nota__corregir"
+                        type="button"
+                        (click)="editando.set(historia.vigente)"
+                      >
                         Corregir (crea versión nueva)
                       </button>
                     }
@@ -390,7 +398,7 @@
             <div class="seccion__cabecera">
               <h2 id="titulo-recetas">Recetas</h2>
               @if (puedeCrearRecetas() && !creandoReceta()) {
-                <button class="boton boton--principal boton--pequeno" type="button" (click)="versionandoReceta.set(null); creandoReceta.set(true)">
+                <button id="historia-nueva-receta" class="boton boton--principal boton--pequeno" type="button" (click)="versionandoReceta.set(null); creandoReceta.set(true)">
                   Nueva receta
                 </button>
               }
@@ -486,8 +494,16 @@
                       }
                     </ul>
                     @if (receta.estado === 'CONFIRMADA' && puedeCrearRecetas() && puedeConfirmarRecetas()) {
-                      <button class="boton boton--pequeno receta__version" type="button" [disabled]="creandoReceta()"
-                              (click)="versionandoReceta.set(receta); creandoReceta.set(true)">
+                      <!-- Sin [disabled] mientras el editor está abierto: el modal
+                           ya deja inerte la lista, y un botón desactivado no
+                           puede recibir el foco que la ventana le devuelve al
+                           cerrarse. -->
+                      <button
+                        [id]="'historia-version-receta-' + receta.id"
+                        class="boton boton--pequeno receta__version"
+                        type="button"
+                        (click)="versionandoReceta.set(receta); creandoReceta.set(true)"
+                      >
                         Crear nueva versión
                       </button>
                     }

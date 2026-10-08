@@ -6,19 +6,21 @@
       <p>Captura clínica versionada vinculada al expediente del paciente. Los datos de identidad se completan desde el registro autorizado.</p>
     </div>
     @if (puedeEditar() && !seleccionado() && !creando()) {
-      <button class="boton boton--principal" type="button" (click)="nuevo()">Nuevo formulario</button>
+      <button id="formulario-033-nuevo" class="boton boton--principal" type="button" (click)="nuevo()">Nuevo formulario</button>
     }
   </header>
 
   @if (error() && !seleccionado() && !creando()) { <p class="aviso-error" role="alert">{{ error() }}</p> }
-  @if (exito()) { <p class="exito" role="status">{{ exito() }}</p> }
+  <!-- Con la captura abierta, el aviso va dentro de la ventana (junto a la
+       nota que lo produjo): detrás del velo modal no se vería. -->
+  @if (exito() && !seleccionado() && !creando()) { <p class="exito" role="status">{{ exito() }}</p> }
   @if (cargando()) { <app-cargando mensaje="Cargando formularios clínicos..." /> }
 
   @if (!cargando() && !seleccionado() && !formularios().length) {
     <div class="tarjeta vacio">
       <h3>Aún no hay formularios 033</h3>
       <p>Registre la atención cuando tenga los hallazgos y antecedentes confirmados.</p>
-      @if (puedeEditar()) { <button class="boton boton--principal" type="button" (click)="nuevo()">Registrar formulario</button> }
+      @if (puedeEditar()) { <button id="formulario-033-registrar" class="boton boton--principal" type="button" (click)="nuevo()">Registrar formulario</button> }
     </div>
   }
 
@@ -40,7 +42,7 @@
               <button class="boton boton--plano boton--pequeno" type="button" (click)="verVersiones(formulario)">
                 {{ raizHistorial() === formulario.raiz_id ? 'Ocultar historial' : 'Ver historial' }}
               </button>
-              @if (puedeEditar()) { <button class="boton boton--pequeno" type="button" (click)="corregir(formulario)">Crear corrección</button> }
+              @if (puedeEditar()) { <button [id]="'formulario-033-corregir-' + formulario.raiz_id" class="boton boton--pequeno" type="button" (click)="corregir(formulario)">Crear corrección</button> }
             </div>
           </div>
           <p class="registro__motivo"><strong>Motivo de consulta:</strong> {{ formulario.datos.motivo_consulta }}</p>
@@ -119,18 +121,22 @@
   }
 
   @if (seleccionado() || creando()) {
+      <!-- Mientras se guarda no se cierra por ningún camino (la X incluida),
+           y con algo escrito cerrar pide confirmación: la captura es larga y
+           un Escape no debe tirarla. -->
       <app-ventana-flotante
+        #v
         [ceja]="seleccionado() ? 'CORRECCIÓN VERSIONADA · MSP 033/2021' : 'NUEVA CAPTURA · MSP 033/2021'"
         [titulo]="seleccionado() ? 'Crear nueva versión' : 'Registrar atención'"
         [forma]="'centrada'"
         [anchoMaximo]="1440"
         [altoCompleto]="true"
         [cierraAlPulsarFuera]="false"
-        [cierraConEscape]="!guardando()"
-        (cerrar)="cancelar()"
+        [ocupada]="guardando()"
+        [cambiosSinGuardar]="hayCambios()"
+        (cerrar)="cerrarCaptura()"
       >
       <form id="formulario-033-captura" class="captura" (ngSubmit)="guardar()">
-        @if (error()) { <p class="aviso-error" role="alert">{{ error() }}</p> }
 
         @if (seleccionado()) {
           <label class="campo correccion"><span class="campo__etiqueta">Motivo de la corrección</span><textarea class="campo__control" name="motivo-correccion" [(ngModel)]="motivoCorreccion" minlength="8" maxlength="500" required></textarea></label>
@@ -173,6 +179,7 @@
             @if (notaId) {
               <button class="boton boton--pequeno" type="button" (click)="aplicarNota()">Completar campos vacíos desde la nota seleccionada</button>
             }
+            @if (exito()) { <p class="ayuda" role="status">{{ exito() }}</p> }
             @if (odontogramaId || registroPlacaId) {
               <p class="ayuda">El odontograma y el índice quedan enlazados como fuente; sus hallazgos no se transforman automáticamente en datos del Formulario 033.</p>
             }
@@ -275,10 +282,13 @@
           }
         </section>
 
+        <!-- Al final, junto a «Guardar»: la captura es larga y quien pulsa
+             guardar está mirando aquí, no arriba del todo. -->
+        @if (error()) { <p class="aviso-error" role="alert">{{ error() }}</p> }
       </form>
       <div pie class="acciones">
           <p class="ayuda">El formulario contiene información clínica sensible y cada consulta o cambio queda auditado.</p>
-          <div><button class="boton" type="button" (click)="cancelar()" [disabled]="guardando()">Cancelar</button><button class="boton boton--principal" type="submit" form="formulario-033-captura" [disabled]="guardando()">{{ guardando() ? 'Guardando…' : (seleccionado() ? 'Guardar nueva versión' : 'Guardar formulario') }}</button></div>
+          <div><button class="boton" type="button" (click)="v.solicitarCierre()" [disabled]="guardando()">Cancelar</button><button class="boton boton--principal" type="submit" form="formulario-033-captura" [disabled]="guardando()">{{ guardando() ? 'Guardando…' : (seleccionado() ? 'Guardar nueva versión' : 'Guardar formulario') }}</button></div>
       </div>
       </app-ventana-flotante>
   }

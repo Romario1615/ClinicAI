@@ -800,6 +800,251 @@ class TestCreacion:
 
         assert respuesta.status_code == 422
 
+    @pytest.mark.parametrize("sufijo_ruta", ["/citas", "/citas/bloqueos"])
+    async def test_un_paciente_de_otra_clinica_responde_404(
+        self,
+        cliente: AsyncClient,
+        api: str,
+        sesion: AsyncSession,
+        usuario: Usuario,
+        clinica: Clinica,
+        sede: Sede,
+        cuerpo_reserva: dict[str, str],
+        paciente_ajeno: Paciente,
+        sufijo_ruta: str,
+    ) -> None:
+        """`cita.paciente_id` es una FK simple: el servicio valida la clinica.
+
+        La respuesta es la misma que para un paciente inexistente.
+        """
+        cabeceras = await _recepcion(cliente, sesion, usuario, clinica, sede)
+
+        ajeno = await cliente.post(
+            _ruta(api, sufijo_ruta),
+            headers=cabeceras,
+            json={**cuerpo_reserva, "paciente_id": str(paciente_ajeno.id)},
+        )
+        inexistente = await cliente.post(
+            _ruta(api, sufijo_ruta),
+            headers=cabeceras,
+            json={**cuerpo_reserva, "paciente_id": str(uuid.uuid4())},
+        )
+
+        assert ajeno.status_code == inexistente.status_code == 404, ajeno.text
+        assert ajeno.json()["codigo"] == inexistente.json()["codigo"] == "RECURSO_NO_ENCONTRADO"
+        assert ajeno.json()["mensaje"] == inexistente.json()["mensaje"]
+        assert await _citas_del_paciente(sesion, paciente_ajeno.id) == 0
+
+
+# ===========================================================================
+#  Series recurrentes: autenticacion, permiso, ambito y entrada
+# ===========================================================================
+_SERIE_VALIDA = {"frecuencia": "SEMANAL", "cantidad": 2}
+
+
+async def _filas_de_serie(sesion: AsyncSession, clinica_id: uuid.UUID) -> int:
+    """Citas de una serie en la clinica de la prueba; acotado para no depender del resto."""
+    return int(
+        (
+            await sesion.execute(
+                sa.select(sa.func.count())
+                .select_from(Cita)
+                .where(Cita.serie_recurrente_id.is_not(None), Cita.clinica_id == clinica_id)
+            )
+        ).scalar_one()
+    )
+
+
+async def _citas_del_paciente(sesion: AsyncSession, paciente_id: uuid.UUID) -> int:
+    return int(
+        (
+            await sesion.execute(
+                sa.select(sa.func.count()).select_from(Cita).where(Cita.paciente_id == paciente_id)
+            )
+        ).scalar_one()
+    )
+
+
+class TestSeriesAccesoYValidacion:
+    """Lista de CLAUDE.md §5.6 para POST /agenda/citas/series.
+
+    En cada rechazo se comprueba ademas que no quedo ninguna fila de serie: la
+    operacion es «todas o ninguna» tambien cuando se rechaza antes de empezar.
+    """
+
+    async def test_sin_autenticacion_responde_401(
+        self,
+        cliente: AsyncClient,
+        api: str,
+        sesion: AsyncSession,
+        clinica: Clinica,
+        cuerpo_reserva: dict[str, str],
+    ) -> None:
+        respuesta = await cliente.post(
+            _ruta(api, "/citas/series"), json={**cuerpo_reserva, **_SERIE_VALIDA}
+        )
+
+        assert respuesta.status_code == 401
+        assert respuesta.json()["codigo"] == "NO_AUTENTICADO"
+        assert await _filas_de_serie(sesion, clinica.id) == 0
+
+    async def test_solo_con_lectura_de_agenda_responde_403(
+        self,
+        cliente: AsyncClient,
+        api: str,
+        sesion: AsyncSession,
+        usuario: Usuario,
+        clinica: Clinica,
+        sede: Sede,
+        cuerpo_reserva: dict[str, str],
+    ) -> None:
+        await conceder_permisos(sesion, usuario, clinica, "agenda.leer", sedes=(sede.id,))
+        cabeceras = await cabecera_bearer(cliente, usuario, clinica)
+        inicio = await _inicio_ofrecido_para_serie(cliente, api, cabeceras, cuerpo_reserva)
+
+        respuesta = await cliente.post(
+            _ruta(api, "/citas/series"),
+            headers=cabeceras,
+            json={**cuerpo_reserva, "inicio": inicio, **_SERIE_VALIDA},
+        )
+
+        assert respuesta.status_code == 403
+        assert await _filas_de_serie(sesion, clinica.id) == 0
+
+    async def test_una_sede_fuera_de_ambito_responde_404_como_una_inexistente(
+        self,
+        cliente: AsyncClient,
+        api: str,
+        sesion: AsyncSession,
+        usuario: Usuario,
+        clinica: Clinica,
+        sede: Sede,
+        otra_sede: Sede,
+        cuerpo_reserva: dict[str, str],
+    ) -> None:
+        """La otra sede es de la misma clinica pero el rol solo alcanza una."""
+        cabeceras = await _recepcion(cliente, sesion, usuario, clinica, sede)
+
+        fuera = await cliente.post(
+            _ruta(api, "/citas/series"),
+            headers=cabeceras,
+            json={**cuerpo_reserva, "sede_id": str(otra_sede.id), **_SERIE_VALIDA},
+        )
+        inexistente = await cliente.post(
+            _ruta(api, "/citas/series"),
+            headers=cabeceras,
+            json={**cuerpo_reserva, "sede_id": str(uuid.uuid4()), **_SERIE_VALIDA},
+        )
+
+        assert fuera.status_code == inexistente.status_code == 404, fuera.text
+        assert fuera.json()["mensaje"] == inexistente.json()["mensaje"]
+        assert await _filas_de_serie(sesion, clinica.id) == 0
+
+    async def test_un_paciente_de_otra_clinica_responde_404_sin_crear_citas(
+        self,
+        cliente: AsyncClient,
+        api: str,
+        sesion: AsyncSession,
+        usuario: Usuario,
+        clinica: Clinica,
+        sede: Sede,
+        cuerpo_reserva: dict[str, str],
+        paciente_ajeno: Paciente,
+    ) -> None:
+        """El IDOR heredado de POST /citas, multiplicado por 53 citas confirmadas."""
+        cabeceras = await _recepcion(cliente, sesion, usuario, clinica, sede)
+        inicio = await _inicio_ofrecido_para_serie(cliente, api, cabeceras, cuerpo_reserva)
+        datos = {**cuerpo_reserva, "inicio": inicio, "frecuencia": "SEMANAL", "cantidad": 53}
+
+        ajeno = await cliente.post(
+            _ruta(api, "/citas/series"),
+            headers={**cabeceras, "Idempotency-Key": f"serie-{uuid.uuid4().hex}"},
+            json={**datos, "paciente_id": str(paciente_ajeno.id)},
+        )
+        inexistente = await cliente.post(
+            _ruta(api, "/citas/series"),
+            headers=cabeceras,
+            json={**datos, "paciente_id": str(uuid.uuid4())},
+        )
+
+        assert ajeno.status_code == inexistente.status_code == 404, ajeno.text
+        assert ajeno.json()["codigo"] == "RECURSO_NO_ENCONTRADO"
+        assert ajeno.json()["mensaje"] == inexistente.json()["mensaje"]
+        assert await _citas_del_paciente(sesion, paciente_ajeno.id) == 0
+        assert await _filas_de_serie(sesion, clinica.id) == 0
+        assert await _filas_de_serie(sesion, paciente_ajeno.clinica_id) == 0
+
+    @pytest.mark.parametrize(
+        "cambios",
+        [
+            pytest.param({"frecuencia": "ANUAL", "cantidad": 2}, id="frecuencia-desconocida"),
+            pytest.param({"frecuencia": "SEMANAL", "cantidad": 1}, id="una-sola-cita"),
+            pytest.param({"frecuencia": "SEMANAL", "cantidad": 54}, id="semanal-54"),
+            pytest.param({"frecuencia": "QUINCENAL", "cantidad": 28}, id="quincenal-28"),
+            pytest.param({"frecuencia": "MENSUAL", "cantidad": 14}, id="mensual-14"),
+            pytest.param({"frecuencia": "SEMANAL"}, id="sin-cantidad"),
+            pytest.param({"cantidad": 2}, id="sin-frecuencia"),
+            pytest.param(
+                {**_SERIE_VALIDA, "procedimiento_plan_id": "00000000-0000-4000-8000-000000000001"},
+                id="procedimiento-de-plan",
+            ),
+            pytest.param({**_SERIE_VALIDA, "inicio": "2026-04-16T10:00:00"}, id="inicio-sin-zona"),
+            pytest.param({**_SERIE_VALIDA, "origen": "WHATSAPP"}, id="origen-del-cliente"),
+            pytest.param({**_SERIE_VALIDA, "paciente_id": "no-es-un-uuid"}, id="paciente-invalido"),
+        ],
+    )
+    async def test_una_entrada_invalida_responde_422(
+        self,
+        cliente: AsyncClient,
+        api: str,
+        sesion: AsyncSession,
+        usuario: Usuario,
+        clinica: Clinica,
+        sede: Sede,
+        cuerpo_reserva: dict[str, str],
+        cambios: dict[str, object],
+    ) -> None:
+        cabeceras = await _recepcion(cliente, sesion, usuario, clinica, sede)
+        inicio = await _inicio_ofrecido_para_serie(cliente, api, cabeceras, cuerpo_reserva)
+
+        respuesta = await cliente.post(
+            _ruta(api, "/citas/series"),
+            headers=cabeceras,
+            json={**cuerpo_reserva, "inicio": inicio, **cambios},
+        )
+
+        assert respuesta.status_code == 422, respuesta.text
+        assert respuesta.json()["codigo"] == "DATOS_INVALIDOS"
+        assert await _filas_de_serie(sesion, clinica.id) == 0
+
+    async def test_los_maximos_por_frecuencia_se_aceptan(
+        self,
+        cliente: AsyncClient,
+        api: str,
+        sesion: AsyncSession,
+        usuario: Usuario,
+        clinica: Clinica,
+        sede: Sede,
+        cuerpo_reserva: dict[str, str],
+    ) -> None:
+        """QUINCENAL 27 es el techo: un año de citas cada dos semanas."""
+        cabeceras = await _recepcion(cliente, sesion, usuario, clinica, sede)
+        inicio = await _inicio_ofrecido_para_serie(cliente, api, cabeceras, cuerpo_reserva)
+
+        respuesta = await cliente.post(
+            _ruta(api, "/citas/series"),
+            headers=cabeceras,
+            json={**cuerpo_reserva, "inicio": inicio, "frecuencia": "QUINCENAL", "cantidad": 27},
+        )
+
+        assert respuesta.status_code == 201, respuesta.text
+        citas = respuesta.json()["citas"]
+        assert len(citas) == 27
+        primera = datetime.fromisoformat(citas[0]["inicio"])
+        ultima = datetime.fromisoformat(citas[-1]["inicio"])
+        assert ultima - primera == timedelta(days=14 * 26)
+        assert await _filas_de_serie(sesion, clinica.id) == 27
+
 
 # ===========================================================================
 #  IDOR y ambito

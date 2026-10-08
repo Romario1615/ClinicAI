@@ -8,13 +8,18 @@ import { formatearHora, rangoDelDia } from '../../nucleo/utilidades/fechas';
 @Component({
   selector: 'app-reprogramar-cita', standalone: true, imports: [FormsModule, VentanaFlotanteComponent],
   template: `
+    <!-- Mientras se guarda no se cierra por ningún camino (Escape, la X,
+         Volver): la respuesta tiene que llegar a la agenda para que muestre
+         el cambio y su aviso. -->
     <app-ventana-flotante
+      #v
       ceja="Agenda"
       titulo="Reprogramar cita"
       forma="centrada"
       [anchoMaximo]="520"
       [cierraAlPulsarFuera]="false"
-      (cerrar)="cerrar.emit()"
+      [ocupada]="ocupado()"
+      (cerrar)="alCerrar()"
     >
         <p>Elija un nuevo horario con el mismo profesional. Horas en {{ zona() }}.</p>
         <form id="formulario-reprogramacion" (ngSubmit)="guardar()">
@@ -57,7 +62,7 @@ import { formatearHora, rangoDelDia } from '../../nucleo/utilidades/fechas';
           @if (error()) { <p role="alert">{{ error() }}</p> }
         </form>
         <div pie class="fila">
-          <button class="boton" type="button" [disabled]="ocupado()" (click)="cerrar.emit()">Volver</button>
+          <button class="boton" type="button" [disabled]="ocupado()" (click)="v.solicitarCierre()">Volver</button>
           <button class="boton boton--principal" type="submit" form="formulario-reprogramacion" [disabled]="ocupado() || cargando() || !inicio || motivo.trim().length < 3">{{ ocupado() ? 'Guardando…' : 'Guardar cambio' }}</button>
         </div>
     </app-ventana-flotante>
@@ -157,6 +162,12 @@ export class ReprogramarCitaComponent implements OnInit {
       next: cita => { this.ocupado.set(false); this.guardada.emit(cita); },
       error: (e: unknown) => { this.ocupado.set(false); this.error.set(this.mensaje(e)); },
     });
+  }
+
+  /** Solo cierra si no hay un guardado en curso: su respuesta se perdería. */
+  protected alCerrar(): void {
+    if (this.ocupado()) return;
+    this.cerrar.emit();
   }
 
   protected hora(inicio: string): string { return formatearHora(inicio, this.zona()); }

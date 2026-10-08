@@ -328,10 +328,14 @@
                       <app-insignia-estado [estado]="fila.cita.estado" />
                     </button>
                   } @else {
+                    <!-- data-inicio y data-fin: el tramo exacto, para localizarlo
+                         sin depender de cómo se escriba la hora. -->
                     <button
                       type="button"
                       class="fila-dia fila-dia--hueco"
                       [class.fila-dia--elegida]="huecoElegido()?.inicio === fila.inicio"
+                      [attr.data-inicio]="fila.inicio"
+                      [attr.data-fin]="fila.fin"
                       [disabled]="!puedeCrear()"
                       (click)="abrirHueco(fila)"
                     >
@@ -671,6 +675,7 @@
       [anchoMaximo]="820"
       [altoCompleto]="true"
       [cierraAlPulsarFuera]="false"
+      [ocupada]="reservando()"
       (cerrar)="cancelarReserva()"
     >
       <form
@@ -696,6 +701,10 @@
 
         <fieldset class="arranques">
           <legend class="campo__etiqueta">Hora de inicio</legend>
+          @if (hueco.turnos.length === 0) {
+            <!-- Tras un choque puede no quedar ninguna hora en el tramo. -->
+            <p class="campo__ayuda">Ya no quedan horas libres aquí. Cierre y elija otro hueco u otro día.</p>
+          }
           <div class="arranques__lista">
             @for (turno of hueco.turnos; track turno.inicio) {
               <button
@@ -844,12 +853,12 @@
         }
       </form>
       <div pie class="reserva__pie">
-        <button type="button" class="boton" (click)="cancelarReserva()">Descartar</button>
+        <button type="button" class="boton" [disabled]="reservando()" (click)="cancelarReserva()">Descartar</button>
         <button
           type="submit"
           form="formulario-reserva-serie"
           class="boton boton--principal"
-          [disabled]="!pacienteId || reservando() || (serieRecurrente && !cantidadSerieValida)"
+          [disabled]="!pacienteId || !turnoElegido() || reservando() || (serieRecurrente && !cantidadSerieValida)"
         >
           @if (reservando()) {
             Guardando…

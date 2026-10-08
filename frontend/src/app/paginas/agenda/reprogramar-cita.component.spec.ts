@@ -91,6 +91,53 @@ describe('ReprogramarCitaComponent', () => {
         expect(cerrado).not.toHaveBeenCalled();
     });
 
+    it('mientras guarda no se cierra por Escape, la X ni Volver, y el resultado llega a la agenda', () => {
+        const cerrado = vi.fn();
+        const guardada = vi.fn();
+        c.cerrar.subscribe(cerrado);
+        c.guardada.subscribe(guardada);
+        c.inicio = TURNO.inicio;
+        c.motivo = 'Pide otro horario';
+        c.guardar();
+        fixture.detectChanges();
+        const peticion = http.expectOne(`${BASE}/agenda/citas/cita-1/reprogramacion`);
+
+        const raiz = fixture.nativeElement as HTMLElement;
+        const dialogo = raiz.querySelector<HTMLDialogElement>('dialog[open]')!;
+        const equis = raiz.querySelector<HTMLButtonElement>('.ventana__cerrar')!;
+        const volver = Array.from(raiz.querySelectorAll<HTMLButtonElement>('.ventana__pie button')).find(
+            (boton) => boton.textContent?.trim() === 'Volver',
+        )!;
+        expect(equis.disabled).toBe(true);
+        expect(volver.disabled).toBe(true);
+
+        dialogo.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+        dialogo.dispatchEvent(new Event('cancel', { cancelable: true }));
+        equis.click();
+        volver.click();
+        // Aunque algo llamara al cierre de la ventana, el componente lo ignora.
+        c.alCerrar();
+        fixture.detectChanges();
+        expect(cerrado).not.toHaveBeenCalled();
+        expect(raiz.querySelector('dialog[open]')).not.toBeNull();
+
+        const nueva = cita({ inicio: TURNO.inicio, fin: TURNO.fin_bloque });
+        peticion.flush(nueva);
+        fixture.detectChanges();
+        expect(guardada).toHaveBeenCalledWith(nueva);
+        expect(equis.disabled).toBe(false);
+    });
+
+    it('sin guardado en curso, Volver cierra', () => {
+        const cerrado = vi.fn();
+        c.cerrar.subscribe(cerrado);
+        const raiz = fixture.nativeElement as HTMLElement;
+        Array.from(raiz.querySelectorAll<HTMLButtonElement>('.ventana__pie button'))
+            .find((boton) => boton.textContent?.trim() === 'Volver')!
+            .click();
+        expect(cerrado).toHaveBeenCalledOnce();
+    });
+
     it('solo ofrece salas libres y avisa si la actual está ocupada', () => {
         c.inicio = TURNO.inicio;
         expect(c.salasLibres().map((s: Consultorio) => s.id)).toEqual(['sala-2', 'sala-3']);

@@ -158,12 +158,8 @@ async def cargar_clinico(
     """
     if await _ya_sembrado(sesion, clinica_id):
         local = await _asegurar_historico_acceso_local(sesion, clinica_id=clinica_id, reloj=reloj)
-        tomas = await _sembrar_caso_adherencia(sesion, clinica_id=clinica_id, reloj=reloj)
-        return ResumenClinico(
-            notas=local.notas,
-            correcciones=local.correcciones,
-            tomas=tomas,
-        )
+        adherencia = await _sembrar_caso_adherencia(sesion, clinica_id=clinica_id, reloj=reloj)
+        return _sumar(local, adherencia)
 
     parejas = await _parejas(sesion, clinica_id)
     if not parejas:
@@ -184,13 +180,11 @@ async def cargar_clinico(
         )
 
     local = await _asegurar_historico_acceso_local(sesion, clinica_id=clinica_id, reloj=reloj)
-    tomas = await _sembrar_caso_adherencia(sesion, clinica_id=clinica_id, reloj=reloj)
-    return _con(
-        resumen,
-        notas=resumen.notas + local.notas,
-        correcciones=resumen.correcciones + local.correcciones,
-        tomas=resumen.tomas + tomas,
-    )
+    adherencia = await _sembrar_caso_adherencia(sesion, clinica_id=clinica_id, reloj=reloj)
+    # Todo lo que esta llamada escribió entra en el resumen, también la receta
+    # del caso de adherencia: el resumen es lo que se informa al terminar y lo
+    # que las pruebas comparan con la base.
+    return _sumar(resumen, local, adherencia)
 
 
 async def _asegurar_historico_acceso_local(
@@ -256,16 +250,19 @@ async def _asegurar_historico_acceso_local(
 
 async def _sembrar_caso_adherencia(
     sesion: AsyncSession, *, clinica_id: uuid.UUID, reloj: Reloj
-) -> int:
+) -> ResumenClinico:
     """Deja una pauta sintetica con tomas pasadas para ejercitar el aviso.
 
     La receta se crea dos dias antes mediante el servicio de dominio, no con
     fechas insertadas a mano. Solo existe en la base local de desarrollo y se
     identifica por un nombre que dice explicitamente que es sintética.
+
+    Devuelve lo que escribió: la receta creada y confirmada, sus tomas y las
+    recetas del caso que tuvo que suspender al reubicarlo.
     """
     pareja = await _pareja_profesional_acceso_local(sesion, clinica_id)
     if pareja is None:
-        return 0
+        return ResumenClinico()
     paciente_id, profesional_id = pareja
 
     existentes = await sesion.execute(
@@ -281,13 +278,14 @@ async def _sembrar_caso_adherencia(
         receta.paciente_id == paciente_id and receta.profesional_id == profesional_id
         for receta in recetas_existentes
     ):
-        return 0
+        return ResumenClinico()
 
     reloj_historico = RelojFijo(reloj.ahora() - timedelta(days=2))
     servicio = ServicioHistoria(sesion, RepositorioHistoria(sesion), reloj_historico)
     # Si una version anterior del sembrador dejó el caso bajo otra pareja,
     # suspenderla por la capa de dominio antes de crear el caso en el ámbito
     # del profesional de acceso local. Se conserva toda la historia.
+    suspendidas = 0
     for receta in recetas_existentes:
         if receta.estado != "CONFIRMADA":
             continue
@@ -296,6 +294,7 @@ async def _sembrar_caso_adherencia(
             principal=_principal_sembrador(clinica_id, receta.profesional_id),
             motivo=f"Reubicacion del escenario sintetico {MARCA}.",
         )
+        suspendidas += 1
     principal = _principal_sembrador(clinica_id, profesional_id)
     creada = await servicio.crear_receta(
         principal=principal,
@@ -314,11 +313,16 @@ async def _sembrar_caso_adherencia(
         indicaciones_generales=f"Escenario sintetico de adherencia {MARCA}.",
     )
     if creada.receta is None:
-        return 0
+        return ResumenClinico(recetas=1, suspendidas=suspendidas)
     confirmacion = await servicio.confirmar_receta(
         creada.receta.id, principal=principal, profesional_id=profesional_id
     )
-    return confirmacion.tomas_generadas
+    return ResumenClinico(
+        recetas=1,
+        confirmadas=1,
+        suspendidas=suspendidas,
+        tomas=confirmacion.tomas_generadas,
+    )
 
 
 async def _pareja_profesional_acceso_local(
@@ -329,14 +333,23 @@ async def _pareja_profesional_acceso_local(
     El recorrido E2E usa la primera cuenta sintética del rol profesional por
     correo, igual que iniciar_sesion_rol_local. Elegir otra relación activa
     puede crear un caso clínico válido pero invisible para ese usuario.
+
+    La cuenta se busca **dentro de la clínica sembrada**.  Buscarla en toda la
+    base hacía que el caso dependiera de las demás clínicas: si la primera
+    cuenta por correo era de otra, esta clínica se quedaba sin caso y el
+    resultado de la siembra cambiaba según lo que hubiera cargado antes.  Con
+    una sola clínica sintética, que es la base local habitual, la cuenta es la
+    misma que resuelve el acceso local.
     """
     identidad = (
         await sesion.execute(
-            select(Usuario.id, Usuario.clinica_id, Profesional.id)
+            select(Profesional.id)
+            .join(Usuario, Usuario.id == Profesional.usuario_id)
             .join(UsuarioRol, UsuarioRol.usuario_id == Usuario.id)
             .join(Rol, Rol.id == UsuarioRol.rol_id)
-            .join(Profesional, Profesional.usuario_id == Usuario.id)
             .where(
+                Usuario.clinica_id == clinica_id,
+                Profesional.clinica_id == clinica_id,
                 Rol.codigo == "profesional",
                 Rol.es_sistema.is_(True),
                 Rol.clinica_id.is_(None),
@@ -347,8 +360,8 @@ async def _pareja_profesional_acceso_local(
             .order_by(Usuario.correo)
             .limit(1)
         )
-    ).first()
-    if identidad is None or identidad[1] != clinica_id:
+    ).scalar_one_or_none()
+    if identidad is None:
         return None
 
     relacion = (
@@ -358,7 +371,7 @@ async def _pareja_profesional_acceso_local(
             .where(
                 Paciente.clinica_id == clinica_id,
                 Paciente.activo.is_(True),
-                RelacionAsistencial.profesional_id == identidad[2],
+                RelacionAsistencial.profesional_id == identidad,
                 RelacionAsistencial.revocada_en.is_(None),
                 RelacionAsistencial.vigente_hasta.is_(None),
             )
@@ -366,7 +379,7 @@ async def _pareja_profesional_acceso_local(
             .limit(1)
         )
     ).scalar_one_or_none()
-    return (relacion, identidad[2]) if relacion is not None else None
+    return (relacion, identidad) if relacion is not None else None
 
 
 async def _sembrar_pareja(
@@ -634,6 +647,18 @@ async def _parejas(
         )
     ).all()
     return [(fila[0], fila[1]) for fila in filas]
+
+
+def _sumar(*resumenes: ResumenClinico) -> ResumenClinico:
+    """Suma campo a campo lo que escribió cada paso de la siembra."""
+    return ResumenClinico(
+        notas=sum(r.notas for r in resumenes),
+        correcciones=sum(r.correcciones for r in resumenes),
+        recetas=sum(r.recetas for r in resumenes),
+        confirmadas=sum(r.confirmadas for r in resumenes),
+        suspendidas=sum(r.suspendidas for r in resumenes),
+        tomas=sum(r.tomas for r in resumenes),
+    )
 
 
 def _con(resumen: ResumenClinico, **cambios: int) -> ResumenClinico:

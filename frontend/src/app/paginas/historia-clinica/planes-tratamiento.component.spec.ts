@@ -188,23 +188,38 @@ describe('PlanesTratamientoComponent', () => {
         expect(dialogo?.getAttribute('aria-modal')).toBe('true');
         expect(dialogo?.getAttribute('aria-label')).toBe('Crear borrador de tratamiento');
 
+        // Cada aviso se ve DENTRO de la ventana, junto a «Añadir al plan»:
+        // detrás del velo modal no lo vería nadie.
+        const avisoProcedimiento = (): string | null | undefined => {
+            fixture.detectChanges();
+            return (fixture.nativeElement as HTMLElement)
+                .querySelector('dialog[open] .procedimiento-editor [role="alert"]')?.textContent;
+        };
         c.descripcionProcedimiento = 'ab';
         c.agregarProcedimiento();
-        expect(c.error()).toContain('3 caracteres');
+        expect(c.errorProcedimiento()).toContain('3 caracteres');
+        expect(avisoProcedimiento()).toContain('3 caracteres');
 
         c.descripcionProcedimiento = 'Restauracion';
         c.pieza = 99;
         c.agregarProcedimiento();
-        expect(c.error()).toContain('FDI');
+        expect(avisoProcedimiento()).toContain('FDI');
 
         c.pieza = 36;
         c.precio = '-1';
         c.agregarProcedimiento();
-        expect(c.error()).toContain('importe');
+        expect(avisoProcedimiento()).toContain('importe');
+        // Y nada de eso se pinta fuera de la ventana.
+        expect(
+            Array.from((fixture.nativeElement as HTMLElement).querySelectorAll('[role="alert"]')).every(
+                (alerta) => alerta.closest('dialog[open]') !== null,
+            ),
+        ).toBe(true);
 
         c.precio = '85';
         c.caras = 'om';
         c.agregarProcedimiento();
+        expect(avisoProcedimiento()).toBeUndefined();
         c.descripcionProcedimiento = 'Limpieza';
         c.pieza = '';
         c.precio = '15';
@@ -419,14 +434,87 @@ describe('PlanesTratamientoComponent', () => {
         alta.flush({ id: 'pl-2', nombre: 'Corona sobre endodoncia', descripcion: null, procedimientos: [], creado_en: '2026-10-05T11:00:00Z' });
         expect(c.plantillas().length).toBe(2);
 
+        // El aviso de la plantilla guardada se ve dentro de la ventana abierta.
+        fixture.detectChanges();
+        expect((fixture.nativeElement as HTMLElement).querySelector('dialog[open] [role="status"]')?.textContent)
+            .toContain('guardada para toda la clínica');
+
         c.titulo = '';
         c.guardarComoPlantilla();
         expect(c.error()).toContain('título');
+        fixture.detectChanges();
+        expect((fixture.nativeElement as HTMLElement).querySelector('dialog[open] [role="alert"]')?.textContent)
+            .toContain('título');
 
         c.abrirFormulario();
         c.abrirFormulario();
         // La lista ya estaba cargada: no se vuelve a pedir.
         http.expectNone(`${BASE}/odontologia/plantillas-plan`);
+    });
+
+    it('descartar un borrador con contenido pide confirmación, y no se cierra mientras guarda', () => {
+        montar([]);
+        c.abrirFormulario();
+        http.expectOne(`${BASE}/odontologia/plantillas-plan`).flush([]);
+        fixture.detectChanges();
+        const raiz = fixture.nativeElement as HTMLElement;
+        const boton = (texto: string) =>
+            Array.from(raiz.querySelectorAll<HTMLButtonElement>('button')).find((b) => b.textContent?.trim() === texto)!;
+        // Vacío: se cierra sin preguntar.
+        expect(c.hayCambiosFormulario()).toBe(false);
+
+        c.titulo = 'Plan sintetico';
+        fixture.detectChanges();
+        boton('Descartar').click();
+        fixture.detectChanges();
+        expect(raiz.querySelector('dialog[open] [role="alertdialog"]')?.textContent).toContain('Hay cambios sin guardar');
+        raiz.querySelector('dialog[open]')!
+            .dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+        fixture.detectChanges();
+        // Escape con la confirmación a la vista es «seguir editando».
+        expect(raiz.querySelector('dialog[open] [role="alertdialog"]')).toBeNull();
+        expect(c.mostrarFormulario()).toBe(true);
+        expect(c.titulo).toBe('Plan sintetico');
+
+        c.descripcionProcedimiento = 'Restauracion';
+        c.agregarProcedimiento();
+        c.guardarBorrador();
+        fixture.detectChanges();
+        const alta = http.expectOne(RUTA);
+        expect(raiz.querySelector<HTMLButtonElement>('dialog[open] .ventana__cerrar')!.disabled).toBe(true);
+        c.cerrarFormulario();
+        fixture.detectChanges();
+        expect(c.mostrarFormulario()).toBe(true);
+        alta.flush({ codigo: 'X', mensaje: 'No se pudo guardar el plan.' }, { status: 422, statusText: 'U' });
+        fixture.detectChanges();
+        expect(raiz.querySelector('dialog[open] [role="alert"]')?.textContent).toContain('No se pudo guardar');
+
+        boton('Descartar').click();
+        fixture.detectChanges();
+        boton('Descartar cambios').click();
+        fixture.detectChanges();
+        expect(c.mostrarFormulario()).toBe(false);
+        expect(c.titulo).toBe('');
+        // El error del borrador descartado no queda colgado en la página.
+        expect(raiz.querySelector('[role="alert"]')).toBeNull();
+    });
+
+    it('una acción del plan no se cierra a mitad de guardado', () => {
+        const aceptado = plan({ estado: 'ACEPTADO' });
+        montar([aceptado]);
+        c.abrirAccion({ tipo: 'cancelar-plan', plan: aceptado });
+        c.motivoCancelacion = 'El paciente cambia de clinica';
+        c.confirmarAccion();
+        fixture.detectChanges();
+        const peticion = http.expectOne(`${BASE}/odontologia/planes-tratamiento/plan-1/cancelacion`);
+        const raiz = fixture.nativeElement as HTMLElement;
+        expect(raiz.querySelector<HTMLButtonElement>('dialog[open] .ventana__cerrar')!.disabled).toBe(true);
+        c.cerrarAccion();
+        expect(c.accion()).not.toBeNull();
+        peticion.flush(plan({ estado: 'CANCELADO' }));
+        fixture.detectChanges();
+        expect(c.accion()).toBeNull();
+        expect(c.exito()).toContain('Plan cancelado');
     });
 
     it('ofrece agendar cada procedimiento pendiente de la siguiente fase', () => {

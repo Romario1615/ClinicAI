@@ -17,8 +17,10 @@ quien gestiona la agenda.
 from __future__ import annotations
 
 import uuid
+from collections.abc import Mapping
 from datetime import datetime
-from typing import Annotated, Literal
+from types import MappingProxyType
+from typing import Annotated, Final, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
@@ -30,6 +32,29 @@ DIAS_MAXIMOS_CONSULTA = 62
 LONGITUD_MAXIMA_MOTIVO = 500
 LONGITUD_MAXIMA_NOTAS = 2000
 FrecuenciaSerieCitas = Literal["SEMANAL", "QUINCENAL", "MENSUAL"]
+
+# Separacion entre dos citas consecutivas de una serie, en semanas.
+#
+# MENSUAL significa «cada cuatro semanas, el mismo dia de la semana» y no «el
+# mismo numero de dia cada mes».  Las franjas de atencion son semanales (lunes
+# a domingo, ADR-0010): repetir el dia 12 de cada mes caeria en jueves, sabado
+# o martes y la serie fallaria con un profesional que atiende solo los lunes.
+# Cada cuatro semanas conserva el dia de la semana y la hora local, que es lo
+# que la agenda puede garantizar.  Decision registrada en ADR-0009.
+SEMANAS_ENTRE_CITAS_SERIE: Final[Mapping[str, int]] = MappingProxyType(
+    {"SEMANAL": 1, "QUINCENAL": 2, "MENSUAL": 4}
+)
+
+# Tabla UNICA de maximos por frecuencia.  La usan el esquema de entrada y el
+# servicio (`generar_instantes_serie`); la interfaz replica estos numeros.
+# Cada maximo mantiene la ultima cita dentro de un año desde la primera:
+# SEMANAL 52*7 = 364 dias, QUINCENAL 26*14 = 364, MENSUAL 12*28 = 336.
+MINIMO_CITAS_SERIE: Final = 2
+MAXIMO_CITAS_SERIE_POR_FRECUENCIA: Final[Mapping[str, int]] = MappingProxyType(
+    {"SEMANAL": 53, "QUINCENAL": 27, "MENSUAL": 13}
+)
+MAXIMO_CITAS_SERIE: Final = max(MAXIMO_CITAS_SERIE_POR_FRECUENCIA.values())
+MENSAJE_SERIE_DEMASIADO_LARGA: Final = "La serie no puede superar un año de citas."
 
 
 def _exigir_zona(valor: datetime) -> datetime:
@@ -120,20 +145,21 @@ class PeticionReserva(_ConInstantes):
 
 
 class PeticionSerieReserva(PeticionReserva):
-    """Reserva una serie corta, siempre en el mismo horario local.
+    """Reserva una serie corta, siempre en el mismo dia de la semana y hora local.
 
-    Las citas se confirman juntas o no se crea ninguna. El máximo protege la
-    agenda de una operación masiva y limita las fechas propuestas a un año.
+    Las citas se confirman juntas o no se crea ninguna. El máximo por
+    frecuencia (`MAXIMO_CITAS_SERIE_POR_FRECUENCIA`) protege la agenda de una
+    operación masiva y limita las fechas propuestas a un año. MENSUAL es cada
+    cuatro semanas (ver `SEMANAS_ENTRE_CITAS_SERIE`).
     """
 
     frecuencia: FrecuenciaSerieCitas
-    cantidad: Annotated[int, Field(ge=2, le=53)]
+    cantidad: Annotated[int, Field(ge=MINIMO_CITAS_SERIE, le=MAXIMO_CITAS_SERIE)]
 
     @model_validator(mode="after")
     def _limitar_horizonte_de_serie(self) -> PeticionSerieReserva:
-        maximo = 13 if self.frecuencia == "MENSUAL" else 53
-        if self.cantidad > maximo:
-            raise ValueError("La serie no puede superar un año de citas.")
+        if self.cantidad > MAXIMO_CITAS_SERIE_POR_FRECUENCIA[self.frecuencia]:
+            raise ValueError(MENSAJE_SERIE_DEMASIADO_LARGA)
         if self.procedimiento_plan_id is not None:
             raise ValueError("Los procedimientos de un plan dental se reservan individualmente.")
         return self

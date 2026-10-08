@@ -21,12 +21,12 @@ una sola sede -- sino en produccion.
 from __future__ import annotations
 
 import uuid
-from collections.abc import Sequence
+from collections.abc import Collection, Sequence
 from datetime import date, datetime, time, timedelta
 from typing import Any
 from zoneinfo import ZoneInfo
 
-from sqlalchemy import Select, and_, func, literal, or_, select
+from sqlalchemy import ColumnElement, Select, and_, func, literal, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modulos.agenda.disponibilidad import (
@@ -51,6 +51,7 @@ from app.modulos.organizacion.modelos import (
     Sede,
     Servicio,
 )
+from app.modulos.pacientes.modelos import Paciente
 from app.modulos.profesionales.modelos import AgendaPlantilla, Profesional
 from app.nucleo.autorizacion import Principal
 
@@ -60,6 +61,40 @@ _ESTADOS_OCUPADOS_SQL = tuple(e.value for e in _ESTADOS_QUE_OCUPAN)
 # Identificador que no puede existir. Fuerza un resultado vacio de forma
 # explicita, que es mas seguro que devolver la consulta sin filtrar.
 _NINGUNO = uuid.UUID(int=0)
+
+
+def condicion_bloqueos_aplicables(
+    *,
+    profesionales: Collection[uuid.UUID],
+    sedes: Collection[uuid.UUID],
+    consultorio_id: uuid.UUID | None = None,
+) -> ColumnElement[bool]:
+    """Bloqueos que restan tiempo a esos profesionales en esas sedes.
+
+    Es la unica definicion de «a quien afecta un bloqueo».  La usan el motor
+    de disponibilidad y el indicador de ocupacion del panel; si cada uno
+    tuviera la suya, el panel mostraria como capacidad minutos que el motor no
+    deja reservar, o al reves.
+
+    * Bloqueo de profesional (`profesional_id` informado): el profesional no
+      atiende, en ninguna sede.
+    * Bloqueo de sede completa: sin profesional **y sin consultorio**.  La ruta
+      de bloqueos guarda siempre `sede_id`, tambien en un bloqueo de sala; sin
+      exigir `consultorio_id` nulo, cerrar una sala cerraria la sede entera.
+    * Bloqueo de consultorio: solo cuenta cuando se pide ese consultorio.  Sin
+      sala concreta, el resto de las salas de la sede sigue disponible.
+    """
+    condiciones: list[ColumnElement[bool]] = [
+        BloqueoAgenda.profesional_id.in_(profesionales),
+        and_(
+            BloqueoAgenda.profesional_id.is_(None),
+            BloqueoAgenda.consultorio_id.is_(None),
+            BloqueoAgenda.sede_id.in_(sedes),
+        ),
+    ]
+    if consultorio_id is not None:
+        condiciones.append(BloqueoAgenda.consultorio_id == consultorio_id)
+    return or_(*condiciones)
 
 
 class RepositorioAgenda:
@@ -485,18 +520,16 @@ class RepositorioAgenda:
 
         # --- Bloqueos ---
         #
-        # Se incluyen los del profesional, los de la sede completa y los del
-        # consultorio.  Un bloqueo de sede (mantenimiento, corte de luz) afecta
-        # a todos los profesionales que atienden ahi.
-        condiciones_bloqueo = [BloqueoAgenda.profesional_id == profesional_id]
-        condiciones_bloqueo.append(
-            and_(BloqueoAgenda.profesional_id.is_(None), BloqueoAgenda.sede_id == sede_id)
-        )
-        if consultorio_id is not None:
-            condiciones_bloqueo.append(BloqueoAgenda.consultorio_id == consultorio_id)
-
+        # Se incluyen los del profesional, los de la sede completa y, solo si
+        # se pidio uno, los del consultorio.  Un bloqueo de sede
+        # (mantenimiento, corte de luz) afecta a todos los profesionales que
+        # atienden ahi; uno de sala, solo a quien vaya a usar esa sala.
         consulta_bloqueos = select(BloqueoAgenda).where(
-            or_(*condiciones_bloqueo),
+            condicion_bloqueos_aplicables(
+                profesionales=(profesional_id,),
+                sedes=(sede_id,),
+                consultorio_id=consultorio_id,
+            ),
             BloqueoAgenda.inicio < hasta,
             BloqueoAgenda.fin > desde,
         )
@@ -512,20 +545,57 @@ class RepositorioAgenda:
 
         return ocupaciones
 
-    async def obtener_servicio(self, servicio_id: uuid.UUID) -> Servicio | None:
-        return (
-            await self._sesion.execute(select(Servicio).where(Servicio.id == servicio_id))
-        ).scalar_one_or_none()
+    # ------------------------------------------------------------------
+    #  Recursos de una reserva, siempre dentro de la clinica
+    # ------------------------------------------------------------------
+    # `clinica_id` es obligatorio y va en el `WHERE`.  Sin el, un
+    # identificador de otra clinica se resolveria igual y la cita quedaria
+    # con `clinica_id` propio y un servicio, profesional o sede ajenos: nada
+    # en la base de datos impide esa mezcla (las FK solo comprueban que la
+    # fila exista).  Un recurso ajeno devuelve `None`, igual que uno
+    # inexistente, y el servicio responde 404 sin distinguirlos.
+    async def obtener_servicio(
+        self, servicio_id: uuid.UUID, *, clinica_id: uuid.UUID
+    ) -> Servicio | None:
+        consulta = select(Servicio).where(
+            Servicio.id == servicio_id, Servicio.clinica_id == clinica_id
+        )
+        return (await self._sesion.execute(consulta)).scalar_one_or_none()
 
-    async def obtener_profesional(self, profesional_id: uuid.UUID) -> Profesional | None:
-        return (
-            await self._sesion.execute(select(Profesional).where(Profesional.id == profesional_id))
-        ).scalar_one_or_none()
+    async def obtener_profesional(
+        self, profesional_id: uuid.UUID, *, clinica_id: uuid.UUID
+    ) -> Profesional | None:
+        consulta = select(Profesional).where(
+            Profesional.id == profesional_id, Profesional.clinica_id == clinica_id
+        )
+        return (await self._sesion.execute(consulta)).scalar_one_or_none()
 
-    async def obtener_sede(self, sede_id: uuid.UUID) -> Sede | None:
-        return (
-            await self._sesion.execute(select(Sede).where(Sede.id == sede_id))
-        ).scalar_one_or_none()
+    async def obtener_sede(self, sede_id: uuid.UUID, *, clinica_id: uuid.UUID) -> Sede | None:
+        consulta = select(Sede).where(Sede.id == sede_id, Sede.clinica_id == clinica_id)
+        return (await self._sesion.execute(consulta)).scalar_one_or_none()
+
+    async def paciente_en_ambito(self, paciente_id: uuid.UUID, *, principal: Principal) -> bool:
+        """Indica si el paciente es de la clinica del principal y esta en su ambito.
+
+        Se usa antes de crear una cita: `cita.paciente_id` es una FK simple y
+        aceptaria el paciente de cualquier clinica.  Aplica las mismas reglas
+        que `RepositorioPacientes.obtener` (clinica, lista explicita de
+        pacientes salvo comodin, y paciente no anulado) pero solo lee el
+        identificador: comprobar la pertenencia no necesita traer la ficha.
+        """
+        if principal.clinica_id is None:
+            return False
+        consulta = select(Paciente.id).where(
+            Paciente.id == paciente_id,
+            Paciente.clinica_id == principal.clinica_id,
+            Paciente.anulado_en.is_(None),
+        )
+        ambito = principal.ambito
+        if not ambito.todos_los_pacientes:
+            if not ambito.pacientes:
+                return False
+            consulta = consulta.where(Paciente.id.in_(ambito.pacientes))
+        return (await self._sesion.execute(consulta)).scalar_one_or_none() is not None
 
     async def obtener_consultorio(self, consultorio_id: uuid.UUID) -> Consultorio | None:
         return (

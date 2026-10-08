@@ -25,9 +25,8 @@ el competidor deshizo su transaccion, y su coste es una operacion mas.
 from __future__ import annotations
 
 import uuid
-from calendar import monthrange
 from dataclasses import dataclass, replace
-from datetime import UTC, date, datetime, time, timedelta
+from datetime import UTC, datetime, time, timedelta
 from itertools import pairwise
 from typing import Final
 from zoneinfo import ZoneInfo
@@ -39,8 +38,20 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.mensajeria.avisos_cita import avisar_cambio_de_cita
 from app.mensajeria.recordatorios import ServicioRecordatorios
 from app.modulos.agenda.disponibilidad import (
+    DescansoLocal,
+    FeriadoLocal,
+    FranjaLocal,
+    Intervalo,
+    Ocupacion,
     ResultadoDisponibilidad,
     calcular_disponibilidad,
+    calcular_huecos_libres,
+)
+from app.modulos.agenda.esquemas import (
+    MAXIMO_CITAS_SERIE_POR_FRECUENCIA,
+    MENSAJE_SERIE_DEMASIADO_LARGA,
+    MINIMO_CITAS_SERIE,
+    SEMANAS_ENTRE_CITAS_SERIE,
 )
 from app.modulos.agenda.modelos import (
     TRANSICIONES_PERMITIDAS,
@@ -89,10 +100,12 @@ MAX_REINTENTOS: Final = 1
 # disponibilidad de los proximos cinco anos" recorreria 1800 dias proyectando
 # franjas, y seria un vector de agotamiento de CPU trivial de explotar.
 DIAS_MAXIMOS_CONSULTA: Final = 90
+# Las fechas de una serie se validan por bloques de este tamaño, por debajo
+# del techo anterior, para reutilizar la misma consulta de ocupaciones.
 MAX_DIAS_BLOQUE_SERIE: Final = 80
-MIN_CITAS_SERIE: Final = 2
-MAX_CITAS_SERIE: Final = 53
-MAX_CITAS_MENSUALES: Final = 13
+# Mensaje unico de «no existe» para el paciente: el mismo si no existe, si es
+# de otra clinica o si queda fuera del ambito (404 sin enumeracion).
+MENSAJE_PACIENTE_NO_ENCONTRADO: Final = "El paciente solicitado no existe."
 
 
 @dataclass(frozen=True, slots=True)
@@ -139,32 +152,62 @@ class ResultadoSerieOperacion:
     respuesta_repetida: dict[str, object] | None = None
 
 
+@dataclass(frozen=True, slots=True)
+class _DatosAgenda:
+    """Lo que el motor de disponibilidad necesita para un rango concreto.
+
+    Lo cargan `consultar_disponibilidad` (para ofrecer turnos) y la
+    validacion de series (para comprobar horarios concretos) con la misma
+    consulta, para que ambas respuestas no puedan divergir.
+    """
+
+    zona: str
+    duracion_minutos: int
+    minutos_preparacion: int
+    minutos_antelacion_minima: int
+    franjas: tuple[FranjaLocal, ...]
+    descansos: tuple[DescansoLocal, ...]
+    feriados: tuple[FeriadoLocal, ...]
+    ocupaciones: tuple[Ocupacion, ...]
+
+
 def generar_instantes_serie(
     inicio: datetime, zona: str, frecuencia: str, cantidad: int
 ) -> tuple[datetime, ...]:
-    """Conserva el mismo día y hora locales, incluso al cruzar el cambio horario."""
+    """Fechas de una serie: mismo día de la semana y misma hora local.
+
+    Semántica de cada frecuencia (`SEMANAS_ENTRE_CITAS_SERIE`):
+
+    * ``SEMANAL``: cada 7 días.
+    * ``QUINCENAL``: cada 14 días.
+    * ``MENSUAL``: cada 4 semanas (28 días), **no** el mismo número de día de
+      cada mes.  Las franjas de atención se definen por día de la semana; el
+      día 12 de cada mes caería en jueves, sábado o martes y la serie se
+      rechazaría con un profesional que solo atiende los lunes.  Cada cuatro
+      semanas conserva el día de la semana, a costa de que en un año haya
+      trece citas y no doce (ADR-0009, anexo de series).
+
+    La hora local se conserva al cruzar un cambio de horario de verano; si una
+    fecha cae en una hora local inexistente, se rechaza la serie entera.
+    """
     if inicio.tzinfo is None or inicio.utcoffset() is None:
         raise ValueError("El inicio de la serie debe incluir zona horaria.")
-    if frecuencia not in {"SEMANAL", "QUINCENAL", "MENSUAL"}:
+    if frecuencia not in SEMANAS_ENTRE_CITAS_SERIE:
         raise ReglaNegocioViolada("La frecuencia de la serie no es válida.")
-    if not MIN_CITAS_SERIE <= cantidad <= MAX_CITAS_SERIE or (
-        frecuencia == "MENSUAL" and cantidad > MAX_CITAS_MENSUALES
-    ):
-        raise ReglaNegocioViolada("La serie no puede superar un año de citas.")
+    if cantidad < MINIMO_CITAS_SERIE:
+        raise ReglaNegocioViolada(f"Una serie necesita al menos {MINIMO_CITAS_SERIE} citas.")
+    if cantidad > MAXIMO_CITAS_SERIE_POR_FRECUENCIA[frecuencia]:
+        raise ReglaNegocioViolada(MENSAJE_SERIE_DEMASIADO_LARGA)
 
     tz = ZoneInfo(zona)
     base = inicio.astimezone(tz)
+    paso = timedelta(weeks=SEMANAS_ENTRE_CITAS_SERIE[frecuencia])
     instantes: list[datetime] = []
     for indice in range(cantidad):
-        if frecuencia == "MENSUAL":
-            mes_absoluto = base.year * 12 + base.month - 1 + indice
-            ano, mes_cero = divmod(mes_absoluto, 12)
-            mes = mes_cero + 1
-            dia = min(base.day, monthrange(ano, mes)[1])
-            fecha_local = date(ano, mes, dia)
-        else:
-            semanas = 1 if frecuencia == "SEMANAL" else 2
-            fecha_local = base.date() + timedelta(days=7 * semanas * indice)
+        # Se suma sobre la FECHA local y se recombina con la hora local: sumar
+        # al instante conservaria el desplazamiento UTC y movería la hora al
+        # cruzar el cambio de horario.
+        fecha_local = base.date() + paso * indice
 
         local = datetime.combine(
             fecha_local,
@@ -219,27 +262,71 @@ class ServicioAgenda:
         hasta: datetime,
         consultorio_id: uuid.UUID | None = None,
         registrar_descartes: bool = False,
-        _permiso_verificado: bool = False,
     ) -> ResultadoDisponibilidad:
         """Calcula los turnos libres.
 
         Es una lectura, pero exige permiso: la disponibilidad de un
         profesional revela su carga de trabajo y sus ausencias, que no es
-        informacion publica dentro de la clinica.
+        informacion publica dentro de la clinica.  La validacion de series no
+        pasa por aqui (usa `_datos_agenda`), asi que no hace falta ninguna via
+        para saltarse este permiso.
         """
-        if not _permiso_verificado and not principal.tiene_permiso("agenda.leer"):
+        if not principal.tiene_permiso("agenda.leer"):
             raise PermisoDenegado("No tiene permiso para consultar la agenda.")
 
+        datos = await self._datos_agenda(
+            principal=principal,
+            profesional_id=profesional_id,
+            servicio_id=servicio_id,
+            sede_id=sede_id,
+            desde=desde,
+            hasta=hasta,
+            consultorio_id=consultorio_id,
+        )
+        return calcular_disponibilidad(
+            desde=desde,
+            hasta=hasta,
+            zona=datos.zona,
+            franjas=datos.franjas,
+            duracion_minutos=datos.duracion_minutos,
+            minutos_preparacion=datos.minutos_preparacion,
+            descansos=datos.descansos,
+            feriados=datos.feriados,
+            ocupaciones=datos.ocupaciones,
+            ahora=self._reloj.ahora(),
+            minutos_antelacion_minima=datos.minutos_antelacion_minima,
+            registrar_descartes=registrar_descartes,
+        )
+
+    async def _datos_agenda(
+        self,
+        *,
+        principal: Principal,
+        profesional_id: uuid.UUID,
+        servicio_id: uuid.UUID,
+        sede_id: uuid.UUID,
+        desde: datetime,
+        hasta: datetime,
+        consultorio_id: uuid.UUID | None,
+    ) -> _DatosAgenda:
+        """Carga reglas y ocupaciones de un rango, con clinica y ambito aplicados.
+
+        Servicio, profesional y sede se buscan dentro de la clinica del
+        principal: uno de otra clinica responde lo mismo que uno inexistente.
+        """
         if (hasta - desde) > timedelta(days=DIAS_MAXIMOS_CONSULTA):
             raise ReglaNegocioViolada(
                 f"El rango consultado no puede exceder {DIAS_MAXIMOS_CONSULTA} dias."
             )
+        if principal.clinica_id is None:
+            raise PermisoDenegado("El principal no tiene clinica asignada.")
+        clinica_id = principal.clinica_id
 
-        servicio = await self._repo.obtener_servicio(servicio_id)
+        servicio = await self._repo.obtener_servicio(servicio_id, clinica_id=clinica_id)
         if servicio is None:
             raise RecursoNoEncontrado("El servicio solicitado no existe.")
 
-        profesional = await self._repo.obtener_profesional(profesional_id)
+        profesional = await self._repo.obtener_profesional(profesional_id, clinica_id=clinica_id)
         if profesional is None:
             raise RecursoNoEncontrado("El profesional solicitado no existe.")
 
@@ -247,49 +334,42 @@ class ServicioAgenda:
             # 404 y no 403: revelar que la sede existe permitiria enumerarlas.
             raise RecursoNoEncontrado("La sede solicitada no existe.")
 
-        sede = await self._repo.obtener_sede(sede_id)
+        sede = await self._repo.obtener_sede(sede_id, clinica_id=clinica_id)
         if sede is None:
             raise RecursoNoEncontrado("La sede solicitada no existe.")
 
         zona = await self._repo.obtener_zona_horaria(sede_id)
 
-        # La duracion efectiva puede diferir de la del servicio: un
-        # profesional puede tardar mas o menos en la misma prestacion.
-        duracion = servicio.duracion_minutos
-        # El buffer efectivo es el mayor de los dos: si el servicio necesita
-        # 10 minutos de limpieza y el profesional 15 de descanso, hacen falta
-        # 15.  Sumarlos seria excesivo y tomar solo uno dejaria el otro sin
-        # cubrir.
-        buffer_minutos = max(servicio.minutos_preparacion, profesional.minutos_preparacion_propio)
-
-        franjas = await self._repo.obtener_franjas_profesional(profesional_id, sede_id)
-        descansos = await self._repo.obtener_descansos_sede(sede_id)
-
         primer_dia, ultimo_dia = rango_de_dias(desde, hasta, zona)
-        feriados = await self._repo.obtener_feriados(
-            profesional.clinica_id, sede_id, desde=primer_dia, hasta=ultimo_dia
-        )
-        ocupaciones = await self._repo.obtener_ocupaciones(
-            profesional_id=profesional_id,
-            sede_id=sede_id,
-            desde=desde,
-            hasta=hasta,
-            consultorio_id=consultorio_id,
-        )
-
-        return calcular_disponibilidad(
-            desde=desde,
-            hasta=hasta,
+        return _DatosAgenda(
             zona=zona,
-            franjas=franjas,
-            duracion_minutos=duracion,
-            minutos_preparacion=buffer_minutos,
-            descansos=descansos,
-            feriados=feriados,
-            ocupaciones=ocupaciones,
-            ahora=self._reloj.ahora(),
+            # La duracion efectiva puede diferir de la del servicio: un
+            # profesional puede tardar mas o menos en la misma prestacion.
+            duracion_minutos=servicio.duracion_minutos,
+            # El buffer efectivo es el mayor de los dos: si el servicio
+            # necesita 10 minutos de limpieza y el profesional 15 de descanso,
+            # hacen falta 15.  Sumarlos seria excesivo y tomar solo uno dejaria
+            # el otro sin cubrir.
+            minutos_preparacion=max(
+                servicio.minutos_preparacion, profesional.minutos_preparacion_propio
+            ),
             minutos_antelacion_minima=sede.minutos_antelacion_minima,
-            registrar_descartes=registrar_descartes,
+            franjas=tuple(await self._repo.obtener_franjas_profesional(profesional_id, sede_id)),
+            descansos=tuple(await self._repo.obtener_descansos_sede(sede_id)),
+            feriados=tuple(
+                await self._repo.obtener_feriados(
+                    clinica_id, sede_id, desde=primer_dia, hasta=ultimo_dia
+                )
+            ),
+            ocupaciones=tuple(
+                await self._repo.obtener_ocupaciones(
+                    profesional_id=profesional_id,
+                    sede_id=sede_id,
+                    desde=desde,
+                    hasta=hasta,
+                    consultorio_id=consultorio_id,
+                )
+            ),
         )
 
     # ==================================================================
@@ -357,6 +437,9 @@ class ServicioAgenda:
         Se valida cada horario contra las reglas y ocupaciones reales antes de
         escribir. PostgreSQL vuelve a arbitrar las carreras mediante la misma
         restricción de exclusión que protege una reserva individual.
+
+        Las fechas siguen `generar_instantes_serie`: mismo día de la semana y
+        hora local; MENSUAL es cada cuatro semanas.
         """
         if not principal.tiene_permiso("cita.crear"):
             raise PermisoDenegado("No tiene permiso para crear citas.")
@@ -366,6 +449,11 @@ class ServicioAgenda:
             raise ReglaNegocioViolada(
                 "Los procedimientos de un plan dental se reservan individualmente."
             )
+        # Una vez antes de todo lo demás: un paciente ajeno debe responder 404
+        # antes de revelar nada de la agenda (por ejemplo, un 409 que diga que
+        # una fecha está ocupada).  `_crear_cita` lo vuelve a comprobar en cada
+        # cita, que es la garantía para cualquier otro camino.
+        await self._exigir_paciente_en_ambito(solicitud.paciente_id, principal)
 
         cuerpo = {
             "paciente_id": str(solicitud.paciente_id),
@@ -438,17 +526,30 @@ class ServicioAgenda:
         frecuencia: str,
         cantidad: int,
     ) -> tuple[datetime, ...]:
-        """Valida ámbito, recursos, autotraslapes y huecos antes de escribir."""
-        if not principal.ambito.cubre_sede(solicitud.sede_id):
-            raise RecursoNoEncontrado("La sede solicitada no existe.")
-        sede = await self._repo.obtener_sede(solicitud.sede_id)
-        if sede is None:
-            raise RecursoNoEncontrado("La sede solicitada no existe.")
+        """Valida ámbito, recursos, autotraslapes y huecos antes de escribir.
+
+        Cada fecha se comprueba por **contención** en los huecos libres del
+        día (franjas menos descansos, feriados, bloqueos y citas) más la
+        antelación mínima, no por pertenencia a la lista de turnos ofrecidos.
+        La rejilla de turnos arranca al principio de cada hueco, así que
+        depende de las citas de ese día: con una cita previa de otra duración,
+        el 12/10 ofrece 10:15 y el 19/10 no, aunque el 19/10 a las 10:15 esté
+        libre.  Exigir la rejilla rechazaba series válidas en cuanto la agenda
+        tenía carga.  Es el mismo criterio que la reserva individual, que
+        tampoco exige la rejilla y deja la última palabra a la exclusión
+        `gist` (ADR-0009).
+        """
+        if principal.clinica_id is None:
+            raise PermisoDenegado("El principal no tiene clínica asignada.")
+        clinica_id = principal.clinica_id
+        await self._exigir_sede_en_ambito(solicitud.sede_id, principal)
         zona = await self._repo.obtener_zona_horaria(solicitud.sede_id)
         instantes = generar_instantes_serie(solicitud.inicio, zona, frecuencia, cantidad)
 
-        servicio = await self._repo.obtener_servicio(solicitud.servicio_id)
-        profesional = await self._repo.obtener_profesional(solicitud.profesional_id)
+        servicio = await self._repo.obtener_servicio(solicitud.servicio_id, clinica_id=clinica_id)
+        profesional = await self._repo.obtener_profesional(
+            solicitud.profesional_id, clinica_id=clinica_id
+        )
         if servicio is None or profesional is None:
             raise RecursoNoEncontrado("El profesional o servicio solicitado no existe.")
         duracion_bloque = servicio.duracion_minutos + max(
@@ -475,7 +576,7 @@ class ServicioAgenda:
             hasta_local = datetime.combine(
                 ultimo_local.date() + timedelta(days=1), time.min, tzinfo=tz
             )
-            disponibilidad = await self.consultar_disponibilidad(
+            datos = await self._datos_agenda(
                 principal=principal,
                 profesional_id=solicitud.profesional_id,
                 servicio_id=solicitud.servicio_id,
@@ -483,17 +584,54 @@ class ServicioAgenda:
                 desde=desde_local,
                 hasta=hasta_local,
                 consultorio_id=solicitud.consultorio_id,
-                _permiso_verificado=True,
             )
-            disponibles = {turno.inicio.astimezone(UTC) for turno in disponibilidad.turnos}
+            huecos = calcular_huecos_libres(
+                desde=desde_local,
+                hasta=hasta_local,
+                zona=datos.zona,
+                franjas=datos.franjas,
+                descansos=datos.descansos,
+                feriados=datos.feriados,
+                ocupaciones=datos.ocupaciones,
+            )
+            limite_antelacion = self._reloj.ahora() + timedelta(
+                minutes=datos.minutos_antelacion_minima
+            )
+            duracion_total = timedelta(minutes=datos.duracion_minutos + datos.minutos_preparacion)
             for instante in bloque:
-                if instante not in disponibles:
+                ocupara = Intervalo(instante, instante + duracion_total)
+                if instante < limite_antelacion or not any(
+                    hueco.contiene(ocupara) for hueco in huecos
+                ):
                     local = instante.astimezone(tz)
                     raise TurnoNoDisponible(
                         "No se puede crear la serie: el horario "
                         f"{local:%d/%m/%Y %H:%M} no está disponible."
                     )
         return instantes
+
+    async def _exigir_paciente_en_ambito(
+        self, paciente_id: uuid.UUID, principal: Principal
+    ) -> None:
+        """404 si el paciente no es de la clínica del principal o de su ámbito.
+
+        El mismo mensaje para «no existe», «es de otra clínica» y «fuera del
+        ámbito»: distinguirlos permitiría enumerar pacientes probando
+        identificadores.
+        """
+        if not await self._repo.paciente_en_ambito(paciente_id, principal=principal):
+            raise RecursoNoEncontrado(MENSAJE_PACIENTE_NO_ENCONTRADO)
+
+    async def _exigir_sede_en_ambito(self, sede_id: uuid.UUID, principal: Principal) -> None:
+        """404 si la sede no está en el ámbito o no es de la clínica del principal.
+
+        El ámbito solo no basta: con el comodín «todas las sedes», una sede de
+        otra clínica pasaría la comprobación de ámbito.
+        """
+        if principal.clinica_id is None or not principal.ambito.cubre_sede(sede_id):
+            raise RecursoNoEncontrado("La sede solicitada no existe.")
+        if await self._repo.obtener_sede(sede_id, clinica_id=principal.clinica_id) is None:
+            raise RecursoNoEncontrado("La sede solicitada no existe.")
 
     async def _crear_cita(
         self,
@@ -504,12 +642,25 @@ class ServicioAgenda:
         expira_en: datetime | None,
         accion: AccionAuditada,
     ) -> ResultadoOperacion:
-        """Crea la cita, con idempotencia y traduccion de errores."""
+        """Crea la cita, con idempotencia y traduccion de errores.
+
+        Es el camino comun de POST /citas, /citas/bloqueos, /citas/series, de
+        la derivacion y de `hold_slot`, asi que aqui se valida todo lo que la
+        base de datos no garantiza: la sede, el paciente, el servicio y el
+        profesional deben ser de la clinica del principal, y la sede y el
+        paciente, de su ambito.  `cita` solo tiene FK simples; sin estas
+        comprobaciones aceptaria un paciente de otra clinica (IDOR).  Todo
+        recurso ajeno responde 404, igual que uno inexistente.
+        """
         if principal.clinica_id is None:
             raise PermisoDenegado("El principal no tiene clinica asignada.")
+        clinica_id = principal.clinica_id
 
-        if not principal.ambito.cubre_sede(solicitud.sede_id):
-            raise RecursoNoEncontrado("La sede solicitada no existe.")
+        # Sede y paciente, antes de la idempotencia: una clave repetida no
+        # debe servir para obtener respuesta sobre una sede o un paciente
+        # ajenos.
+        await self._exigir_sede_en_ambito(solicitud.sede_id, principal)
+        await self._exigir_paciente_en_ambito(solicitud.paciente_id, principal)
 
         # --- Idempotencia ---
         #
@@ -535,11 +686,13 @@ class ServicioAgenda:
                 solicitud, principal
             )
 
-        servicio = await self._repo.obtener_servicio(solicitud.servicio_id)
+        servicio = await self._repo.obtener_servicio(solicitud.servicio_id, clinica_id=clinica_id)
         if servicio is None:
             raise RecursoNoEncontrado("El servicio solicitado no existe.")
 
-        profesional = await self._repo.obtener_profesional(solicitud.profesional_id)
+        profesional = await self._repo.obtener_profesional(
+            solicitud.profesional_id, clinica_id=clinica_id
+        )
         if profesional is None:
             raise RecursoNoEncontrado("El profesional solicitado no existe.")
 
@@ -978,7 +1131,11 @@ class ServicioAgenda:
         estado_anterior = cita.estado
 
         if nuevo_profesional_id is not None and nuevo_profesional_id != cita.profesional_id:
-            nuevo = await self._repo.obtener_profesional(nuevo_profesional_id)
+            # Dentro de la clinica de la cita: un profesional de otra clinica
+            # responde igual que uno inexistente.
+            nuevo = await self._repo.obtener_profesional(
+                nuevo_profesional_id, clinica_id=cita.clinica_id
+            )
             if nuevo is None:
                 raise RecursoNoEncontrado("El profesional solicitado no existe.")
             if not nuevo.activo:
@@ -987,7 +1144,9 @@ class ServicioAgenda:
                 )
             cita.profesional_id = nuevo_profesional_id
             # El buffer puede cambiar con el profesional.
-            servicio = await self._repo.obtener_servicio(cita.servicio_id)
+            servicio = await self._repo.obtener_servicio(
+                cita.servicio_id, clinica_id=cita.clinica_id
+            )
             if servicio is not None:
                 cita.minutos_preparacion = max(
                     servicio.minutos_preparacion, nuevo.minutos_preparacion_propio

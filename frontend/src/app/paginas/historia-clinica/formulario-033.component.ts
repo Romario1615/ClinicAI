@@ -106,6 +106,8 @@ export class Formulario033Component {
   protected registroPlacaId = '';
   protected motivoCorreccion = '';
   protected datos = nuevoFormulario033();
+  /** Lo que había al abrir la captura: con eso se sabe si cerrar perdería algo. */
+  private huellaInicial = '';
   protected readonly puedeLeerCitas = this.sesion.tienePermiso(PERMISOS.agendaLeer);
   protected readonly puedeLeerNotas = this.sesion.tienePermiso(PERMISOS.historiaLeer) &&
     this.sesion.tienePermiso(PERMISOS.historiaLeerSensible);
@@ -160,6 +162,7 @@ export class Formulario033Component {
     this.limpiarVinculos();
     this.exito.set('');
     this.error.set('');
+    this.huellaInicial = this.huella();
     this.cargarFuentes();
   }
 
@@ -175,10 +178,41 @@ export class Formulario033Component {
     this.motivoCorreccion = '';
     this.exito.set('');
     this.error.set('');
+    this.huellaInicial = this.huella();
     this.cargarFuentes();
   }
 
+  /** Hay algo escrito o vinculado en la captura abierta que cerrar perdería. */
+  protected hayCambios(): boolean {
+    return (this.creando() || this.seleccionado() !== null) && this.huella() !== this.huellaInicial;
+  }
+
+  /**
+   * La captura en una cadena comparable. La sede no cuenta: la preselecciona
+   * la pantalla al cargar las sedes, no la escribe quien atiende.
+   */
+  private huella(): string {
+    return JSON.stringify({
+      datos: this.datos,
+      cita: this.citaId,
+      nota: this.notaId,
+      odontograma: this.odontogramaId,
+      placa: this.registroPlacaId,
+      motivo: this.motivoCorreccion.trim(),
+    });
+  }
+
+  /**
+   * Cierre ya confirmado por la ventana. A mitad de guardado no se cierra:
+   * si el envío fallara después, lo escrito ya se habría borrado.
+   */
+  protected cerrarCaptura(): void {
+    if (this.guardando()) return;
+    this.cancelar();
+  }
+
   protected guardar(): void {
+    if (this.guardando()) return;
     const seleccionado = this.seleccionado();
     if (!this.sedeId) { this.error.set('Seleccione la sede donde se realizó la atención.'); return; }
     if (seleccionado && this.motivoCorreccion.trim().length < 8) {

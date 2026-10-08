@@ -24,8 +24,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.ia.embeddings import EmbeddingsSimulado
 from app.modulos.conocimiento.modelos import KnowledgeDocument
-from app.modulos.historia.modelos import Receta
+from app.modulos.historia.modelos import Receta, RecetaMedicamento
+from app.modulos.organizacion.modelos import Clinica, Especialidad
 from app.modulos.pacientes.modelos import Paciente
+from app.modulos.profesionales.modelos import Profesional
 from app.modulos.usuarios.modelos import (
     AmbitoAsignacion,
     Permiso,
@@ -46,7 +48,7 @@ from app.semillas.catalogos import (
     cargar_catalogos,
     verificar_coherencia,
 )
-from app.semillas.clinico import cargar_clinico
+from app.semillas.clinico import MEDICAMENTO_ADHERENCIA, cargar_clinico
 from app.semillas.conocimiento import cargar_conocimiento
 from app.semillas.sinteticos import (
     DOMINIO_PRUEBAS,
@@ -715,3 +717,103 @@ class TestSemillasClinicas:
         )
         assert repetido.notas == 0
         assert despues == antes
+
+
+class TestCasoDeAdherencia:
+    """El caso de adherencia se siembra en la clinica pedida y entra en el resumen."""
+
+    async def test_no_depende_de_otras_clinicas_sinteticas_y_se_cuenta(
+        self, sesion: AsyncSession
+    ) -> None:
+        """Otra clinica con una cuenta profesional que ordena antes no lo impide.
+
+        Antes la cuenta del acceso local se buscaba en toda la base: si la
+        primera por correo era de otra clinica, esta se quedaba sin caso de
+        adherencia, y con una sola clinica el caso se creaba pero su receta no
+        entraba en el resumen (13 recetas en la base frente a 12 informadas).
+        """
+        configuracion = Configuracion(_env_file=None, entorno="local")
+        await cargar_catalogos(sesion)
+        await sesion.flush()
+        base = await cargar_datos_sinteticos(
+            sesion,
+            configuracion,
+            cantidad_pacientes=12,
+            cantidad_citas=25,
+            semilla=910003,
+        )
+        assert base.clinica_id is not None
+
+        otra = Clinica(
+            nombre=f"Otra clinica {MARCA_SINTETICO}",
+            identificacion_fiscal=f"PRUEBA-OTRA-{secrets.token_hex(4)}",
+            zona_horaria="America/Guayaquil",
+        )
+        sesion.add(otra)
+        await sesion.flush()
+        especialidad = Especialidad(clinica_id=otra.id, nombre=f"General {MARCA_SINTETICO}")
+        cuenta = Usuario(
+            clinica_id=otra.id,
+            # Los digitos ordenan antes que cualquier correo sembrado.
+            correo=f"0000-{secrets.token_hex(4)}@{DOMINIO_PRUEBAS}",
+            hash_contrasena="hash-sintetico-no-utilizable",
+            nombre="Profesional",
+            apellido=f"De otra clinica {MARCA_SINTETICO}",
+        )
+        sesion.add_all([especialidad, cuenta])
+        await sesion.flush()
+        rol_profesional = await sesion.scalar(
+            sa.select(Rol).where(
+                Rol.codigo == "profesional", Rol.es_sistema.is_(True), Rol.clinica_id.is_(None)
+            )
+        )
+        assert rol_profesional is not None
+        sesion.add_all(
+            [
+                UsuarioRol(usuario_id=cuenta.id, rol_id=rol_profesional.id),
+                Profesional(
+                    clinica_id=otra.id,
+                    usuario_id=cuenta.id,
+                    especialidad_id=especialidad.id,
+                    nombre="Profesional",
+                    apellido=f"De otra clinica {MARCA_SINTETICO}",
+                ),
+            ]
+        )
+        await sesion.flush()
+
+        clinico = await cargar_clinico(
+            sesion, clinica_id=base.clinica_id, reloj=RelojFijo(INSTANTE_REFERENCIA)
+        )
+        await sesion.flush()
+
+        recetas = await sesion.scalar(
+            sa.select(sa.func.count())
+            .select_from(Receta)
+            .where(Receta.clinica_id == base.clinica_id)
+        )
+        casos = await sesion.scalar(
+            sa.select(sa.func.count())
+            .select_from(RecetaMedicamento)
+            .join(Receta, Receta.id == RecetaMedicamento.receta_id)
+            .where(
+                Receta.clinica_id == base.clinica_id,
+                RecetaMedicamento.nombre == MEDICAMENTO_ADHERENCIA,
+            )
+        )
+        tomas = await sesion.scalar(
+            sa.text(
+                "SELECT count(t.id) FROM toma t "
+                "JOIN paciente p ON p.id = t.paciente_id WHERE p.clinica_id = :clinica"
+            ),
+            {"clinica": base.clinica_id},
+        )
+        assert casos == 1
+        assert recetas == clinico.recetas
+        assert tomas == clinico.tomas
+
+        # Repetir no crea otro caso ni lo cuenta otra vez.
+        repetido = await cargar_clinico(
+            sesion, clinica_id=base.clinica_id, reloj=RelojFijo(INSTANTE_REFERENCIA)
+        )
+        assert (repetido.recetas, repetido.tomas) == (0, 0)

@@ -38,13 +38,19 @@ const SIGNOS = [
   imports: [FormsModule, VentanaFlotanteComponent],
   template: `
     @if (abierta()) {
+      <!-- La ventana protege lo escrito: mientras se guarda no se cierra, y
+           con cambios pide confirmación antes de descartarlos (Escape, la X o
+           Cancelar pasan por el mismo sitio). -->
       <app-ventana-flotante
+        #v
         ceja="Historia clínica"
         [titulo]="base() ? 'Corregir nota · versión nueva' : 'Nueva nota de evolución'"
         forma="centrada"
         [anchoMaximo]="960"
         [altoCompleto]="true"
         [cierraAlPulsarFuera]="false"
+        [ocupada]="guardando()"
+        [cambiosSinGuardar]="hayCambios()"
         (cerrar)="cerrar()"
       >
     <form id="form-nota" class="editor-nota" (ngSubmit)="guardar()">
@@ -97,7 +103,7 @@ const SIGNOS = [
       }
     </form>
         <div class="acciones acciones--final" pie>
-          <button class="boton" type="button" [disabled]="guardando()" (click)="cerrar()">Cancelar</button>
+          <button class="boton" type="button" [disabled]="guardando()" (click)="v.solicitarCierre()">Cancelar</button>
           <button class="boton boton--principal" type="submit" form="form-nota" [disabled]="guardando()">
             {{ guardando() ? 'Guardando…' : base() ? 'Guardar versión nueva' : 'Guardar nota' }}
           </button>
@@ -142,8 +148,38 @@ export class NotaEditorComponent implements OnInit {
   protected readonly abierta = signal(true);
   protected readonly guardando = signal(false);
   protected readonly error = signal('');
+  /** Lo que había al abrir: con eso se sabe si cerrar perdería algo. */
+  private huellaInicial = '';
 
   ngOnInit(): void {
+    this.cargarBase();
+    this.huellaInicial = this.huella();
+  }
+
+  /** Hay algo escrito (o cambiado) que cerrar perdería. */
+  protected hayCambios(): boolean {
+    return this.huella() !== this.huellaInicial;
+  }
+
+  /**
+   * El contenido del formulario en una cadena comparable. Los espacios en los
+   * extremos y los signos vacíos no cuentan como cambio.
+   */
+  private huella(): string {
+    const vitales = Object.entries(this.vitales)
+      .filter((par): par is [string, number] => typeof par[1] === 'number' && Number.isFinite(par[1]))
+      .sort(([a], [b]) => a.localeCompare(b));
+    return JSON.stringify({
+      tipo: this.tipo,
+      motivoConsulta: this.motivoConsulta.trim(),
+      nivelSensibilidad: this.nivelSensibilidad,
+      valores: Object.fromEntries(Object.entries(this.valores).map(([clave, valor]) => [clave, (valor ?? '').trim()])),
+      vitales,
+      motivo: this.motivo.trim(),
+    });
+  }
+
+  private cargarBase(): void {
     const nota = this.base();
     if (!nota) return;
     this.tipo = (nota.tipo as NotaNueva['tipo']) ?? 'EVOLUCION';
@@ -207,6 +243,10 @@ export class NotaEditorComponent implements OnInit {
     });
   }
 
+  /**
+   * Cierre ya confirmado: la ventana solo lo pide tras «Descartar cambios»
+   * cuando hay algo escrito, y nunca a mitad de guardado.
+   */
   protected cerrar(): void {
     if (this.guardando()) return;
     this.abierta.set(false);

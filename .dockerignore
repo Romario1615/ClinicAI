@@ -1,41 +1,74 @@
+# ---------------------------------------------------------------------------
+#  Contexto de construccion de las imagenes (`docker build .` desde la raiz).
+#
+#  Los Dockerfiles copian `backend/` entero (`COPY backend/ ./`). Un patron
+#  sin `**/` solo aplica en la raiz del contexto, asi que un `.env`, una clave
+#  o `backend/almacenamiento/` de una maquina de desarrollo acabarian dentro
+#  de la imagen. Por eso todo lo sensible va con `**/`, alineado con
+#  `.gitignore`: lo que no se versiona tampoco viaja en una imagen.
+# ---------------------------------------------------------------------------
+
 # Repositorio e informacion local
-.git
 **/.git
-.env
-.env.*
-!.env.example
+
+# Secretos y configuracion local. `.env.example` no lleva valores reales.
+**/.env
+**/.env.*
+!**/.env.example
+**/*.pem
+**/*.key
+**/*.p12
+**/*.pfx
+**/*.crt
+**/secretos
+**/credenciales
+**/*-credenciales.json
+**/client_secret*.json
+**/service-account*.json
+
+# Datos: ficheros de pacientes, adjuntos y respaldos nunca van en una imagen.
+**/almacenamiento
+**/adjuntos
+**/respaldos
+datos-sinteticos
+**/datos-sinteticos/generados
+**/*.dump
+**/*.sql.gz
+**/*.bak
+**/*.sqlite
+**/*.sqlite3
+**/*.db
 
 # Entornos y dependencias instaladas; la imagen se instala desde uv.lock.
-.venv
 **/.venv
-venv
 **/venv
-frontend/node_modules
 **/node_modules
+**/.pnpm-store
 
 # Builds, caches y reportes de pruebas
 frontend/dist
-frontend/.angular
+**/.angular
 frontend/coverage
 frontend/cobertura
-backend/.pytest_cache
-backend/.mypy_cache
-backend/.ruff_cache
-backend/.hypothesis
+**/.pytest_cache
+**/.mypy_cache
+**/.ruff_cache
+**/.hypothesis
 **/__pycache__
 **/*.py[cod]
-test-results
-playwright-report
-coverage.xml
-.coverage
+**/*.egg-info
+**/htmlcov
+**/.coverage
+**/.coverage.*
+**/coverage.xml
+**/test-results
+**/playwright-report
+pruebas-e2e/.auth
+pruebas-carga/resultados
+reportes
 
-# Datos de desarrollo, respaldos y temporales
-datos-sinteticos
-credenciales
-tmp
-*.sqlite
-*.sqlite3
-*.db
-*.bak
-*.dump
-*.sql.gz
+# Temporales y registros
+**/tmp
+**/temporal
+**/*.log
+.playwright-mcp

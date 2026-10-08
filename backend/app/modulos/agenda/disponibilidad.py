@@ -506,7 +506,7 @@ def _alinear_hacia_arriba(instante: datetime, granularidad_minutos: int, zona: s
     return alineado.astimezone(instante.tzinfo)
 
 
-def _turnos_de_un_dia(
+def _huecos_de_un_dia(
     *,
     dia: date,
     rango: Intervalo,
@@ -516,19 +516,16 @@ def _turnos_de_un_dia(
     descansos: Sequence[DescansoLocal],
     feriados: Sequence[FeriadoLocal],
     ocupaciones: Sequence[Ocupacion],
-    duracion_minutos: int,
-    minutos_preparacion: int,
-    granularidad_minutos: int,
     registrar_descartes: bool,
-) -> tuple[list[TurnoLibre], list[HuecoDescartado]]:
-    """Calcula los turnos de un unico dia local.
+) -> tuple[list[Intervalo], list[HuecoDescartado]]:
+    """Huecos libres de un unico dia local, ANTES de dividirlos en turnos.
 
-    Se extrae del bucle principal porque el orden de las cuatro operaciones
-    es la parte delicada del motor y merece leerse junta: proyectar, recortar
-    al rango, restar ocupaciones y solo entonces dividir en turnos.
-
-    Restar antes de dividir es lo que evita ofrecer un turno que cabe en la
-    franja pero pisa una cita.
+    Son las tres primeras operaciones del motor: proyectar las franjas,
+    recortarlas al rango y restar descansos, feriados, bloqueos y citas.  Se
+    separan de la division en turnos porque hay preguntas que no dependen de
+    la rejilla: «¿cabe una cita de 40 minutos a las 10:15?» se responde con
+    los huecos, no con la lista de turnos ofrecidos, cuyo punto de partida
+    cambia con las citas de cada dia.
     """
     atencion = proyectar_franjas(franjas, dia=dia, zona=zona)
     if not atencion:
@@ -574,6 +571,45 @@ def _turnos_de_un_dia(
             for o in del_dia
             if any(o.intervalo.se_solapa_con(f) for f in atencion_en_rango)
         )
+
+    return libres, descartados
+
+
+def _turnos_de_un_dia(
+    *,
+    dia: date,
+    rango: Intervalo,
+    zona: str,
+    tz: ZoneInfo,
+    franjas: Sequence[FranjaLocal],
+    descansos: Sequence[DescansoLocal],
+    feriados: Sequence[FeriadoLocal],
+    ocupaciones: Sequence[Ocupacion],
+    duracion_minutos: int,
+    minutos_preparacion: int,
+    granularidad_minutos: int,
+    registrar_descartes: bool,
+) -> tuple[list[TurnoLibre], list[HuecoDescartado]]:
+    """Calcula los turnos de un unico dia local.
+
+    El orden de las cuatro operaciones es la parte delicada del motor:
+    proyectar, recortar al rango, restar ocupaciones (en `_huecos_de_un_dia`)
+    y solo entonces dividir en turnos.
+
+    Restar antes de dividir es lo que evita ofrecer un turno que cabe en la
+    franja pero pisa una cita.
+    """
+    libres, descartados = _huecos_de_un_dia(
+        dia=dia,
+        rango=rango,
+        zona=zona,
+        tz=tz,
+        franjas=franjas,
+        descansos=descansos,
+        feriados=feriados,
+        ocupaciones=ocupaciones,
+        registrar_descartes=registrar_descartes,
+    )
 
     # 4. Division en turnos.
     turnos: list[TurnoLibre] = []
@@ -692,6 +728,59 @@ def calcular_disponibilidad(
     ordenados = tuple(unicos[clave] for clave in sorted(unicos))
 
     return ResultadoDisponibilidad(ordenados, tuple(descartados))
+
+
+def calcular_huecos_libres(
+    *,
+    desde: datetime,
+    hasta: datetime,
+    zona: str,
+    franjas: Sequence[FranjaLocal],
+    descansos: Sequence[DescansoLocal] = (),
+    feriados: Sequence[FeriadoLocal] = (),
+    ocupaciones: Sequence[Ocupacion] = (),
+) -> tuple[Intervalo, ...]:
+    """Huecos libres del rango: franjas menos descansos, feriados y ocupaciones.
+
+    Es el mismo calculo que `calcular_disponibilidad` hasta el paso 3, sin
+    dividir en turnos ni aplicar la antelacion minima (que depende de `ahora`
+    y la aplica quien pregunta).  Sirve para comprobar si un horario concreto
+    cabe en la agenda sin exigir que coincida con la rejilla de turnos de ese
+    dia: la rejilla arranca al principio de cada hueco, asi que una cita de
+    otra duracion la desplaza y el mismo horario local puede estar libre un
+    dia y no figurar entre los turnos ofrecidos de otro.
+
+    Los huecos se devuelven ya recortados al rango y ordenados.  Comprobar un
+    horario es `any(h.contiene(intervalo) for h in huecos)`.
+    """
+    if desde.tzinfo is None or hasta.tzinfo is None:
+        raise ValueError("El rango exige instantes con zona horaria (ADR-0010).")
+    if hasta <= desde:
+        raise ValueError("`hasta` debe ser posterior a `desde`.")
+
+    tz = ZoneInfo(zona)
+    rango = Intervalo(desde, hasta)
+    huecos: list[Intervalo] = []
+
+    # Misma holgura de un dia por extremo que `calcular_disponibilidad`.
+    dia = desde.astimezone(tz).date() - timedelta(days=1)
+    ultimo_dia = hasta.astimezone(tz).date() + timedelta(days=1)
+    while dia <= ultimo_dia:
+        libres, _ = _huecos_de_un_dia(
+            dia=dia,
+            rango=rango,
+            zona=zona,
+            tz=tz,
+            franjas=franjas,
+            descansos=descansos,
+            feriados=feriados,
+            ocupaciones=ocupaciones,
+            registrar_descartes=False,
+        )
+        huecos.extend(libres)
+        dia += timedelta(days=1)
+
+    return tuple(sorted(huecos, key=lambda hueco: hueco.inicio))
 
 
 def granularidad_incompatible(

@@ -15,7 +15,9 @@ const BASE = CONFIGURACION_POR_DEFECTO.urlApi;
 const PACIENTE = 'paciente-sintetico-033';
 const permisosSesion = new Set<string>();
 
-describe('Formulario033Component', () => {
+// La captura completa pinta más de cien controles: con la máquina cargada la
+// primera prueba pasa de los 5 s por defecto sin que nada vaya mal.
+describe('Formulario033Component', { timeout: 20_000 }, () => {
     let fixture!: ComponentFixture<Formulario033Component>;
     let http: HttpTestingController;
 
@@ -130,10 +132,75 @@ describe('Formulario033Component', () => {
         expect(fixture.nativeElement.querySelector('.formulario-033 > [role="alert"]')).toBeNull();
         expect(dialogo.querySelector('form#formulario-033-captura')).not.toBeNull();
 
+        // Con algo escrito, Cancelar pregunta antes de tirar la captura.
         botonConTexto('Cancelar').click();
+        fixture.detectChanges();
+        expect(dialogo.querySelector('[role="alertdialog"]')?.textContent).toContain('Hay cambios sin guardar');
+        expect(fixture.nativeElement.querySelector('[role="dialog"]')).not.toBeNull();
+        botonConTexto('Descartar cambios').click();
         fixture.detectChanges();
         expect(fixture.nativeElement.querySelector('[role="dialog"]')).toBeNull();
         expect(fixture.nativeElement.querySelector('[role="alert"]')).toBeNull();
+    });
+
+    it('a mitad de guardado ni la X ni Escape cierran ni borran lo escrito', () => {
+        abrir();
+        botonConTexto('Registrar formulario').click();
+        fixture.detectChanges();
+        const formulario = fixture.componentInstance as unknown as {
+            datos: { motivo_consulta: string };
+            cerrarCaptura(): void;
+            hayCambios(): boolean;
+        };
+        expect(formulario.hayCambios()).toBe(false);
+        const motivo = fixture.nativeElement.querySelector('textarea[name="motivo"]') as HTMLTextAreaElement;
+        motivo.value = 'Dolor dental al masticar';
+        motivo.dispatchEvent(new Event('input', { bubbles: true }));
+        fixture.detectChanges();
+        expect(formulario.hayCambios()).toBe(true);
+        botonConTexto('Guardar formulario').click();
+        fixture.detectChanges();
+        const envio = http.expectOne({ method: 'POST', url: `${BASE}/odontologia/pacientes/${PACIENTE}/formularios-033` });
+
+        const dialogo = fixture.nativeElement.querySelector('dialog[open]') as HTMLDialogElement;
+        const equis = dialogo.querySelector('.ventana__cerrar') as HTMLButtonElement;
+        expect(equis.disabled).toBe(true);
+        equis.click();
+        dialogo.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+        formulario.cerrarCaptura();
+        fixture.detectChanges();
+        expect(fixture.nativeElement.querySelector('dialog[open]')).not.toBeNull();
+        expect(formulario.datos.motivo_consulta).toBe('Dolor dental al masticar');
+
+        envio.flush({ codigo: 'VALIDACION', mensaje: 'Revise los antecedentes.' }, { status: 422, statusText: 'Unprocessable Entity' });
+        fixture.detectChanges();
+        expect(fixture.nativeElement.querySelector('dialog[open] [role="alert"]')?.textContent).toContain('Revise los antecedentes');
+        expect(formulario.datos.motivo_consulta).toBe('Dolor dental al masticar');
+    });
+
+    it('al cerrar, el foco vuelve al botón que abrió la captura, aunque se haya recreado', async () => {
+        abrir([salida(), salida({ id: 'otra', raiz_id: 'raiz-otra', creado_en: '2026-10-07T15:00:00Z' })]);
+        const raiz = fixture.nativeElement as HTMLElement;
+        const pulsarYCerrar = async (selector: string): Promise<void> => {
+            const disparador = raiz.querySelector<HTMLButtonElement>(selector)!;
+            disparador.focus();
+            disparador.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));
+            disparador.click();
+            fixture.detectChanges();
+            expect(raiz.querySelector('dialog[open]')).not.toBeNull();
+            raiz.querySelector('dialog[open]')!
+                .dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+            fixture.detectChanges();
+            await new Promise((resolver) => setTimeout(resolver));
+            expect(raiz.querySelector('dialog[open]')).toBeNull();
+        };
+
+        await pulsarYCerrar('#formulario-033-nuevo');
+        expect(document.activeElement?.id).toBe('formulario-033-nuevo');
+        // Con dos registros, vuelve a la «Crear corrección» del que se abrió,
+        // no a la primera que tenga el mismo texto.
+        await pulsarYCerrar('#formulario-033-corregir-raiz-otra');
+        expect(document.activeElement?.id).toBe('formulario-033-corregir-raiz-otra');
     });
 
     it('vincula campos del navegador y envía las secciones sin datos de identidad editables', () => {
@@ -205,6 +272,10 @@ describe('Formulario033Component', () => {
         formulario.seleccionarCita('cita-033');
         formulario.seleccionarNota('nota-033');
         formulario.aplicarNota();
+        // El aviso de lo completado se ve dentro de la ventana, no detrás del velo.
+        fixture.detectChanges();
+        expect(documento.querySelector('dialog[open] [role="status"]')?.textContent).toContain('Se completaron 2 campo(s)');
+        expect(documento.querySelector('.formulario-033 > .exito')).toBeNull();
         formulario.odontogramaId = 'odonto-033';
         formulario.registroPlacaId = 'placa-033';
         expect(formulario.datos.motivo_consulta).toBe('Dolor dental');

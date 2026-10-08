@@ -50,6 +50,68 @@ describe('RecetaEditorComponent', () => {
         expect(dialogo?.querySelector('.ventana__pie')).not.toBeNull();
     });
 
+    function dialogo(): HTMLDialogElement | null {
+        return (fixture.nativeElement as HTMLElement).querySelector<HTMLDialogElement>('dialog[open]');
+    }
+
+    function botonPorTexto(texto: string): HTMLButtonElement | undefined {
+        return Array.from((fixture.nativeElement as HTMLElement).querySelectorAll<HTMLButtonElement>('button')).find(
+            (boton) => boton.textContent?.trim() === texto,
+        );
+    }
+
+    it('recién abierta no tiene cambios: Escape la cierra sin preguntar', () => {
+        expect(c.hayCambios()).toBe(false);
+        const cancelado = vi.fn();
+        c.cancelado.subscribe(cancelado);
+        dialogo()!.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+        fixture.detectChanges();
+        expect(cancelado).toHaveBeenCalledOnce();
+    });
+
+    it('con un medicamento escrito, Escape y Cancelar piden confirmación antes de descartar', () => {
+        const cancelado = vi.fn();
+        c.cancelado.subscribe(cancelado);
+        const nombre = dialogo()!.querySelector<HTMLInputElement>('form#form-receta input')!;
+        nombre.value = 'Medicamento sintetico';
+        nombre.dispatchEvent(new Event('input'));
+        fixture.detectChanges();
+        expect(c.hayCambios()).toBe(true);
+
+        dialogo()!.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+        fixture.detectChanges();
+        expect(cancelado).not.toHaveBeenCalled();
+        expect(dialogo()?.querySelector('[role="alertdialog"]')?.textContent).toContain('Hay cambios sin guardar');
+        botonPorTexto('Seguir editando')!.click();
+        fixture.detectChanges();
+        expect(c.lineas()[0].nombre).toBe('Medicamento sintetico');
+
+        botonPorTexto('Cancelar')!.click();
+        fixture.detectChanges();
+        expect(cancelado).not.toHaveBeenCalled();
+        botonPorTexto('Descartar cambios')!.click();
+        fixture.detectChanges();
+        expect(cancelado).toHaveBeenCalledOnce();
+        expect(dialogo()).toBeNull();
+    });
+
+    it('mientras guarda, ni la X ni Escape la cierran', () => {
+        const linea = c.lineas()[0];
+        linea.nombre = 'Medicamento sintetico';
+        linea.dosis = '1 unidad';
+        c.crear();
+        fixture.detectChanges();
+        const alta = http.expectOne(`${BASE}/historia/recetas`);
+        const cancelado = vi.fn();
+        c.cancelado.subscribe(cancelado);
+        expect(dialogo()!.querySelector<HTMLButtonElement>('.ventana__cerrar')!.disabled).toBe(true);
+        dialogo()!.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+        fixture.detectChanges();
+        expect(cancelado).not.toHaveBeenCalled();
+        expect(dialogo()).not.toBeNull();
+        alta.flush({ id: 'r-1' });
+    });
+
     it('ofrece firma propia y solo las delegaciones vigentes', () => {
         expect(c.firmante).toBe('prof-yo');
         expect(c.firmantes().map((f: {
@@ -115,6 +177,11 @@ describe('RecetaEditorComponent', () => {
         fixture.detectChanges();
         expect(c.lineas()[0].nombre).toBe('Medicamento existente');
         expect(c.indicaciones).toBe('Indicaciones actuales');
+        // Partir de la receta vigente no es un cambio; escribir el motivo sí.
+        expect(c.hayCambios()).toBe(false);
+        c.motivoVersion = 'x';
+        expect(c.hayCambios()).toBe(true);
+        c.motivoVersion = '';
 
         c.crear();
         expect(c.error()).toContain('motivo');

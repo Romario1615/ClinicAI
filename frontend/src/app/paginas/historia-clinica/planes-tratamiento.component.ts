@@ -82,6 +82,8 @@ export class PlanesTratamientoComponent {
   protected readonly cargando = signal(true);
   protected readonly guardando = signal(false);
   protected readonly error = signal('');
+  /** Por qué no se pudo añadir un procedimiento al borrador (se pinta junto al botón). */
+  protected readonly errorProcedimiento = signal('');
   /** La carga devolvió el 404 de acceso clínico: no se ofrece crear nada. */
   protected readonly sinAcceso = signal(false);
   protected readonly exito = signal('');
@@ -156,19 +158,19 @@ export class PlanesTratamientoComponent {
     const carasTexto = this.caras.toUpperCase().replace(/[\s,;]/g, '');
     const caras = carasTexto ? [...new Set(carasTexto)].join('') : null;
     if (descripcion.length < 3) {
-      this.error.set('Describe el procedimiento con al menos 3 caracteres.');
+      this.errorProcedimiento.set('Describe el procedimiento con al menos 3 caracteres.');
       return;
     }
     if (!Number.isFinite(importe) || importe < 0) {
-      this.error.set('El precio debe ser un importe válido igual o mayor que cero.');
+      this.errorProcedimiento.set('El precio debe ser un importe válido igual o mayor que cero.');
       return;
     }
     if (pieza !== null && (!Number.isInteger(pieza) || pieza < 11 || pieza > 85)) {
-      this.error.set('La pieza dental debe usar notación FDI.');
+      this.errorProcedimiento.set('La pieza dental debe usar notación FDI.');
       return;
     }
     if (caras && !/^[OMDVL]+$/.test(caras)) {
-      this.error.set('Usa caras FDI: O, M, D, V o L.');
+      this.errorProcedimiento.set('Usa caras FDI: O, M, D, V o L.');
       return;
     }
     const nuevas = [...this.procedimientos()];
@@ -187,7 +189,7 @@ export class PlanesTratamientoComponent {
     this.pieza = '';
     this.caras = '';
     this.precio = '0.00';
-    this.error.set('');
+    this.errorProcedimiento.set('');
   }
 
   protected quitarProcedimiento(indice: number): void {
@@ -274,7 +276,9 @@ export class PlanesTratamientoComponent {
     return plan.procedimientos.some((item) => item.id === accion.procedimiento.id) ? accion : null;
   }
 
+  /** No se cierra a mitad de guardado: el resultado llegaría a una ventana que ya no existe. */
   protected cerrarAccion(): void {
+    if (this.guardando()) return;
     this.accion.set(null);
   }
 
@@ -420,6 +424,10 @@ export class PlanesTratamientoComponent {
   }
 
   protected abrirFormulario(): void {
+    // Los avisos anteriores no son de este borrador: dentro de la ventana
+    // confundirían.
+    this.error.set('');
+    this.exito.set('');
     this.mostrarFormulario.set(true);
     if (this.mostrarFormulario() && this.plantillas() === null) {
       this.api.plantillasPlan().subscribe({
@@ -429,8 +437,28 @@ export class PlanesTratamientoComponent {
     }
   }
 
+  /** Cierre ya confirmado por la ventana; nunca a mitad de guardado. */
   protected cerrarFormulario(): void {
-    if (!this.guardando()) this.reiniciarFormulario();
+    if (this.guardando()) return;
+    this.reiniciarFormulario();
+    // Lo que se dijo dentro del borrador descartado no vale fuera.
+    this.error.set('');
+    this.exito.set('');
+  }
+
+  /** Hay algo escrito en el borrador que cerrar perdería. */
+  protected hayCambiosFormulario(): boolean {
+    return (
+      this.titulo.trim() !== '' ||
+      this.observaciones.trim() !== '' ||
+      this.procedimientos().length > 0 ||
+      this.descripcionProcedimiento.trim() !== '' ||
+      String(this.pieza ?? '').trim() !== '' ||
+      this.caras.trim() !== '' ||
+      Number(this.precio || 0) !== 0 ||
+      Number(this.fase) !== 1 ||
+      this.nivelSensibilidad !== 'N2'
+    );
   }
 
   /** Copia los procedimientos de la plantilla al borrador. El borrador se puede ajustar. */
@@ -480,6 +508,8 @@ export class PlanesTratamientoComponent {
     this.caras = '';
     this.precio = '0.00';
     this.fase = 1;
+    this.plantillaId = '';
+    this.errorProcedimiento.set('');
   }
 
   protected dinero(valor: string): string {

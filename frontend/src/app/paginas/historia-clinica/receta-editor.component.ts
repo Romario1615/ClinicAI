@@ -35,6 +35,46 @@ const VIAS = [
   'OTRA',
 ] as const;
 
+/** Una línea de la receta tal como la edita el formulario. */
+function aLinea(medicamento: MedicamentoNuevo): MedicamentoNuevo {
+  return {
+    nombre: medicamento.nombre,
+    dosis: medicamento.dosis,
+    via: medicamento.via,
+    concentracion: medicamento.concentracion,
+    forma: medicamento.forma,
+    cuando_sea_necesario: medicamento.cuando_sea_necesario,
+    frecuencia_horas: medicamento.frecuencia_horas,
+    duracion_dias: medicamento.duracion_dias,
+    hora_primera_toma: medicamento.hora_primera_toma,
+    instrucciones: medicamento.instrucciones,
+  };
+}
+
+/**
+ * La receta en una cadena comparable, para saber si cerrar perdería algo.
+ * Un texto vacío y un campo nulo valen lo mismo, y los espacios no cuentan.
+ */
+function huellaReceta(datos: {
+  readonly lineas: readonly MedicamentoNuevo[];
+  readonly indicaciones: string;
+  readonly nivel: string;
+  readonly motivo: string;
+  readonly firmante: string;
+}): string {
+  const normal = (valor: unknown): unknown =>
+    typeof valor === 'string' ? valor.trim() || null : valor ?? null;
+  return JSON.stringify({
+    lineas: datos.lineas.map((linea) =>
+      Object.fromEntries(Object.entries(aLinea(linea)).map(([clave, valor]) => [clave, normal(valor)])),
+    ),
+    indicaciones: datos.indicaciones.trim(),
+    nivel: datos.nivel,
+    motivo: datos.motivo.trim(),
+    firmante: datos.firmante,
+  });
+}
+
 function lineaVacia(): MedicamentoNuevo {
   return {
     nombre: '',
@@ -56,13 +96,18 @@ function lineaVacia(): MedicamentoNuevo {
   imports: [FormsModule, VentanaFlotanteComponent],
   template: `
     @if (abierta()) {
+      <!-- Mientras se guarda no se cierra; con cambios, cerrar pide
+           confirmación dentro de la ventana (Escape, la X y Cancelar). -->
       <app-ventana-flotante
+        #v
         ceja="Historia clínica"
         [titulo]="versionDe() ? 'Nueva versión de receta' : 'Nueva receta · borrador'"
         forma="centrada"
         [anchoMaximo]="1040"
         [altoCompleto]="true"
         [cierraAlPulsarFuera]="false"
+        [ocupada]="guardando()"
+        [cambiosSinGuardar]="hayCambios()"
         (cerrar)="cerrar()"
       >
     <form id="form-receta" class="editor-receta" (ngSubmit)="crear()">
@@ -149,7 +194,7 @@ function lineaVacia(): MedicamentoNuevo {
       @if (error()) { <p class="aviso-error" role="alert">{{ error() }}</p> }
     </form>
         <div class="acciones acciones--final" pie>
-          <button class="boton" type="button" [disabled]="guardando()" (click)="cerrar()">Cancelar</button>
+          <button class="boton" type="button" [disabled]="guardando()" (click)="v.solicitarCierre()">Cancelar</button>
           <button class="boton boton--principal" type="submit" form="form-receta" [disabled]="guardando()">
             {{ guardando() ? 'Guardando…' : versionDe() ? 'Firmar nueva versión' : 'Guardar borrador' }}
           </button>
@@ -207,23 +252,36 @@ export class RecetaEditorComponent {
       if (!receta) return;
       this.indicaciones = receta.indicaciones_generales ?? '';
       this.nivelSensibilidad = receta.nivel_sensibilidad;
-      this.lineas.set(receta.medicamentos.map((medicamento) => ({
-        nombre: medicamento.nombre,
-        dosis: medicamento.dosis,
-        via: medicamento.via,
-        concentracion: medicamento.concentracion,
-        forma: medicamento.forma,
-        cuando_sea_necesario: medicamento.cuando_sea_necesario,
-        frecuencia_horas: medicamento.frecuencia_horas,
-        duracion_dias: medicamento.duracion_dias,
-        hora_primera_toma: medicamento.hora_primera_toma,
-        instrucciones: medicamento.instrucciones,
-      })));
+      this.lineas.set(receta.medicamentos.map(aLinea));
     });
     this.api.delegacionesMias().subscribe({
       next: (lista) => this.delegaciones.set(lista),
       error: () => this.delegaciones.set([]),
     });
+  }
+
+  /**
+   * Hay algo escrito que cerrar perdería. Se compara con lo que el editor
+   * muestra al abrir: una línea vacía o la receta de la que parte la versión,
+   * firmada por quien tiene la sesión.
+   */
+  protected hayCambios(): boolean {
+    const origen = this.versionDe();
+    const inicial = huellaReceta({
+      lineas: origen ? origen.medicamentos : [lineaVacia()],
+      indicaciones: origen?.indicaciones_generales ?? '',
+      nivel: origen?.nivel_sensibilidad ?? 'N2',
+      motivo: '',
+      firmante: this.propio() ?? '',
+    });
+    const actual = huellaReceta({
+      lineas: this.lineas(),
+      indicaciones: this.indicaciones,
+      nivel: this.nivelSensibilidad,
+      motivo: this.motivoVersion,
+      firmante: this.firmante,
+    });
+    return actual !== inicial;
   }
 
   protected agregar(): void {
@@ -298,6 +356,7 @@ export class RecetaEditorComponent {
       });
   }
 
+  /** Cierre ya confirmado por la ventana; nunca a mitad de guardado. */
   protected cerrar(): void {
     if (this.guardando()) return;
     this.abierta.set(false);

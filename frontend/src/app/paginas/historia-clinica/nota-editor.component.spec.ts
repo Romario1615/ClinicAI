@@ -71,6 +71,91 @@ describe('NotaEditorComponent', () => {
         expect(cancelado).toHaveBeenCalledOnce();
     });
 
+    function dialogo(): HTMLDialogElement | null {
+        return (fixture.nativeElement as HTMLElement).querySelector<HTMLDialogElement>('dialog[open]');
+    }
+
+    function botonPorTexto(texto: string): HTMLButtonElement | undefined {
+        return Array.from((fixture.nativeElement as HTMLElement).querySelectorAll<HTMLButtonElement>('button')).find(
+            (boton) => boton.textContent?.trim() === texto,
+        );
+    }
+
+    function escribirSubjetivo(texto: string): void {
+        // La primera sección SOAP es «Subjetivo».
+        const campo = (fixture.nativeElement as HTMLElement).querySelectorAll<HTMLTextAreaElement>('form#form-nota textarea')[0];
+        campo.value = texto;
+        campo.dispatchEvent(new Event('input'));
+        fixture.detectChanges();
+    }
+
+    it('con algo escrito, Escape, la X y Cancelar piden confirmación y no descartan', async () => {
+        montar(null);
+        await fixture.whenStable();
+        const cancelado = vi.fn();
+        fixture.componentInstance.cancelado.subscribe(cancelado);
+        escribirSubjetivo('Refiere dolor al masticar');
+        expect(c.hayCambios()).toBe(true);
+
+        dialogo()!.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+        fixture.detectChanges();
+        expect(cancelado).not.toHaveBeenCalled();
+        expect(dialogo()?.querySelector('[role="alertdialog"]')?.textContent).toContain('Hay cambios sin guardar');
+
+        // «Seguir editando» conserva lo escrito.
+        botonPorTexto('Seguir editando')!.click();
+        fixture.detectChanges();
+        expect(dialogo()?.querySelector('[role="alertdialog"]')).toBeNull();
+        expect(c.valores.subjetivo).toBe('Refiere dolor al masticar');
+
+        // La X y el Cancelar del pie pasan por la misma confirmación.
+        dialogo()!.querySelector<HTMLButtonElement>('.ventana__cerrar')!.click();
+        fixture.detectChanges();
+        expect(cancelado).not.toHaveBeenCalled();
+        botonPorTexto('Seguir editando')!.click();
+        fixture.detectChanges();
+        botonPorTexto('Cancelar')!.click();
+        fixture.detectChanges();
+        expect(cancelado).not.toHaveBeenCalled();
+        expect(dialogo()).not.toBeNull();
+
+        // Solo «Descartar cambios» cierra.
+        botonPorTexto('Descartar cambios')!.click();
+        fixture.detectChanges();
+        expect(cancelado).toHaveBeenCalledOnce();
+        expect(dialogo()).toBeNull();
+    });
+
+    it('sin cambios, corregir una nota se cierra sin preguntar', async () => {
+        montar(NOTA);
+        await fixture.whenStable();
+        fixture.detectChanges();
+        expect(c.hayCambios()).toBe(false);
+        const cancelado = vi.fn();
+        fixture.componentInstance.cancelado.subscribe(cancelado);
+        botonPorTexto('Cancelar')!.click();
+        fixture.detectChanges();
+        expect(cancelado).toHaveBeenCalledOnce();
+    });
+
+    it('mientras guarda, la X está desactivada y Escape no cierra', () => {
+        montar(null);
+        c.valores.subjetivo = 'Texto de la nota';
+        c.guardar();
+        fixture.detectChanges();
+        const alta = http.expectOne(`${BASE}/historia/notas`);
+        const cancelado = vi.fn();
+        fixture.componentInstance.cancelado.subscribe(cancelado);
+        expect(dialogo()!.querySelector<HTMLButtonElement>('.ventana__cerrar')!.disabled).toBe(true);
+        dialogo()!.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+        fixture.detectChanges();
+        expect(cancelado).not.toHaveBeenCalled();
+        expect(dialogo()).not.toBeNull();
+        alta.flush(NOTA);
+        fixture.detectChanges();
+        expect(dialogo()).toBeNull();
+    });
+
     it('no guarda una nota vacía y no envía el autor', () => {
         montar(null);
         c.guardar();

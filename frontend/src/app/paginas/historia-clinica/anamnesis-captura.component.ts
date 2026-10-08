@@ -48,7 +48,9 @@ interface RespuestaAnamnesis {
         <div><p class="ceja"><app-icono nombre="historia" [tamano]="15" /> REGISTRO ASISTENCIAL</p><h3 id="titulo-captura-anamnesis">Anamnesis de la clínica</h3><p>Las respuestas se guardan con la versión de preguntas utilizada.</p></div>
         <button type="button" class="boton boton--pequeno" (click)="cargar()" [disabled]="cargando()">Actualizar</button>
       </header>
-      @if (error()) { <p class="captura__error" role="alert">{{ error() }}</p> }
+      <!-- Con la ventana abierta el error se pinta dentro de ella: detrás del
+           velo modal no se vería ni lo anunciaría el lector de pantalla. -->
+      @if (error() && !editorAbierto()) { <p class="captura__error" role="alert">{{ error() }}</p> }
       @if (aviso()) { <p class="captura__aviso" role="status">{{ aviso() }}</p> }
       @if (cargando()) { <p class="captura__estado" role="status">Cargando formularios y capturas…</p> }
       @else {
@@ -61,13 +63,18 @@ interface RespuestaAnamnesis {
           </div>
         }
         @if (editorAbierto()) {
+          <!-- Mientras se guarda no se cierra, y con respuestas escritas
+               cerrar pide confirmación (Escape, la X y Cancelar). -->
           <app-ventana-flotante
+            #v
             ceja="Registro asistencial"
             titulo="Registrar anamnesis"
             forma="centrada"
             [anchoMaximo]="900"
             [altoCompleto]="true"
             [cierraAlPulsarFuera]="false"
+            [ocupada]="guardando()"
+            [cambiosSinGuardar]="hayCambios()"
             (cerrar)="cerrarEditor()"
           >
           <form id="formulario-captura-anamnesis" class="formulario" (ngSubmit)="guardar()">
@@ -99,9 +106,11 @@ interface RespuestaAnamnesis {
                 }
               </div>
             }
+            <!-- Junto a las acciones: es donde se mira al pulsar «Guardar». -->
+            @if (error()) { <p class="captura__error" role="alert">{{ error() }}</p> }
           </form>
           <div pie>
-            <button class="boton" type="button" (click)="cerrarEditor()" [disabled]="guardando()">Cancelar</button>
+            <button class="boton" type="button" (click)="v.solicitarCierre()" [disabled]="guardando()">Cancelar</button>
             <button class="boton boton--principal" type="submit" form="formulario-captura-anamnesis" [disabled]="guardando() || !plantillaActual()">
               {{ guardando() ? 'Guardando…' : 'Guardar respuestas' }}
             </button>
@@ -202,6 +211,18 @@ export class AnamnesisCapturaComponent {
     this.editorAbierto.set(true);
   }
 
+  /** Hay alguna respuesta escrita o marcada que cerrar perdería. */
+  protected hayCambios(): boolean {
+    return Object.values(this.valores).some(
+      (valor) =>
+        valor !== undefined &&
+        valor !== null &&
+        !(typeof valor === 'string' && valor.trim() === '') &&
+        !(Array.isArray(valor) && valor.length === 0),
+    );
+  }
+
+  /** Cierre ya confirmado por la ventana; nunca a mitad de guardado. */
   protected cerrarEditor(): void {
     if (this.guardando()) return;
     this.editorAbierto.set(false);
@@ -236,7 +257,7 @@ export class AnamnesisCapturaComponent {
 
   protected guardar(): void {
     const plantilla = this.plantillaActual();
-    if (!plantilla || !this.puedeEscribir()) return;
+    if (!plantilla || !this.puedeEscribir() || this.guardando()) return;
     this.guardando.set(true);
     this.error.set('');
     this.aviso.set('');

@@ -16,23 +16,28 @@
     }
   </div>
 
-  <!-- Con una ventana abierta el error se muestra dentro de ella: detrás del
-       velo no lo vería nadie. -->
+  <!-- Con una ventana abierta el error y el aviso se muestran dentro de ella:
+       detrás del velo modal no los vería nadie ni los anunciaría el lector. -->
   @if (error() && !accion() && !mostrarFormulario()) {
     <p class="aviso-error" role="alert">{{ error() }}</p>
   }
-  @if (exito()) {
+  @if (exito() && !mostrarFormulario()) {
     <p class="aviso-exito" role="status">{{ exito() }}</p>
   }
 
   @if (mostrarFormulario() && puedeEditar()) {
+    <!-- Mientras se guarda no se cierra, y con algo escrito cerrar pide
+         confirmación (Escape, la X y Descartar pasan por el mismo sitio). -->
     <app-ventana-flotante
+      #v
       ceja="Planificación dental"
       titulo="Crear borrador de tratamiento"
       forma="centrada"
       [anchoMaximo]="940"
       [altoCompleto]="true"
       [cierraAlPulsarFuera]="false"
+      [ocupada]="guardando()"
+      [cambiosSinGuardar]="hayCambiosFormulario()"
       (cerrar)="cerrarFormulario()"
     >
       <form id="formulario-plan" class="editor-plan" (ngSubmit)="guardarBorrador()">
@@ -91,6 +96,11 @@
         <button class="boton" type="button" (click)="agregarProcedimiento()">
           Añadir al plan
         </button>
+        <!-- Junto al botón que lo provoca: el formulario es largo y un aviso
+             al final quedaría fuera de la vista. -->
+        @if (errorProcedimiento()) {
+          <p class="aviso-error" role="alert">{{ errorProcedimiento() }}</p>
+        }
       </div>
 
       @if (procedimientos().length) {
@@ -132,8 +142,11 @@
       @if (error()) {
         <p class="aviso-error" role="alert">{{ error() }}</p>
       }
+      @if (exito()) {
+        <p class="aviso-exito" role="status">{{ exito() }}</p>
+      }
       <div pie class="acciones-plan">
-        <button class="boton" type="button" [disabled]="guardando()" (click)="cerrarFormulario()">Descartar</button>
+        <button class="boton" type="button" [disabled]="guardando()" (click)="v.solicitarCierre()">Descartar</button>
         @if (nivelSensibilidad !== 'N3') {
           <button class="boton" type="button" [disabled]="guardando() || !procedimientos().length" (click)="guardarComoPlantilla()">
             Guardar como plantilla
@@ -286,7 +299,7 @@
               forma="centrada"
               [anchoMaximo]="560"
               [cierraAlPulsarFuera]="false"
-              [cierraConEscape]="!guardando()"
+              [ocupada]="guardando()"
               (cerrar)="cerrarAccion()"
             >
               <form [id]="'accion-plan-' + plan.id" class="accion-plan" (ngSubmit)="confirmarAccion()">

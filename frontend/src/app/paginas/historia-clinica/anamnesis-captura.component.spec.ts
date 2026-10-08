@@ -13,6 +13,14 @@ const PREGUNTAS = [
     { id: 'habitos', etiqueta: 'Hábitos', tipo: 'seleccion_multiple', obligatoria: false, ayuda: null, opciones: ['Tabaco', 'Ninguno'] },
 ];
 
+function botonConTexto(raiz: HTMLElement, texto: string): HTMLButtonElement {
+    const boton = Array.from(raiz.querySelectorAll<HTMLButtonElement>('button')).find(
+        (elemento) => elemento.textContent?.trim() === texto,
+    );
+    if (!boton) throw new Error(`No existe el botón «${texto}».`);
+    return boton;
+}
+
 describe('AnamnesisCapturaComponent', () => {
     let fixture: ComponentFixture<AnamnesisCapturaComponent>;
     let http: HttpTestingController;
@@ -110,13 +118,62 @@ describe('AnamnesisCapturaComponent', () => {
 
         const componente = fixture.componentInstance as unknown as {
             valores: Record<string, unknown>;
-            cerrarEditor(): void;
+            hayCambios(): boolean;
         };
+        expect(componente.hayCambios()).toBe(false);
         componente.valores = { motivo: 'Texto que debe descartarse' };
-        componente.cerrarEditor();
+        fixture.detectChanges();
+        expect(componente.hayCambios()).toBe(true);
+
+        // Cancelar no descarta a ciegas: pregunta dentro de la ventana.
+        botonConTexto(elemento, 'Cancelar').click();
+        fixture.detectChanges();
+        expect(elemento.querySelector('dialog[open] [role="alertdialog"]')?.textContent).toContain('Hay cambios sin guardar');
+        expect(componente.valores).toEqual({ motivo: 'Texto que debe descartarse' });
+
+        botonConTexto(elemento, 'Descartar cambios').click();
         fixture.detectChanges();
         expect(elemento.querySelector('dialog[open]')).toBeNull();
         expect(componente.valores).toEqual({});
         expect(http.match(`${BASE}/historia/pacientes/paciente-1/anamnesis/respuestas`).length).toBe(0);
+    });
+
+    it('el error del servidor se ve dentro de la ventana, no detrás del velo', () => {
+        fixture.detectChanges();
+        http.expectOne(`${BASE}/historia/pacientes/paciente-1/anamnesis/plantillas-activas`).flush([
+            { id: 'plantilla-1', nombre: 'Primera consulta', version: 2, nivel_sensibilidad: 'N2', preguntas: PREGUNTAS },
+        ]);
+        http.expectOne(`${BASE}/historia/pacientes/paciente-1/anamnesis/respuestas`).flush([]);
+        fixture.detectChanges();
+        const elemento = fixture.nativeElement as HTMLElement;
+        elemento.querySelector<HTMLButtonElement>('button[aria-haspopup="dialog"]')!.click();
+        fixture.detectChanges();
+
+        const componente = fixture.componentInstance as unknown as { valores: Record<string, unknown>; guardar(): void };
+        componente.valores = { medicacion: false };
+        componente.guardar();
+        fixture.detectChanges();
+        // Mientras guarda, la X está desactivada y Escape no cierra.
+        expect(elemento.querySelector<HTMLButtonElement>('dialog[open] .ventana__cerrar')!.disabled).toBe(true);
+        elemento
+            .querySelector('dialog[open]')!
+            .dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+        fixture.detectChanges();
+        expect(elemento.querySelector('dialog[open]')).not.toBeNull();
+
+        http
+            .expectOne((p) => p.method === 'POST' && p.url === `${BASE}/historia/pacientes/paciente-1/anamnesis/respuestas`)
+            .flush(
+                { codigo: 'DATOS_INVALIDOS', mensaje: 'La pregunta «Motivo de consulta» es obligatoria.' },
+                { status: 422, statusText: 'Unprocessable Entity' },
+            );
+        fixture.detectChanges();
+
+        const alertas = Array.from(elemento.querySelectorAll('[role="alert"]'));
+        expect(alertas).toHaveLength(1);
+        expect(alertas[0].closest('dialog[open]')).not.toBeNull();
+        expect(alertas[0].textContent).toContain('es obligatoria');
+        // Lo escrito sigue ahí para corregirlo.
+        expect(componente.valores).toEqual({ medicacion: false });
     });
 });

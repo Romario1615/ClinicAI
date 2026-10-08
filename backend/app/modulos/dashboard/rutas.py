@@ -95,6 +95,8 @@ async def analizar_local(
         estado,
         ahora=reloj.ahora(),
         incluir_metricas_pacientes=False,
+        # Ni los hallazgos locales ni el agregado para la IA leen la ocupación.
+        incluir_ocupacion=False,
     )
     return ResumenOperativoLocal(hallazgos=generar_hallazgos(datos))
 
@@ -157,6 +159,8 @@ async def analizar_con_ia(
         estado,
         ahora=reloj.ahora(),
         incluir_metricas_pacientes=False,
+        # Ni los hallazgos locales ni el agregado para la IA leen la ocupación.
+        incluir_ocupacion=False,
     )
     agregado = {
         "periodo": {"desde": filtro.desde.isoformat(), "hasta": filtro.hasta.isoformat()},

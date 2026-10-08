@@ -18,14 +18,16 @@ Lo que se verifica, mas alla de que el codigo se ejecute:
 from __future__ import annotations
 
 import uuid
-from dataclasses import replace
-from datetime import UTC, datetime, time, timedelta
+from dataclasses import dataclass, replace
+from datetime import UTC, date, datetime, time, timedelta
 from zoneinfo import ZoneInfo
 
 import pytest
+import pytest_asyncio
 import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.modelos import Clinica, Especialidad, Paciente, Profesional, Sede, Servicio
 from app.modulos.agenda.modelos import Cita, CitaHistorial, EstadoCita, OrigenCita
 from app.modulos.agenda.repositorio import RepositorioAgenda
 from app.modulos.agenda.servicios import ServicioAgenda, SolicitudReserva
@@ -1098,6 +1100,439 @@ class TestSeriesRecurrentes:
         )
 
         assert len(resultado.citas) == 2
+
+    async def test_una_cita_previa_de_otra_duracion_no_impide_la_serie(
+        self,
+        sesion,
+        servicio_agenda,
+        solicitud,
+        principal_recepcion,
+        segundo_paciente,
+        sede,
+        clinica,
+        especialidad,
+        sufijo,
+    ) -> None:
+        """La serie comprueba huecos libres, no la rejilla de turnos de cada día.
+
+        Una cita previa de 70 minutos el primer jueves desplaza la rejilla de
+        ese día (10:15, 11:00, 11:45) respecto de la de los jueves sin citas
+        (09:00, 09:45, 10:30...).  Las 10:15 de los jueves siguientes están
+        libres aunque no sean un turno ofrecido, y la serie debe aceptarse:
+        antes se rechazaba con 409 en cuanto la agenda tenía carga.
+        """
+        await _franjas_laborables(sesion, sede.id)
+        largo = Servicio(
+            clinica_id=clinica.id,
+            especialidad_id=especialidad.id,
+            nombre=f"Servicio largo {sufijo}",
+            duracion_minutos=60,
+            minutos_preparacion=10,
+        )
+        sesion.add(largo)
+        await sesion.flush()
+        await servicio_agenda.crear_cita_confirmada(
+            replace(
+                solicitud,
+                paciente_id=segundo_paciente.id,
+                servicio_id=largo.id,
+                inicio=datetime.combine(JUEVES, time(9), tzinfo=GUAYAQUIL),
+            ),
+            principal=principal_recepcion,
+        )
+        oferta = await servicio_agenda.consultar_disponibilidad(
+            principal=principal_recepcion,
+            profesional_id=solicitud.profesional_id,
+            servicio_id=solicitud.servicio_id,
+            sede_id=solicitud.sede_id,
+            desde=datetime.combine(JUEVES, time.min, tzinfo=GUAYAQUIL),
+            hasta=datetime.combine(JUEVES + timedelta(days=8), time.min, tzinfo=GUAYAQUIL),
+        )
+        ofrecidos = {t.inicio.astimezone(GUAYAQUIL).replace(tzinfo=None) for t in oferta.turnos}
+        # Precondición: la rejilla del primer jueves está desplazada.
+        assert datetime(2026, 4, 16, 10, 15) in ofrecidos
+        assert datetime(2026, 4, 23, 10, 15) not in ofrecidos
+
+        resultado = await servicio_agenda.crear_serie_confirmada(
+            replace(solicitud, inicio=datetime.combine(JUEVES, time(10, 15), tzinfo=GUAYAQUIL)),
+            principal=principal_recepcion,
+            frecuencia="SEMANAL",
+            cantidad=3,
+        )
+
+        assert [c.inicio.astimezone(GUAYAQUIL).replace(tzinfo=None) for c in resultado.citas] == [
+            datetime(2026, 4, 16, 10, 15),
+            datetime(2026, 4, 23, 10, 15),
+            datetime(2026, 4, 30, 10, 15),
+        ]
+
+    async def test_una_fecha_que_pisa_una_cita_sigue_rechazando_la_serie(
+        self,
+        sesion,
+        servicio_agenda,
+        solicitud,
+        principal_recepcion,
+        segundo_paciente,
+        sede,
+    ) -> None:
+        """La contención no relaja la ocupación: un solape parcial se rechaza."""
+        await _franjas_laborables(sesion, sede.id)
+        await servicio_agenda.crear_cita_confirmada(
+            replace(
+                solicitud,
+                paciente_id=segundo_paciente.id,
+                inicio=datetime.combine(JUEVES + timedelta(days=7), time(10, 30), tzinfo=GUAYAQUIL),
+            ),
+            principal=principal_recepcion,
+        )
+
+        with pytest.raises(TurnoNoDisponible, match="23/04/2026 10:15"):
+            await servicio_agenda.crear_serie_confirmada(
+                replace(solicitud, inicio=datetime.combine(JUEVES, time(10, 15), tzinfo=GUAYAQUIL)),
+                principal=principal_recepcion,
+                frecuencia="SEMANAL",
+                cantidad=3,
+            )
+        assert await _filas_de_serie(sesion, solicitud.paciente_id) == 0
+
+    async def test_una_fecha_fuera_de_la_franja_rechaza_la_serie(
+        self, sesion, servicio_agenda, solicitud, principal_recepcion, sede
+    ) -> None:
+        """12:30 + 40 minutos sobrepasa el cierre de las 13:00."""
+        await _franjas_laborables(sesion, sede.id)
+
+        with pytest.raises(TurnoNoDisponible, match="16/04/2026 12:30"):
+            await servicio_agenda.crear_serie_confirmada(
+                replace(solicitud, inicio=datetime.combine(JUEVES, time(12, 30), tzinfo=GUAYAQUIL)),
+                principal=principal_recepcion,
+                frecuencia="SEMANAL",
+                cantidad=2,
+            )
+        assert await _filas_de_serie(sesion, solicitud.paciente_id) == 0
+
+    async def test_una_fecha_dentro_de_la_antelacion_minima_rechaza_la_serie(
+        self, sesion, servicio_agenda, solicitud, principal_recepcion, sede
+    ) -> None:
+        """La sede exige 60 minutos de antelación; dentro de 30 está libre pero no vale."""
+        await _horario_de_la_sede(sesion, sede.id)
+
+        with pytest.raises(TurnoNoDisponible, match="no está disponible"):
+            await servicio_agenda.crear_serie_confirmada(
+                replace(solicitud, inicio=AHORA + timedelta(minutes=30)),
+                principal=principal_recepcion,
+                frecuencia="SEMANAL",
+                cantidad=2,
+            )
+        assert await _filas_de_serie(sesion, solicitud.paciente_id) == 0
+
+    async def test_mensual_con_franjas_de_lunes_a_viernes_conserva_el_dia_de_la_semana(
+        self, sesion, servicio_agenda, solicitud, principal_recepcion, sede
+    ) -> None:
+        """MENSUAL = cada cuatro semanas: siempre jueves, siempre dentro de franja.
+
+        Con «el mismo número de día» la segunda fecha sería el sábado 16/05,
+        fuera de las franjas de lunes a viernes, y la serie fallaba con 409.
+        """
+        await _franjas_laborables(sesion, sede.id)
+
+        resultado = await servicio_agenda.crear_serie_confirmada(
+            replace(solicitud, inicio=datetime.combine(JUEVES, time(10), tzinfo=GUAYAQUIL)),
+            principal=principal_recepcion,
+            frecuencia="MENSUAL",
+            cantidad=4,
+        )
+
+        locales = [cita.inicio.astimezone(GUAYAQUIL) for cita in resultado.citas]
+        assert [local.date() for local in locales] == [
+            date(2026, 4, 16),
+            date(2026, 5, 14),
+            date(2026, 6, 11),
+            date(2026, 7, 9),
+        ]
+        assert {local.isoweekday() for local in locales} == {4}
+        assert {(local.hour, local.minute) for local in locales} == {(10, 0)}
+        assert await _filas_de_serie(sesion, solicitud.paciente_id) == 4
+
+
+# ===========================================================================
+#  Recursos de otra clinica y pacientes fuera del ambito (IDOR)
+# ===========================================================================
+@dataclass(frozen=True)
+class _OtraClinica:
+    clinica: Clinica
+    sede: Sede
+    servicio: Servicio
+    profesional: Profesional
+    paciente: Paciente
+
+
+@pytest_asyncio.fixture
+async def otra_clinica(sesion: AsyncSession, sufijo: str) -> _OtraClinica:
+    """Una segunda clinica completa, con datos sinteticos."""
+    clinica = Clinica(
+        nombre=f"Clinica Ajena {sufijo}",
+        identificacion_fiscal=f"AJENA-{sufijo}",
+        zona_horaria="America/Guayaquil",
+    )
+    sesion.add(clinica)
+    await sesion.flush()
+    especialidad = Especialidad(clinica_id=clinica.id, nombre=f"Especialidad Ajena {sufijo}")
+    sede = Sede(clinica_id=clinica.id, nombre=f"Sede Ajena {sufijo}", direccion="Calle Ficticia 9")
+    paciente = Paciente(
+        clinica_id=clinica.id,
+        tipo_documento="SIN_DOCUMENTO",
+        nombre="Paciente",
+        apellido=f"De Otra Clinica {sufijo}",
+    )
+    sesion.add_all([especialidad, sede, paciente])
+    await sesion.flush()
+    servicio = Servicio(
+        clinica_id=clinica.id,
+        especialidad_id=especialidad.id,
+        nombre=f"Servicio Ajeno {sufijo}",
+        duracion_minutos=30,
+        minutos_preparacion=10,
+    )
+    profesional = Profesional(
+        clinica_id=clinica.id,
+        especialidad_id=especialidad.id,
+        nombre="Profesional",
+        apellido=f"Ajeno {sufijo}",
+    )
+    sesion.add_all([servicio, profesional])
+    await sesion.flush()
+    await _horario_de_la_sede(sesion, sede.id)
+    return _OtraClinica(clinica, sede, servicio, profesional, paciente)
+
+
+class TestRecursosDeOtraClinica:
+    """`cita` solo tiene FK simples: el servicio valida clinica y ambito.
+
+    Un recurso de otra clinica responde 404 con el mismo mensaje que uno
+    inexistente, y no se escribe ninguna fila.
+    """
+
+    @pytest.mark.parametrize("metodo", ["crear_cita_confirmada", "bloquear_turno"])
+    async def test_un_paciente_de_otra_clinica_responde_no_encontrado(
+        self,
+        sesion,
+        servicio_agenda,
+        solicitud,
+        principal_recepcion,
+        sede,
+        otra_clinica,
+        metodo,
+    ) -> None:
+        await _horario_de_la_sede(sesion, sede.id)
+
+        with pytest.raises(RecursoNoEncontrado, match="paciente"):
+            await getattr(servicio_agenda, metodo)(
+                replace(solicitud, paciente_id=otra_clinica.paciente.id),
+                principal=principal_recepcion,
+            )
+
+        assert await _citas_del_paciente(sesion, otra_clinica.paciente.id) == 0
+
+    async def test_una_serie_para_un_paciente_de_otra_clinica_no_crea_ninguna_cita(
+        self, sesion, servicio_agenda, solicitud, principal_recepcion, sede, otra_clinica
+    ) -> None:
+        await _horario_de_la_sede(sesion, sede.id)
+        solicitud_serie = await _solicitud_en_horario_disponible(
+            servicio_agenda, solicitud, principal_recepcion
+        )
+
+        with pytest.raises(RecursoNoEncontrado, match="paciente"):
+            await servicio_agenda.crear_serie_confirmada(
+                replace(solicitud_serie, paciente_id=otra_clinica.paciente.id),
+                principal=principal_recepcion,
+                frecuencia="SEMANAL",
+                cantidad=53,
+            )
+
+        assert await _filas_de_serie(sesion, otra_clinica.paciente.id) == 0
+        assert await _citas_del_paciente(sesion, otra_clinica.paciente.id) == 0
+
+    async def test_un_paciente_fuera_del_ambito_responde_no_encontrado(
+        self,
+        sesion,
+        servicio_agenda,
+        solicitud,
+        principal_paciente,
+        segundo_paciente,
+        sede,
+    ) -> None:
+        """El principal de un paciente (canal WhatsApp) solo reserva para si mismo.
+
+        `hold_slot` recibe `paciente_id` como argumento del modelo; sin esta
+        comprobacion, el agente podria apartar turnos a nombre de otro.
+        """
+        await _horario_de_la_sede(sesion, sede.id)
+        ajena = replace(solicitud, paciente_id=segundo_paciente.id)
+
+        with pytest.raises(RecursoNoEncontrado, match="paciente"):
+            await servicio_agenda.bloquear_turno(ajena, principal=principal_paciente)
+        with pytest.raises(RecursoNoEncontrado, match="paciente"):
+            await servicio_agenda.crear_serie_confirmada(
+                ajena, principal=principal_paciente, frecuencia="SEMANAL", cantidad=2
+            )
+
+        assert await _citas_del_paciente(sesion, segundo_paciente.id) == 0
+        # Para si mismo, si puede.
+        propia = await servicio_agenda.bloquear_turno(solicitud, principal=principal_paciente)
+        assert propia.cita.paciente_id == solicitud.paciente_id
+
+    async def test_paciente_ajeno_e_inexistente_responden_igual(
+        self, servicio_agenda, solicitud, principal_recepcion, otra_clinica
+    ) -> None:
+        """Si los mensajes se distinguieran, el 404 dejaria de proteger nada."""
+        with pytest.raises(RecursoNoEncontrado) as ajeno:
+            await servicio_agenda.crear_cita_confirmada(
+                replace(solicitud, paciente_id=otra_clinica.paciente.id),
+                principal=principal_recepcion,
+            )
+        with pytest.raises(RecursoNoEncontrado) as inexistente:
+            await servicio_agenda.crear_cita_confirmada(
+                replace(solicitud, paciente_id=uuid.uuid4()),
+                principal=principal_recepcion,
+            )
+
+        assert str(ajeno.value) == str(inexistente.value)
+
+    @pytest.mark.parametrize(
+        ("campo", "recurso", "texto"),
+        [
+            ("servicio_id", "servicio", "servicio"),
+            ("profesional_id", "profesional", "profesional"),
+        ],
+    )
+    async def test_servicio_o_profesional_de_otra_clinica_responde_no_encontrado(
+        self,
+        sesion,
+        servicio_agenda,
+        solicitud,
+        principal_recepcion,
+        sede,
+        otra_clinica,
+        campo,
+        recurso,
+        texto,
+    ) -> None:
+        await _horario_de_la_sede(sesion, sede.id)
+        ajeno_id = getattr(otra_clinica, recurso).id
+        ajena = replace(solicitud, **{campo: ajeno_id})
+
+        with pytest.raises(RecursoNoEncontrado, match=texto):
+            await servicio_agenda.crear_cita_confirmada(ajena, principal=principal_recepcion)
+        with pytest.raises(RecursoNoEncontrado, match=texto):
+            await servicio_agenda.crear_serie_confirmada(
+                ajena, principal=principal_recepcion, frecuencia="SEMANAL", cantidad=2
+            )
+        with pytest.raises(RecursoNoEncontrado, match=texto):
+            await servicio_agenda.consultar_disponibilidad(
+                principal=principal_recepcion,
+                profesional_id=ajena.profesional_id,
+                servicio_id=ajena.servicio_id,
+                sede_id=ajena.sede_id,
+                desde=AHORA,
+                hasta=AHORA + timedelta(days=1),
+            )
+
+        assert await _citas_del_paciente(sesion, solicitud.paciente_id) == 0
+
+    async def test_una_sede_de_otra_clinica_no_pasa_con_el_comodin_de_sedes(
+        self, sesion, servicio_agenda, solicitud, principal_recepcion, otra_clinica
+    ) -> None:
+        """«Todas las sedes» son las de su clinica, no las de cualquiera."""
+        con_comodin = replace(
+            principal_recepcion,
+            ambito=replace(principal_recepcion.ambito, todas_las_sedes=True),
+        )
+        ajena = replace(solicitud, sede_id=otra_clinica.sede.id)
+
+        with pytest.raises(RecursoNoEncontrado, match="sede"):
+            await servicio_agenda.crear_cita_confirmada(ajena, principal=con_comodin)
+        with pytest.raises(RecursoNoEncontrado, match="sede"):
+            await servicio_agenda.bloquear_turno(ajena, principal=con_comodin)
+        with pytest.raises(RecursoNoEncontrado, match="sede"):
+            await servicio_agenda.crear_serie_confirmada(
+                ajena, principal=con_comodin, frecuencia="SEMANAL", cantidad=2
+            )
+        with pytest.raises(RecursoNoEncontrado, match="sede"):
+            await servicio_agenda.consultar_disponibilidad(
+                principal=con_comodin,
+                profesional_id=solicitud.profesional_id,
+                servicio_id=solicitud.servicio_id,
+                sede_id=otra_clinica.sede.id,
+                desde=AHORA,
+                hasta=AHORA + timedelta(days=1),
+            )
+
+        assert await _citas_del_paciente(sesion, solicitud.paciente_id) == 0
+
+    async def test_reprogramar_a_un_profesional_de_otra_clinica_responde_no_encontrado(
+        self, sesion, servicio_agenda, solicitud, principal_recepcion, sede, otra_clinica
+    ) -> None:
+        await _horario_de_la_sede(sesion, sede.id)
+        creada = await servicio_agenda.crear_cita_confirmada(
+            solicitud, principal=principal_recepcion
+        )
+
+        with pytest.raises(RecursoNoEncontrado, match="profesional"):
+            await servicio_agenda.reprogramar_cita(
+                creada.cita.id,
+                nuevo_inicio=solicitud.inicio + timedelta(hours=2),
+                motivo="Cambio de profesional",
+                nuevo_profesional_id=otra_clinica.profesional.id,
+                principal=principal_recepcion,
+            )
+
+
+# Jueves 16 de abril de 2026: el dia siguiente a AHORA, laborable.
+JUEVES = date(2026, 4, 16)
+GUAYAQUIL = ZoneInfo("America/Guayaquil")
+
+
+async def _franjas_laborables(
+    sesion: AsyncSession,
+    sede_id: uuid.UUID,
+    *,
+    hora_inicio: time = time(9),
+    hora_fin: time = time(13),
+) -> None:
+    """Horario de lunes a viernes, de 09:00 a 13:00, granularidad de 15."""
+    for dia in range(1, 6):
+        await sesion.execute(
+            sa.text(
+                "INSERT INTO horario_atencion (propietario_tipo, propietario_id, "
+                "dia_semana, hora_inicio, hora_fin, granularidad_minutos) "
+                "VALUES ('SEDE', :sede, :dia, :inicio, :fin, 15)"
+            ),
+            {"sede": sede_id, "dia": dia, "inicio": hora_inicio, "fin": hora_fin},
+        )
+    await sesion.flush()
+
+
+async def _filas_de_serie(sesion: AsyncSession, paciente_id: uuid.UUID) -> int:
+    """Citas de una serie del paciente; acota por paciente para no depender del resto de la base."""
+    return int(
+        (
+            await sesion.execute(
+                sa.select(sa.func.count())
+                .select_from(Cita)
+                .where(Cita.serie_recurrente_id.is_not(None), Cita.paciente_id == paciente_id)
+            )
+        ).scalar_one()
+    )
+
+
+async def _citas_del_paciente(sesion: AsyncSession, paciente_id: uuid.UUID) -> int:
+    return int(
+        (
+            await sesion.execute(
+                sa.select(sa.func.count()).select_from(Cita).where(Cita.paciente_id == paciente_id)
+            )
+        ).scalar_one()
+    )
 
 
 async def _solicitud_en_horario_disponible(

@@ -1,9 +1,18 @@
-"""Consulta y cálculo del indicador agregado de ocupación de agenda."""
+"""Consulta y cálculo del indicador agregado de ocupación de agenda.
+
+El indicador compara el tiempo reservado con el tiempo que la agenda ofrecía
+en el periodo.  Las reglas de capacidad (horario, plantilla, pausas, feriados
+y bloqueos) son las mismas que aplica el motor de disponibilidad: si el panel
+contara como capacidad minutos que el motor no deja reservar, la ocupación
+saldría más baja que la real sin que nadie pudiera explicar por qué.
+"""
 
 from __future__ import annotations
 
 import uuid
+from bisect import bisect_right
 from collections import defaultdict
+from collections.abc import Iterable, Sequence
 from datetime import date, timedelta
 from typing import Any
 from zoneinfo import ZoneInfo
@@ -22,9 +31,14 @@ from app.modulos.agenda.disponibilidad import (
     restar,
 )
 from app.modulos.agenda.modelos import _ESTADOS_QUE_OCUPAN, BloqueoAgenda, Cita, EstadoCita
-from app.modulos.agenda.repositorio import RepositorioAgenda, _a_fecha, _a_hora
+from app.modulos.agenda.repositorio import (
+    RepositorioAgenda,
+    _a_fecha,
+    _a_hora,
+    condicion_bloqueos_aplicables,
+)
 from app.modulos.dashboard.esquemas import FiltroDashboard, ResumenOcupacionAgenda
-from app.modulos.dashboard.ocupacion import resumir_intervalos_ocupacion
+from app.modulos.dashboard.ocupacion import resumir_intervalos_ocupacion, unir_intervalos
 from app.modulos.organizacion.modelos import (
     Clinica,
     Descanso,
@@ -43,6 +57,27 @@ from app.nucleo.autorizacion import Principal
 
 ParAgenda = tuple[uuid.UUID, uuid.UUID]
 _NINGUNO = uuid.UUID(int=0)
+
+# Estados cuyo tiempo cuenta como agenda consumida en este indicador.
+#
+# No es `_ESTADOS_QUE_OCUPAN`, y no debe serlo: ese conjunto responde a «¿puede
+# otra reserva usar este hueco?» (motor de disponibilidad y restricción de
+# exclusión), por eso deja fuera lo ya terminado.  El indicador responde a
+# «¿cuánto del horario se reservó?»: una consulta atendida (COMPLETED) o a la
+# que el paciente no acudió (NO_SHOW) consumió ese tiempo igual que una
+# confirmada.  Sin ellas, cualquier periodo pasado saldría cerca del 0 %,
+# porque cerrar cada consulta es justo pasarla a uno de esos dos estados.
+# CANCELLED y PENDING no consumen tiempo: el motor tampoco los trata como
+# ocupados y el hueco queda libre para otra reserva.
+ESTADOS_OCUPACION_PANEL: frozenset[EstadoCita] = _ESTADOS_QUE_OCUPAN | {
+    EstadoCita.COMPLETED,
+    EstadoCita.NO_SHOW,
+}
+
+DETALLE_OCUPACION = (
+    "Citas activas, atendidas e inasistencias frente al horario disponible; "
+    "descuenta pausas, feriados y bloqueos."
+)
 
 
 def _filtrar_ambito(
@@ -261,18 +296,15 @@ async def _consultar_bloqueos(
     sedes: set[uuid.UUID],
     filtro: FiltroDashboard,
 ) -> list[BloqueoAgenda]:
+    # Misma condición que el motor de disponibilidad sin consultorio pedido:
+    # el panel no filtra por sala, así que un bloqueo de sala no resta
+    # capacidad (el resto de las salas de la sede sigue atendiendo).
     filas = await sesion.execute(
         select(BloqueoAgenda).where(
             BloqueoAgenda.clinica_id == principal.clinica_id,
             BloqueoAgenda.inicio < filtro.hasta,
             BloqueoAgenda.fin > filtro.desde,
-            or_(
-                BloqueoAgenda.profesional_id.in_(profesionales),
-                and_(
-                    BloqueoAgenda.profesional_id.is_(None),
-                    BloqueoAgenda.sede_id.in_(sedes),
-                ),
-            ),
+            condicion_bloqueos_aplicables(profesionales=profesionales, sedes=sedes),
         )
     )
     return list(filas.scalars())
@@ -293,7 +325,7 @@ async def _consultar_reservas(
         RepositorioAgenda(sesion)
         .consulta_autorizada(principal)
         .where(
-            Cita.estado.in_(tuple(estado.value for estado in _ESTADOS_QUE_OCUPAN)),
+            Cita.estado.in_(tuple(estado.value for estado in ESTADOS_OCUPACION_PANEL)),
             Cita.inicio < filtro.hasta,
             Cita.fin > filtro.desde,
         )
@@ -308,10 +340,16 @@ async def _consultar_reservas(
             consulta = consulta.where(Servicio.especialidad_id == especialidad_id)
         if servicio_id is not None:
             consulta = consulta.where(Cita.servicio_id == servicio_id)
+    # Solo las columnas que hacen falta, leídas de la fila y no del mapa de
+    # identidad: `fin` lo calcula un disparador, y una cita ya cargada en la
+    # sesión cuyo inicio se cambió conserva el `fin` anterior en memoria.
+    columnas = consulta.with_only_columns(
+        Cita.profesional_id, Cita.sede_id, Cita.inicio, Cita.fin, maintain_column_froms=True
+    )
     reservas: dict[uuid.UUID, list[Intervalo]] = defaultdict(list)
-    for cita in (await sesion.execute(consulta)).scalars():
-        if (cita.profesional_id, cita.sede_id) in pares:
-            reservas[cita.profesional_id].append(Intervalo(cita.inicio, cita.fin))
+    for id_profesional, id_sede, inicio, fin in (await sesion.execute(columnas)).tuples():
+        if (id_profesional, id_sede) in pares:
+            reservas[id_profesional].append(Intervalo(inicio, fin))
     return reservas
 
 
@@ -321,15 +359,58 @@ def _recortar(intervalo: Intervalo, rango: Intervalo) -> Intervalo | None:
     return Intervalo(inicio, fin) if fin > inicio else None
 
 
+class _BloqueosOrdenados:
+    """Bloqueos de una pareja profesional-sede, fusionados y ordenados.
+
+    Al estar fusionados no se solapan, así que tanto los inicios como los
+    fines quedan en orden creciente y los que tocan un día se localizan por
+    búsqueda binaria.  Recorrer en cada día todos los bloqueos del periodo
+    hacía el cálculo proporcional a pares por días por bloqueos, y con un rango
+    largo eso bloquea el bucle de eventos durante segundos.
+    """
+
+    __slots__ = ("_fines", "_intervalos")
+
+    def __init__(self, intervalos: Iterable[Intervalo]) -> None:
+        self._intervalos = unir_intervalos(intervalos)
+        self._fines = [intervalo.fin for intervalo in self._intervalos]
+
+    def que_solapan(self, ventana: Intervalo) -> list[Intervalo]:
+        indice = bisect_right(self._fines, ventana.inicio)
+        resultado: list[Intervalo] = []
+        while indice < len(self._intervalos) and self._intervalos[indice].inicio < ventana.fin:
+            resultado.append(self._intervalos[indice])
+            indice += 1
+        return resultado
+
+
+def _agrupar_bloqueos(
+    bloqueos: Iterable[BloqueoAgenda],
+) -> tuple[dict[uuid.UUID, list[Intervalo]], dict[uuid.UUID, list[Intervalo]]]:
+    """Separa una sola vez los bloqueos de profesional y los de sede completa.
+
+    Replica `condicion_bloqueos_aplicables` sin consultorio pedido: un bloqueo
+    de sala no se asigna a nadie, porque el panel no filtra por sala.
+    """
+    por_profesional: dict[uuid.UUID, list[Intervalo]] = defaultdict(list)
+    por_sede: dict[uuid.UUID, list[Intervalo]] = defaultdict(list)
+    for bloqueo in bloqueos:
+        intervalo = Intervalo(bloqueo.inicio, bloqueo.fin)
+        if bloqueo.profesional_id is not None:
+            por_profesional[bloqueo.profesional_id].append(intervalo)
+        elif bloqueo.consultorio_id is None and bloqueo.sede_id is not None:
+            por_sede[bloqueo.sede_id].append(intervalo)
+    return por_profesional, por_sede
+
+
 def _cierres_del_dia(
     *,
     dia: date,
     zona: str,
-    id_profesional: uuid.UUID,
-    id_sede: uuid.UUID,
-    descansos: list[DescansoLocal],
-    feriados: list[FeriadoLocal],
-    bloqueos: list[BloqueoAgenda],
+    ventana: Intervalo,
+    descansos: Sequence[DescansoLocal],
+    feriados: Sequence[FeriadoLocal],
+    bloqueos: _BloqueosOrdenados,
 ) -> list[Intervalo]:
     cierres = [
         ocupacion.intervalo for ocupacion in proyectar_descansos(descansos, dia=dia, zona=zona)
@@ -337,12 +418,7 @@ def _cierres_del_dia(
     cierres.extend(
         ocupacion.intervalo for ocupacion in proyectar_feriados(feriados, dia=dia, zona=zona)
     )
-    cierres.extend(
-        Intervalo(bloqueo.inicio, bloqueo.fin)
-        for bloqueo in bloqueos
-        if bloqueo.profesional_id == id_profesional
-        or (bloqueo.profesional_id is None and bloqueo.sede_id == id_sede)
-    )
+    cierres.extend(bloqueos.que_solapan(ventana))
     return cierres
 
 
@@ -359,10 +435,17 @@ def _disponibles_por_profesional(
 ) -> dict[uuid.UUID, list[Intervalo]]:
     disponibles: dict[uuid.UUID, list[Intervalo]] = defaultdict(list)
     rango = Intervalo(filtro.desde, filtro.hasta)
+    bloqueos_profesional, bloqueos_sede = _agrupar_bloqueos(bloqueos)
     for (id_profesional, id_sede), zona in pares.items():
         franjas = plantillas.get((id_profesional, id_sede)) or horarios_sede.get(id_sede, [])
         if not franjas:
             continue
+        # Lo que no depende del día se prepara una vez por pareja.
+        feriados = [*feriados_clinica, *feriados_sede.get(id_sede, [])]
+        descansos = descansos_sede.get(id_sede, [])
+        bloqueos_par = _BloqueosOrdenados(
+            [*bloqueos_profesional.get(id_profesional, ()), *bloqueos_sede.get(id_sede, ())]
+        )
         zona_info = ZoneInfo(zona)
         dia = filtro.desde.astimezone(zona_info).date() - timedelta(days=1)
         ultimo_dia = filtro.hasta.astimezone(zona_info).date() + timedelta(days=1)
@@ -373,19 +456,31 @@ def _disponibles_por_profesional(
                 if (recortado := _recortar(intervalo, rango)) is not None
             ]
             if base:
-                feriados = [*feriados_clinica, *feriados_sede.get(id_sede, [])]
                 cierres = _cierres_del_dia(
                     dia=dia,
                     zona=zona,
-                    id_profesional=id_profesional,
-                    id_sede=id_sede,
-                    descansos=descansos_sede.get(id_sede, []),
+                    ventana=Intervalo(base[0].inicio, base[-1].fin),
+                    descansos=descansos,
                     feriados=feriados,
-                    bloqueos=bloqueos,
+                    bloqueos=bloqueos_par,
                 )
                 disponibles[id_profesional].extend(restar(base, cierres))
             dia += timedelta(days=1)
     return disponibles
+
+
+def ocupacion_no_calculada() -> ResumenOcupacionAgenda:
+    """Resultado para quien pide el resumen sin necesitar la ocupación.
+
+    Los análisis local y con IA no la leen; calcularla igualmente recorre cada
+    día del periodo por profesional sin ningún resultado visible.
+    """
+    return ResumenOcupacionAgenda(
+        minutos_disponibles=None,
+        minutos_ocupados=None,
+        porcentaje=None,
+        detalle="La ocupación no se calcula en este análisis.",
+    )
 
 
 async def resumir_ocupacion_agenda(
@@ -399,7 +494,11 @@ async def resumir_ocupacion_agenda(
     servicio_id: uuid.UUID | None,
     estado: EstadoCita | None,
 ) -> ResumenOcupacionAgenda:
-    """Compara reservas activas y minutos de agenda disponibles."""
+    """Compara el tiempo reservado con los minutos de agenda disponibles.
+
+    Cuentan las citas de `ESTADOS_OCUPACION_PANEL` (activas, atendidas e
+    inasistencias), recortadas al horario disponible.
+    """
     if estado is not None:
         return ResumenOcupacionAgenda(
             minutos_disponibles=None,
@@ -466,7 +565,7 @@ async def resumir_ocupacion_agenda(
     detalle = (
         "Sin horarios configurados para calcular capacidad en este periodo."
         if capacidad == 0
-        else "Reservas activas frente al horario disponible; incluye pausas, feriados y bloqueos."
+        else DETALLE_OCUPACION
     )
     return ResumenOcupacionAgenda(
         minutos_disponibles=capacidad,

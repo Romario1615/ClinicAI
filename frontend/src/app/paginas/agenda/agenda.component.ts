@@ -168,6 +168,19 @@ const MOTIVOS: Record<string, string> = {
 const CLAVE_VISTA = 'agenda.vista';
 
 /**
+ * Citas como máximo por serie: un año de calendario en cada frecuencia.
+ *
+ * Es copia de la tabla del servidor, que es quien decide (rechaza con 422 lo
+ * que pase de aquí). Se repite para avisar antes de enviar: con 53 citas cada
+ * dos semanas la serie llegaba a dos años, y eso no lo pidió nadie.
+ */
+export const MAXIMO_CITAS_SERIE: Readonly<Record<FrecuenciaSerieCitas, number>> = {
+  SEMANAL: 53,
+  QUINCENAL: 27,
+  MENSUAL: 13,
+};
+
+/**
  * Ancho de ventana a partir del cual lo pendiente cabe en una columna fija a
  * la derecha del calendario. Por debajo, el calendario necesita todo el ancho
  * (siete días o varias columnas de profesionales) y lo pendiente se abre en
@@ -425,7 +438,7 @@ export class AgendaComponent {
 
   protected readonly puedeCrear = computed(() => this.sesion.tienePermiso(PERMISOS.citaCrear));
   protected get maximoCitasSerie(): number {
-    return this.frecuenciaSerie === 'MENSUAL' ? 13 : 53;
+    return MAXIMO_CITAS_SERIE[this.frecuenciaSerie];
   }
   protected get cantidadSerieValida(): boolean {
     return Number.isInteger(this.cantidadSerie)
@@ -579,6 +592,7 @@ export class AgendaComponent {
             : resultado.citas,
         );
         this.disponibilidad.set(resultado.disponibilidad);
+        this.ajustarReservaAbierta();
       });
     this.cargarCatalogo();
   }
@@ -705,14 +719,28 @@ export class AgendaComponent {
     });
   }
 
+  /** Cambio de día, de filtro o tras una acción: se cierra lo abierto y se recarga. */
   protected cargarAgenda(): void {
+    if (!this.sedeId() || !this.fecha()) {
+      return;
+    }
+    this.cerrarPanel();
+    this.recargarDatos();
+  }
+
+  /**
+   * Vuelve a pedir los datos del día SIN cerrar lo que esté abierto.
+   *
+   * Existe por el 409 de la reserva: cerrar la ventana ahí borraba el mensaje
+   * que dice qué fecha de la serie chocó, y lo escrito en el formulario.
+   */
+  private recargarDatos(): void {
     if (!this.sedeId() || !this.fecha()) {
       return;
     }
     this.cargandoAgenda.set(true);
     this.errorAgenda.set(null);
     this.avisoAgenda.set('');
-    this.cerrarPanel();
     this.cargarOfertasSinAvisar();
     this.cargarConsultorios();
     this.cargarRango();
@@ -918,6 +946,24 @@ export class AgendaComponent {
       this.pacientes.update((lista) => [...lista, paciente]);
     }
     this.pacienteId = paciente.id;
+  }
+
+  /**
+   * Con la reserva abierta tras un 409, la ventana deja de ofrecer las horas
+   * que ya no están libres. La hora elegida se conserva si sigue libre: en una
+   * serie el choque suele estar en otra fecha, no en la primera.
+   */
+  private ajustarReservaAbierta(): void {
+    const hueco = this.huecoElegido();
+    if (!hueco) {
+      return;
+    }
+    const libres = new Set(this.turnos().map((turno) => turno.inicio));
+    this.huecoElegido.set({ ...hueco, turnos: hueco.turnos.filter((turno) => libres.has(turno.inicio)) });
+    const elegido = this.turnoElegido();
+    if (elegido && !libres.has(elegido.inicio)) {
+      this.turnoElegido.set(null);
+    }
   }
 
   protected abrirCita(cita: Cita): void {
@@ -1186,6 +1232,11 @@ export class AgendaComponent {
   }
 
   protected cancelarReserva(): void {
+    // A mitad de guardado no se cierra: la respuesta llegaría a una ventana
+    // que ya no existe y el aviso de éxito o de choque se perdería.
+    if (this.reservando()) {
+      return;
+    }
     this.cerrarPanel();
   }
 
@@ -1236,13 +1287,15 @@ export class AgendaComponent {
           this.cargarAgenda();
         },
         error: (fallo: unknown) => {
+          const error = this.aFallo(fallo);
           this.reservando.set(false);
-          this.errorReserva.set(this.aFallo(fallo));
-          if (this.aFallo(fallo).estado === 409) {
-            // El turno se ocupó entre la consulta y el intento. Se recarga
-            // para que la lista deje de ofrecerlo: seguir mostrándolo haría
-            // que se reintentara con el mismo resultado.
-            this.cargarAgenda();
+          this.errorReserva.set(error);
+          if (error.estado === 409) {
+            // El turno (o una fecha de la serie) se ocupó entre la consulta y
+            // el intento. Se recargan los datos para dejar de ofrecerlo, pero
+            // la ventana sigue abierta con el mensaje y lo ya escrito: cerrarla
+            // era perder en silencio qué fecha chocó.
+            this.recargarDatos();
           }
         },
       });

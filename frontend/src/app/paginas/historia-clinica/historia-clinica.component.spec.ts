@@ -382,6 +382,80 @@ describe('HistoriaClinicaComponent', () => {
         });
     });
 
+    describe('foco al cerrar los editores (WCAG 2.4.3)', () => {
+        beforeEach(() =>
+            conPermisos('historia_clinica.leer', 'historia_clinica.escribir', 'receta.leer', 'receta.crear', 'receta.confirmar'),
+        );
+
+        function raiz(): HTMLElement {
+            return fixture.nativeElement as HTMLElement;
+        }
+
+        /** Pulsa como lo haría una persona: el puntero baja y después llega el clic. */
+        function pulsar(selector: string): void {
+            const boton = raiz().querySelector<HTMLButtonElement>(selector);
+            expect(boton, selector).not.toBeNull();
+            boton!.focus();
+            boton!.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));
+            boton!.click();
+            fixture.detectChanges();
+        }
+
+        async function cerrarConEscape(): Promise<void> {
+            const dialogo = raiz().querySelector('dialog[open]');
+            expect(dialogo).not.toBeNull();
+            dialogo!.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+            fixture.detectChanges();
+            // La ventana busca el botón recreado cuando Angular termina de pintar.
+            await new Promise((resolver) => setTimeout(resolver));
+            expect(raiz().querySelector('dialog[open]')).toBeNull();
+        }
+
+        it('«Nueva nota» y «Corregir» de una nota concreta recuperan el foco', async () => {
+            listar();
+            abrir({
+                notas: [
+                    nota({ id: 'n-a', raiz_id: 'raiz-a', motivo_consulta: 'Primera [SINTETICO]' }),
+                    nota({ id: 'n-b', raiz_id: 'raiz-b', motivo_consulta: 'Segunda [SINTETICO]', creado_en: '2026-09-11T14:00:00Z' }),
+                ],
+                recetas: [],
+            });
+
+            pulsar('#historia-nueva-nota');
+            expect(raiz().querySelector('dialog[open]')?.getAttribute('aria-label')).toBe('Nueva nota de evolución');
+            await cerrarConEscape();
+            expect(document.activeElement?.id).toBe('historia-nueva-nota');
+
+            // Hay dos «Corregir» con el mismo texto: el foco vuelve al de ESA nota.
+            pulsar('#historia-corregir-raiz-b');
+            expect(raiz().querySelector('dialog[open]')?.getAttribute('aria-label')).toBe('Corregir nota · versión nueva');
+            await cerrarConEscape();
+            expect(document.activeElement?.id).toBe('historia-corregir-raiz-b');
+        });
+
+        it('«Nueva receta» y «Crear nueva versión» recuperan el foco', async () => {
+            listar();
+            abrir({ notas: [], recetas: [receta()] });
+            const componente = fixture.componentInstance as unknown as { pestana: { set(valor: string): void } };
+            componente.pestana.set('recetas');
+            fixture.detectChanges();
+
+            pulsar('#historia-nueva-receta');
+            http.expectOne(`${BASE}/profesionales/delegaciones/mias`).flush([]);
+            fixture.detectChanges();
+            expect(raiz().querySelector('dialog[open]')?.getAttribute('aria-label')).toBe('Nueva receta · borrador');
+            await cerrarConEscape();
+            expect(document.activeElement?.id).toBe('historia-nueva-receta');
+
+            pulsar('#historia-version-receta-rec-1');
+            http.expectOne(`${BASE}/profesionales/delegaciones/mias`).flush([]);
+            fixture.detectChanges();
+            expect(raiz().querySelector('dialog[open]')?.getAttribute('aria-label')).toBe('Nueva versión de receta');
+            await cerrarConEscape();
+            expect(document.activeElement?.id).toBe('historia-version-receta-rec-1');
+        });
+    });
+
     it('volver al listado limpia la historia mostrada', () => {
         conPermisos('historia_clinica.leer', 'receta.leer');
         listar();
