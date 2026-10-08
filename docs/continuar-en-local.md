@@ -108,19 +108,42 @@ trabajo»):
 * Ejemplos terminados: Pacientes (`a2ae137`), Agenda, Lista de espera e
   Historia clínica (`d8f3794`).
 
-Pantallas pendientes de adaptar:
+Adaptadas en la rama `claude/pantallas-sin-scroll` (2026-10-08), medidas con
+datos sintéticos en los ocho tamaños: sin desplazamiento de la página de
+1920×1080 a 1024×768 y sin desborde horizontal en 768×1024, 390×844 y 360×740.
+Alto previo a 1366×768 entre paréntesis.
 
-* Panel (unos 3700 px de alto a 1366×768; repartir en pestañas, con
-  `perfil-pacientes` ya separado por ti).
-* Configuración (perfil, integraciones e IA, horarios y feriados,
-  disponibilidad, bloqueos, sedes, anamnesis), Catálogo y Equipo.
-* Conocimiento, Medicamentos y Conversaciones.
-* Usuarios, Plataforma (unos 5000 px; dos listas en columnas), Delegaciones,
-  Seguridad y Automatizaciones (unos 3200 px).
-* Pagos, Gastos y caja (separar «Libro» y «Flujo de caja») y Promociones.
-* Ayuda, Asistente y Agente demo (historial desplazable, campo de escribir
-  siempre visible) y las páginas públicas (solo adaptación, sin requisito de
-  no desplazamiento).
+| Pantalla | Cómo queda |
+|---|---|
+| Panel (3832 px) | Seis pestañas: Resumen, Hoy, Cifras del periodo, Distribución, Pacientes y Seguimiento; periodo y filtros compartidos arriba. |
+| Pagos (5317 px) | Pestañas Pagos y Cargos y saldos; exportación CSV en ventana flotante. |
+| Equipo (5019 px) | Lista en rejilla dentro de su tarjeta. |
+| Conocimiento (3458 px) | Documentos y consulta en dos columnas; accesos del documento y flujo 1→4 (en pantallas bajas) en ventanas flotantes. |
+| Automatizaciones (3375 px) | Una pestaña por fase de la atención. |
+| Catálogo (3058 px) | Pestañas Sedes y consultorios, Especialidades, Módulos de historia, Servicios y Profesionales. |
+| Ayuda (2800 px) | Rol y límites a un lado, tareas al otro. |
+| Conversaciones, Asistente, Agente demo | Historial desplazable; campo de escribir y acciones siempre visibles. |
+| Configuración (hasta 1636 px) | Cada sección desplaza en su marco; Integraciones compacta. |
+| Usuarios (6514 px) | Pestañas propias con filtros fijos y tabla desplazable. |
+
+Correcciones de paso en esas pantallas: la ventana no se cierra durante el
+guardado en Equipo, Catálogo, Automatizaciones y Accesos del documento
+(hallazgo 32, salvo los diálogos de reserva de la agenda); un `<main>` anidado
+en Conversaciones; el título de Conocimiento ilegible; la barra de secciones
+de Configuración que desbordaba la página a 768 px.
+
+Siguen pendientes:
+
+* Plataforma (superadministración), Delegaciones, Seguridad, Promociones,
+  Gastos y caja y Medicamentos: no se midieron con un rol que las alcance.
+* La pantalla de Analítica que está en curso en `main`.
+* Las páginas públicas (solo adaptación).
+* Automatizar estas mediciones en
+  `pruebas-e2e/escenarios/15-pantallas-trabajo.spec.ts`.
+* En la batería completa de Vitest, la primera prueba de
+  `panel.component.spec.ts` supera el límite de 5 s (en solitario pasa en
+  menos de 1 s): coste de compilar el panel con 94 archivos en paralelo.
+  Falta decidir si se acota el montaje de la prueba o se ajusta el límite.
 
 ---
 
