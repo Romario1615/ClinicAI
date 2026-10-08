@@ -25,6 +25,7 @@ interface Mensaje { autor: 'Usted' | 'Asistente'; texto: string; respuesta?: Res
 @Component({
   selector: 'app-agente-demo', standalone: true,
   imports: [FormsModule, SelectorPacienteComponent, InsigniaEstadoComponent, CargandoComponent],
+  host: { class: 'pantalla' },
   templateUrl: './agente-demo.component.html', changeDetection: ChangeDetectionStrategy.Eager,
  styleUrl: './agente-demo.component.scss',
 })

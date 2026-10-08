@@ -1,4 +1,5 @@
-:host { display: block; max-width: 1100px; margin: 0 auto; }
+/* La clase pantalla del host reparte el alto; aquí solo se acota el ancho. */
+:host { width: 100%; max-width: 1100px; margin: 0 auto; }
 .introduccion { max-width: 80ch; color: var(--texto-suave); margin-bottom: 24px; }
 .modo { background: var(--aviso-fondo); color: var(--aviso); border: 1px solid currentColor; border-radius: 24px; padding: 6px 14px; font-size: .9rem; }
 fieldset { border: 0; padding: 0; margin: 0; min-width: 0; }
@@ -15,3 +16,19 @@ fieldset { border: 0; padding: 0; margin: 0; min-width: 0; }
 .compositor { margin-top: 24px; padding-top: 20px; border-top: 1px solid var(--borde); }
 .compositor textarea { min-height: 80px; }
 @media (max-width: 540px) { .tarjeta { padding: 16px; } .mensaje { max-width: 100%; } .horarios .boton { width: 100%; } }
+
+/* Pantalla de trabajo: los mensajes llenan el alto y desplazan; acciones y
+   campo de escribir quedan siempre a la vista. */
+.conversacion > :not(.mensajes) { flex: none; }
+@media (min-width: 821px) and (min-height: 600px) {
+  .introduccion { margin-bottom: 0; }
+  .editor-demo { flex: 0 1 auto; min-height: 0; }
+  .conversacion { flex: 1 1 0; }
+  .mensajes { max-height: none; margin-bottom: var(--espacio-3); }
+  .compositor { margin-top: var(--espacio-3); padding-top: var(--espacio-3); }
+  .compositor textarea { min-height: 56px; }
+  /* Quién a un lado, cuándo al otro: el botón de iniciar queda a la vista. */
+  .preparar { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--espacio-5); align-items: start; }
+  .preparar__cuando .formulario-demo { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .editor-demo h2 { margin-top: 0; }
+}

@@ -1,25 +1,28 @@
-<header class="cabecera-pagina">
+<header class="cabecera-pagina pantalla__fijo">
   <div><p class="ceja">DEMOSTRACIÓN LOCAL</p><h1>Agente demo</h1></div>
   <img class="modulo-cabecera__imagen" src="/images/conversacion-asistente.png" alt="" aria-hidden="true" loading="lazy" />
   <span class="modo">{{ modo === 'simulado' ? 'Modo simulado' : 'Modelo configurado' }}</span>
 </header>
-<p class="introduccion">Pruebe una conversación administrativa con datos sintéticos. Las reservas se guardan en la agenda local. Esta pantalla no envía mensajes de WhatsApp.</p>
+<p class="introduccion pantalla__fijo">Pruebe una conversación administrativa con datos sintéticos. Las reservas se guardan en la agenda local. Esta pantalla no envía mensajes de WhatsApp.</p>
 
 @if (cargando()) {
-  <app-cargando mensaje="Preparando la demostración…" />
+  <app-cargando class="pantalla__fijo" mensaje="Preparando la demostración…" />
 } @else {
-  @if (error()) { <p class="aviso-error" role="alert">{{ error() }}</p> }
+  @if (error()) { <p class="aviso-error pantalla__fijo" role="alert">{{ error() }}</p> }
   @if (!sesionId()) {
-    <section class="tarjeta editor-demo" aria-labelledby="preparar-demo">
+    <section class="tarjeta editor-demo desplazable" tabindex="0" aria-labelledby="preparar-demo">
       <h2 id="preparar-demo">Prepare una conversación</h2>
       <form (ngSubmit)="iniciar()">
-        <fieldset [disabled]="ocupado()">
+        <fieldset class="preparar" [disabled]="ocupado()">
+          <div class="preparar__quien">
           <label>Asistente<select name="modo" [(ngModel)]="modo">
             <option value="simulado">Simulador local (sin conexión externa)</option>
             <option value="configurado">Modelo configurado en el servidor</option>
           </select></label>
           <p class="ayuda-demo">El simulador sigue un guion. El modelo configurado puede enviar la conversación sintética al proveedor contratado.</p>
           <app-selector-paciente (seleccion)="paciente.set($event)" />
+          </div>
+          <div class="preparar__cuando">
           <div class="formulario-demo">
             <label>Sede<select name="sede" [ngModel]="sedeId()" (ngModelChange)="sedeId.set($event); cambiarSeleccion()" required>
               @for (s of sedes(); track s.id) { <option [value]="s.id">{{ s.nombre }}</option> }
@@ -35,17 +38,18 @@
           <p class="ayuda-demo">Se consultarán siete días en la zona {{ zona() }}.</p>
           @if (!profesionales().length && !cargandoProfesionales()) { <p>No hay profesionales disponibles para esta sede y servicio.</p> }
           <button class="boton boton--principal" type="submit" [disabled]="!paciente() || !profesionalId || !fecha || ocupado() || cargandoProfesionales()">{{ ocupado() ? 'Iniciando…' : 'Iniciar simulación' }}</button>
+          </div>
         </fieldset>
       </form>
       @if (error()) { <button class="boton" type="button" (click)="cargar()" [disabled]="ocupado()">Recargar catálogo</button> }
     </section>
   } @else {
-    <section class="tarjeta conversacion" aria-labelledby="conversacion-demo">
+    <section class="tarjeta tarjeta--llena conversacion" aria-labelledby="conversacion-demo">
       <div class="cabecera-pagina">
         <div><h2 id="conversacion-demo">{{ paciente()?.nombre }} {{ paciente()?.apellido }}</h2><small>Horarios en {{ zona() }}</small></div>
         <button class="boton" type="button" (click)="nueva()" [disabled]="ocupado()">Nueva simulación</button>
       </div>
-      <div class="mensajes" role="log" aria-label="Conversación simulada" aria-live="polite">
+      <div class="mensajes desplazable" role="log" aria-label="Conversación simulada" aria-live="polite" tabindex="0">
         @for (mensaje of mensajes(); track $index) {
           <article class="mensaje" [class.mensaje--propio]="mensaje.autor === 'Usted'">
             <strong>{{ mensaje.autor }}</strong><p>{{ mensaje.texto }}</p>

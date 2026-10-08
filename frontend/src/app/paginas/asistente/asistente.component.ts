@@ -42,8 +42,9 @@ interface Turno {
   selector: 'app-asistente',
   standalone: true,
   imports: [FormsModule, RouterLink, SelectorPacienteComponent, IconoComponent],
+  host: { class: 'pantalla' },
   template: `
-    <header class="modulo-cabecera">
+    <header class="modulo-cabecera pantalla__fijo">
       <div class="modulo-cabecera__texto">
         <p class="ceja"><app-icono nombre="asistente-clinico" [tamano]="17" /> ASISTENTE DEL EQUIPO</p>
         <h1>Asistente</h1>
@@ -51,7 +52,7 @@ interface Turno {
       </div>
     </header>
 
-    <div class="asistente">
+    <div class="asistente pantalla__columnas">
       <aside class="asistente__contexto" aria-label="Paciente de la conversación">
         <h2>Paciente</h2>
         @if (paciente(); as p) {
@@ -66,7 +67,7 @@ interface Turno {
       </aside>
 
       <section class="asistente__chat" aria-label="Conversación con el asistente">
-        <div class="mensajes" role="log" aria-live="polite" #registro>
+        <div class="mensajes desplazable" role="log" aria-live="polite" tabindex="0" #registro>
           @for (turno of turnos(); track $index) {
             <article class="mensaje" [class.mensaje--usted]="turno.autor === 'usted'">
               <p>{{ turno.texto }}</p>
@@ -143,7 +144,7 @@ interface Turno {
       from { transform: translate3d(-2%, 0, 0) scale(.97); opacity: .55; }
       to { transform: translate3d(2%, 1%, 0) scale(1.04); opacity: .9; }
     }
-    .asistente { display: grid; grid-template-columns: minmax(220px, 300px) 1fr; gap: var(--espacio-4); align-items: start; }
+    .asistente { --pantalla-columnas: minmax(220px, 300px) minmax(0, 1fr); gap: var(--espacio-4); align-items: start; }
     .asistente__contexto, .asistente__chat { padding: var(--espacio-4); border: 1px solid var(--borde);
       border-radius: var(--radio); background: var(--superficie); }
     .asistente__contexto h2 { margin: 0 0 var(--espacio-2); font-size: 1rem; }
@@ -171,6 +172,18 @@ interface Turno {
     }
     @media (prefers-reduced-motion: reduce) {
       .modulo-cabecera, .modulo-cabecera::after { animation: none; }
+    }
+    /* Pantalla de trabajo: el historial llena el alto y desplaza; las
+       sugerencias y el campo de escribir quedan siempre a la vista. */
+    .asistente__chat { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+    .asistente__chat > :not(.mensajes) { flex: none; }
+    @media (min-width: 821px) and (min-height: 600px) {
+      .asistente { align-items: stretch; }
+      .modulo-cabecera { min-height: 0; padding: var(--espacio-3) var(--espacio-5); }
+      .modulo-cabecera h1 { margin: 0 0 2px; font-size: 1.45rem; }
+      .modulo-cabecera p:last-child { font-size: .88rem; }
+      .asistente__contexto { min-height: 0; overflow: auto; }
+      .mensajes { max-height: none; align-content: start; }
     }
   `,
 })
