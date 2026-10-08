@@ -344,13 +344,15 @@ class TestDespachador:
         que hizo la automatizacion sin tener que reconstruirlo de los mensajes.
         """
         await despachar("get_patient_appointments", {"paciente_id": str(paciente.id)}, contexto)
+        # Se acota al paciente de la prueba: la base de desarrollo guarda
+        # invocaciones reales posteriores al reloj fijo de la prueba.
         tipo = (
             await sesion.execute(
                 sa.text(
-                    "SELECT actor_tipo FROM auditoria WHERE accion = :a "
+                    "SELECT actor_tipo FROM auditoria WHERE accion = :a AND paciente_id = :p "
                     "ORDER BY ocurrido_en DESC LIMIT 1"
                 ),
-                {"a": AccionAuditada.HERRAMIENTA_INVOCADA.value},
+                {"a": AccionAuditada.HERRAMIENTA_INVOCADA.value, "p": paciente.id},
             )
         ).scalar_one()
         assert tipo == TipoActor.AGENTE_IA.value

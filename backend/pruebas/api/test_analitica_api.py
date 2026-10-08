@@ -78,7 +78,12 @@ async def test_analitica_aprende_solo_historia_completa(
     assert all(p["fecha"] < "2026-04-15" for p in k["citas"]["historia"])
     assert all(p["fecha"] >= "2026-04-15" for p in k["citas"]["prediccion"])
     assert not any("paciente_id" in x for x in datos["kpis"])
-    captura = (await sesion.execute(select(CapturaIndicadores))).scalar_one()
+    # Acotado a la clínica de la prueba: la base de desarrollo guarda otras capturas.
+    captura = (
+        await sesion.execute(
+            select(CapturaIndicadores).where(CapturaIndicadores.clinica_id == clinica.id)
+        )
+    ).scalar_one()
     assert captura.actor_id == usuario.id and captura.clinica_id == clinica.id
     assert "agenda.citas_proximos_7_dias" in captura.valores
     assert "estado.agenda.citas_proximos_7_dias" in k

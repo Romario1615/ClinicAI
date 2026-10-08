@@ -238,7 +238,9 @@ async def test_reservar_confirmar_y_reprogramar(
     horarios = await decir(cliente, hilo, acceso, "Buscar horarios")
     assert horarios.status_code == 200 and horarios.json()["datos"]["turnos"], horarios.text
     propuesta = (await decir(cliente, hilo, acceso, "1")).json()["propuesta"]
-    assert (await sesion.execute(select(func.count(Cita.id)))).scalar_one() == 0
+    # Proponer no reserva: el profesional de la prueba sigue sin citas.
+    citas_del_profesional = select(func.count(Cita.id)).where(Cita.profesional_id == profesional.id)
+    assert (await sesion.execute(citas_del_profesional)).scalar_one() == 0
     apartada = await confirmar(cliente, hilo, acceso, propuesta)
     assert apartada.status_code == 200, apartada.text
     id_cita = uuid.UUID(apartada.json()["datos"]["cita_id"])
@@ -329,6 +331,7 @@ async def test_resumen_local_relacion_asistencial_y_no_cache_clinico(
         await sesion.execute(
             select(ClaveIdempotencia).where(
                 ClaveIdempotencia.alcance == "agente_paciente.mensaje",
+                ClaveIdempotencia.clinica_id == clinica.id,
                 ClaveIdempotencia.estado == "COMPLETADA",
             )
         )

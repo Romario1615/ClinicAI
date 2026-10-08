@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import struct
+import uuid
 import zlib
 from datetime import date, timedelta
 
@@ -831,5 +832,12 @@ async def test_vencimientos_se_fijan_una_vez_y_filtran_saldo_realmente_pendiente
     assert sin_vencidos.status_code == 200
     assert sin_vencidos.json() == {"elementos": [], "total": 0}
 
-    acciones = list((await sesion.execute(sa.select(Auditoria.accion))).scalars())
+    # Solo las del cargo de la prueba: la base de desarrollo guarda otras.
+    acciones = list(
+        (
+            await sesion.execute(
+                sa.select(Auditoria.accion).where(Auditoria.entidad_id == uuid.UUID(cargo_id))
+            )
+        ).scalars()
+    )
     assert acciones.count(AccionAuditada.CARGO_PAGO_VENCIMIENTO_FIJADO.value) == 1
