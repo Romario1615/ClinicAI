@@ -17,6 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.mensajeria.adaptadores import AdaptadorSandbox, RegistroCanales
 from app.mensajeria.servicios import ResumenProceso, ServicioOutbox
+from app.modulos.agenda.modelos import Cita
 from app.modulos.documentos.modelos import EntregaDocumento, RegistroPaciente
 from app.modulos.historia.modelos import Receta
 from app.modulos.odontologia.modelos import PlanTratamiento, ProcedimientoPlan
@@ -705,3 +706,64 @@ async def test_worker_solo_entrega_documento_valido_y_consentido(
         assert resumen.descartados == 1
         assert not canal.enviados
         assert mensaje.estado == "DESCARTADO"
+
+
+async def test_contextos_del_profesional_solo_ofrecen_sus_citas(
+    cliente: AsyncClient,
+    api: str,
+    acceso: dict[str, str],
+    sesion: AsyncSession,
+    clinica: Clinica,
+    sede: Sede,
+    paciente: Paciente,
+    profesional: Profesional,
+    especialidad: Especialidad,
+    servicio,
+    reloj: RelojFijo,
+    sufijo: str,
+) -> None:
+    """La ficha no ofrece como referencia una cita que el profesional no puede usar.
+
+    Crear un registro solo admite citas propias del profesional; si la lista
+    incluyera las de un colega, elegirla terminaría en un 404 al guardar.
+    """
+    colega = Profesional(
+        clinica_id=clinica.id,
+        especialidad_id=especialidad.id,
+        nombre="Colega",
+        apellido="Sintético",
+        numero_registro_profesional=f"REG-COLEGA-{sufijo}",
+    )
+    sesion.add(colega)
+    await sesion.flush()
+    propias, ajenas = [], []
+    for indice, (autor, destino) in enumerate(((profesional, propias), (colega, ajenas))):
+        cita = Cita(
+            clinica_id=clinica.id,
+            sede_id=sede.id,
+            paciente_id=paciente.id,
+            profesional_id=autor.id,
+            servicio_id=servicio.id,
+            inicio=reloj.ahora() - timedelta(days=3 + indice),
+            duracion_minutos=30,
+            minutos_preparacion=0,
+            estado="COMPLETED",
+            origen="PANEL",
+        )
+        sesion.add(cita)
+        await sesion.flush()
+        destino.append(str(cita.id))
+
+    r = await cliente.get(f"{api}/pacientes/{paciente.id}/contextos-atencion", headers=acceso)
+    assert r.status_code == 200, r.text
+    ids = {c["id"] for c in r.json()}
+    assert set(propias) <= ids
+    assert not ids & set(ajenas)
+
+    # Y la propia sirve de referencia al guardar.
+    creado = await cliente.post(
+        f"{api}/historia/pacientes/{paciente.id}/registros",
+        json={**nuevo(especialidad, sede), "cita_id": propias[0], "sede_id": None},
+        headers=acceso,
+    )
+    assert creado.status_code == 201, creado.text

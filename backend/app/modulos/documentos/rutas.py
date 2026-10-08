@@ -86,6 +86,11 @@ async def contextos(
         .order_by(Cita.inicio.desc(), Cita.id)
         .limit(100)
     )
+    # Un profesional solo puede documentar sobre sus propias citas (la misma
+    # regla que aplica el alta de registros): ofrecer las de un colega acabaría
+    # en un 404 al guardar.
+    if principal.profesional_id is not None:
+        consulta = consulta.where(Cita.profesional_id == principal.profesional_id)
     filas = await sesion.execute(consulta)
     return [
         ContextoAtencion(
