@@ -158,11 +158,14 @@ async def cargar_clinico(
     """
     if await _ya_sembrado(sesion, clinica_id):
         local = await _asegurar_historico_acceso_local(sesion, clinica_id=clinica_id, reloj=reloj)
-        tomas = await _sembrar_caso_adherencia(sesion, clinica_id=clinica_id, reloj=reloj)
+        adherencia = await _sembrar_caso_adherencia(sesion, clinica_id=clinica_id, reloj=reloj)
         return ResumenClinico(
             notas=local.notas,
             correcciones=local.correcciones,
-            tomas=tomas,
+            recetas=adherencia.recetas,
+            confirmadas=adherencia.confirmadas,
+            suspendidas=adherencia.suspendidas,
+            tomas=adherencia.tomas,
         )
 
     parejas = await _parejas(sesion, clinica_id)
@@ -184,12 +187,15 @@ async def cargar_clinico(
         )
 
     local = await _asegurar_historico_acceso_local(sesion, clinica_id=clinica_id, reloj=reloj)
-    tomas = await _sembrar_caso_adherencia(sesion, clinica_id=clinica_id, reloj=reloj)
+    adherencia = await _sembrar_caso_adherencia(sesion, clinica_id=clinica_id, reloj=reloj)
     return _con(
         resumen,
         notas=resumen.notas + local.notas,
         correcciones=resumen.correcciones + local.correcciones,
-        tomas=resumen.tomas + tomas,
+        recetas=resumen.recetas + adherencia.recetas,
+        confirmadas=resumen.confirmadas + adherencia.confirmadas,
+        suspendidas=resumen.suspendidas + adherencia.suspendidas,
+        tomas=resumen.tomas + adherencia.tomas,
     )
 
 
@@ -256,7 +262,7 @@ async def _asegurar_historico_acceso_local(
 
 async def _sembrar_caso_adherencia(
     sesion: AsyncSession, *, clinica_id: uuid.UUID, reloj: Reloj
-) -> int:
+) -> ResumenClinico:
     """Deja una pauta sintetica con tomas pasadas para ejercitar el aviso.
 
     La receta se crea dos dias antes mediante el servicio de dominio, no con
@@ -265,7 +271,7 @@ async def _sembrar_caso_adherencia(
     """
     pareja = await _pareja_profesional_acceso_local(sesion, clinica_id)
     if pareja is None:
-        return 0
+        return ResumenClinico()
     paciente_id, profesional_id = pareja
 
     existentes = await sesion.execute(
@@ -281,13 +287,14 @@ async def _sembrar_caso_adherencia(
         receta.paciente_id == paciente_id and receta.profesional_id == profesional_id
         for receta in recetas_existentes
     ):
-        return 0
+        return ResumenClinico()
 
     reloj_historico = RelojFijo(reloj.ahora() - timedelta(days=2))
     servicio = ServicioHistoria(sesion, RepositorioHistoria(sesion), reloj_historico)
     # Si una version anterior del sembrador dejó el caso bajo otra pareja,
     # suspenderla por la capa de dominio antes de crear el caso en el ámbito
     # del profesional de acceso local. Se conserva toda la historia.
+    suspendidas = 0
     for receta in recetas_existentes:
         if receta.estado != "CONFIRMADA":
             continue
@@ -296,6 +303,7 @@ async def _sembrar_caso_adherencia(
             principal=_principal_sembrador(clinica_id, receta.profesional_id),
             motivo=f"Reubicacion del escenario sintetico {MARCA}.",
         )
+        suspendidas += 1
     principal = _principal_sembrador(clinica_id, profesional_id)
     creada = await servicio.crear_receta(
         principal=principal,
@@ -314,11 +322,13 @@ async def _sembrar_caso_adherencia(
         indicaciones_generales=f"Escenario sintetico de adherencia {MARCA}.",
     )
     if creada.receta is None:
-        return 0
+        return ResumenClinico(suspendidas=suspendidas)
     confirmacion = await servicio.confirmar_receta(
         creada.receta.id, principal=principal, profesional_id=profesional_id
     )
-    return confirmacion.tomas_generadas
+    return ResumenClinico(
+        recetas=1, confirmadas=1, suspendidas=suspendidas, tomas=confirmacion.tomas_generadas
+    )
 
 
 async def _pareja_profesional_acceso_local(

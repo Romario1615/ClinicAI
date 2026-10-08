@@ -164,6 +164,75 @@ avance de `main` al resultado revisado. El stash antiguo queda como copia local
 de respaldo, ya integrado en revisiones anteriores; no se reaplica encima del
 trabajo actual.
 
+## Faciograma visible y documentos desde la ficha
+
+### Hallazgo en la instalación local
+
+El profesional del acceso local usa Odontología. Sus módulos de historia eran
+odontograma, periodoncia, planes e imágenes; el faciograma no estaba habilitado.
+El gráfico existía dentro de Atención y documentos y no tenía pestaña directa.
+Administración lo habilitó mediante la configuración versionada existente,
+conservando los cuatro módulos y los permisos del rol. Esa configuración vive
+en la BD local: otras clínicas deben habilitarlo para su propia especialidad.
+
+La ficha ahora ofrece Faciograma y Documentos y PDF con atajos desde el resumen.
+La selección de cita se conserva entre las tres vistas de atención y propaga
+su sede/especialidad. La pestaña inicial solo se selecciona si está autorizada.
+En móvil, las pestañas se desplazan horizontalmente. Se revisaron las pantallas
+de los tres roles operativos en el navegador contra los servicios 4200/8000;
+no se escribieron registros clínicos en desarrollo.
+
+### Pruebas ejecutadas
+
+| Comprobación | Resultado |
+|---|---|
+| Frontend | 635/635 en 89 archivos, 54,16 s |
+| Cobertura frontend | Sentencias 86,19 %; ramas 73,62 %; funciones 81,46 %; líneas 88,65 % |
+| Lint y build | Aprobados; 463,02 kB iniciales y sin avisos de presupuesto |
+| Chromium completo | 67/67 en 7,7 minutos; seis roles y axe en las 22 rutas |
+| Faciograma en la ficha | Alta, corrección v2, anulación v3, historial, cita conservada, PDF y escritorio/móvil; axe sin incidencias |
+| Documentos con la API final | 4/4 en 46,3 s; presupuestos, cotizaciones y recetas, PDF y solicitudes sandbox |
+| PDF abiertos con pypdf | Faciograma: dos páginas; presupuesto, cotización y receta: una página cada uno; texto extraíble |
+| Backend focalizado | 73/73 en 55,19 s con ENTORNO=desarrollo del ejecutor de CI |
+| Resumen de semillas | 2/2 unitarias: incluye receta, confirmación, suspensión y tomas adicionales |
+| Copia de receta N3 | 2/2 API en 3,41 s: conserva sensibilidad solicitada, rechaza edición y deniega WhatsApp |
+| Backend global nuevo | En ejecución, en otra BD exclusiva, sin llamadas a proveedores |
+| Ruff, formato y mypy | Aprobados; 419 archivos formateados y 229 fuentes tipadas |
+
+La primera corrida Chromium dio 66 aprobadas y una aserción fallida: la prueba
+buscaba «Recetas» con nombre exacto cuando existía un borrador y el nombre era
+«Recetas 1». El recorrido con teclado funcionaba. Se hizo estable el selector,
+se comprobó junto al faciograma (2/2) y se repitió toda la suite sin reintentos.
+
+Se descubrió que emitir como N3 una receta originalmente N2 reducía la copia a
+N2. Dos casos reprodujeron ese fallo; ahora se conserva el nivel más restrictivo.
+La copia no permite edición directa (422); la corrección parte de la receta
+original. Las corridas globales anteriores se detuvieron para incorporar la
+corrección y su contrato correcto; no se cuentan como aprobadas ni como cobertura.
+
+### Diferencias encontradas en CI
+
+La [corrida 37716853153](https://github.com/Romario1615/ClinicAI/actions/runs/37716853153)
+del commit `6702084` terminó con fallos. Frontend, calidad estática, dependencias
+y detección de secretos pasaron. Se corrigieron estas causas:
+
+- Imágenes: el ejecutor no pudo resolver `trivy-action@0.28.0`. Se fija la
+  [publicación oficial v0.36.0](https://github.com/aquasecurity/trivy-action/releases/tag/v0.36.0)
+  al commit `ed142fd0673e97e23eac54620cfb913e5ce36c25`, comprobando su etiqueta firmada.
+- Pruebas locales del agente: CI configura ENTORNO=desarrollo; la aplicación
+  aislada de API ahora declara local y proveedores simulados explícitos. Las
+  restricciones de entorno de la aplicación real se conservan.
+- Semillas: la receta extra del acceso local no entraba en el resumen; se
+  contabilizan receta, confirmación, suspensión y tomas sin cambiar los datos clínicos.
+
+La nueva corrida remota aún no se declara aprobada. Los logs, PDF y capturas
+están en `tmp/qa-20261007/` (excluido de Git): `frontend-ficha-final.log`,
+`e2e-completo-ficha-repeticion.log`, `e2e-documentos-api-final.log`,
+`backend-ci-focalizado.log`, `receta-sensible-final.log`,
+`backend-ficha-regresion-definitiva.log`, `local-faciograma.png`,
+`local-documentos.png`, `local-usuarios.png`, `local-clinicas.png` y
+`faciograma-{1440,768,390}.png`.
+
 ## Comandos de la revisión anterior
 
 ```powershell

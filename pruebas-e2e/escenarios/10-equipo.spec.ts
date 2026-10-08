@@ -48,10 +48,27 @@ test('administración crea, edita y desactiva un perfil profesional', async ({ p
   await altaAcceso.getByLabel('Contraseña inicial').fill('Inicial!Segura123');
   await altaAcceso.locator('.opciones .opcion').filter({ hasText: /^Profesional/ }).locator('input').check();
   await altaAcceso.getByLabel('Perfil profesional').selectOption({ label: `${nombre} Pruebas` });
+  const perfilId = await altaAcceso.getByLabel('Perfil profesional').inputValue();
   await altaAcceso.getByRole('button', { name: 'Crear cuenta y dar acceso' }).click();
   await expect(page.locator('.exito[role="status"]')).toContainText('Cuenta creada y acceso concedido.');
   const cuenta = page.locator('tbody tr').filter({ hasText: `profesional-${sufijo}@example.invalid` });
   await expect(cuenta).toContainText('Profesional');
+  await cuenta.getByRole('button', { name: 'Editar datos', exact: true }).click();
+  const datos = page.getByRole('dialog', { name: 'Editar usuario', exact: true });
+  await datos.getByLabel('Nombre', { exact: true }).fill(`Cuenta editada ${sufijo}`);
+  await datos.getByRole('button', { name: 'Guardar cambios' }).click();
+  await expect(cuenta).toContainText(`Cuenta editada ${sufijo}`);
+  await expect(cuenta).toContainText('Profesional');
+  await cuenta.getByRole('button', { name: 'Quitar acceso', exact: true }).click();
+  await page.getByRole('dialog', { name: 'Quitar el acceso', exact: true }).getByRole('button', { name: 'Quitar acceso', exact: true }).click();
+  await page.getByRole('checkbox', { name: 'Mostrar cuentas sin acceso' }).check();
+  await expect(cuenta).toContainText('Sin acceso');
+  await cuenta.getByRole('button', { name: 'Restaurar acceso', exact: true }).click();
+  await expect(cuenta).toContainText('Con acceso');
+  await cuenta.getByRole('button', { name: 'Gestionar accesos', exact: true }).click();
+  const accesos = page.getByRole('dialog', { name: `Cuenta editada ${sufijo} Profesional`, exact: true });
+  await expect(accesos.getByLabel('Perfil profesional')).toHaveValue(perfilId);
+  await accesos.getByRole('button', { name: 'Cancelar' }).click();
 
   await page.getByRole('navigation', { name: 'Secciones' })
     .getByRole('link', { name: 'Equipo clínico' }).click();

@@ -18,7 +18,9 @@ administración y atención clínica y el historial de los registros.
    reversible. Desactivar una clínica o cuenta revoca sesiones y bloquea el
    acceso. La plataforma gestiona clínicas; administración gestiona cuentas de
    su clínica. Las cuentas de superadministración están protegidas.
-2. La ficha incluye **Atención y documentos**. Elegir una cita fija sede y
+2. La ficha incluye **Atención y documentos**, **Faciograma** y **Documentos y PDF**.
+   Las dos últimas tienen acceso directo y atajos desde el resumen; la cita
+   seleccionada se conserva al cambiar entre las tres pestañas. Elegir una cita fija sede y
    especialidad; el backend valida ambas contra la cita autorizada del paciente.
    La historia completa conserva sus permisos, relación asistencial y módulos.
    Agenda y Pagos reciben el contexto de la cita.
@@ -40,6 +42,8 @@ administración y atención clínica y el historial de los registros.
 6. Una receta PDF solo procede de una receta confirmada existente: copia el
    firmante y la pauta registrados. No admite cambiar medicamentos desde el
    editor de documentos. Suspender la receta invalida su descarga y sus enlaces.
+   Su clasificación conserva N3 si lo tiene la receta o se solicita para la
+   copia; emitir una receta N2 como documento N3 no reduce esa protección.
 7. WhatsApp envía una notificación genérica con enlace privado, nunca el PDF
    clínico como adjunto abierto. Requiere `DOCUMENTOS_WHATSAPP` vigente y
    confirmación explícita del destinatario. Enlaces de 1 a 30 días, token aleatorio

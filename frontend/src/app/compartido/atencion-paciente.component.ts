@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, computed, effect, inject, input, OnInit, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, effect, inject, input, OnInit, output, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { HistoriaClinicaComponent } from '../paginas/historia-clinica/historia-clinica.component';
@@ -25,7 +25,7 @@ export interface ContextoAtencion { id: string; inicio: string; estado: string; 
     </section>
     @if (!cargando() && !error() && puedeVerClinico() && especialidadDisponible()) {
       @for (contexto of contextoVista(); track contexto) {
-      <app-historia-clinica class="historia-embebida" [pacienteInicial]="pacienteId()" [citaContexto]="elegida()?.id ?? null" [sedeContexto]="elegida()?.sede_id ?? null" [embebida]="true" />
+      <app-historia-clinica class="historia-embebida" [pacienteInicial]="pacienteId()" [citaContexto]="elegida()?.id ?? null" [sedeContexto]="elegida()?.sede_id ?? null" [moduloInicial]="moduloInicial()" [embebida]="true" />
       }
     } @else if (!puedeVerClinico()) { <p>Su rol permite gestionar los datos administrativos de esta atención.</p> }
   `,
@@ -38,6 +38,8 @@ export class AtencionPacienteComponent implements OnInit {
   private readonly especialidades = inject(EspecialidadHistoriaService);
   readonly pacienteId = input.required<string>();
   readonly citaInicial = input<string | null>(null);
+  readonly moduloInicial = input<'faciograma' | 'documentos' | null>(null);
+  readonly cambioCita = output<ContextoAtencion | null>();
   protected readonly citas = signal<ContextoAtencion[]>([]);
   protected readonly elegida = signal<ContextoAtencion | null>(null);
   protected readonly error = signal('');
@@ -64,6 +66,7 @@ export class AtencionPacienteComponent implements OnInit {
     const cita = this.citas().find(c => c.id === id) ?? null;
     this.error.set(id && !cita ? 'La cita solicitada no está disponible en su ámbito. Seleccione otra atención.' : '');
     this.elegida.set(cita);
+    if (!id || cita) this.cambioCita.emit(cita);
     if (cita && this.especialidades.disponibles().some(e => e.id === cita.especialidad_id)) this.especialidades.elegir(cita.especialidad_id);
   }
   protected especialidadDisponible(): boolean { return !this.elegida() || this.especialidades.disponibles().some(e => e.id === this.elegida()!.especialidad_id); }

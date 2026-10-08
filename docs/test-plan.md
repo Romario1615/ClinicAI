@@ -1,5 +1,26 @@
 # Plan de pruebas
 
+## Faciograma visible y documentos desde la ficha (2026-10-07)
+
+Frontend **635/635**, lint y build aprobados; cobertura 86,19 % sentencias,
+73,62 % ramas, 81,46 % funciones y 88,65 % líneas. Chromium **67/67 en 7,7 minutos**:
+pestañas directas, cita conservada, faciograma versionado/anulado y visible a
+1440/768/390 px, axe en su ficha y en las 22 rutas, presupuesto/cotización/receta
+con PDF real y entrega sandbox. La prueba de equipo también edita identidad,
+quita/restaura acceso y comprueba que no se pierde el perfil profesional.
+
+La API de desarrollo 8000/4200 se verificó mediante navegador sin escrituras
+clínicas. El administrador habilitó el módulo facial para su especialidad
+odontológica mediante la API versionada. Las escrituras del navegador se
+hacen en la base E2E exclusiva. Los cuatro recorridos de documentos se repitieron
+con la API reiniciada y la corrección de N3: **4/4 en 46,3 s**.
+
+Backend: **73/73** de las rutas locales/RAG, semillas y manuales con el entorno
+de CI; **2/2** unitarias del conteo de recetas de semillas; **2/2** API para
+copias sensibles de recetas. Las regresiones nuevas se reprodujeron fallando
+antes del arreglo. La corrida global posterior está en ejecución en otra BD
+temporal, con proveedores mock/sandbox. [Informe y estado de CI](verificacion-2026-10-07.md#faciograma-visible-y-documentos-desde-la-ficha).
+
 ## CRUD, faciograma y documentos (2026-10-07)
 
 La ampliación añade regresiones de clínica/cuenta, versionado y anulación de

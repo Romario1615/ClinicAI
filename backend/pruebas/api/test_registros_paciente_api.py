@@ -256,6 +256,74 @@ async def test_receta_pdf_solo_confirmada_y_rechaza_suspension(
     assert (await cliente.get(f"{ruta}/{r.json()['id']}/pdf", headers=acceso)).status_code == 404
 
 
+@pytest.mark.parametrize("versionar", [False, True])
+async def test_receta_pdf_conserva_clasificacion_sensible_del_documento(
+    cliente,
+    api,
+    acceso,
+    especialidad,
+    sede,
+    paciente,
+    sesion,
+    clinica,
+    profesional,
+    reloj,
+    usuario,
+    versionar,
+):
+    await conceder_permisos(
+        sesion, usuario, clinica, "historia_clinica.leer_sensible", sedes=(sede.id,)
+    )
+    receta = await _receta(sesion, clinica, paciente, profesional, reloj)
+    ruta = f"{api}/historia/pacientes/{paciente.id}/registros"
+    primera = await cliente.post(
+        ruta,
+        json=nuevo(
+            especialidad,
+            sede,
+            tipo="RECETA",
+            receta_id=str(receta.id),
+            partidas=[],
+            nivel_sensibilidad="N3",
+        ),
+        headers=acceso,
+    )
+    assert primera.status_code == 201, primera.text
+    registro = primera.json()
+    assert registro["nivel_sensibilidad"] == "N3"
+    if versionar:
+        segunda = await cliente.post(
+            ruta,
+            json=nuevo(
+                especialidad,
+                sede,
+                tipo="RECETA",
+                receta_id=str(receta.id),
+                partidas=[],
+                nivel_sensibilidad="N2",
+                raiz_id=registro["raiz_id"],
+                version_base=1,
+            ),
+            headers=acceso,
+        )
+        # La copia de receta se corrige desde la receta original, nunca con
+        # una edicion del documento que pueda alterar su pauta o clasificacion.
+        assert segunda.status_code == 422, segunda.text
+        listado = await cliente.get(
+            ruta, params={"especialidad_id": str(especialidad.id)}, headers=acceso
+        )
+        assert (
+            next(f for f in listado.json() if f["id"] == registro["id"])["nivel_sensibilidad"]
+            == "N3"
+        )
+    entrega = await cliente.post(
+        f"{ruta}/{registro['id']}/whatsapp",
+        json={"clave_idempotencia": str(uuid.uuid4()), "identidad_destinatario_confirmada": True},
+        headers=acceso,
+    )
+    assert entrega.status_code == 403, entrega.text
+
+
 @pytest.mark.parametrize("accion", ["listar", "crear", "anular", "pdf", "whatsapp"])
 async def test_rutas_exigen_sesion(
     cliente: AsyncClient,

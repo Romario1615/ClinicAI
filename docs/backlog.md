@@ -7,6 +7,22 @@ que se indique explícitamente que la Verificación es manual.
 
 Estado: `pendiente` · `en curso` · `hecho` · `bloqueado`
 
+## Revisión de los pedidos de registros y documentos (2026-10-07)
+
+| Pedido | Estado y acceso |
+|---|---|
+| CRUD de clínicas | Implementado y probado en navegador: Superadministrador → Clínicas → crear, consultar, editar, desactivar/reactivar. La baja conserva las referencias. |
+| CRUD de usuarios | Implementado y probado en navegador: Administración → Usuarios y roles → crear, consultar, Editar datos, Gestionar accesos, Quitar/Restaurar acceso. Conserva el perfil profesional y el rol al editar identidad. Superadministración también gestiona las cuentas de cada clínica. |
+| Atención desde la ficha según la cita | Implementada: la cita fija sede/especialidad; Atención y documentos integra la historia completa y enlaces a Agenda/Pagos. Cambiar entre sus pestañas directas conserva la cita seleccionada. |
+| Faciograma | Implementado: 23 zonas interactivas, seguimiento manual, versiones, anulación, historial y PDF gráfico. Pestaña directa en la ficha. Se habilitó en la especialidad odontológica del acceso local; otras clínicas lo configuran desde Catálogo. |
+| PDF de presupuesto, cotización y receta | Implementado: archivo real generado por el servidor, importes decimales y receta confirmada con su pauta y firmante. También desde los planes dentales. |
+| Entrega por WhatsApp | Flujo privado con consentimiento y verificación de identidad, probado en sandbox. La entrega real con Meta sigue pendiente de configuración y prueba. |
+| Manuales por rol | Actualizados en Ayuda con los accesos directos y la selección de la atención; se conserva un manual diferente por rol. |
+
+Esto verifica los registros solicitados. El inventario de pendientes de otras
+especialidades, facturación e inventario sigue detallado en las fases siguientes.
+Evidencia: [informe](verificacion-2026-10-07.md#faciograma-visible-y-documentos-desde-la-ficha).
+
 ---
 
 ## Fase 0 — Análisis y fundación

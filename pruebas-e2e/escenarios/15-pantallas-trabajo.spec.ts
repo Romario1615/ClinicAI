@@ -75,10 +75,11 @@ test('las pestañas clínicas cambian con flechas, Inicio y Fin y conservan su p
   const evolucion = page.getByRole('tab', { name: 'Evolución', exact: true });
   await evolucion.focus();
   await page.keyboard.press('ArrowRight');
-  const recetas = page.getByRole('tab', { name: 'Recetas', exact: true });
+  // La cantidad de borradores puede llegar después de abrir la historia.
+  const recetas = page.getByRole('tab', { name: /^Recetas(?: \d+)?$/ });
   await expect(recetas).toBeFocused();
   await expect(recetas).toHaveAttribute('aria-selected', 'true');
-  await expect(page.getByRole('tabpanel', { name: 'Recetas', exact: true })).toBeVisible();
+  await expect(page.getByRole('tabpanel', { name: /^Recetas(?: \d+)?$/ })).toBeVisible();
   await page.keyboard.press('End');
   await expect(page.getByRole('tab', { name: 'Planes', exact: true })).toBeFocused();
   await expect(page.getByRole('tabpanel', { name: 'Planes', exact: true })).toBeVisible();

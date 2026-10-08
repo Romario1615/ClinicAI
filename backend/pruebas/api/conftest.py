@@ -149,6 +149,9 @@ def configuracion() -> Configuracion:
     # Las credenciales personales de .env nunca convierten una regresion
     # local en llamadas pagadas o envios a proveedores externos.
     return Configuracion(
+        # Las rutas de simulacion solo existen en local. El entorno del
+        # ejecutor de CI no debe cambiar el contrato de esta aplicacion aislada.
+        entorno="local",
         proveedor_llm="mock",
         proveedor_embeddings="mock",
         modo_whatsapp="sandbox",

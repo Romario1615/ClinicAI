@@ -285,7 +285,7 @@ describe('FichaPacienteComponent con permisos clínicos', () => {
         const claves = c.pestanas().map((p: {
             clave: string;
         }) => p.clave);
-        expect(claves).toEqual(['resumen', 'citas', 'contacto', 'atencion', 'historia', 'odontograma', 'planes']);
+        expect(claves).toEqual(['resumen', 'citas', 'contacto', 'atencion', 'historia', 'odontograma', 'documentos', 'planes']);
         expect((fixture.nativeElement as HTMLElement).textContent).toContain('Información clínica');
         expect((fixture.nativeElement as HTMLElement).textContent).not.toContain('su rol no los alcanza');
 
@@ -333,6 +333,30 @@ describe('FichaPacienteComponent con permisos clínicos', () => {
         expect(texto).not.toContain('no existe');
     });
 
+    it('ofrece el faciograma junto al odontograma cuando está habilitado en la especialidad', () => {
+        const especialidades = TestBed.inject(EspecialidadHistoriaService);
+        especialidades.disponibles.set([{ ...ODONTOLOGIA_SINTETICA, modulos: [...ODONTOLOGIA_SINTETICA.modulos, 'faciograma'] }]);
+        fixture.detectChanges();
+        const pestañas = [...(fixture.nativeElement as HTMLElement).querySelectorAll('[role="tab"]')].map(p => p.textContent?.trim());
+        expect(pestañas).toContain('Faciograma');
+        expect(pestañas).toContain('Documentos y PDF');
+        expect(c.accesosClinicos().find((p: {clave: string}) => p.clave === 'faciograma')?.detalle).toContain('rostro');
+        c.accesoClinico.set(false);
+        expect(c.pestanas().some((p: {clave: string}) => p.clave === 'faciograma' || p.clave === 'documentos')).toBe(false);
+    });
+
+    it('conserva la cita seleccionada entre atención, faciograma y documentos', () => {
+        fixture.componentRef.setInput('citaInicial', 'cita-inicial');
+        expect(c.citaParaAtencion()).toBe('cita-inicial');
+        c.citaElegidaId.set('cita-seleccionada');
+        for (const pestaña of ['atencion', 'faciograma', 'documentos']) {
+            c.elegir(pestaña);
+            expect(c.citaParaAtencion()).toBe('cita-seleccionada');
+        }
+        c.citaElegidaId.set(null);
+        expect(c.citaParaAtencion()).toBeNull();
+    });
+
     it('al revisar desde otra especialidad cambia sus módulos y vuelve a pedir las notas', () => {
         const especialidades = TestBed.inject(EspecialidadHistoriaService);
         especialidades.disponibles.set([
@@ -347,7 +371,7 @@ describe('FichaPacienteComponent con permisos clínicos', () => {
         // Sin odontograma ni planes en dermatología; la pestaña abierta se cierra.
         expect(c.pestanas().map((p: {
             clave: string;
-        }) => p.clave)).toEqual(['resumen', 'citas', 'contacto', 'atencion', 'historia']);
+        }) => p.clave)).toEqual(['resumen', 'citas', 'contacto', 'atencion', 'historia', 'documentos']);
         expect(c.pestana()).toBe('resumen');
 
         c.elegir('historia');
