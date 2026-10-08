@@ -610,28 +610,29 @@ async def resumir(
             estado=None,
         )
         atenciones = consulta_atenciones.subquery()
-        primeras_atenciones = (
-            select(atenciones.c.paciente_id, func.min(atenciones.c.inicio).label("primera"))
-            .group_by(atenciones.c.paciente_id)
-            .subquery()
-        )
         pacientes_atendidos_en_periodo = (
             select(atenciones.c.paciente_id)
             .where(atenciones.c.inicio >= filtro.desde, atenciones.c.inicio < filtro.hasta)
             .distinct()
             .subquery()
         )
+        # Nuevo = sin ninguna atención completada antes del periodo. Se pregunta
+        # por cada paciente del periodo (índice paciente_id, inicio) en lugar de
+        # calcular la primera atención de toda la historia de la clínica, que
+        # recorría la tabla entera de citas en cada carga del panel.
+        atendido_antes = (
+            consulta_atenciones.where(
+                Cita.paciente_id == pacientes_atendidos_en_periodo.c.paciente_id,
+                Cita.inicio < filtro.desde,
+            )
+            .exists()
+            .correlate(pacientes_atendidos_en_periodo)
+        )
         conteo_pacientes = await sesion.execute(
             select(
-                func.count().filter(primeras_atenciones.c.primera >= filtro.desde),
-                func.count().filter(primeras_atenciones.c.primera < filtro.desde),
-            ).select_from(
-                primeras_atenciones.join(
-                    pacientes_atendidos_en_periodo,
-                    pacientes_atendidos_en_periodo.c.paciente_id
-                    == primeras_atenciones.c.paciente_id,
-                )
-            )
+                func.count().filter(~atendido_antes),
+                func.count().filter(atendido_antes),
+            ).select_from(pacientes_atendidos_en_periodo)
         )
         pacientes_nuevos, pacientes_recurrentes = (int(valor) for valor in conteo_pacientes.one())
         (

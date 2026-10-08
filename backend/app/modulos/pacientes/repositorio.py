@@ -29,7 +29,7 @@ from __future__ import annotations
 import uuid
 from typing import Any
 
-from sqlalchemy import Select, func, or_, select
+from sqlalchemy import Select, func, literal_column, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modulos.pacientes.modelos import Paciente
@@ -127,16 +127,19 @@ class RepositorioPacientes:
                 # busca mientras se teclea, y un error por cada letra seria
                 # ruido.
                 return None
-            patron = f"%{limpio}%"
-            consulta = consulta.where(
-                or_(
-                    Paciente.nombre.ilike(patron),
-                    Paciente.apellido.ilike(patron),
-                    # Se usa `ilike` con parametro enlazado, nunca
-                    # concatenacion de cadenas: el termino llega del usuario.
-                    func.concat(Paciente.nombre, " ", Paciente.apellido).ilike(patron),
-                )
+            # Una sola expresion, la del indice trigram
+            # `ix_paciente_nombre_completo_trgm`: el nombre y el apellido son
+            # subcadenas de ella, asi que equivale a buscar en los tres. Debe
+            # coincidir con la del indice (`||` y el espacio literal, no
+            # `concat()` ni un parametro), o el planificador no lo usa.
+            # El escape trata `%` y `_` del usuario como texto: si no, «%%%»
+            # devolveria a todos los pacientes. El termino va siempre como
+            # parametro enlazado, nunca concatenado en el SQL.
+            nombre_completo = Paciente.nombre.op("||")(literal_column("' '")).op("||")(
+                Paciente.apellido
             )
+            literal = limpio.replace("\\", "\\\\").replace("%", r"\%").replace("_", r"\_")
+            consulta = consulta.where(nombre_completo.ilike(f"%{literal}%", escape="\\"))
 
         return consulta
 

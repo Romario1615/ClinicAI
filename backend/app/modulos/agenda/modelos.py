@@ -359,6 +359,25 @@ class Cita(Base, MezclaIdentificador, MezclaAuditoria):
             "expira_en",
             postgresql_where=text("estado = 'HELD'"),
         ),
+        # Sala de espera y cancelaciones del día: el panel las consulta por
+        # rango de llegada o de cancelación, y sin índice recorría toda la
+        # historia de citas. Parciales: solo cuentan las filas con valor.
+        Index(
+            "ix_cita_llegada",
+            "clinica_id",
+            "llegada_en",
+            postgresql_where=text("llegada_en IS NOT NULL"),
+        ),
+        Index(
+            "ix_cita_cancelada",
+            "clinica_id",
+            "cancelada_en",
+            postgresql_where=text("cancelada_en IS NOT NULL"),
+        ),
+        # Solapamiento con una ventana (`inicio < hasta AND fin > desde`): el
+        # índice por inicio solo acota por arriba y recorría toda la historia;
+        # `fin > desde` deja fuera casi todo lo ya terminado.
+        Index("ix_cita_clinica_fin", "clinica_id", "fin"),
     )
 
     @property

@@ -764,6 +764,35 @@ class TestPacientes:
         assert cuerpo["total"] >= 1
         assert cuerpo["termino_ignorado"] is False
 
+    async def test_la_busqueda_cruza_nombre_y_apellido_y_no_acepta_comodines(
+        self,
+        cliente: AsyncClient,
+        api: str,
+        sesion: AsyncSession,
+        usuario: Usuario,
+        clinica: Clinica,
+        paciente: Paciente,
+    ) -> None:
+        """Una sola expresión indexada cubre nombre, apellido y nombre completo.
+
+        `%` y `_` del usuario se buscan como texto: si actuaran de comodín,
+        «%%%» devolvería a todos los pacientes de la clínica.
+        """
+        await conceder_permisos(sesion, usuario, clinica, "paciente.leer_administrativo")
+        cabeceras = await cabecera_bearer(cliente, usuario, clinica)
+
+        async def ids(termino: str) -> list[str]:
+            r = await cliente.get(
+                _ruta(api, "/pacientes/"), headers=cabeceras, params={"termino": termino}
+            )
+            assert r.status_code == 200, r.text
+            return [p["id"] for p in r.json()["elementos"]]
+
+        for termino in ("paciente", "DE PRUEBA", "ente De Pru"):
+            assert str(paciente.id) in await ids(termino), termino
+        assert await ids("%%%") == []
+        assert await ids("___") == []
+
     async def test_un_termino_demasiado_corto_se_ignora_y_se_avisa(
         self,
         cliente: AsyncClient,

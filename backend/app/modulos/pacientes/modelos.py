@@ -155,6 +155,15 @@ class Paciente(Base, MezclaIdentificador, MezclaAuditoria, MezclaAnulacion):
             postgresql_where=text("telefono_whatsapp IS NOT NULL"),
         ),
         Index("ix_paciente_apellido", "clinica_id", "apellido", "nombre"),
+        # Busqueda por nombre (`ILIKE '%termino%'`): sin trigramas recorria la
+        # tabla entera. La expresion debe ser la misma que usa el repositorio.
+        Index(
+            "ix_paciente_nombre_completo_trgm",
+            text("(nombre || ' ' || apellido) gin_trgm_ops"),
+            postgresql_using="gin",
+        ),
+        # Altas por periodo (cohortes de registro del panel).
+        Index("ix_paciente_creado", "clinica_id", "creado_en"),
         CheckConstraint(
             "nivel_verificacion IN ('NO_VERIFICADO', 'TELEFONO', 'DOCUMENTO', 'PRESENCIAL')",
             name="nivel_verificacion_valido",
