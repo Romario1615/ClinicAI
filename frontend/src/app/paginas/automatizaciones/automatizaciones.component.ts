@@ -18,6 +18,7 @@ import { FalloApi } from '../../nucleo/servicios/api.service';
 import { PERMISOS } from '../../nucleo/servicios/configuracion';
 import { SesionService } from '../../nucleo/servicios/sesion.service';
 import { VentanaFlotanteComponent } from '../../compartido/ventana-flotante.component';
+import { PestanasComponent, type OpcionPestana } from '../../compartido/pestanas.component';
 
 export interface Automatizacion {
   readonly codigo: string;
@@ -45,11 +46,11 @@ const FASES: readonly { clave: string; titulo: string; ayuda: string }[] = [
 
 @Component({
   selector: 'app-automatizaciones',
-  host: { tabindex: '0', role: 'region', 'aria-label': 'Automatizaciones de la clínica' },
+  host: { class: 'pantalla', role: 'region', 'aria-label': 'Automatizaciones de la clínica' },
   standalone: true,
-  imports: [FormsModule, VentanaFlotanteComponent, IconoComponent],
+  imports: [FormsModule, VentanaFlotanteComponent, IconoComponent, PestanasComponent],
   template: `
-    <header class="encabezado">
+    <header class="encabezado pantalla__fijo">
       <div class="encabezado__contenido">
         <p class="ceja"><app-icono nombre="automatizaciones" [tamano]="16" /> ADMINISTRACIÓN</p>
         <h1>Automatizaciones</h1>
@@ -61,20 +62,33 @@ const FASES: readonly { clave: string; titulo: string; ayuda: string }[] = [
       <img class="encabezado__ilustracion" src="/images/automatizaciones-flujo-clinica.svg" alt="" aria-hidden="true" width="640" height="400" fetchpriority="low" />
     </header>
 
-    @if (error()) { <p class="aviso-error" role="alert">{{ error() }}</p> }
-    @if (aviso()) { <p class="exito" role="status">{{ aviso() }}</p> }
+    @if (error()) { <p class="aviso-error pantalla__fijo" role="alert">{{ error() }}</p> }
+    @if (aviso()) { <p class="exito pantalla__fijo" role="status">{{ aviso() }}</p> }
 
     @if (cargando()) {
-      <p role="status" class="vacio">Cargando automatizaciones…</p>
+      <p role="status" class="vacio pantalla__fijo">Cargando automatizaciones…</p>
     }
 
+    <!-- Una fase a la vez, en el orden en que le pasan al paciente. Las demás
+         se ocultan sin desmontarse. -->
+    @if (grupos().length > 1) {
+      <app-pestanas class="pantalla__fijo" grupo="automatizaciones" etiqueta="Momentos de la atención" [opciones]="pestanas()" [activa]="faseActiva()" (activaChange)="fase.set($event)" />
+    }
+
+    <div class="pantalla__resto">
     @for (grupo of grupos(); track grupo.clave) {
-      <section class="fase" [attr.aria-labelledby]="'fase-' + grupo.clave">
+      <section
+        class="fase"
+        role="tabpanel"
+        [id]="'automatizaciones-panel-' + grupo.clave"
+        [attr.aria-labelledby]="'automatizaciones-pestana-' + grupo.clave"
+        [hidden]="faseActiva() !== grupo.clave"
+      >
         <div class="fase__cabecera">
           <h2 [id]="'fase-' + grupo.clave">{{ grupo.titulo }}</h2>
           <span>{{ grupo.ayuda }}</span>
         </div>
-        <div class="flujos">
+        <div class="flujos desplazable" tabindex="0" role="region" [attr.aria-labelledby]="'fase-' + grupo.clave">
           @for (flujo of grupo.flujos; track flujo.codigo) {
             <article class="flujo" [class.flujo--apagado]="!flujo.activo">
               <header class="flujo__cabecera">
@@ -115,6 +129,7 @@ const FASES: readonly { clave: string; titulo: string; ayuda: string }[] = [
         </div>
       </section>
     }
+    </div>
 
     @if (cambio(); as flujo) {
       <app-ventana-flotante
@@ -122,7 +137,8 @@ const FASES: readonly { clave: string; titulo: string; ayuda: string }[] = [
         [titulo]="(flujo.activo ? 'Apagar: ' : 'Encender: ') + flujo.nombre"
         forma="centrada"
         [anchoMaximo]="520"
-        (cerrar)="cambio.set(null)"
+        [ocupada]="ocupado()"
+        (cerrar)="cerrarCambio()"
       >
         <p>
           @if (flujo.activo) {
@@ -139,7 +155,7 @@ const FASES: readonly { clave: string; titulo: string; ayuda: string }[] = [
         </label>
         @if (errorCambio()) { <p class="aviso-error" role="alert">{{ errorCambio() }}</p> }
         <div class="acciones acciones--final" pie>
-          <button class="boton" type="button" (click)="cambio.set(null)">Cancelar</button>
+          <button class="boton" type="button" (click)="cerrarCambio()" [disabled]="ocupado()">Cancelar</button>
           <button class="boton boton--principal" type="button" [disabled]="ocupado()" (click)="confirmarCambio(flujo)">
             {{ flujo.activo ? 'Apagar' : 'Encender' }}
           </button>
@@ -149,7 +165,10 @@ const FASES: readonly { clave: string; titulo: string; ayuda: string }[] = [
   `,
   changeDetection: ChangeDetectionStrategy.Eager,
   styles: `
-    :host { display: grid; gap: var(--espacio-5); }
+    /* Las clases de reparto fijan display; sin !important el atributo hidden
+       perdería y se verían todas las fases a la vez. */
+    .fase[hidden] { display: none !important; }
+    .fase { display: flex; flex-direction: column; min-height: 0; }
     .ceja { margin: 0; color: var(--acento); font-size: 0.75rem; font-weight: 700; letter-spacing: 0.1em; }
     .encabezado { position: relative; isolation: isolate; display: flex; min-height: 220px; align-items: center; overflow: hidden; padding: clamp(20px, 3vw, 36px); border: 1px solid color-mix(in srgb, var(--acento) 14%, var(--borde)); border-radius: calc(var(--radio) + 4px); background: linear-gradient(105deg, var(--superficie-elevada) 0%, color-mix(in srgb, var(--superficie-elevada) 82%, #e0f7f4) 66%, #eaf9f7 100%); box-shadow: var(--sombra-1); }
     .encabezado::before { content: ''; position: absolute; z-index: -2; inset: -65%; background: radial-gradient(ellipse at 78% 48%, rgb(42 184 171 / 20%), transparent 34%), radial-gradient(ellipse at 92% 15%, rgb(246 199 102 / 13%), transparent 28%); animation: automatizaciones-ambiente 20s ease-in-out infinite alternate; }
@@ -193,6 +212,16 @@ const FASES: readonly { clave: string; titulo: string; ayuda: string }[] = [
     @media (max-width: 760px) { .encabezado { min-height: 190px; align-items: flex-start; padding-bottom: 100px; } .encabezado__contenido { width: 100%; } .encabezado__ilustracion { top: auto; bottom: -50px; right: -10px; width: 76%; height: 155px; transform: none; opacity: .76; } }
     @media (max-width: 600px) { .flujos { grid-template-columns: 1fr; } .encabezado { padding-bottom: 76px; } .encabezado__ilustracion { bottom: -58px; width: 86%; height: 142px; opacity: .58; } }
     @media (prefers-reduced-motion: reduce) { .encabezado::before, .encabezado::after { animation: none; } }
+    /* Al final: tiene que ganar a las reglas de la cabecera de arriba. */
+    @media (min-width: 821px) and (min-height: 600px) {
+      .fase { flex: 1 1 0; }
+      .fase__cabecera { flex: none; }
+      .flujos { align-content: start; padding: 2px; }
+      .encabezado { min-height: 0; padding: var(--espacio-3) var(--espacio-5); }
+      .encabezado h1 { margin: 0 0 2px; font-size: 1.45rem; }
+      .encabezado__sub { font-size: .85rem; line-height: 1.4; }
+      .encabezado__ilustracion { height: 170%; }
+    }
   `,
 })
 export class AutomatizacionesComponent {
@@ -208,11 +237,30 @@ export class AutomatizacionesComponent {
   protected readonly cambio = signal<Automatizacion | null>(null);
   protected motivo = '';
 
+  /** Fase elegida; vacía hasta que se elige una pestaña. */
+  protected readonly fase = signal('');
+
   protected readonly grupos = computed(() =>
     FASES.map((fase) => ({ ...fase, flujos: this.flujos().filter((f) => f.fase === fase.clave) })).filter(
       (grupo) => grupo.flujos.length > 0,
     ),
   );
+
+  protected readonly pestanas = computed<readonly OpcionPestana[]>(() =>
+    this.grupos().map((grupo) => ({ clave: grupo.clave, etiqueta: grupo.titulo, cuenta: grupo.flujos.length })),
+  );
+
+  /** La fase que se muestra: la elegida si existe, o la primera. */
+  protected readonly faseActiva = computed(() => {
+    const claves = this.grupos().map((grupo) => grupo.clave);
+    return claves.includes(this.fase()) ? this.fase() : (claves[0] ?? '');
+  });
+
+  /** A mitad del guardado no se cierra: el resultado se perdería. */
+  protected cerrarCambio(): void {
+    if (this.ocupado()) return;
+    this.cambio.set(null);
+  }
 
   constructor() {
     this.api.leer<Automatizacion[]>('/automatizaciones').subscribe({

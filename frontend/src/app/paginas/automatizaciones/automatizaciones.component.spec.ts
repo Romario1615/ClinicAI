@@ -83,8 +83,10 @@ describe('AutomatizacionesComponent', () => {
     it('auditoría solo ve, sin interruptores', () => {
         montar(['auditoria.leer']);
         expect((fixture.nativeElement as HTMLElement).querySelectorAll('[role=switch]').length).toBe(0);
-        expect(fixture.nativeElement.getAttribute('tabindex')).toBe('0');
+        // El host ya no desplaza: lo hace el marco de cada fase, que es el que
+        // necesita foco de teclado.
         expect(fixture.nativeElement.getAttribute('role')).toBe('region');
+        expect((fixture.nativeElement as HTMLElement).querySelector('.flujos.desplazable')?.getAttribute('tabindex')).toBe('0');
         expect(fixture.nativeElement.getAttribute('aria-label')).toBe('Automatizaciones de la clínica');
     });
 
@@ -96,6 +98,16 @@ describe('AutomatizacionesComponent', () => {
         expect(imagen?.getAttribute('height')).toBe('400');
         expect(imagen?.getAttribute('alt')).toBe('');
         expect(imagen?.getAttribute('aria-hidden')).toBe('true');
+    });
+
+    it('muestra una fase a la vez y cambia con las pestañas', () => {
+        montar(['configuracion.escribir']);
+        const el = fixture.nativeElement as HTMLElement;
+        const visibles = () => [...el.querySelectorAll<HTMLElement>('[role=tabpanel]')].filter((p) => !p.hidden).map((p) => p.id);
+        expect(visibles()).toEqual(['automatizaciones-panel-ANTES_DE_LA_CITA']);
+        el.querySelector<HTMLElement>('#automatizaciones-pestana-MENSAJES')?.click();
+        fixture.detectChanges();
+        expect(visibles()).toEqual(['automatizaciones-panel-MENSAJES']);
     });
 
     it('muestra el error de carga', () => {
