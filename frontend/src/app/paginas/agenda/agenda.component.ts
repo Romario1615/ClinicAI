@@ -1,3 +1,6 @@
+import { CapturaFotosComponent, type FotoSeleccionada } from '../../compartido/captura-fotos.component';
+import { FotosRegistroComponent } from '../../compartido/fotos-registro.component';
+import { FotosRegistroService } from '../../nucleo/servicios/fotos-registro.service';
 /**
  * Pantalla de agenda. Conectada al backend real.
  *
@@ -201,7 +204,7 @@ function leerVista(): VistaCalendario | 'lista' {
 @Component({
   selector: 'app-agenda',
   standalone: true,
-  imports: [
+  imports: [CapturaFotosComponent, FotosRegistroComponent,
     FormsModule,
     NgTemplateOutlet,
     PestanasComponent,
@@ -227,6 +230,8 @@ function leerVista(): VistaCalendario | 'lista' {
   styleUrl: './agenda.component.scss',
 })
 export class AgendaComponent {
+  protected readonly operacionFotos = inject(FotosRegistroService).operacion<{id:string;citas:readonly Cita[]}>();
+  protected fotos:readonly FotoSeleccionada[]=[];
   private readonly api = inject(ApiService);
   private readonly catalogo = inject(CatalogoService);
   private readonly operaciones = inject(OperacionesService);
@@ -887,6 +892,7 @@ export class AgendaComponent {
     if (fila.tipo !== 'hueco' || !this.puedeCrear()) {
       return;
     }
+    this.operacionFotos.reiniciar(); this.fotos=[];
     this.citaSeleccionada.set(null);
     this.reservaDelDia.set(false);
     this.huecoElegido.set(fila);
@@ -1268,7 +1274,10 @@ export class AgendaComponent {
           .pipe(map((respuesta) => respuesta.citas))
       : this.api.crearCita(datos, this.claveIdempotencia).pipe(map((cita) => [cita] as const));
 
-    citas$.subscribe({
+    this.operacionFotos.guardar('cita',citas$.pipe(map(citas=>{
+      if(!citas[0]) throw new FalloApi('RESPUESTA_INVALIDA','La API no devolvió la reserva.',500);
+      return {id:citas[0].id,citas};
+    })),this.fotos).pipe(map(r=>r.citas)).subscribe({
         next: (citas) => {
           this.reservando.set(false);
           const primera = citas[0];

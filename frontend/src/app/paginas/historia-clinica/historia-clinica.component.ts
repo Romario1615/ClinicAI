@@ -1,3 +1,4 @@
+import { FotosRegistroComponent } from '../../compartido/fotos-registro.component';
 /**
  * Historia clinica. Conectada al backend real.
  *
@@ -138,7 +139,7 @@ import { RegistrosPacienteComponent } from '../../compartido/registros-paciente.
 @Component({
   selector: 'app-historia-clinica',
   standalone: true,
-  imports: [
+  imports: [FotosRegistroComponent,
     RegistrosPacienteComponent,
     ResumenModuloComponent,
     IconoComponent,
@@ -191,6 +192,7 @@ export class HistoriaClinicaComponent implements OnInit {
 
   // --- Historia ---
   protected readonly notas = signal<readonly Nota[]>([]);
+  protected readonly puedeLeerFotos = computed(() => this.sesion.tienePermiso(PERMISOS.imagenClinicaLeer));
   protected readonly recetas = signal<readonly Receta[]>([]);
   protected readonly incluirHistorico = signal(false);
   protected readonly cargandoHistoria = signal(false);

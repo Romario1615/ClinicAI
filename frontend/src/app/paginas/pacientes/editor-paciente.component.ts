@@ -5,6 +5,8 @@ import { VentanaFlotanteComponent } from '../../compartido/ventana-flotante.comp
 import type { Paciente } from '../../nucleo/modelos/dominio';
 import { FalloApi } from '../../nucleo/servicios/api.service';
 import { OperacionesService } from '../../nucleo/servicios/operaciones.service';
+import { CapturaFotosComponent, type FotoSeleccionada } from '../../compartido/captura-fotos.component';
+import { FotosRegistroService } from '../../nucleo/servicios/fotos-registro.service';
 
 /**
  * Alta y edicion de un paciente, en una ventana flotante.
@@ -21,7 +23,7 @@ import { OperacionesService } from '../../nucleo/servicios/operaciones.service';
 @Component({
   selector: 'app-editor-paciente',
   standalone: true,
-  imports: [FormsModule, VentanaFlotanteComponent],
+  imports: [FormsModule, VentanaFlotanteComponent, CapturaFotosComponent],
   template: `
     <app-ventana-flotante
       ceja="Paciente"
@@ -147,6 +149,7 @@ import { OperacionesService } from '../../nucleo/servicios/operaciones.service';
             {{ ocupado() ? 'Guardando…' : 'Guardar paciente' }}
           </button>
         </div>
+        <app-captura-fotos titulo="Foto de perfil" [perfil]="true" [ocupada]="ocupado()" (cambiadas)="fotos=$event" />
       </form>
     </app-ventana-flotante>
   `,
@@ -171,6 +174,8 @@ import { OperacionesService } from '../../nucleo/servicios/operaciones.service';
 })
 export class EditorPacienteComponent implements OnChanges {
   private readonly api = inject(OperacionesService);
+  protected readonly operacionFotos = inject(FotosRegistroService).operacion<Paciente>();
+  protected fotos: readonly FotoSeleccionada[] = [];
   @Input() paciente: (Paciente & { direccion?: string | null }) | null = null;
   @Output() readonly guardado = new EventEmitter<Paciente>();
   @Output() readonly cerrar = new EventEmitter<void>();
@@ -184,6 +189,7 @@ export class EditorPacienteComponent implements OnChanges {
   @ViewChild('formulario') private formulario?: NgForm;
   private clave = crypto.randomUUID(); private ultimoCuerpo = '';
   ngOnChanges(): void {
+    this.operacionFotos.reiniciar(); this.fotos=[];
     const p = this.paciente;
     this.nombre = p?.nombre ?? ''; this.apellido = p?.apellido ?? ''; this.tipo = p?.tipo_documento ?? 'CEDULA';
     this.numero = p?.numero_documento ?? ''; this.nacimiento = p?.fecha_nacimiento ?? '';
@@ -205,7 +211,7 @@ export class EditorPacienteComponent implements OnChanges {
     const cuerpo = JSON.stringify(datos);
     if (this.ultimoCuerpo && cuerpo !== this.ultimoCuerpo) this.clave = crypto.randomUUID();
     this.ultimoCuerpo = cuerpo; this.ocupado.set(true); this.error.set('');
-    this.api.guardar<Paciente>(this.paciente ? `/pacientes/${this.paciente.id}` : '/pacientes/', datos, this.clave, !!this.paciente).subscribe({
+    this.operacionFotos.guardar('perfil_paciente', this.api.guardar<Paciente>(this.paciente ? `/pacientes/${this.paciente.id}` : '/pacientes/', datos, this.clave, !!this.paciente), this.fotos).subscribe({
       next: p => { this.ocupado.set(false); this.guardado.emit(p); },
       error: (e: FalloApi) => { this.error.set(e.message); this.ocupado.set(false); },
     });

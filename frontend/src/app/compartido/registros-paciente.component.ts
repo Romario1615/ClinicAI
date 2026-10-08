@@ -8,16 +8,21 @@ import { SesionService } from '../nucleo/servicios/sesion.service';
 import { guardarPdf, PartidaDocumento, PuntoFacial, RegistroPaciente, RegistrosPacienteService, ZonaFacial } from '../nucleo/servicios/registros-paciente.service';
 import { Sede } from '../nucleo/modelos/dominio';
 import { MapaFacialComponent } from './mapa-facial.component';
+import { CapturaFotosComponent, type FotoSeleccionada } from './captura-fotos.component';
+import { FotosRegistroComponent } from './fotos-registro.component';
+import { FotosRegistroService } from '../nucleo/servicios/fotos-registro.service';
 import { VentanaFlotanteComponent } from './ventana-flotante.component';
 
 @Component({
   selector: 'app-registros-paciente', standalone: true,
-  imports: [FormsModule, DatePipe, DecimalPipe, MapaFacialComponent, VentanaFlotanteComponent],
+  imports: [FormsModule, DatePipe, DecimalPipe, MapaFacialComponent, VentanaFlotanteComponent, CapturaFotosComponent, FotosRegistroComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './registros-paciente.component.html', styleUrl: './registros-paciente.component.scss',
 })
 export class RegistrosPacienteComponent {
   private readonly api = inject(RegistrosPacienteService);
+  protected readonly operacionFotos = inject(FotosRegistroService).operacion<RegistroPaciente>();
+  protected fotos: readonly FotoSeleccionada[] = [];
   private readonly pacientes = inject(ApiService);
   private readonly catalogo = inject(CatalogoService);
   protected readonly especialidades = inject(EspecialidadHistoriaService);
@@ -87,7 +92,7 @@ export class RegistrosPacienteComponent {
     if (this.facial()) this.api.zonas().subscribe({ next: puntos => this.puntos.set(puntos), error: error => this.error.set(error.message) });
   }
   protected editar(registro: RegistroPaciente | null = null): void {
-    this.error.set(''); this.aviso.set(''); this.versionEditando = registro; this.esEdicion.set(!!registro); this.claveGuardado = crypto.randomUUID();
+    this.error.set(''); this.aviso.set(''); this.operacionFotos.reiniciar(); this.fotos=[]; this.versionEditando = registro; this.esEdicion.set(!!registro); this.claveGuardado = crypto.randomUUID();
     this.tipo = registro?.tipo ?? (this.facial() ? 'FACIOGRAMA' : 'PRESUPUESTO');
     this.titulo = registro?.titulo ?? (this.facial() ? 'Evaluación y seguimiento facial' : 'Presupuesto de atención');
     this.zonas = structuredClone(registro?.contenido.zonas ?? []);
@@ -132,7 +137,7 @@ export class RegistrosPacienteComponent {
     if (this.zonaElegida && this.zonaObservacion.trim()) this.registrarZona();
     const registro = this.versionEditando;
     this.ocupado.set(true); this.error.set('');
-    this.api.guardar(this.pacienteId(), {
+    this.operacionFotos.guardar('registro',this.api.guardar(this.pacienteId(), {
       clave_idempotencia: this.claveGuardado, tipo: this.tipo, titulo: this.titulo,
       especialidad_id: especialidad, sede_id: this.sedeElegida || null, cita_id: registro ? registro.cita_id : this.citaId(),
       raiz_id: registro?.raiz_id ?? null, version_base: registro?.version ?? 0, motivo: this.motivo,
@@ -140,7 +145,7 @@ export class RegistrosPacienteComponent {
       partidas: this.facial() || this.tipo === 'RECETA' ? [] : this.partidas,
       receta_id: this.tipo === 'RECETA' ? this.recetaId || null : null,
       moneda: this.moneda, valido_hasta: this.validoHasta || null, observaciones: this.observaciones,
-    }).subscribe({ next: () => { this.ocupado.set(false); this.editor.set(false); this.aviso.set('Versión guardada en la historia del paciente.'); this.cargar(); }, error: error => { this.ocupado.set(false); this.error.set(error.message); } });
+     }),this.fotos).subscribe({ next: () => { this.ocupado.set(false); this.editor.set(false); this.aviso.set('Versión guardada en la historia del paciente.'); this.cargar(); }, error: error => { this.ocupado.set(false); this.error.set(error.message); } });
   }
   protected descargar(registro: RegistroPaciente): void {
     this.error.set(''); this.ocupado.set(true);

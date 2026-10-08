@@ -1,5 +1,7 @@
 import { Component, OnInit, inject, signal, ChangeDetectionStrategy } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { CapturaFotosComponent, type FotoSeleccionada } from '../../compartido/captura-fotos.component';
+import { FotosRegistroService } from '../../nucleo/servicios/fotos-registro.service';
 
 import { VentanaFlotanteComponent } from '../../compartido/ventana-flotante.component';
 import { EditorRegistroComponent } from '../../compartido/editor-registro.component';
@@ -20,7 +22,7 @@ import {
 @Component({
   selector: 'app-plataforma',
   standalone: true,
-  imports: [FormsModule, VentanaFlotanteComponent, EditorRegistroComponent],
+  imports: [FormsModule, VentanaFlotanteComponent, EditorRegistroComponent, CapturaFotosComponent],
   template: `
     <header class="encabezado">
       <div><p class="sobretitulo">Administración global</p><h1>Clínicas</h1>
@@ -233,6 +235,7 @@ import {
           <label>Correo de acceso<input name="correoAdmin" [(ngModel)]="form.administrador_correo" type="email" required maxlength="200" /></label>
           <label>Contraseña temporal<input name="contrasena" [(ngModel)]="form.contrasena_inicial" type="password" required minlength="12" maxlength="128" autocomplete="new-password" /></label>
         </div>
+        <app-captura-fotos titulo="Logo y fotografías de la clínica" [ocupada]="ocupado()" (cambiadas)="fotos=$event" />
         </form>
         <div pie class="acciones"><button class="boton" type="button" (click)="cerrarNuevaClinica()" [disabled]="ocupado()">Cancelar</button><button class="boton boton--principal" type="submit" form="formulario-clinica-plataforma" [disabled]="ocupado()">{{ ocupado() ? 'Registrando…' : 'Crear clínica y administrador' }}</button></div>
       </app-ventana-flotante>
@@ -263,6 +266,8 @@ import {
   `],
 })
 export class PlataformaComponent implements OnInit {
+  protected readonly operacionFotos = inject(FotosRegistroService).operacion<ClinicaPlataforma>();
+  protected fotos: readonly FotoSeleccionada[] = [];
   private readonly api = inject(ApiService);
   protected readonly registro = signal<{ tipo: 'clinica' | 'usuario'; fila: ClinicaPlataforma | UsuarioPlataforma; estado: boolean | null } | null>(null);
   protected readonly clinicas = signal<readonly ClinicaPlataforma[]>([]);
@@ -310,6 +315,7 @@ export class PlataformaComponent implements OnInit {
   ngOnInit(): void { this.cargar(); }
 
   protected abrirNuevaClinica(): void {
+    this.operacionFotos.reiniciar(); this.fotos=[];
     this.error.set(''); this.aviso.set('');
     this.form = this.formularioVacio();
     this.nuevaClinicaAbierta.set(true);
@@ -598,7 +604,7 @@ export class PlataformaComponent implements OnInit {
   protected crear(): void {
     if (this.ocupado()) return;
     this.error.set(''); this.aviso.set(''); this.ocupado.set(true);
-    this.api.crearClinicaPlataforma({
+    this.operacionFotos.guardar('clinica',this.api.crearClinicaPlataforma({
       ...this.form,
       nombre: this.form.nombre.trim(),
       correo: this.form.correo?.trim() || null,
@@ -606,7 +612,7 @@ export class PlataformaComponent implements OnInit {
       identificacion_fiscal: this.form.identificacion_fiscal?.trim() || null,
       sede_direccion: this.form.sede_direccion?.trim() || null,
       administrador_correo: this.form.administrador_correo.trim(),
-    }).subscribe({
+    }),this.fotos).subscribe({
       next: (clinica) => {
         this.clinicas.update((actuales) => [...actuales, clinica].sort((a, b) => a.nombre.localeCompare(b.nombre)));
         this.form = this.formularioVacio();

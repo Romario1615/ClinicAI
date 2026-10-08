@@ -50,6 +50,7 @@ interface EnlaceNavegacion {
 
 const NAVEGACION: readonly EnlaceNavegacion[] = [
   { ruta: '/panel', etiqueta: 'Panel', icono: 'panel', permisos: [], demostracion: false },
+  { ruta: '/analitica', etiqueta: 'Analítica IA', icono: 'panel', permisos: [PERMISOS.metricasLeer], demostracion: false },
   { ruta: '/plataforma/clinicas', etiqueta: 'Clínicas', icono: 'configuracion', permisos: [], rol: 'superadministrador', demostracion: false },
   {
     ruta: '/usuarios',

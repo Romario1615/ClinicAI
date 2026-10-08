@@ -9,6 +9,8 @@
 import { Component, computed, effect, inject, input, signal, ChangeDetectionStrategy } from '@angular/core';
 import { DatePipe, DecimalPipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { CapturaFotosComponent, type FotoSeleccionada } from '../../compartido/captura-fotos.component';
+import { FotosRegistroService } from '../../nucleo/servicios/fotos-registro.service';
 
 import { ApiService, FalloApi } from '../../nucleo/servicios/api.service';
 import type { RegistroPlaca } from '../../nucleo/servicios/api.service';
@@ -30,7 +32,7 @@ const NOMBRES_CARA: Record<string, string> = {
 @Component({
   selector: 'app-indice-placa',
   standalone: true,
-  imports: [DatePipe, DecimalPipe, FormsModule],
+  imports: [CapturaFotosComponent,DatePipe, DecimalPipe, FormsModule],
   template: `
     <section class="placa" aria-labelledby="titulo-placa">
       <!-- Cabecera en una fila: explicación, evolución y último control. En la
@@ -95,6 +97,7 @@ const NOMBRES_CARA: Record<string, string> = {
               </div>
             }
           </div>
+          <app-captura-fotos titulo="Fotos del control de placa" [ocupada]="guardando()" (cambiadas)="fotos=$event" />
           <div class="placa__pie">
             <label class="campo placa__observacion">
               <span class="campo__etiqueta">Observación (opcional)</span>
@@ -159,6 +162,8 @@ const NOMBRES_CARA: Record<string, string> = {
   `,
 })
 export class IndicePlacaComponent {
+  protected readonly operacionFotos=inject(FotosRegistroService).operacion<RegistroPlaca>();
+  protected fotos:readonly FotoSeleccionada[]=[];
   private readonly api = inject(ApiService);
   private readonly sesion = inject(SesionService);
 
@@ -249,16 +254,17 @@ export class IndicePlacaComponent {
     }
     this.guardando.set(true);
     this.error.set('');
-    this.api
+    this.operacionFotos.guardar('placa',this.api
       .registrarIndicePlaca(this.pacienteId(), {
         piezas_evaluadas: [...this.evaluadas()],
         superficies_con_placa: superficies,
         observacion: this.observacion.trim() || null,
-      })
+      }),this.fotos)
       .subscribe({
         next: (registro) => {
           this.guardando.set(false);
           this.serie.update((serie) => [registro, ...serie]);
+          this.operacionFotos.reiniciar(); this.fotos=[];
           this.evaluadas.set(new Set());
           this.placa.set(new Map());
           this.observacion = '';

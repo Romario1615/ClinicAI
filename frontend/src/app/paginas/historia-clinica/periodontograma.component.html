@@ -1,0 +1,62 @@
+<section class="perio" aria-label="Periodoncia">
+  <header class="perio__cabecera"><div><p class="ceja">ODONTOLOGÍA · SEGUIMIENTO</p><h2>Periodontograma</h2><p>32 piezas · 6 sitios por pieza · historial de mediciones</p></div>
+    <div class="perio__acciones"><button type="button" class="boton" (click)="placa.set(!placa())">{{ placa() ? 'Periodontograma' : 'Índice de placa' }}</button>
+      @if(puedeEscribir() && !placa()) {<button type="button" class="boton boton--primario" (click)="nuevo()">Nuevo examen</button>}
+    </div>
+  </header>
+  @if(placa()) { <app-indice-placa [pacienteId]="pacienteId()" /> }
+  @else {
+    @if(error() && !editor()) {<p role="alert" class="aviso aviso--error">{{error()}}</p>}
+    @if(actual(); as r) {
+      <div class="perio__filtros"><label>Control <select [ngModel]="r.id" (ngModelChange)="elegido.set($event)">@for(x of registros(); track x.id) {<option [value]="x.id">{{x.fecha_examen}} · v{{x.version}}{{x.anulado ? ' · Anulado' : !x.vigente ? ' · Corregido' : ''}}</option>}</select></label>
+        <label>Comparar con <select [ngModel]="previo()" (ngModelChange)="previo.set($event)"><option [ngValue]="null">Sin comparación</option>@for(x of registros(); track x.id) {@if(x.id!==r.id && x.vigente && !x.anulado) {<option [value]="x.id">{{x.fecha_examen}}</option>}}</select></label>
+        <button type="button" class="boton" [disabled]="ocupado()" (click)="descargar()">Descargar PDF</button>
+        @if(r.puede_editar) {<button type="button" class="boton" (click)="nuevo(true)">Corregir / anular</button>}
+      </div>
+      <div class="perio__metricas">
+        <article><span>Sitios sondados</span><strong>{{r.resumen.sitios_sondados}} / {{r.resumen.sitios_posibles}}</strong></article>
+        <article><span>Profundidad media</span><strong>{{r.resumen.profundidad_media === null ? 'Sin medir' : (r.resumen.profundidad_media | number:'1.1-2') + ' mm'}}</strong></article>
+        <article><span>Sangrado observado</span><strong>{{r.resumen.sangrado_porcentaje === null ? 'Sin evaluar' : (r.resumen.sangrado_porcentaje | number:'1.0-1') + '%'}}</strong><small>{{r.resumen.sangrado_evaluados}} sitios evaluados</small></article>
+        <article><span>Profundidades ≥ 6 mm</span><strong>{{r.resumen.sitios_6_mas}}</strong><small>Conteo de mediciones</small></article>
+      </div>
+      @if(comparacion(); as c) {<p class="perio__comparacion">Comparación en {{c.sitios}} sitios comunes: diferencia media {{c.diferencia === null ? 'sin datos comparables' : (c.diferencia | number:'1.1-2') + ' mm'}}. No compara piezas ausentes ni cambios a implante.</p>}
+      <p><strong>{{r.anulado ? 'Examen anulado' : r.vigente ? 'Versión vigente' : 'Versión histórica'}}</strong> · {{r.fecha_examen | date:'mediumDate'}} · {{r.nivel_sensibilidad}}</p>
+      <ng-container [ngTemplateOutlet]="grafico" />
+      @if(r.observaciones) {<p>{{r.observaciones}}</p>}
+      @if(puedeLeerFotos()) {<app-fotos-registro tipo="periodontograma" [registroId]="r.id" [puedeEditar]="r.puede_editar" />}
+      <details><summary>Ver tabla de mediciones y trazabilidad</summary><div class="perio__tabla"><table><caption>PS: profundidad · MG: margen · NIC = PS + MG; todas en mm. — = sin evaluar.</caption><thead><tr><th>Pieza / sitio</th><th>PS</th><th>MG</th><th>NIC</th><th>Sangrado</th><th>Placa</th><th>Supuración</th></tr></thead><tbody>
+        @for(a of arcadas; track a.nombre) {@for(codigo of a.piezas; track codigo) {@for(s of sitios; track s.id) {
+          @let m = r.piezas[codigo]?.sitios?.[s.id];
+          <tr><th>{{codigo}} · {{s.nombre}}</th><td>{{m?.profundidad ?? '—'}}</td><td>{{m?.margen ?? '—'}}</td><td>{{m?.profundidad !== null && m?.profundidad !== undefined && m?.margen !== null && m?.margen !== undefined ? m!.profundidad! + m!.margen! : '—'}}</td><td>{{m?.sangrado === null || m?.sangrado === undefined ? '—' : m!.sangrado ? 'Sí' : 'No'}}</td><td>{{m?.placa === null || m?.placa === undefined ? '—' : m!.placa ? 'Sí' : 'No'}}</td><td>{{m?.supuracion === null || m?.supuracion === undefined ? '—' : m!.supuracion ? 'Sí' : 'No'}}</td></tr>
+        }}}</tbody></table></div><p>Motivo: {{r.motivo}} · Registrado {{r.creado_en | date:'medium'}} · Autor: {{r.profesional_id}}</p></details>
+    } @else {<div class="estado-vacio"><h3>Aún no hay controles periodontales</h3><p>Abra un nuevo examen y seleccione una pieza para registrar sus seis sitios.</p></div>}
+  }
+</section>
+<ng-template #grafico>
+  <div class="perio__vistas"><button type="button" class="boton" [attr.aria-pressed]="vista()==='V'" (click)="vista.set('V')">Vestibular</button><button type="button" class="boton" [attr.aria-pressed]="vista()==='L'" (click)="vista.set('L')">Palatina / lingual</button></div>
+  <p class="perio__leyenda">Altura = profundidad en mm · Verde: &lt; 4 · Ámbar: 4 a &lt; 6 · Coral: ≥ 6 · Gris: sin medir. Los colores agrupan valores; no indican diagnóstico.</p>
+  @for(a of arcadas; track a.nombre) {<div class="perio__arcada"><h3>Arcada {{a.nombre.toLowerCase()}} · {{vista()==='V' ? 'vestibular' : a.nombre==='Superior' ? 'palatina' : 'lingual'}}</h3><div class="perio__dientes" [attr.aria-label]="a.nombre">
+    @for(codigo of a.piezas; track codigo) {<button type="button" class="perio__diente" [disabled]="!editor()" [class.perio__diente--ausente]="ausente(codigo)" [attr.aria-label]="'Editar pieza ' + codigo" (click)="abrirPieza(codigo)"><span class="perio__barras">@for(s of sitiosVista(); track s) {<span class="perio__barra" [class.perio__barra--vacia]="valor(codigo,s)===null" [class.perio__barra--media]="(valor(codigo,s) ?? 0)>=4" [class.perio__barra--alta]="(valor(codigo,s) ?? 0)>=6" [style.height.px]="altura(codigo,s)"><span>{{valor(codigo,s) ?? '—'}}</span></span>}</span><strong>{{codigo}}</strong><small>{{ausente(codigo) ? 'Ausente' : 'M · C · D'}}</small></button>}
+  </div></div>}
+</ng-template>
+@if(editor()) {
+  <app-ventana-flotante titulo="Registrar examen periodontal" [ocupada]="ocupado()" [error]="error()" [cambiosSinGuardar]="true" (cerrar)="editor.set(false)">
+    <form (ngSubmit)="guardar()" class="perio__editor"><fieldset [disabled]="ocupado() || operacionFotos.guardado"><div class="perio__filtros"><label>Fecha del examen <input type="date" name="fecha" [(ngModel)]="fecha" required /></label><label>Sede<select name="sede" [(ngModel)]="sede" [disabled]="corrigiendo() || !!citaId()"><option value="">Sin sede (ámbito completo)</option>@for(s of sedes();track s.id){<option [value]="s.id">{{s.nombre}}</option>}</select></label><label>Sensibilidad<select name="nivel" [(ngModel)]="nivel"><option>N2</option><option>N3</option></select></label></div>
+      @if(piezaElegida(); as codigo) {<fieldset class="perio__pieza"><legend>Pieza {{codigo}}</legend><div class="perio__acciones"><label><input type="checkbox" name="ausente" [(ngModel)]="pieza.ausente" /> Ausente</label><label><input type="checkbox" name="implante" [(ngModel)]="pieza.implante" [disabled]="pieza.ausente" /> Implante</label></div>
+        @if(!pieza.ausente) {
+          @if(!pieza.implante) {<div class="perio__filtros"><label>Movilidad<select name="movilidad" [(ngModel)]="pieza.movilidad"><option [ngValue]="null">Sin evaluar</option>@for(n of [0,1,2,3]; track n) {<option [ngValue]="n">{{n}}</option>}</select></label><label>Furcación<select name="furcacion" [(ngModel)]="pieza.furcacion"><option [ngValue]="null">Sin evaluar</option>@for(n of [0,1,2,3]; track n) {<option [ngValue]="n">{{n}}</option>}</select></label></div>}
+          <p>Margen: positivo para recesión apical, negativo si está coronal a la unión cemento-esmalte. NIC = profundidad + margen.</p>
+          @for(s of sitios; track s.id) {@let m = pieza.sitios[s.id]!;<fieldset class="perio__sitio"><legend>{{s.nombre}}</legend><label>Profundidad (mm)<input type="number" min="0" max="20" step="0.5" [name]="s.id+'ps'" [(ngModel)]="m.profundidad" /></label><label>Margen (mm)<input type="number" min="-20" max="20" step="0.5" [name]="s.id+'mg'" [(ngModel)]="m.margen" /></label><span>NIC: {{m.profundidad!==null && m.margen!==null ? m.profundidad+m.margen : '—'}} mm</span>
+            <label>Sangrado<select [name]="s.id+'bop'" [(ngModel)]="m.sangrado"><option [ngValue]="null">Sin evaluar</option><option [ngValue]="true">Sí</option><option [ngValue]="false">No</option></select></label><label>Placa<select [name]="s.id+'pi'" [(ngModel)]="m.placa"><option [ngValue]="null">Sin evaluar</option><option [ngValue]="true">Sí</option><option [ngValue]="false">No</option></select></label><label>Supuración<select [name]="s.id+'sup'" [(ngModel)]="m.supuracion"><option [ngValue]="null">Sin evaluar</option><option [ngValue]="true">Sí</option><option [ngValue]="false">No</option></select></label>
+          </fieldset>}
+        }
+        <label>Nota de la pieza<textarea name="notaPieza" [(ngModel)]="pieza.nota" maxlength="500"></textarea></label><button type="button" class="boton boton--primario" (click)="confirmarPieza()">Aplicar pieza {{codigo}}</button>
+      </fieldset>} @else {<ng-container [ngTemplateOutlet]="grafico" />}
+      <label>Observaciones<textarea name="observaciones" [(ngModel)]="observaciones" maxlength="2000"></textarea></label><label>Motivo del registro o corrección<textarea name="motivo" [(ngModel)]="motivo" required minlength="8" maxlength="500"></textarea></label>
+      </fieldset>
+      @if(operacionFotos.guardado){<p role="status">Examen guardado. Puede reintentar las fotografías pendientes.</p>}
+      <app-captura-fotos titulo="Fotografías del examen" [ocupada]="ocupado()" (cambiadas)="fotos=$event" />
+      <div class="perio__acciones"><button type="submit" class="boton boton--primario" [disabled]="ocupado() || motivo.trim().length<8 || !!piezaElegida()">Guardar examen</button>@if(corrigiendo() && !operacionFotos.guardado) {<button type="button" class="boton" [disabled]="ocupado() || motivo.trim().length<8" (click)="guardar(true)">Anular control con motivo</button>}</div>
+    </form>
+  </app-ventana-flotante>
+}

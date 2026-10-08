@@ -11,6 +11,8 @@
  */
 import { Component, OnInit, inject, input, output, signal, ChangeDetectionStrategy } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { CapturaFotosComponent, type FotoSeleccionada } from '../../compartido/captura-fotos.component';
+import { FotosRegistroService } from '../../nucleo/servicios/fotos-registro.service';
 
 import { ApiService, FalloApi } from '../../nucleo/servicios/api.service';
 import type { Nota, NotaNueva } from '../../nucleo/servicios/api.service';
@@ -35,7 +37,7 @@ const SIGNOS = [
 @Component({
   selector: 'app-nota-editor',
   standalone: true,
-  imports: [FormsModule, VentanaFlotanteComponent],
+  imports: [FormsModule, VentanaFlotanteComponent, CapturaFotosComponent],
   template: `
     @if (abierta()) {
       <!-- La ventana protege lo escrito: mientras se guarda no se cierra, y
@@ -101,6 +103,7 @@ const SIGNOS = [
       @if (error()) {
         <p class="aviso-error" role="alert">{{ error() }}</p>
       }
+      @if (puedeFotos()) { <app-captura-fotos titulo="Fotografías del registro" [ocupada]="guardando()" (cambiadas)="fotos=$event" /> }
     </form>
         <div class="acciones acciones--final" pie>
           <button class="boton" type="button" [disabled]="guardando()" (click)="v.solicitarCierre()">Cancelar</button>
@@ -121,6 +124,9 @@ const SIGNOS = [
 })
 export class NotaEditorComponent implements OnInit {
   private readonly api = inject(ApiService);
+  protected readonly operacionFotos = inject(FotosRegistroService).operacion<Nota>();
+  protected fotos: readonly FotoSeleccionada[] = [];
+  protected puedeFotos(): boolean { return this.sesion.tienePermiso(PERMISOS.imagenClinicaCargar); }
   private readonly sesion = inject(SesionService);
 
   readonly pacienteId = input.required<string>();
@@ -158,7 +164,7 @@ export class NotaEditorComponent implements OnInit {
 
   /** Hay algo escrito (o cambiado) que cerrar perdería. */
   protected hayCambios(): boolean {
-    return this.huella() !== this.huellaInicial;
+    return this.fotos.length > 0 || this.huella() !== this.huellaInicial;
   }
 
   /**
@@ -230,7 +236,7 @@ export class NotaEditorComponent implements OnInit {
     const peticion = base
       ? this.api.corregirNota(base.raiz_id, { ...datos, motivo: this.motivo.trim() })
       : this.api.crearNota(datos);
-    peticion.subscribe({
+    this.operacionFotos.guardar('nota', peticion, this.fotos).subscribe({
       next: (nota) => {
         this.guardando.set(false);
         this.abierta.set(false);

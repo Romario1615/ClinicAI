@@ -29,11 +29,14 @@ from pydantic import AwareDatetime, BaseModel
 from sqlalchemy import Select, false, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.ia.recuperador import contexto_desde_principal
 from app.modulos.agenda.modelos import Cita
 from app.modulos.agenda.repositorio import RepositorioAgenda
 from app.modulos.conocimiento.modelos import KnowledgeDocument
+from app.modulos.conocimiento.repositorio import condicion_acl_documento
 from app.modulos.conversaciones.modelos import Conversacion
 from app.modulos.historia.modelos import AlertaAdherencia, Receta
+from app.modulos.historia.repositorio import RepositorioHistoria
 from app.modulos.lista_espera.modelos import EntradaListaEspera
 from app.modulos.lista_espera.repositorio import RepositorioListaEspera
 from app.modulos.odontologia.modelos import PlanTratamiento
@@ -207,6 +210,9 @@ async def _clinico(sesion: AsyncSession, principal: Principal, resultado: Indica
                     Receta.clinica_id == clinica,
                     Receta.profesional_id == principal.profesional_id,
                     Receta.estado == "BORRADOR",
+                    Receta.nivel_sensibilidad != "N3"
+                    if not principal.tiene_permiso("historia_clinica.leer_sensible")
+                    else Receta.id.is_not(None),
                 ),
             )
         if principal.tiene_permiso("plan_tratamiento.leer"):
@@ -226,6 +232,54 @@ async def _clinico(sesion: AsyncSession, principal: Principal, resultado: Indica
             "plan_tratamiento.leer"
         ):
             resultado.clinico = clinico
+
+
+async def _conocimiento(
+    sesion: AsyncSession, principal: Principal, desde: AwareDatetime, resultado: Indicadores
+) -> None:
+    clinica = principal.clinica_id
+    if principal.tiene_permiso("conocimiento.leer") and clinica is not None:
+        contexto = contexto_desde_principal(principal, ahora=desde)
+        documentos = select(KnowledgeDocument.id).where(
+            KnowledgeDocument.clinic_id == clinica,
+            KnowledgeDocument.sensitivity_level.in_(
+                [n.value for n in NivelSensibilidad if contexto.nivel_maximo.cubre(n)]
+            ),
+            condicion_acl_documento(KnowledgeDocument.id, contexto),
+        )
+        if contexto.sedes is not None:
+            documentos = documentos.where(
+                or_(
+                    KnowledgeDocument.branch_id.is_(None),
+                    KnowledgeDocument.branch_id.in_(contexto.sedes),
+                )
+                if contexto.sedes
+                else false()
+            )
+        if contexto.especialidades is not None:
+            documentos = documentos.where(
+                or_(
+                    KnowledgeDocument.specialty_id.is_(None),
+                    KnowledgeDocument.specialty_id.in_(contexto.especialidades),
+                )
+                if contexto.especialidades
+                else false()
+            )
+        resultado.conocimiento = IndicadoresConocimiento(
+            borradores=await _contar(sesion, documentos.where(KnowledgeDocument.status == "DRAFT")),
+            en_revision=await _contar(
+                sesion, documentos.where(KnowledgeDocument.status == "PENDING_REVIEW")
+            ),
+            vigentes=await _contar(
+                sesion,
+                documentos.where(
+                    or_(
+                        KnowledgeDocument.status == "APPROVED",
+                        KnowledgeDocument.status == "PUBLISHED",
+                    )
+                ),
+            ),
+        )
 
 
 async def calcular(
@@ -265,11 +319,17 @@ async def calcular(
         )
 
     if principal.tiene_permiso("pago.leer") and clinica is not None:
-        pagos = select(Pago.id).where(Pago.clinica_id == clinica)
+        citas_autorizadas = (
+            RepositorioAgenda(sesion).consulta_autorizada(principal).with_only_columns(Cita.id)
+        )
+        pagos = select(Pago.id).where(
+            Pago.clinica_id == clinica, Pago.cita_id.in_(citas_autorizadas)
+        )
         confirmado = (
             await sesion.execute(
                 select(func.coalesce(func.sum(Pago.importe), 0)).where(
                     Pago.clinica_id == clinica,
+                    Pago.cita_id.in_(citas_autorizadas),
                     Pago.estado == "CONFIRMED",
                     func.coalesce(Pago.actualizado_en, Pago.creado_en) >= hace_30,
                 )
@@ -289,8 +349,15 @@ async def calcular(
         resultado.adherencia = IndicadoresAdherencia(
             alertas_abiertas=await _contar(
                 sesion,
-                select(AlertaAdherencia.id).where(
-                    AlertaAdherencia.clinica_id == clinica, AlertaAdherencia.atendida_en.is_(None)
+                RepositorioHistoria(sesion).consulta_receta_autorizada(
+                    select(AlertaAdherencia.id)
+                    .join(Receta, Receta.id == AlertaAdherencia.receta_id)
+                    .where(
+                        AlertaAdherencia.clinica_id == clinica,
+                        AlertaAdherencia.atendida_en.is_(None),
+                    ),
+                    principal=principal,
+                    ahora=desde,
                 ),
             )
         )
@@ -316,23 +383,7 @@ async def calcular(
             abiertas=await _contar(sesion, conversaciones.where(Conversacion.estado == "ABIERTA")),
         )
 
-    if principal.tiene_permiso("conocimiento.leer") and clinica is not None:
-        documentos = select(KnowledgeDocument.id).where(KnowledgeDocument.clinic_id == clinica)
-        resultado.conocimiento = IndicadoresConocimiento(
-            borradores=await _contar(sesion, documentos.where(KnowledgeDocument.status == "DRAFT")),
-            en_revision=await _contar(
-                sesion, documentos.where(KnowledgeDocument.status == "PENDING_REVIEW")
-            ),
-            vigentes=await _contar(
-                sesion,
-                documentos.where(
-                    or_(
-                        KnowledgeDocument.status == "APPROVED",
-                        KnowledgeDocument.status == "PUBLISHED",
-                    )
-                ),
-            ),
-        )
+    await _conocimiento(sesion, principal, desde, resultado)
 
     if principal.tiene_permiso("promocion.gestionar") and clinica is not None:
         campanas = select(CampanaPromocion.id).where(CampanaPromocion.clinica_id == clinica)

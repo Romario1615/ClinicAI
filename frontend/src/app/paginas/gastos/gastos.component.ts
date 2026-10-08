@@ -1,3 +1,4 @@
+import { FotosRegistroComponent } from '../../compartido/fotos-registro.component';
 /**
  * Gastos y caja.
  *
@@ -14,6 +15,8 @@
  */
 import { Component, computed, inject, signal, ChangeDetectionStrategy } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { CapturaFotosComponent, type FotoSeleccionada } from '../../compartido/captura-fotos.component';
+import { FotosRegistroService } from '../../nucleo/servicios/fotos-registro.service';
 
 import { CargandoComponent, ErrorComponent, VacioComponent } from '../../compartido/estados.component';
 import { IconoComponent } from '../../compartido/icono.component';
@@ -66,7 +69,7 @@ function aFallo(error: unknown, mensaje: string): FalloApi {
   selector: 'app-gastos',
   standalone: true,
   imports: [
-    FormsModule,
+    FormsModule, CapturaFotosComponent, FotosRegistroComponent,
     IconoComponent,
     TarjetasIndicadoresComponent,
     VentanaFlotanteComponent,
@@ -238,6 +241,7 @@ function aFallo(error: unknown, mensaje: string): FalloApi {
                   <td>{{ etiquetaMetodo(gasto.metodo) }}</td>
                   <td class="numerico">{{ dinero(gasto.importe) }}</td>
                   <td>
+                    <app-fotos-registro tipo="gasto" [registroId]="gasto.id" [puedeEditar]="puedeRegistrar() && gasto.estado === 'REGISTRADO'" />
                     <span class="insignia" [class.insignia--peligro]="gasto.estado === 'ANULADO'">
                       {{ gasto.estado === 'ANULADO' ? 'Anulado' : 'Vigente' }}
                     </span>
@@ -267,7 +271,7 @@ function aFallo(error: unknown, mensaje: string): FalloApi {
     </section>
 
     @if (altaAbierta()) {
-      <app-ventana-flotante ceja="Gastos" titulo="Registrar gasto" forma="centrada" [anchoMaximo]="560" [cierraAlPulsarFuera]="false" (cerrar)="altaAbierta.set(false)">
+      <app-ventana-flotante ceja="Gastos" titulo="Registrar gasto" forma="centrada" [anchoMaximo]="560" [cierraAlPulsarFuera]="false" [ocupada]="guardando()" (cerrar)="altaAbierta.set(false)">
         <form #formAlta="ngForm" (ngSubmit)="registrar(formAlta.valid)" novalidate>
           <div class="formulario-demo">
             <label class="campo">
@@ -320,6 +324,7 @@ function aFallo(error: unknown, mensaje: string): FalloApi {
               <input class="campo__control" name="referencia" maxlength="100" [(ngModel)]="formulario.referencia" />
             </label>
           </div>
+          <app-captura-fotos titulo="Fotos del comprobante o del gasto" [ocupada]="guardando()" (cambiadas)="fotos=$event" />
           @if (falloAlta(); as fallo) {
             <p class="aviso-error" role="alert">{{ fallo.message }}</p>
           }
@@ -502,6 +507,8 @@ function aFallo(error: unknown, mensaje: string): FalloApi {
   `,
 })
 export class GastosComponent {
+  protected readonly operacionFotos = inject(FotosRegistroService).operacion<Gasto>();
+  protected fotos: readonly FotoSeleccionada[] = [];
   private readonly gastos = inject(GastosService);
   private readonly catalogo = inject(CatalogoService);
   private readonly sesion = inject(SesionService);
@@ -641,6 +648,7 @@ export class GastosComponent {
   }
 
   protected abrirAlta(): void {
+    this.operacionFotos.reiniciar(); this.fotos=[];
     this.formulario = this.formularioVacio();
     this.falloAlta.set(null);
     // Una clave por formulario abierto: el doble clic y el reintento tras un
@@ -657,7 +665,7 @@ export class GastosComponent {
     }
     this.guardando.set(true);
     this.falloAlta.set(null);
-    this.gastos
+    this.operacionFotos.guardar('gasto',this.gastos
       .registrar(
         {
           sede_id: this.formulario.sede_id,
@@ -670,7 +678,7 @@ export class GastosComponent {
           referencia: this.formulario.referencia.trim() || null,
         },
         this.claveAlta,
-      )
+      ),this.fotos)
       .subscribe({
         next: (gasto) => {
           this.guardando.set(false);

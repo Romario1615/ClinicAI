@@ -1,6 +1,8 @@
 import { CommonModule } from '@angular/common';
 import { Component, effect, inject, input, signal, ChangeDetectionStrategy } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { CapturaFotosComponent, type FotoSeleccionada } from '../../compartido/captura-fotos.component';
+import { FotosRegistroService } from '../../nucleo/servicios/fotos-registro.service';
 import { catchError, forkJoin, of, type Observable, type OperatorFunction } from 'rxjs';
 
 import { CargandoComponent } from '../../compartido/estados.component';
@@ -68,12 +70,14 @@ export function nuevoFormulario033(): Formulario033DatosApi {
 @Component({
   selector: 'app-formulario-033',
   standalone: true,
-  imports: [CommonModule, FormsModule, CargandoComponent, VentanaFlotanteComponent],
+  imports: [CapturaFotosComponent,CommonModule, FormsModule, CargandoComponent, VentanaFlotanteComponent],
   templateUrl: './formulario-033.component.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './formulario-033.component.scss',
 })
 export class Formulario033Component {
+  protected readonly operacionFotos = inject(FotosRegistroService).operacion<Formulario033Api>();
+  protected fotos: readonly FotoSeleccionada[] = [];
   readonly pacienteId = input.required<string>();
   readonly puedeEditar = input(false);
 
@@ -155,6 +159,7 @@ export class Formulario033Component {
   }
 
   protected nuevo(): void {
+    this.operacionFotos.reiniciar(); this.fotos=[];
     this.creando.set(true);
     this.seleccionado.set(null);
     this.datos = nuevoFormulario033();
@@ -167,6 +172,7 @@ export class Formulario033Component {
   }
 
   protected corregir(formulario: Formulario033Api): void {
+    this.operacionFotos.reiniciar(); this.fotos=[];
     if (!this.puedeCorregir(formulario)) return;
     this.creando.set(false);
     this.seleccionado.set(formulario);
@@ -239,7 +245,7 @@ export class Formulario033Component {
           ...datos, version_base: seleccionado.version, motivo: this.motivoCorreccion.trim(),
         })
       : this.api.crearFormulario033(this.pacienteId(), datos);
-    solicitud.subscribe({
+    this.operacionFotos.guardar('formulario033',solicitud,this.fotos).subscribe({
       next: (creado) => {
         this.guardando.set(false);
         this.seleccionado.set(null);

@@ -1,5 +1,7 @@
 import { Component, OnInit, inject, signal, ChangeDetectionStrategy } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { CapturaFotosComponent, type FotoSeleccionada } from '../../compartido/captura-fotos.component';
+import { FotosRegistroService } from '../../nucleo/servicios/fotos-registro.service';
 
 import { IconoComponent } from '../../compartido/icono.component';
 import { VentanaFlotanteComponent } from '../../compartido/ventana-flotante.component';
@@ -9,7 +11,7 @@ import { CatalogoService, type DatosSede, type SedeGestion } from '../../nucleo/
 @Component({
   selector: 'app-sedes-configuracion',
   standalone: true,
-  imports: [FormsModule, IconoComponent, VentanaFlotanteComponent],
+  imports: [FormsModule, IconoComponent, VentanaFlotanteComponent, CapturaFotosComponent],
   template: `
     <section class="sedes-cabecera" aria-labelledby="sedes-titulo">
       <div>
@@ -79,6 +81,7 @@ import { CatalogoService, type DatosSede, type SedeGestion } from '../../nucleo/
           <label class="campo campo--completo"><span class="campo__etiqueta">Antelación mínima para reservar (minutos)</span>
             <input class="campo__control" name="antelacion-sede" [(ngModel)]="datos.minutos_antelacion_minima" type="number" min="0" max="10080" step="1" required />
           </label>
+          <app-captura-fotos titulo="Imágenes de la sede" [ocupada]="guardando()" (cambiadas)="fotos=$event" />
         </form>
         <div pie class="sede__acciones">
           <button class="boton" type="button" (click)="cancelar()" [disabled]="guardando()">Cancelar</button>
@@ -124,6 +127,8 @@ import { CatalogoService, type DatosSede, type SedeGestion } from '../../nucleo/
   `,
 })
 export class SedesConfiguracionComponent implements OnInit {
+  protected readonly operacionFotos=inject(FotosRegistroService).operacion<SedeGestion>();
+  protected fotos:readonly FotoSeleccionada[]=[];
   private readonly catalogo = inject(CatalogoService);
   protected readonly sedes = signal<readonly SedeGestion[]>([]);
   protected readonly cargando = signal(false);
@@ -153,6 +158,7 @@ export class SedesConfiguracionComponent implements OnInit {
   }
 
   protected editar(sede: SedeGestion): void {
+    this.operacionFotos.reiniciar(); this.fotos=[];
     this.editando.set(sede.id);
     this.formulario.set({
       nombre: sede.nombre,
@@ -185,7 +191,7 @@ export class SedesConfiguracionComponent implements OnInit {
     this.guardando.set(true);
     this.error.set('');
     this.aviso.set('');
-    this.catalogo.actualizarSede(id, datos).subscribe({
+    this.operacionFotos.guardar('sede',this.catalogo.actualizarSede(id, datos),this.fotos).subscribe({
       next: (actualizada) => {
         this.sedes.update((actuales) => actuales.map((sede) => sede.id === id ? actualizada : sede));
         this.editando.set(null);

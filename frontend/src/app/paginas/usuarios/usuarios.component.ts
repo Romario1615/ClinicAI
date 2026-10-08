@@ -22,6 +22,8 @@
 import { Component, computed, inject, signal, ChangeDetectionStrategy } from '@angular/core';
 import { DatePipe, NgTemplateOutlet } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { CapturaFotosComponent, type FotoSeleccionada } from '../../compartido/captura-fotos.component';
+import { FotosRegistroService } from '../../nucleo/servicios/fotos-registro.service';
 
 import { FalloApi } from '../../nucleo/servicios/api.service';
 import { OperacionesService } from '../../nucleo/servicios/operaciones.service';
@@ -98,7 +100,7 @@ const CATEGORIAS: Record<string, string> = {
   standalone: true,
   imports: [
     EditorRegistroComponent,
-    FormsModule,
+    FormsModule, CapturaFotosComponent,
     DatePipe,
     NgTemplateOutlet,
     MatrizAccesosComponent,
@@ -300,6 +302,7 @@ const CATEGORIAS: Record<string, string> = {
               </div>
               <h3 class="paso">2. Rol</h3>
               <ng-container *ngTemplateOutlet="eleccionRoles" />
+              <app-captura-fotos [perfil]="true" titulo="Foto de perfil" [ocupada]="ocupado()" (cambiadas)="fotos=$event" />
               @if (error()) { <p class="aviso-error" role="alert">{{ error() }}</p> }
             </form>
             <div class="acciones acciones--final" pie>
@@ -370,6 +373,7 @@ const CATEGORIAS: Record<string, string> = {
                   </div>
                 </fieldset>
               }
+              <app-captura-fotos titulo="Foto de la persona o del registro" [ocupada]="ocupado()" (cambiadas)="fotos=$event" />
               @if (error()) { <p class="aviso-error" role="alert">{{ error() }}</p> }
             </form>
             <div class="acciones acciones--final" pie>
@@ -558,6 +562,8 @@ const CATEGORIAS: Record<string, string> = {
 })
 export class UsuariosComponent {
   private readonly api = inject(OperacionesService);
+  protected readonly operacionFotos = inject(FotosRegistroService).operacion<{id:string}>();
+  protected fotos: readonly FotoSeleccionada[] = [];
   private readonly indicadores = inject(IndicadoresService);
   protected readonly sesion = inject(SesionService);
   protected readonly PERMISOS = PERMISOS;
@@ -665,6 +671,7 @@ export class UsuariosComponent {
   }
 
   protected abrir(ventana: Ventana): void {
+    this.operacionFotos.reiniciar(); this.fotos=[];
     this.error.set('');
     this.aviso.set('');
     if (ventana.tipo === 'alta') {
@@ -872,7 +879,9 @@ export class UsuariosComponent {
     this.ocupado.set(true);
     this.error.set('');
     this.aviso.set('');
-    this.api.guardar(ruta, datos, crypto.randomUUID(), editar).subscribe({
+    const peticion=this.api.guardar<{id:string}>(ruta, datos, crypto.randomUUID(), editar);
+    const conFotos=ruta==='/usuarios' || ruta==='/usuarios/roles';
+    (conFotos ? this.operacionFotos.guardar(ruta==='/usuarios'?'perfil_usuario':'rol',peticion,this.fotos) : peticion).subscribe({
       next: () => {
         this.ocupado.set(false);
         this.ventana.set(null);

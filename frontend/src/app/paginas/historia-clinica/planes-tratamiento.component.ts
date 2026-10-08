@@ -6,6 +6,9 @@ import { PERMISOS } from '../../nucleo/servicios/configuracion';
 import { SesionService } from '../../nucleo/servicios/sesion.service';
 import { Router } from '@angular/router';
 import { FormsModule } from '@angular/forms';
+import { CapturaFotosComponent, type FotoSeleccionada } from '../../compartido/captura-fotos.component';
+import { FotosRegistroService } from '../../nucleo/servicios/fotos-registro.service';
+import { FotosRegistroComponent } from '../../compartido/fotos-registro.component';
 import type { Sede } from '../../nucleo/modelos/dominio';
 
 import { ApiService } from '../../nucleo/servicios/api.service';
@@ -46,12 +49,14 @@ type AccionAbierta =
 @Component({
   selector: 'app-planes-tratamiento',
   standalone: true,
-  imports: [DatePipe, FormsModule, FotosClinicasComponent, VentanaFlotanteComponent],
+  imports: [DatePipe, FormsModule, FotosClinicasComponent, VentanaFlotanteComponent, CapturaFotosComponent, FotosRegistroComponent],
   templateUrl: './planes-tratamiento.component.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './planes-tratamiento.component.scss',
 })
 export class PlanesTratamientoComponent {
+  protected readonly operacionFotos=inject(FotosRegistroService).operacion<PlanTratamiento>();
+  protected fotos:readonly FotoSeleccionada[]=[];
   private readonly api = inject(ApiService);
   private readonly documentos = inject(RegistrosPacienteService);
   protected readonly generandoPdf = signal(false);
@@ -217,7 +222,7 @@ export class PlanesTratamientoComponent {
     this.guardando.set(true);
     this.error.set('');
     this.exito.set('');
-    this.api.crearPlanTratamiento(this.pacienteId(), datos).subscribe({
+    this.operacionFotos.guardar('plan',this.api.crearPlanTratamiento(this.pacienteId(), datos),this.fotos).subscribe({
       next: (plan) => {
         this.planes.update((planes) => [plan, ...planes]);
         this.reiniciarFormulario();
@@ -498,6 +503,7 @@ export class PlanesTratamientoComponent {
   }
 
   protected reiniciarFormulario(): void {
+    this.operacionFotos.reiniciar(); this.fotos=[];
     this.mostrarFormulario.set(false);
     this.titulo = '';
     this.observaciones = '';

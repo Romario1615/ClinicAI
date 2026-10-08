@@ -1,5 +1,7 @@
 import { Component, inject, signal, ChangeDetectionStrategy } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { CapturaFotosComponent, type FotoSeleccionada } from '../../compartido/captura-fotos.component';
+import { FotosRegistroService } from '../../nucleo/servicios/fotos-registro.service';
 import { forkJoin, of } from 'rxjs';
 
 import { VentanaFlotanteComponent } from '../../compartido/ventana-flotante.component';
@@ -18,7 +20,7 @@ const TIPOS: readonly { readonly valor: TipoConsultorio; readonly etiqueta: stri
 ];
 
 @Component({
-  selector: 'app-catalogo', standalone: true, imports: [FormsModule, ModulosEspecialidadComponent, VentanaFlotanteComponent],
+  selector: 'app-catalogo', standalone: true, imports: [CapturaFotosComponent,FormsModule, ModulosEspecialidadComponent, VentanaFlotanteComponent],
   host: { tabindex: '0', role: 'region', 'aria-label': 'Catálogo de la clínica' },
   template: `
     <header class="modulo-cabecera"><div class="modulo-cabecera__texto"><p class="ceja">CONFIGURACIÓN</p><h1>Catálogo de la clínica</h1><p>Sedes, consultorios, servicios y profesionales disponibles para su sesión.</p></div><img class="modulo-cabecera__imagen" src="/images/catalogo-clinica.png" alt="" aria-hidden="true" loading="lazy" /></header>
@@ -72,7 +74,7 @@ const TIPOS: readonly { readonly valor: TipoConsultorio; readonly etiqueta: stri
           <label class="campo"><span>Nombre</span><input name="nombre" [(ngModel)]="form.nombre" required maxlength="100" placeholder="Ej. Consultorio 1" /></label>
           <label class="campo"><span>Tipo</span><select name="tipo" [(ngModel)]="form.tipo">@for (tipo of tipos; track tipo.valor) { <option [value]="tipo.valor">{{ tipo.etiqueta }}</option> }</select></label>
           <label class="campo"><span>Capacidad</span><input name="capacidad" type="number" [(ngModel)]="form.capacidad" min="1" max="100" required /></label>
-        </form>
+        <app-captura-fotos titulo="Fotografías del registro" [ocupada]="guardando()" (cambiadas)="fotos=$event" /></form>
         <div pie class="acciones"><button class="boton" type="button" (click)="nuevo()">Cancelar</button><button class="boton boton--principal" type="submit" form="form-consultorio" [disabled]="guardando()">{{ guardando() ? 'Guardando…' : editando() ? 'Guardar cambios' : 'Crear consultorio' }}</button></div>
       </app-ventana-flotante>
     }
@@ -83,7 +85,7 @@ const TIPOS: readonly { readonly valor: TipoConsultorio; readonly etiqueta: stri
           <label class="campo"><span>Nombre</span><input name="especialidad-nombre" [(ngModel)]="formEspecialidad.nombre" maxlength="150" required /></label>
           <label class="campo"><span>Código</span><input name="especialidad-codigo" [(ngModel)]="formEspecialidad.codigo" maxlength="32" /></label>
           <label class="campo"><span>Descripción</span><textarea name="especialidad-descripcion" [(ngModel)]="formEspecialidad.descripcion" rows="3"></textarea></label>
-        </form>
+        <app-captura-fotos titulo="Fotografías del registro" [ocupada]="guardando()" (cambiadas)="fotos=$event" /></form>
         <div pie class="acciones"><button class="boton" type="button" (click)="nuevaEspecialidad()">Cancelar</button><button class="boton boton--principal" type="submit" form="form-especialidad" [disabled]="guardando()">{{ guardando() ? 'Guardando…' : editandoEspecialidad() ? 'Guardar cambios' : 'Crear especialidad' }}</button></div>
       </app-ventana-flotante>
     }
@@ -99,7 +101,7 @@ const TIPOS: readonly { readonly valor: TipoConsultorio; readonly etiqueta: stri
           <label class="campo"><span>Consultorio requerido</span><select name="servicio-consultorio" [(ngModel)]="formServicio.tipo_consultorio_requerido"><option [ngValue]="null">Sin requisito</option>@for (tipo of tipos; track tipo.valor) { <option [ngValue]="tipo.valor">{{ tipo.etiqueta }}</option> }</select></label>
           <label class="campo"><span class="opcion"><input name="servicio-pago-previo" type="checkbox" [(ngModel)]="formServicio.requiere_pago_previo" /> Requiere pago previo</span></label>
           <label class="campo campo--completo"><span>Indicaciones de preparación</span><textarea name="servicio-indicaciones" [(ngModel)]="formServicio.instrucciones_preparacion" rows="2"></textarea></label>
-        </form>
+        <app-captura-fotos titulo="Fotografías del registro" [ocupada]="guardando()" (cambiadas)="fotos=$event" /></form>
         <div pie class="acciones"><button class="boton" type="button" (click)="nuevoServicio()">Cancelar</button><button class="boton boton--principal" type="submit" form="form-servicio" [disabled]="guardando()">{{ guardando() ? 'Guardando…' : editandoServicio() ? 'Guardar cambios' : 'Crear servicio' }}</button></div>
       </app-ventana-flotante>
     }
@@ -118,6 +120,8 @@ const TIPOS: readonly { readonly valor: TipoConsultorio; readonly etiqueta: stri
   `,
 })
 export class CatalogoComponent {
+  protected readonly operacionFotos = inject(FotosRegistroService).operacion<{id:string}>();
+  protected fotos: readonly FotoSeleccionada[] = [];
   private readonly catalogo = inject(CatalogoService);
   private readonly sesion = inject(SesionService);
   protected readonly tipos = TIPOS;
@@ -170,7 +174,7 @@ export class CatalogoComponent {
     if (id) this.catalogo.consultoriosGestion(id).subscribe({ next: (items) => this.consultorios.set(items), error: () => this.error.set('No se pudieron cargar los consultorios de esta sede.') });
   }
 
-  protected abrirNuevoConsultorio(): void { this.nuevo(); this.error.set(''); this.mensaje.set(''); this.ventanaFormulario.set('consultorio'); }
+  protected abrirNuevoConsultorio(): void { this.nuevo(); this.error.set(''); this.mensaje.set(''); this.operacionFotos.reiniciar(); this.fotos=[]; this.ventanaFormulario.set('consultorio'); }
 
   protected guardar(): void {
     if (!this.form.nombre.trim() || !this.sedeSeleccionada()) return;
@@ -178,7 +182,7 @@ export class CatalogoComponent {
     const operacion = this.editando()
       ? this.catalogo.actualizarConsultorio(this.editando(), { ...this.form, nombre: this.form.nombre.trim() })
       : this.catalogo.crearConsultorio({ ...this.form, nombre: this.form.nombre.trim(), sede_id: this.sedeSeleccionada() });
-    operacion.subscribe({
+    this.operacionFotos.guardar('consultorio',operacion,this.fotos).subscribe({
       next: () => {
         const confirmacion = this.editando() ? 'Consultorio actualizado.' : 'Consultorio creado.';
         this.guardando.set(false); this.seleccionarSede(this.sedeSeleccionada()); this.mensaje.set(confirmacion);
@@ -188,7 +192,7 @@ export class CatalogoComponent {
   }
 
   protected editar(sala: Consultorio): void {
-    this.editando.set(sala.id); this.form = { nombre: sala.nombre, tipo: sala.tipo, capacidad: sala.capacidad }; this.mensaje.set(''); this.error.set(''); this.ventanaFormulario.set('consultorio');
+    this.editando.set(sala.id); this.form = { nombre: sala.nombre, tipo: sala.tipo, capacidad: sala.capacidad }; this.mensaje.set(''); this.error.set(''); this.operacionFotos.reiniciar(); this.fotos=[]; this.ventanaFormulario.set('consultorio');
   }
 
   protected nuevo(): void { this.editando.set(''); this.form = { nombre: '', tipo: 'CONSULTA', capacidad: 1 }; this.ventanaFormulario.set(null); }
@@ -224,7 +228,7 @@ export class CatalogoComponent {
     const peticion = editar
       ? this.catalogo.actualizarEspecialidad(editar, datos)
       : this.catalogo.crearEspecialidad(datos);
-    peticion.subscribe({
+    this.operacionFotos.guardar('especialidad',peticion,this.fotos).subscribe({
       next: () => {
         this.guardando.set(false); this.nuevaEspecialidad(); this.cargarInventarios();
         this.catalogo.especialidades().subscribe({ next: (items) => this.especialidades.set(items) });
@@ -236,12 +240,12 @@ export class CatalogoComponent {
     });
   }
 
-  protected abrirNuevaEspecialidad(): void { this.nuevaEspecialidad(); this.error.set(''); this.mensaje.set(''); this.ventanaFormulario.set('especialidad'); }
+  protected abrirNuevaEspecialidad(): void { this.nuevaEspecialidad(); this.error.set(''); this.mensaje.set(''); this.operacionFotos.reiniciar(); this.fotos=[]; this.ventanaFormulario.set('especialidad'); }
 
   protected editarEspecialidad(item: Especialidad): void {
     this.editandoEspecialidad.set(item.id);
     this.formEspecialidad = { nombre: item.nombre, codigo: item.codigo ?? '', descripcion: item.descripcion ?? '' };
-    this.error.set(''); this.mensaje.set(''); this.ventanaFormulario.set('especialidad');
+    this.error.set(''); this.mensaje.set(''); this.operacionFotos.reiniciar(); this.fotos=[]; this.ventanaFormulario.set('especialidad');
   }
 
   protected nuevaEspecialidad(): void {
@@ -270,7 +274,7 @@ export class CatalogoComponent {
     const peticion = editar
       ? this.catalogo.actualizarServicio(editar, datos)
       : this.catalogo.crearServicio(datos);
-    peticion.subscribe({
+    this.operacionFotos.guardar('servicio',peticion,this.fotos).subscribe({
       next: () => {
         this.guardando.set(false); this.nuevoServicio(); this.cargarInventarios();
         this.catalogo.servicios().subscribe({ next: (items) => this.servicios.set(items) });
@@ -296,10 +300,10 @@ export class CatalogoComponent {
       instrucciones_preparacion: item.instrucciones_preparacion,
       tipo_consultorio_requerido: item.tipo_consultorio_requerido ?? null,
     };
-    this.error.set(''); this.mensaje.set(''); this.ventanaFormulario.set('servicio');
+    this.error.set(''); this.mensaje.set(''); this.operacionFotos.reiniciar(); this.fotos=[]; this.ventanaFormulario.set('servicio');
   }
 
-  protected abrirNuevoServicio(): void { this.nuevoServicio(); this.error.set(''); this.mensaje.set(''); this.ventanaFormulario.set('servicio'); }
+  protected abrirNuevoServicio(): void { this.nuevoServicio(); this.error.set(''); this.mensaje.set(''); this.operacionFotos.reiniciar(); this.fotos=[]; this.ventanaFormulario.set('servicio'); }
 
   protected nuevoServicio(): void {
     this.editandoServicio.set(''); this.formServicio = this.formularioServicioVacio(); this.ventanaFormulario.set(null);
