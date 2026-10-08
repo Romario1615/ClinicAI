@@ -137,11 +137,14 @@ de Configuración que desbordaba la página a 768 px.
 
 Delegaciones, Seguridad, Promociones y Analítica caben sin cambios.
 
+La regla se comprueba sola en `pruebas-e2e/escenarios/15-pantallas-trabajo.spec.ts`:
+recorre todas las secciones del menú (administración y superadministración) a
+1366 × 768 y 1024 × 768 sin desplazamiento de página ni de sección, y a
+390 × 844 sin desborde horizontal.
+
 Siguen pendientes:
 
 * Las páginas públicas (solo adaptación).
-* Automatizar estas mediciones en
-  `pruebas-e2e/escenarios/15-pantallas-trabajo.spec.ts`.
 
 Gastos y caja no se veía con ningún rol porque la base local no tenía los
 permisos `gasto.leer` y `gasto.registrar`. Si `python -m app.semillas.cargar

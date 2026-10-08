@@ -88,3 +88,66 @@ test('las pestañas clínicas cambian con flechas, Inicio y Fin y conservan su p
   await expect(evolucion).toHaveAttribute('aria-selected', 'true');
   await expect(page.getByRole('tabpanel', { name: 'Evolución', exact: true }).locator('.nota').first()).toBeVisible();
 });
+
+/**
+ * Medición de la regla «pantalla de trabajo» en todas las secciones del menú.
+ *
+ * En escritorio ninguna sección desplaza la página ni su propio anfitrión:
+ * lo que no cabe desplaza dentro de su tarjeta (`.desplazable`). En móvil la
+ * página puede desplazar en vertical, pero nunca en horizontal.
+ */
+async function medirSecciones(page: Page): Promise<string[]> {
+  const rutas = await page.locator('nav.navegacion a[href^="/"]').evaluateAll((enlaces) =>
+    [...new Set(enlaces.map((enlace) => enlace.getAttribute('href') ?? ''))].filter(Boolean),
+  );
+  expect(rutas.length).toBeGreaterThan(0);
+  const fallos: string[] = [];
+  const tamanos = [
+    { width: 1366, height: 768, escritorio: true },
+    { width: 1024, height: 768, escritorio: true },
+    { width: 390, height: 844, escritorio: false },
+  ];
+  for (const { escritorio, ...dimensiones } of tamanos) {
+    await page.setViewportSize(dimensiones);
+    for (const ruta of rutas) {
+      // Clic programático: en móvil el enlace está dentro del cajón cerrado y
+      // el router lo atiende igual sin recargar (la sesión vive en memoria).
+      await page.evaluate((href) => document.querySelector<HTMLElement>(`nav.navegacion a[href="${href}"]`)?.click(), ruta);
+      await page.waitForURL((url) => url.pathname.startsWith(ruta));
+      await page.waitForLoadState('networkidle');
+      // La coreografía de entrada desplaza las tarjetas unos píxeles mientras
+      // dura; se mide con la pantalla ya quieta.
+      await page.evaluate(() => Promise.all(document.getAnimations()
+        .filter((animacion) => animacion.effect?.getTiming().iterations !== Infinity)
+        .map((animacion) => animacion.finished.catch(() => undefined))));
+      const medida = await page.evaluate(() => {
+        const raiz = document.scrollingElement!;
+        const anfitrion = document.querySelector('router-outlet')?.nextElementSibling as HTMLElement | null;
+        return {
+          paginaY: raiz.scrollHeight - raiz.clientHeight,
+          paginaX: raiz.scrollWidth - raiz.clientWidth,
+          anfitrionY: anfitrion ? anfitrion.scrollHeight - anfitrion.clientHeight : 0,
+        };
+      });
+      const etiqueta = `${ruta} a ${dimensiones.width}×${dimensiones.height}`;
+      if (medida.paginaX > 1) fallos.push(`${etiqueta}: desborda ${medida.paginaX} px en horizontal`);
+      if (escritorio && medida.paginaY > 1) fallos.push(`${etiqueta}: la página desplaza ${medida.paginaY} px`);
+      if (escritorio && medida.anfitrionY > 1) fallos.push(`${etiqueta}: la sección desplaza ${medida.anfitrionY} px`);
+    }
+  }
+  return fallos;
+}
+
+test('ninguna sección desplaza la página en escritorio ni desborda en móvil', async ({ page }) => {
+  test.setTimeout(240_000);
+  await page.setViewportSize({ width: 1366, height: 768 });
+  await acceder(page, 'administradora');
+  expect(await medirSecciones(page)).toEqual([]);
+});
+
+test('la consola de plataforma cabe en escritorio y no desborda en móvil', async ({ page }) => {
+  test.setTimeout(120_000);
+  await page.setViewportSize({ width: 1366, height: 768 });
+  await acceder(page, 'superadministrador');
+  expect(await medirSecciones(page)).toEqual([]);
+});
