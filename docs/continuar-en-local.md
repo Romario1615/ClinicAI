@@ -125,7 +125,7 @@ Alto previo a 1366×768 entre paréntesis.
 | Conversaciones, Asistente, Agente demo | Historial desplazable; campo de escribir y acciones siempre visibles. |
 | Configuración (hasta 1636 px) | Cada sección desplaza en su marco; Integraciones compacta. |
 | Usuarios (6514 px) | Pestañas propias con filtros fijos y tabla desplazable. |
-| Plataforma (33 954 px) | Organizaciones (y sus sedes) y accesos del personal en dos columnas. |
+| Plataforma (33 954 px) | Organizaciones (y sus sedes) y accesos del personal en dos columnas, con buscador en cada lista. En tableta y móvil cada lista desplaza en su tarjeta (de 58 007 a 1 269 px a 390 × 844). |
 | Medicamentos (3418 px) | Listado con tabla desplazable; detalle con avisos y tomas en dos columnas. |
 | Gastos y caja | Indicadores fijos; movimientos y libro en dos columnas. Por debajo de 1366 px de ancho el libro ocupa todo el ancho y los movimientos se abren en una ventana flotante. |
 
@@ -139,8 +139,6 @@ Delegaciones, Seguridad, Promociones y Analítica caben sin cambios.
 
 Siguen pendientes:
 
-* Plataforma en móvil sigue siendo muy larga: las listas de clínicas y
-  cuentas no se paginan.
 * Las páginas públicas (solo adaptación).
 * Automatizar estas mediciones en
   `pruebas-e2e/escenarios/15-pantallas-trabajo.spec.ts`.

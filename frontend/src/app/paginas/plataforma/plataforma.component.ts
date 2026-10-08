@@ -1,4 +1,4 @@
-import { Component, OnInit, inject, signal, ChangeDetectionStrategy } from '@angular/core';
+import { Component, OnInit, computed, inject, signal, ChangeDetectionStrategy } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { CapturaFotosComponent, type FotoSeleccionada } from '../../compartido/captura-fotos.component';
 import { FotosRegistroService } from '../../nucleo/servicios/fotos-registro.service';
@@ -48,8 +48,12 @@ import {
         <button class="boton boton--principal" type="button" (click)="abrirNuevaClinica()">Registrar clínica</button></div>
       @if (cargando()) { <p role="status">Cargando clínicas…</p> }
       @if (!cargando() && clinicas().length === 0) { <p class="vacio">Todavía no se han registrado clínicas.</p> }
+      @if (clinicas().length > 5) {
+        <label class="buscador">Buscar clínica<input type="search" name="buscarClinica" placeholder="Nombre o correo" [value]="filtroClinicas()" (input)="filtroClinicas.set($any($event.target).value)" /></label>
+        @if (filtroClinicas() && clinicasVisibles().length === 0) { <p class="vacio" role="status">Ninguna clínica coincide con «{{ filtroClinicas() }}».</p> }
+      }
       <div class="desplazable" tabindex="0" role="region" aria-label="Organizaciones registradas">
-      @for (clinica of clinicas(); track clinica.id) {
+      @for (clinica of clinicasVisibles(); track clinica.id) {
         <article class="fila">
           <div class="datos"><strong>{{ clinica.nombre }}</strong><app-fotos-registro tipo="clinica" [registroId]="clinica.id" [puedeEditar]="true" />
             <span>{{ clinica.correo || 'Sin correo institucional' }}</span>
@@ -115,8 +119,12 @@ import {
       @if (avisoUsuario()) { <p class="mensaje mensaje--bien" role="status">{{ avisoUsuario() }}</p> }
       @if (cargandoUsuarios()) { <p role="status">Cargando cuentas…</p> }
       @if (!cargandoUsuarios() && usuarios().length === 0) { <p class="vacio">No hay cuentas de personal registradas.</p> }
+      @if (usuarios().length > 5) {
+        <label class="buscador">Buscar cuenta<input type="search" name="buscarCuenta" placeholder="Nombre, correo o clínica" [value]="filtroUsuarios()" (input)="filtroUsuarios.set($any($event.target).value)" /></label>
+        @if (filtroUsuarios() && usuariosVisibles().length === 0) { <p class="vacio" role="status">Ninguna cuenta coincide con «{{ filtroUsuarios() }}».</p> }
+      }
       <div class="desplazable" tabindex="0" role="region" aria-label="Accesos del personal">
-      @for (usuario of usuarios(); track usuario.id) {
+      @for (usuario of usuariosVisibles(); track usuario.id) {
         <article class="fila">
           <div class="datos"><strong>{{ usuario.nombre }} {{ usuario.apellido }}</strong>@if(usuario.clinica_id){<app-fotos-registro tipo="usuario" [registroId]="usuario.id" [puedeEditar]="true" />}
             <span>{{ usuario.correo }} · {{ usuario.clinica_nombre }}</span>
@@ -276,6 +284,12 @@ import {
     h3 { margin-top:1.5rem; }
     .mensaje { padding:.8rem 1rem; border-radius:.6rem; }.mensaje--error { background:#fff0ef; color:#a32720; }.mensaje--bien { background:#eaf8f1; color:#126644; }
     .vacio { color:var(--texto-secundario, #5d6b79); }
+    .buscador { margin-bottom:var(--espacio-2); }
+    /* Tableta y móvil: la página vuelve a desplazar, pero cada lista larga
+       sigue dentro de su tarjeta en lugar de alargarla sin límite. */
+    @media not ((min-width:821px) and (min-height:600px)) {
+      .desplazable { max-height:min(70dvh, 36rem); overflow:auto; overscroll-behavior:contain; }
+    }
     @media (max-width:600px) { .encabezado { flex-direction:column; } }
     /* Pantalla de trabajo: cada lista desplaza dentro de su tarjeta. */
     .plataforma__columna { display:flex; flex-direction:column; gap:var(--espacio-3); min-width:0; min-height:0; }
@@ -323,6 +337,13 @@ export class PlataformaComponent implements OnInit {
   protected formSede: AltaSedePlataforma = this.formularioSedeVacio();
   protected form: AltaClinicaPlataforma = this.formularioVacio();
   protected readonly usuarios = signal<readonly UsuarioPlataforma[]>([]);
+  /** Con decenas de clínicas y cuentas, buscar es más rápido que desplazar. */
+  protected readonly filtroClinicas = signal('');
+  protected readonly filtroUsuarios = signal('');
+  protected readonly clinicasVisibles = computed(() => filtrar(this.clinicas(), this.filtroClinicas(), (c) => [c.nombre, c.correo]));
+  protected readonly usuariosVisibles = computed(() =>
+    filtrar(this.usuarios(), this.filtroUsuarios(), (u) => [u.nombre, u.apellido, u.correo, u.clinica_nombre]),
+  );
   protected readonly cargandoUsuarios = signal(false);
   protected readonly ocupadoUsuario = signal(false);
   protected readonly errorUsuarios = signal('');
@@ -680,4 +701,15 @@ function actualizarConjunto(actual: ReadonlySet<string>, id: string, activo: boo
   const siguiente = new Set(actual);
   if (activo) siguiente.add(id); else siguiente.delete(id);
   return siguiente;
+}
+
+/** Sin distinguir mayúsculas ni tildes: «medica» encuentra «Médica». */
+function normalizar(texto: string): string {
+  return texto.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+}
+
+function filtrar<T>(filas: readonly T[], consulta: string, campos: (fila: T) => readonly (string | null | undefined)[]): readonly T[] {
+  const buscado = normalizar(consulta.trim());
+  if (!buscado) return filas;
+  return filas.filter((fila) => campos(fila).some((campo) => !!campo && normalizar(campo).includes(buscado)));
 }

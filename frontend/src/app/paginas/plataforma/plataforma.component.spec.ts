@@ -108,6 +108,32 @@ describe('PlataformaComponent', () => {
     return encontrado;
   }
 
+  it('con listas largas ofrece buscar sin distinguir tildes ni mayúsculas', () => {
+    const clinicas = Array.from({ length: 6 }, (_, i) => ({ ...clinica, id: `c-${i}`, nombre: `Clínica Sintética ${i}` }));
+    clinicas.push({ ...clinica, id: 'c-medica', nombre: 'Centro Médico Norte' });
+    const cuentas = Array.from({ length: 6 }, (_, i) => ({ ...usuario, id: `u-${i}`, nombre: `Persona${i}`, correo: `p${i}@example.invalid` }));
+    api.clinicasPlataforma.mockReturnValue(of(clinicas));
+    api.usuariosPlataforma.mockReturnValue(of(cuentas));
+    fixture = TestBed.createComponent(PlataformaComponent);
+    fixture.detectChanges();
+    const raiz = fixture.nativeElement as HTMLElement;
+    const lista = (nombre: string) => raiz.querySelector(`[aria-label="${nombre}"]`)!.querySelectorAll('article').length;
+
+    const buscarClinica = raiz.querySelector<HTMLInputElement>('input[name="buscarClinica"]')!;
+    buscarClinica.value = 'MEDICO';
+    buscarClinica.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+    expect(lista('Organizaciones registradas')).toBe(1);
+    expect(raiz.textContent).toContain('Centro Médico Norte');
+
+    const buscarCuenta = raiz.querySelector<HTMLInputElement>('input[name="buscarCuenta"]')!;
+    buscarCuenta.value = 'nadie';
+    buscarCuenta.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+    expect(lista('Accesos del personal')).toBe(0);
+    expect(raiz.textContent).toContain('Ninguna cuenta coincide con «nadie»');
+  });
+
   it('abre y cancela el alta de una clínica sin dejar datos del borrador', () => {
     boton('Registrar clínica').click();
     fixture.detectChanges();
