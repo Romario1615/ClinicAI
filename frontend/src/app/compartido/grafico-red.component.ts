@@ -1,7 +1,7 @@
 /**
  * Gráfico en movimiento: la clínica conectada.
  *
- * Un núcleo de vidrio (el escudo de ClinicAI) unido por conexiones curvas a
+ * Un núcleo de vidrio (el agente de ClinicAI) unido por conexiones curvas a
  * las piezas del trabajo diario: agenda, pacientes, mensajes, conocimiento,
  * pagos e historia. Con Motion, las conexiones se dibujan, los nodos se posan
  * con un resorte, un pulso de luz recorre cada conexión, los nodos respiran y
@@ -98,12 +98,12 @@ const PARTICULAS: readonly { x: number; y: number; r: number }[] = [
       <defs>
         <radialGradient [attr.id]="id('nucleo')" cx="35%" cy="30%" r="75%">
           <stop offset="0%" stop-color="#ffffff" stop-opacity="0.95" />
-          <stop offset="55%" stop-color="#bff0e8" stop-opacity="0.8" />
-          <stop offset="100%" stop-color="#5fd1c4" stop-opacity="0.7" />
+          <stop offset="55%" stop-color="#d1e2ff" stop-opacity="0.8" />
+          <stop offset="100%" stop-color="#8fcfff" stop-opacity="0.7" />
         </radialGradient>
         <radialGradient [attr.id]="id('halo')" cx="50%" cy="50%" r="50%">
-          <stop offset="0%" stop-color="#5fd1c4" stop-opacity="0.45" />
-          <stop offset="100%" stop-color="#5fd1c4" stop-opacity="0" />
+          <stop offset="0%" stop-color="#8fcfff" stop-opacity="0.45" />
+          <stop offset="100%" stop-color="#8fcfff" stop-opacity="0" />
         </radialGradient>
         <linearGradient [attr.id]="id('nodo')" x1="0" y1="0" x2="0" y2="1">
           <stop offset="0%" stop-color="#ffffff" stop-opacity="0.92" />
@@ -141,8 +141,8 @@ const PARTICULAS: readonly { x: number; y: number; r: number }[] = [
         <g class="red__capa" data-nodo>
           <circle r="44" class="red__anillo" data-anillo />
           <circle r="34" class="red__nucleo-vidrio" [attr.fill]="url('nucleo')" />
-          <path class="red__escudo" d="M0 -17 14 -11.5v10.5C14 9 7.5 15 0 19 -7.5 15 -14 9 -14 -1v-10.5Z" />
-          <path class="red__marca" d="m-6 1 4.5 4.5L7 -4" />
+          <text class="red__letras" x="0" y="7" text-anchor="middle">IA</text>
+          <path class="red__marca" d="m17 -22 2 5 5 2-5 2-2 5-2-5-5-2 5-2Z" />
         </g>
       </g>
     </svg>
@@ -159,19 +159,19 @@ const PARTICULAS: readonly { x: number; y: number; r: number }[] = [
       width: 100%;
       height: auto;
       overflow: visible;
-      --red-trazo: rgb(11 110 106 / 34%);
-      --red-pulso: #0b6e6a;
-      --red-icono: #0b6e6a;
-      --red-borde: rgb(11 110 106 / 28%);
-      --red-particula: #5fd1c4;
+      --red-trazo: rgb(52 86 196 / 34%);
+      --red-pulso: #3456c4;
+      --red-icono: #3456c4;
+      --red-borde: rgb(52 86 196 / 28%);
+      --red-particula: #8fcfff;
     }
 
     .red--oscura {
-      --red-trazo: rgb(170 244 233 / 34%);
-      --red-pulso: #aaf4e9;
-      --red-icono: #0a4b4c;
+      --red-trazo: rgb(164 205 255 / 34%);
+      --red-pulso: #a6ceff;
+      --red-icono: #27429b;
       --red-borde: rgb(255 255 255 / 55%);
-      --red-particula: #aaf4e9;
+      --red-particula: #a6ceff;
     }
 
     /* Con pathLength="1", un guion de longitud 1 es el trazo completo. */
@@ -247,15 +247,10 @@ const PARTICULAS: readonly { x: number; y: number; r: number }[] = [
       filter: drop-shadow(0 10px 18px rgb(6 38 41 / 24%));
     }
 
-    .red__escudo {
-      fill: rgb(11 110 106 / 14%);
-      stroke: #0b6e6a;
-      stroke-width: 1.8;
-      stroke-linejoin: round;
-    }
+    .red__letras { fill:#203b82; font:800 23px var(--fuente); letter-spacing:-1px; }
 
     .red__marca {
-      stroke: #0b6e6a;
+      stroke: #3456c4;
       stroke-width: 2.2;
     }
   `,

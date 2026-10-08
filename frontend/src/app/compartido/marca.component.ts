@@ -26,9 +26,9 @@ import { Component, input, ChangeDetectionStrategy } from '@angular/core';
     .marca__simbolo { display: block; width: 44px; height: 44px; flex: 0 0 auto; }
     .marca__texto { display: flex; flex-direction: column; line-height: 1.08; }
     .marca__nombre { font-size: 1.26rem; font-weight: 800; letter-spacing: -0.045em; white-space: nowrap; }
-    .marca__ai { color: #75e0d1; }
+    .marca__ai { color: var(--marca-brillo); }
     .marca--clara .marca__ai { color: var(--acento); }
-    .marca__descriptor { margin-top: 4px; color: #a9ccca; font-size: 0.68rem; font-weight: 650; letter-spacing: 0.12em; text-transform: uppercase; }
+    .marca__descriptor { margin-top: 4px; color: var(--marca-tenue); font-size: 0.68rem; font-weight: 650; letter-spacing: 0.12em; text-transform: uppercase; }
     .marca--clara .marca__descriptor { color: var(--texto-suave); }
     .marca--compacta .marca__simbolo { width: 36px; height: 36px; }
     .marca--compacta .marca__nombre { font-size: 1.05rem; }

@@ -1,5 +1,38 @@
 # Recursos visuales
 
+## Identidad de IA (2026-10-08)
+
+La interfaz comparte azul profundo, cobalto y cian. La portada y el panel usan
+fondos oscuros; datos, formularios y ventanas conservan vidrio claro. Los
+recursos anteriores se conservan para sus módulos y estados complementarios.
+`acceso-equipo.png` y `panel-clinicai-dental-network-v1.jpg` ya no se usan en las
+portadas: la composición actual es nativa de SVG y CSS, adaptable a toda la ventana.
+
+- `frontend/src/app/compartido/fondo-ia.component.ts`: conexiones y 24 partículas
+  con posiciones estables. Sin imágenes, azar, eventos de puntero ni ciclos de
+  JavaScript. Decorativo, sin foco y oculto al lector de pantalla. Detiene el
+  movimiento con la preferencia del usuario y desaparece al aumentar contraste.
+- `grafico-red.component.ts`: núcleo **IA**, seis módulos conectados y pulsos de
+  luz con el motor de movimiento existente; pausa sus bucles fuera de pantalla.
+- `clinicai-simbolo.svg`: conserva el símbolo original y adapta su paleta al
+  azul/cian. Se reutiliza como logo y favicon.
+
+### Fondo anatómico del faciograma
+
+Archivo: `frontend/public/images/faciograma-anatomia-v1.png` (PNG transparente,
+2 065 744 bytes). Generado mediante la herramienta integrada **imagegen**,
+modo generación; los puntos se dibujan como controles SVG independientes.
+Ilustración de una persona anónima, sin fotografías ni datos de pacientes.
+No representa puntos de inyección ni prescribe técnicas, dosis o tratamientos.
+
+Prompt utilizado:
+
+```text
+Use case: scientific-educational. Asset type: background illustration for ClinicAI aesthetic patient face chart. Primary request: an original elegant frontal facial muscle anatomy illustration, adult anonymous face, perfectly symmetric straight frontal view from crown to neck. Fine anatomical muscle fiber drawing, neutral warm ivory skin edges, pale peach and terracotta muscle fibers, soft gray-blue eyes, natural closed lips, subtle depth and very clean medical atlas illustration finish. Composition: head centered, whole crown at y=35/400, eyes y=157/400, nose tip y=199/400, lips y=238/400, chin y=301/400, narrow neck and shoulders down to y=398/400; face widths correspond to x=83..237 in a 320x400 canvas. Show both ears at eye/nose level. Transparent background, isolated cutout with generous small margins. No printed labels, no markers, no points, no instructions, no injection sites, no lettering, no watermark, no UI. This is a general visual backdrop for manually entered observations; do not include procedure guidance.
+```
+
+## Recursos anteriores
+
 Las ilustraciones generadas comparten una dirección visual: volúmenes 3D suaves,
 paleta verde azulado, marfil y salvia, fondo transparente cuando corresponde y
 sin texto incrustado. Se guardan en `frontend/public/images/` y se consumen

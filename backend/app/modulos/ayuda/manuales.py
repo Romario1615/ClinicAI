@@ -360,7 +360,7 @@ _PROFESIONAL = ManualSistema(
                 "Abra la ficha del paciente desde su cita o desde Pacientes y elija Atención y documentos.",
                 "Compruebe la especialidad indicada bajo su rol al elegir el acceso local y junto a su nombre en la sesión; corresponde a su perfil profesional.",
                 "Seleccione la cita de referencia: sus notas nuevas y documentos conservarán esa cita y sede.",
-                "Use las secciones habilitadas para su especialidad: evolución, piezas dentales, imágenes, planes y recetas.",
+                "Pulse Elegir qué registrar: odontología muestra Odontograma y Periodoncia; salud estética muestra Faciograma. Evolución, documentos y recetas dependen de sus permisos.",
             ),
             (
                 "Cambiar de cita recarga el espacio clínico; una especialidad no asignada permanece restringida.",
@@ -373,10 +373,10 @@ _PROFESIONAL = ManualSistema(
             "/pacientes",
             "Documentar evaluación y seguimiento estético sobre un rostro frontal.",
             (
-                "En Pacientes, pulse Ver ficha y abra la pestaña Faciograma junto a Odontograma; se muestra si administración habilitó ese módulo para su especialidad.",
+                "En el acceso local, elija su especialidad y pulse Profesional de salud; cada cuenta conserva su perfil y sus permisos. En producción ingrese con su cuenta asignada.",
                 "Seleccione la cita de referencia para conservar sede y especialidad; la selección se mantiene al pasar a Atención y documentos o Documentos y PDF.",
-                "Pulse Nuevo registro facial y seleccione una zona en el rostro o en la lista; indique observación, estado y procedimiento realizado por usted.",
-                "Agregue las zonas, indique el motivo y guarde; Editar crea una nueva versión y Anular conserva el historial.",
+                "En una ficha de salud estética, elija Faciograma: pulse directamente una zona de la ilustración para abrir su evaluación; indique observación, estado y procedimiento registrado por usted.",
+                "Pulse Actualizar zona, indique el motivo y Guardar versión; editar conserva las versiones anteriores. Solo el autor edita y anula su evaluación.",
                 "Descargue el PDF para obtener las observaciones y una página con el mapa de las 23 zonas.",
             ),
             (

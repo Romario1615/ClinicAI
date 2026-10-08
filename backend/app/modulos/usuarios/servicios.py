@@ -33,10 +33,10 @@ import uuid
 from dataclasses import dataclass, replace
 from datetime import datetime, timedelta
 
-from sqlalchemy import func, select
+from sqlalchemy import Select, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.modulos.organizacion.modelos import Clinica
+from app.modulos.organizacion.modelos import Clinica, Especialidad
 from app.modulos.profesionales.modelos import Profesional
 from app.modulos.usuarios.especialidades import especialidades_de_usuarios
 from app.modulos.usuarios.modelos import (
@@ -191,10 +191,43 @@ class ServicioAutenticacion:
         )
         return especialidades.get(usuario.id)
 
+    def _profesionales_locales(self) -> Select[tuple[Usuario, Especialidad]]:
+        """Cuentas sintéticas activas vinculadas a una especialidad vigente."""
+        return (
+            select(Usuario, Especialidad)
+            .join(Profesional, Profesional.usuario_id == Usuario.id)
+            .join(Especialidad, Especialidad.id == Profesional.especialidad_id)
+            .join(UsuarioRol, UsuarioRol.usuario_id == Usuario.id)
+            .join(Rol, Rol.id == UsuarioRol.rol_id)
+            .where(
+                Usuario.activo.is_(True),
+                Usuario.apellido.contains("[SINTETICO]"),
+                Profesional.activo.is_(True),
+                Profesional.anulado_en.is_(None),
+                Especialidad.activa.is_(True),
+                Especialidad.anulado_en.is_(None),
+                Profesional.clinica_id == Usuario.clinica_id,
+                Especialidad.clinica_id == Usuario.clinica_id,
+                Rol.codigo == "profesional",
+                Rol.es_sistema.is_(True),
+                Rol.clinica_id.is_(None),
+            )
+            .order_by(Usuario.correo, Usuario.id)
+        )
+
+    async def especialidades_acceso_local(self) -> list[tuple[uuid.UUID, str]]:
+        if not self._permite_acceso_local_demo:
+            return []
+        areas: dict[uuid.UUID, str] = {}
+        for _, especialidad in await self._sesion.execute(self._profesionales_locales()):
+            areas.setdefault(especialidad.id, especialidad.nombre)
+        return list(areas.items())
+
     async def iniciar_sesion_rol_local(
         self,
         *,
         codigo_rol: str,
+        especialidad_id: uuid.UUID | None = None,
         ip: str | None = None,
         agente_usuario: str | None = None,
     ) -> ResultadoAutenticacion:
@@ -206,6 +239,20 @@ class ServicioAutenticacion:
         configuracion de la aplicacion.
         """
         usuario = (await self._usuarios_acceso_local()).get(codigo_rol)
+        if especialidad_id is not None:
+            if not self._permite_acceso_local_demo or codigo_rol != "profesional":
+                raise RecursoNoEncontrado("El acceso local solicitado no esta disponible.")
+            usuario = (
+                (
+                    await self._sesion.execute(
+                        self._profesionales_locales()
+                        .where(Especialidad.id == especialidad_id)
+                        .limit(1)
+                    )
+                )
+                .scalars()
+                .first()
+            )
         if usuario is None:
             raise RecursoNoEncontrado("El acceso local solicitado no esta disponible.")
 

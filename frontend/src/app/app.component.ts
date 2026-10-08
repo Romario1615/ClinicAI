@@ -16,6 +16,7 @@ import { Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/rou
 
 import { BuscadorGlobalComponent } from './compartido/buscador-global.component';
 import { FotoPersonaComponent } from './compartido/foto-persona.component';
+import { FondoIAComponent } from './compartido/fondo-ia.component';
 import { IconoComponent, type NombreIcono } from './compartido/icono.component';
 import { MarcaComponent } from './compartido/marca.component';
 import { VentanaFlotanteComponent } from './compartido/ventana-flotante.component';
@@ -195,6 +196,7 @@ const NAVEGACION: readonly EnlaceNavegacion[] = [
     MarcaComponent,
     BuscadorGlobalComponent,
     FotoPersonaComponent,
+    FondoIAComponent,
     VentanaFlotanteComponent,
   ],
   templateUrl: './app.component.html',

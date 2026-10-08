@@ -54,8 +54,9 @@ export class AutenticacionService {
       );
   }
 
-  iniciarSesionLocal(codigoRol: string): Observable<Identidad> {
-    return this.api.iniciarSesionLocal(codigoRol).pipe(
+  iniciarSesionLocal(codigoRol: string, especialidadId?: string): Observable<Identidad> {
+    const ingreso = especialidadId ? this.api.iniciarSesionLocal(codigoRol, especialidadId) : this.api.iniciarSesionLocal(codigoRol);
+    return ingreso.pipe(
       tap((tokens) => this.sesion.establecerTokens(tokens)),
       switchMap(() => this.cargarIdentidad()),
     );

@@ -1,22 +1,30 @@
 <div class="acceso">
-  <!-- Panel de marca. Decorativo: todo lo que dice se repite o no hace falta
-       para entrar, así que en pantallas estrechas se oculta. -->
-  <aside class="acceso__marca" aria-hidden="true">
+  <aside class="acceso__marca" aria-label="ClinicAI, gestión de clínicas con inteligencia artificial">
+    <app-fondo-ia [oscuro]="true" />
     <app-marca class="acceso__logo" [compacta]="true" />
 
     <div class="acceso__mensaje">
-      <p class="acceso__ceja">GESTIÓN PARA CLÍNICAS</p>
-      <p class="acceso__titular">Agenda, pacientes y conocimiento clínico en un solo lugar.</p>
-      <ul class="acceso__puntos">
-        <li>Citas sin doble reserva</li>
-        <li>Historia clínica con versiones</li>
-        <li>Respuestas solo desde documentos aprobados</li>
-      </ul>
+      <p class="acceso__ceja"><span aria-hidden="true">✦</span> GESTIÓN CLÍNICA + AGENTE IA</p>
+      <p class="acceso__titular">Tu clínica,<br />conectada con <span>inteligencia.</span></p>
+      <p class="acceso__descripcion">Un agente para coordinar citas, atender mensajes y consultar el conocimiento aprobado de tu clínica.</p>
     </div>
 
-    <!-- Gráfico en movimiento: la clínica conectada (decorativo). Sustituye
-         al antiguo flujo estático. -->
-    <app-grafico-red class="acceso__grafico" tono="oscuro" />
+    <div class="acceso__ecosistema" aria-hidden="true">
+      <span class="acceso__etiqueta-red">UN AGENTE. TODO TU EQUIPO.</span>
+      <app-grafico-red class="acceso__grafico" tono="oscuro" />
+      <span class="acceso__conexion acceso__conexion--agenda">Agenda</span>
+      <span class="acceso__conexion acceso__conexion--pacientes">Pacientes</span>
+      <span class="acceso__conexion acceso__conexion--mensajes">Mensajes</span>
+    </div>
+
+    <div class="acceso__pie-marca">
+      <ul class="acceso__puntos">
+        <li><span>01</span><strong>Agenda conectada</strong><small>Coordina cada cita</small></li>
+        <li><span>02</span><strong>Equipo organizado</strong><small>Acceso por rol y especialidad</small></li>
+        <li><span>03</span><strong>Conocimiento con IA</strong><small>Desde fuentes aprobadas</small></li>
+      </ul>
+      <p>Más tiempo para tu equipo. Mejor organización para tu clínica.</p>
+    </div>
   </aside>
 
   <div class="acceso__formulario">
@@ -31,6 +39,9 @@
         <p class="acceso__ceja acceso__ceja--formulario">ACCESO LOCAL</p>
         <h1>Elige un rol</h1>
         <p class="acceso__intro">Elige tu rol y revisa la especialidad o área de trabajo de la cuenta.</p>
+        @if (especialidadesLocales().length > 1) {
+          <label class="campo">Especialidad del profesional<select class="campo__control" name="especialidadLocal" [(ngModel)]="especialidadLocal" [disabled]="enviando()"><option value="">Cuenta profesional predeterminada</option>@for (esp of especialidadesLocales(); track esp.id) { <option [value]="esp.id">{{ esp.nombre }}</option> }</select></label>
+        }
         <div class="acceso__roles" role="group" aria-label="Ingresar como un rol">
           @for (rol of rolesLocales(); track rol.codigo) {
             <button
@@ -64,7 +75,7 @@
               </span>
               <span class="acceso__rol-texto">
                 <strong>{{ rol.nombre }}</strong>
-                <small class="acceso__rol-especialidad">{{ especialidadDelRol(rol.especialidad, [rol.codigo]) }}</small>
+                <small class="acceso__rol-especialidad">{{ especialidadDelRol(especialidadParaRol(rol), [rol.codigo]) }}</small>
                 @if (enviando()) { <small role="status">Conectando…</small> }
               </span>
               <span class="acceso__rol-flecha" aria-hidden="true">→</span>
@@ -154,10 +165,7 @@
         </div>
       }
 
-    <p class="acceso__nota">
-      Al cerrar esta pestaña la sesión termina: los tokens viven solo en memoria, nunca en
-      el almacenamiento del navegador (ADR‑0016).
-    </p>
+    <p class="acceso__nota">La sesión termina al cerrar esta pestaña.</p>
     </div>
   </div>
 </div>

@@ -1,3 +1,8 @@
+.ambiente-ia { position:fixed; z-index:-1; }
+/* El acceso también ocupa toda la ventana en las reglas de escritorio y móvil. */
+.contenido.contenido--suelto { padding:0; overflow:visible; min-height:100dvh; }
+.contenido--suelto::before { display:none; }
+
 /* Disposición en rejilla: la navegación ocupa todo el alto a la izquierda y
  * lleva la marca; la cabecera y el contenido comparten la columna derecha.
  * En pantallas estrechas la navegación se convierte en un panel desplegable,
@@ -170,7 +175,7 @@
   /* Vidrio oscuro de marca, al 92 %: deja intuir la aurora por los cantos
    * sin que el texto secundario baje de 5:1. */
   background:
-    radial-gradient(420px 260px at 0% 0%, rgb(95 209 196 / 18%), transparent 70%),
+    radial-gradient(420px 260px at 0% 0%, rgb(126 153 255 / 18%), transparent 70%),
     radial-gradient(320px 240px at 100% 100%, rgb(127 182 230 / 10%), transparent 70%),
     var(--vidrio-oscuro);
   backdrop-filter: var(--vidrio-desenfoque);
@@ -283,7 +288,7 @@
 .navegacion__enlace--activo {
   background:
     var(--vidrio-reflejo),
-    linear-gradient(180deg, rgb(95 209 196 / 24%), rgb(95 209 196 / 12%));
+    linear-gradient(180deg, rgb(104 145 255 / 26%), rgb(104 145 255 / 15%));
   border-color: rgb(255 255 255 / 12%);
   color: #fff;
   /* Barra lateral además del color: la sección activa tiene que distinguirse
@@ -291,7 +296,7 @@
   box-shadow:
     inset 3px 0 0 var(--marca-brillo),
     inset 0 1px 0 rgb(255 255 255 / 16%),
-    0 6px 18px -10px rgb(95 209 196 / 60%);
+    0 6px 18px -10px rgb(104 145 255 / 50%);
 }
 
 .navegacion__demo {
@@ -315,15 +320,13 @@
   color: var(--marca-tenue);
 }
 
-/* El contenido ocupa el ancho disponible con un tope generoso: a 1440 px, un
-   limite de 1200 dejaba una franja muerta a la derecha justo donde vive el
-   panel contextual de la agenda. */
+/* El contenido utiliza todo el ancho disponible de la ventana. */
 .contenido {
   position: relative;
   isolation: isolate;
   grid-area: contenido;
   padding: var(--espacio-6) var(--espacio-6) var(--espacio-7);
-  max-width: 1600px;
+  max-width: none;
   width: 100%;
   /* Que el contenido pueda llenar el alto: una lista corta con media pantalla
      vacia debajo se lee como si algo no hubiera cargado. */
@@ -342,7 +345,7 @@
   inset: 0 0 0 calc(var(--ancho-navegacion, 252px) + var(--hueco-armazon, 0px));
   pointer-events: none;
   background:
-    url('/images/ambiente-clinicai-red-v1.jpg'),
+    radial-gradient(ellipse at 80% 24%, rgb(124 150 230 / 10%), transparent 55%),
     radial-gradient(ellipse at 18% 8%, rgb(99 190 174 / 5%), transparent 34%),
     radial-gradient(ellipse at 86% 72%, rgb(181 207 178 / 7%), transparent 36%);
   background-repeat: no-repeat;

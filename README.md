@@ -1,5 +1,22 @@
 # ClinicAI — Plataforma de gestión clínica
 
+## Portada y gestión con IA (2026-10-08)
+
+- **Identidad visual:** portada a pantalla completa con núcleo IA, conexiones y partículas SVG; azul profundo, cobalto y cian compartidos por navegación, panel, botones y ventanas de vidrio. Los formularios y datos conservan fondos claros. La preferencia de movimiento reducido detiene las animaciones y el contraste aumentado elimina el fondo decorativo.
+- **Acceso local:** los seis botones conservan su rol. El selector **Especialidad del profesional** permite abrir una cuenta sintética existente de Odontología, Dermatología u otra especialidad disponible. Se limita al entorno local; no concede permisos nuevos ni cambia la especialidad de un profesional.
+- **Ficha → Elegir qué registrar:** abre las herramientas que corresponden a la especialidad. **Odontología:** odontograma, Periodoncia (índice de placa) y planes dentales. **Estética, Dermatología y Cirugía plástica:** faciograma. Una autorización de lectura de otra área no habilita sus herramientas especializadas.
+- **Faciograma:** fondo anatómico original con 23 puntos. Pulse un punto o use Enter/Espacio para abrir su observación, estado y procedimiento manual. **Actualizar zona** incorpora la observación; **Guardar versión** conserva autor, cita e historial. Para corregir, se requiere motivo; los registros de otro profesional se consultan según ámbito y no se editan.
+- **Ayuda:** manual distinto para cada rol, actualizado con el acceso por especialidad y el registro desde la ficha.
+
+[Diseño y recursos](docs/recursos-visuales.md#identidad-de-ia-2026-10-08) · [Verificación de esta entrega](docs/verificacion-2026-10-08.md).
+
+**Verificación actual:** 2 030 pruebas backend aprobadas (tres llamadas optativas
+a Anthropic omitidas), 689 frontend en 94 archivos y mínimos de cobertura
+cumplidos. Lint, build, Ruff, Mypy, Bandit y Gitleaks aprobados. Chromium revisó
+la portada en cuatro tamaños, los seis roles, sus manuales y el faciograma
+editable con versiones y PDF. Servidor actualizado en
+[http://localhost:4200/acceso](http://localhost:4200/acceso).
+
 > **Roles entre especialistas (2026-10-07, `main`):** la sesión clínica se limita
 > a su especialidad y a las áreas concedidas expresamente; compartir clínica o
 > paciente no concede todas las historias ni permite corregir registros ajenos.
@@ -41,19 +58,19 @@ La ampliación se desarrolló sobre `claude/friendly-gates-o240sb`:
 - **Superadministrador → Clínicas:** crear, consultar, editar datos y desactivar/reactivar clínicas; editar y desactivar/reactivar cuentas desde la plataforma. Las cuentas de superadministración están protegidas.
 - **Administrador → Usuarios y roles:** alta, consulta, edición de identidad, asignación de roles/ámbitos y baja/reactivación. Editar identidad o dar de baja revoca sesiones; una clínica desactivada no permite iniciar sesión.
 - **Profesional → Pacientes → Ver ficha → Atención y documentos:** seleccionar la cita para trabajar con su sede y especialidad; acceder a la historia completa y abrir Agenda/Pagos según permisos. La identidad del paciente se edita desde la ficha.
-- **Profesional → Pacientes → Ver ficha → Faciograma:** pestaña directa junto a Odontograma, con mapa interactivo de 23 zonas, uso con teclado, observaciones, estados y procedimiento manual. Edición mediante nuevas versiones, anulación con motivo, historial y PDF con mapa gráfico. Habilitar desde **Catálogo → Módulos de historia por especialidad**. Estética, dermatología y cirugía plástica lo incluyen por omisión. En la instalación local revisada también está habilitado para Odontología mediante una configuración versionada del administrador.
+- **Profesional → Pacientes → Ver ficha → Faciograma:** pestaña directa para Estética, Dermatología y Cirugía plástica, con mapa interactivo de 23 zonas, uso con teclado, observaciones, estados y procedimiento manual. Edición mediante nuevas versiones, anulación con motivo, historial y PDF con mapa gráfico. **Catálogo → Módulos de historia por especialidad** permite configurar únicamente herramientas compatibles con esa especialidad. Odontología ofrece odontograma, Periodoncia y planes dentales.
 - **Profesional → Pacientes → Ver ficha → Documentos y PDF:** presupuestos y cotizaciones con partidas, cantidades, precios, moneda y vigencia; PDF de recetas confirmadas conservando firmante y pauta. Los planes propuestos/aceptados generan un presupuesto guardado y descargable. Formularios en ventanas de vidrio líquido.
 - **WhatsApp:** confirmar el destinatario y registrar antes el consentimiento **Documentos por WhatsApp** desde Contacto. El aviso contiene un enlace privado, con caducidad y verificación de identidad; una corrección/anulación invalida el anterior. Sin credenciales se muestra **sandbox**, no una entrega real. No se envían faciogramas ni documentos N3 por enlace público.
 - **Ayuda:** instrucciones diferentes por rol, filtradas por los permisos efectivos, ampliadas con estas operaciones.
 
-**Por qué no aparecía el faciograma:** el acceso local del profesional está asignado
-a Odontología y esa especialidad tenía desactivado el módulo. El gráfico también
-estaba dentro de Atención y documentos. Ahora tiene una pestaña directa y un atajo
-desde el resumen. La cita elegida se conserva al cambiar entre Atención y documentos,
-Faciograma y Documentos y PDF; sus nuevos registros usan la sede y especialidad de
-esa cita. En móvil, la fila de pestañas se desplaza horizontalmente para dejar más
-altura al contenido. Para otra clínica, el administrador debe habilitar el módulo
-en la especialidad que corresponda. La habilitación conserva los permisos del rol.
+**Cómo abrir el faciograma:** en el acceso local, seleccione **Dermatología** o
+una especialidad estética disponible y pulse **Profesional de salud**. Abra
+**Pacientes → Ver ficha → Elegir qué registrar → Faciograma**. La cuenta dental
+predeterminada muestra las herramientas de Odontología. La cita elegida se
+conserva al cambiar entre Atención y documentos, Faciograma y Documentos y PDF;
+los nuevos registros validan la sede, especialidad y responsable de esa cita.
+En móvil, la fila de pestañas se desplaza horizontalmente. La configuración de
+módulos conserva los permisos del rol y la compatibilidad con su especialidad.
 
 La migración `20261007_031` crea registros y entregas de documentos y amplía el
 consentimiento. Aplicar `alembic upgrade head` antes de iniciar backend/worker.

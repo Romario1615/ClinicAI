@@ -33,6 +33,7 @@ import { PerfilPacientesComponent } from './perfil-pacientes.component';
 
 import { ColaTrabajoComponent } from '../../compartido/cola-trabajo.component';
 import { IconoComponent, type NombreIcono } from '../../compartido/icono.component';
+import { FondoIAComponent } from '../../compartido/fondo-ia.component';
 import { PestanasComponent, type OpcionPestana } from '../../compartido/pestanas.component';
 import { TarjetasIndicadoresComponent } from '../../compartido/tarjetas-indicadores.component';
 import { VentanaFlotanteComponent } from '../../compartido/ventana-flotante.component';
@@ -75,6 +76,7 @@ const DIAS_POR_PERIODO: Record<string, number> = { hoy: 1, '7': 7, '30': 30 };
     RouterLink,
     ColaTrabajoComponent,
     IconoComponent,
+    FondoIAComponent,
     TarjetasIndicadoresComponent,
     VentanaFlotanteComponent,
     PerfilPacientesComponent,
@@ -82,9 +84,10 @@ const DIAS_POR_PERIODO: Record<string, number> = { hoy: 1, '7': 7, '30': 30 };
   ],
   host: { class: 'pantalla' },
   template: `
-    <div class="cabecera-pagina pantalla__fijo">
+    <div class="cabecera-pagina panel__portada pantalla__fijo">
+      <app-fondo-ia [oscuro]="true" />
       <div>
-        <p class="ceja panel__ceja"><app-icono nombre="diente-conectado" [tamano]="16" /> GESTIÓN CLÍNICA</p>
+        <p class="ceja panel__ceja"><app-icono nombre="agente" [tamano]="16" /> CLINICAI · GESTIÓN CON IA</p>
         <h1>Panel de seguimiento</h1>
         <p class="panel__contexto">{{ hoyLegible() }} · horario de {{ zona() }}</p>
       </div>
@@ -679,12 +682,11 @@ const DIAS_POR_PERIODO: Record<string, number> = { hoy: 1, '7': 7, '30': 30 };
       border: 1px solid var(--borde);
       border-radius: var(--radio);
       background-image:
-        linear-gradient(90deg, rgb(5 31 42 / 82%) 0%, rgb(5 31 42 / 67%) 43%, rgb(5 31 42 / 19%) 100%),
-        url('/images/panel-clinicai-dental-network-v1.jpg');
+        radial-gradient(ellipse at 85% 20%, rgb(99 128 223 / 35%), transparent 52%),
+        linear-gradient(115deg, #132445, #172a52 65%, #253e73);
       background-position: center, 50% 52%;
       background-size: cover;
       isolation: isolate;
-      animation: panel-fondo-desplazamiento 28s ease-in-out infinite alternate;
       color: #fff;
     }
 
@@ -694,7 +696,7 @@ const DIAS_POR_PERIODO: Record<string, number> = { hoy: 1, '7': 7, '30': 30 };
       z-index: 0;
       inset: -55% 12% -55% 42%;
       pointer-events: none;
-      background: radial-gradient(ellipse, rgb(95 209 196 / 25%), transparent 66%);
+      background: radial-gradient(ellipse, rgb(129 166 255 / 20%), transparent 66%);
       opacity: .8;
       animation: panel-resplandor 14s ease-in-out infinite alternate;
     }
@@ -732,6 +734,8 @@ const DIAS_POR_PERIODO: Record<string, number> = { hoy: 1, '7': 7, '30': 30 };
     }
 
     .cabecera-pagina h1 { color: #fff; }
+    .cabecera-pagina .boton--principal { background:#e9efff; color:#243f8e; border-color:#f5f8ff; box-shadow:0 4px 20px rgb(0 0 0 / 12%); }
+    .cabecera-pagina .boton--principal:hover { background:#fff; }
 
     @media (max-width: 600px) {
       .cabecera-pagina {
@@ -750,11 +754,11 @@ const DIAS_POR_PERIODO: Record<string, number> = { hoy: 1, '7': 7, '30': 30 };
 
     .panel__contexto {
       margin: 2px 0 0;
-      color: #d1e7e7;
+      color: #d1def5;
       font-size: 0.9rem;
     }
 
-    .panel__ceja { display: flex; align-items: center; gap: var(--espacio-2); color: #aaf4e9; }
+    .panel__ceja { display: flex; align-items: center; gap: var(--espacio-2); color: #aad8ff; }
     .panel__ceja app-icono { animation: panel-latido 5s ease-in-out infinite; }
     @keyframes panel-latido {
       0%, 100% { transform: scale(1); filter: drop-shadow(0 0 0 rgb(170 244 233 / 0%)); }

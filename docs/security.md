@@ -16,6 +16,18 @@ capacidades clínicas conservan su ámbito operativo. Un perfil inactivo, anulad
 o vinculado a otra clínica pierde las capacidades clínicas y de adherencia.
 Perder el perfil nunca convierte al especialista en asistencia con alcance general.
 
+Los módulos especializados deben ser compatibles con el perfil: odontograma,
+Periodoncia y planes pertenecen a Odontología; faciograma pertenece a Estética,
+Dermatología y Cirugía plástica. El administrador puede restringir las opciones
+compatibles. Una concesión de lectura de otra especialidad no concede sus
+herramientas especializadas. El catálogo de zonas faciales también valida el módulo.
+
+En acceso local, `especialidad_id` solo selecciona una cuenta sintética activa
+con rol profesional, perfil vigente y especialidad activa de la misma clínica.
+Se rechazan áreas inexistentes, perfiles inactivos y su uso para otros roles.
+La selección no cambia asignaciones ni permite elegir identificadores de usuarios.
+El endpoint sigue deshabilitado fuera de la configuración local autorizada.
+
 La lectura de notas, imágenes clínicas, planes, odontogramas, periodoncia,
 anamnesis capturada y Formulario 033 filtra autores en SQL dentro de la clínica
 y de las especialidades autorizadas. El resumen clínico conserva ese filtro;
@@ -58,7 +70,7 @@ clínica a recepción ni administración. [ADR-0022](decisiones/0022-crud-faciog
 | `PUT /plataforma/clinicas/usuarios/{id}/datos`, `/{id}/estado` | Superadministración + permiso de edición/baja de usuario; cuentas de plataforma protegidas |
 | `PUT /usuarios/{id}/datos` | Edición de usuario; SQL limitado a su clínica; revoca sesiones sin alterar roles/vínculo |
 | `GET /pacientes/{id}/contextos-atencion` | Lectura de agenda y ámbito del paciente/citas |
-| `GET /historia/faciograma/zonas` | Lectura de historia; catálogo sin datos de pacientes |
+| `GET /historia/faciograma/zonas` | Lectura de historia y módulo facial compatible; catálogo sin datos de pacientes |
 | `GET /historia/pacientes/{id}/registros` y `/{registro}/pdf` | Lectura clínica, relación asistencial, clínica, sede, especialidad, módulos y sensibilidad; lectura auditada |
 | `POST /historia/pacientes/{id}/registros`, `/{registro}/anulacion` | Escritura clínica; mismo ámbito; versión sucesora/anulación solo por el autor, con motivo |
 | `POST /historia/planes/{id}/presupuesto-documento` | Escritura clínica, lectura autorizada del plan y módulo activo; cita/sede validadas |

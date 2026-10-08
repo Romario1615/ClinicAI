@@ -479,7 +479,11 @@ class TestAccesoLocalPorRoles:
         respuesta = await cliente.get(_ruta(api, "/accesos-locales"))
 
         assert respuesta.status_code == 200
-        assert respuesta.json() == {"habilitado": False, "roles": []}
+        assert respuesta.json() == {
+            "habilitado": False,
+            "roles": [],
+            "especialidades_profesionales": [],
+        }
 
     @pytest.mark.parametrize("entorno", [Entorno.PREPRODUCCION, Entorno.PRODUCCION])
     async def test_no_emite_accesos_locales_fuera_de_desarrollo(
@@ -501,7 +505,11 @@ class TestAccesoLocalPorRoles:
         )
 
         assert accesos.status_code == 200
-        assert accesos.json() == {"habilitado": False, "roles": []}
+        assert accesos.json() == {
+            "habilitado": False,
+            "roles": [],
+            "especialidades_profesionales": [],
+        }
         assert inicio.status_code == 404
         assert inicio.json()["codigo"] == "RECURSO_NO_ENCONTRADO"
         assert (
