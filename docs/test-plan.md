@@ -18,8 +18,11 @@ con la API reiniciada y la corrección de N3: **4/4 en 46,3 s**.
 Backend: **73/73** de las rutas locales/RAG, semillas y manuales con el entorno
 de CI; **2/2** unitarias del conteo de recetas de semillas; **2/2** API para
 copias sensibles de recetas. Las regresiones nuevas se reprodujeron fallando
-antes del arreglo. La corrida global posterior está en ejecución en otra BD
-temporal, con proveedores mock/sandbox. [Informe y estado de CI](verificacion-2026-10-07.md#faciograma-visible-y-documentos-desde-la-ficha).
+antes del arreglo. La corrida global posterior aprobó **1921 pruebas y omitió
+tres de Anthropic real en 10 min 36 s**, con ENTORNO=desarrollo, otra BD temporal
+y proveedores mock/sandbox. Se ejecutó sin cobertura; no se atribuye una medida
+nueva de cobertura backend a esta corrida. Las dos bases desechables se retiraron.
+[Informe y estado de CI](verificacion-2026-10-07.md#faciograma-visible-y-documentos-desde-la-ficha).
 
 ## CRUD, faciograma y documentos (2026-10-07)
 

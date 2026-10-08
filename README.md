@@ -47,10 +47,15 @@ reiniciar la API con la corrección de clasificación sensible, sus cuatro
 recorridos de documentos pasan de nuevo. Backend: 73 pruebas focalizadas y dos
 unitarias de resumen de semillas; dos regresiones nuevas verifican que la copia
 de una receta conserva N3 y rechaza su edición directa. La nueva corrida global
-está en ejecución; la anterior aprobó 1917 y omitió tres llamadas a Anthropic.
+del backend aprobó **1921 pruebas** y omitió tres llamadas optativas a Anthropic,
+en **10 min 36 s**, con el entorno de CI y una BD exclusiva. Las dos bases
+temporales se eliminaron al terminar; las de desarrollo se conservan.
 Se comprobaron las pantallas del profesional, administrador y superadministrador
 en los servicios reales 4200/8000. [Informe de esta corrección](docs/verificacion-2026-10-07.md#faciograma-visible-y-documentos-desde-la-ficha).
 El sitio sigue disponible en [el acceso local](http://localhost:4200/acceso).
+El commit funcional `41aa0dd` pasó seis trabajos de GitHub (secretos, dependencias,
+calidad estática, frontend y ambas imágenes); su suite backend remota estaba en
+ejecución al registrar esta evidencia. No se declara una corrida CI completa en verde.
 
 Las cifras siguientes conservan ejecuciones anteriores; la verificación de esta
 ampliación se registra en la sección específica del informe.

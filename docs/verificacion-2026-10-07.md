@@ -196,7 +196,7 @@ no se escribieron registros clínicos en desarrollo.
 | Backend focalizado | 73/73 en 55,19 s con ENTORNO=desarrollo del ejecutor de CI |
 | Resumen de semillas | 2/2 unitarias: incluye receta, confirmación, suspensión y tomas adicionales |
 | Copia de receta N3 | 2/2 API en 3,41 s: conserva sensibilidad solicitada, rechaza edición y deniega WhatsApp |
-| Backend global nuevo | En ejecución, en otra BD exclusiva, sin llamadas a proveedores |
+| Backend global nuevo | 1921 aprobadas, 3 omitidas (Anthropic real), 10 min 36 s; ENTORNO=desarrollo y otra BD exclusiva, sin llamadas a proveedores |
 | Ruff, formato y mypy | Aprobados; 419 archivos formateados y 229 fuentes tipadas |
 
 La primera corrida Chromium dio 66 aprobadas y una aserción fallida: la prueba
@@ -225,7 +225,15 @@ y detección de secretos pasaron. Se corrigieron estas causas:
 - Semillas: la receta extra del acceso local no entraba en el resumen; se
   contabilizan receta, confirmación, suspensión y tomas sin cambiar los datos clínicos.
 
-La nueva corrida remota aún no se declara aprobada. Los logs, PDF y capturas
+La [corrida remota del commit funcional 41aa0dd](https://github.com/Romario1615/ClinicAI/actions/runs/37720408186)
+aprobó secretos, dependencias, calidad estática backend, frontend y las dos
+imágenes. Las pruebas unitarias del backend también pasaron; API/integración y
+los pasos posteriores seguían en ejecución al registrar esta evidencia. No se
+declara una corrida completa CI en verde. La repetición global local final se
+hizo sin cobertura. Se retiraron la API 8020 y ambas BD temporales después de
+terminar; permanecen 4200/8000 y la BD de desarrollo con la habilitación facial.
+
+Los logs, PDF y capturas
 están en `tmp/qa-20261007/` (excluido de Git): `frontend-ficha-final.log`,
 `e2e-completo-ficha-repeticion.log`, `e2e-documentos-api-final.log`,
 `backend-ci-focalizado.log`, `receta-sensible-final.log`,

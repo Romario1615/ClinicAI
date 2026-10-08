@@ -5,10 +5,13 @@
 > Frontend 635/635; lint y build aprobados. Chromium 67/67 en 7,7 minutos, axe
 > en las 22 rutas y en la ficha facial; cuatro recorridos documentales repetidos
 > con la API final. Dos pruebas API verifican que emitir una receta sensible
-> conserva N3 y bloquea su entrega por enlace. La regresión global nueva está
-> en ejecución. La corrida GitHub 37716853153 falló por la referencia de Trivy,
+> conserva N3 y bloquea su entrega por enlace. La regresión global nueva aprobó
+> 1921 pruebas y omitió tres de Anthropic real en 10 min 36 s, sin cobertura.
+> La corrida GitHub 37716853153 falló por la referencia de Trivy,
 > el entorno de las rutas locales y el resumen de semillas; las tres causas
-> están corregidas y pendientes de una nueva validación remota. Esta revisión
+> están corregidas. La nueva corrida 37720408186 del commit funcional 41aa0dd
+> aprobó seis trabajos; la suite backend remota seguía en ejecución al registrar
+> la evidencia. Esta revisión
 > actualiza funcionalidad local; los requisitos de producción siguientes
 > continúan pendientes. [Informe](verificacion-2026-10-07.md#faciograma-visible-y-documentos-desde-la-ficha).
 
