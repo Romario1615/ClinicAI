@@ -101,13 +101,13 @@ import type { ResumenPanel } from '../../nucleo/servicios/operaciones.service';
     .demografia__intro { min-width: 0; }
     .demografia__rejilla {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr));
-      gap: var(--espacio-5);
-      margin-top: var(--espacio-4);
+      grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr));
+      gap: var(--espacio-4);
+      margin-top: var(--espacio-3);
     }
     .demografia__grupo { min-width: 0; }
-    .demografia__grupo h4 { margin: 0 0 var(--espacio-3); }
-    .demografia__lista { display: grid; gap: var(--espacio-3); list-style: none; margin: 0; padding: 0; }
+    .demografia__grupo h4 { margin: 0 0 var(--espacio-2); }
+    .demografia__lista { display: grid; gap: var(--espacio-2); list-style: none; margin: 0; padding: 0; }
     /* El valor reserva su ancho real; la barra ocupa una fila independiente. */
     .demografia__fila {
       display: grid;

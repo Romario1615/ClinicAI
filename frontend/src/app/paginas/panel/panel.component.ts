@@ -33,6 +33,7 @@ import { PerfilPacientesComponent } from './perfil-pacientes.component';
 
 import { ColaTrabajoComponent } from '../../compartido/cola-trabajo.component';
 import { IconoComponent, type NombreIcono } from '../../compartido/icono.component';
+import { PestanasComponent, type OpcionPestana } from '../../compartido/pestanas.component';
 import { TarjetasIndicadoresComponent } from '../../compartido/tarjetas-indicadores.component';
 import { VentanaFlotanteComponent } from '../../compartido/ventana-flotante.component';
 import { IndicadoresService, type Indicadores } from '../../nucleo/servicios/indicadores.service';
@@ -77,9 +78,11 @@ const DIAS_POR_PERIODO: Record<string, number> = { hoy: 1, '7': 7, '30': 30 };
     TarjetasIndicadoresComponent,
     VentanaFlotanteComponent,
     PerfilPacientesComponent,
+    PestanasComponent,
   ],
+  host: { class: 'pantalla' },
   template: `
-    <div class="cabecera-pagina">
+    <div class="cabecera-pagina pantalla__fijo">
       <div>
         <p class="ceja panel__ceja"><app-icono nombre="diente-conectado" [tamano]="16" /> GESTIÓN CLÍNICA</p>
         <h1>Panel de seguimiento</h1>
@@ -89,471 +92,524 @@ const DIAS_POR_PERIODO: Record<string, number> = { hoy: 1, '7': 7, '30': 30 };
     </div>
 
     @if (error()) {
-      <p class="aviso-error" role="alert">{{ error() }}</p>
+      <p class="aviso-error pantalla__fijo" role="alert">{{ error() }}</p>
     }
 
-    <!-- ============ 0. Tablero de su rol ============
-         Cada grupo aparece solo si el rol alcanza ese módulo: el backend no
-         envía el bloque y aquí no se pinta. Cada tarjeta lleva a donde se
-         resuelve lo que cuenta. -->
-    @for (grupo of tablero(); track grupo.titulo) {
-      <section class="bloque">
-        <div class="bloque__cabecera">
-          <h2>{{ grupo.titulo }}</h2>
-          <span class="bloque__linea" aria-hidden="true"></span>
-        </div>
-        <app-tarjetas-indicadores [indicadores]="grupo.tarjetas" [titulo]="grupo.titulo" />
-      </section>
-    }
-
-    <!-- ============ 1. Lo que tiene plazo ============ -->
-    @if (sesion.tienePermiso(PERMISOS.agendaLeer)) {
-      <section class="bloque">
-        <div class="bloque__cabecera">
-          <h2>Lo primero</h2>
-          <span class="bloque__linea" aria-hidden="true"></span>
-          <span class="bloque__cuenta numerico">
-            {{ pendientes().length }} tarea(s) con plazo
-          </span>
-        </div>
-        @if (cargandoHoy()) {
-          <p role="status">Consultando el día…</p>
-        } @else {
-          <app-cola-trabajo
-            [tareas]="pendientes()"
-            [rejilla]="true"
-            (actuar)="irALaAgenda()"
-            (localizar)="irALaAgenda()"
-          />
-        }
-      </section>
-
-      <!-- ============ 2. La carga de hoy ============ -->
-      <section class="bloque">
-        <div class="bloque__cabecera">
-          <h2>Carga de hoy</h2>
-          <span class="bloque__linea" aria-hidden="true"></span>
-        </div>
-        <div class="tarjeta">
-          <p class="campo__ayuda carga__nota">
-            Minutos de consulta comprometidos por profesional durante la jornada.
-          </p>
-          @if (carga().length === 0) {
-            <p class="carga__vacio">Sin citas hoy en su ámbito.</p>
-          } @else {
-            <ul class="carga">
-              @for (fila of carga(); track fila.id) {
-                <li class="carga__fila">
-                  <span class="carga__nombre">{{ fila.nombre }}</span>
-                  <span class="carga__pista" [attr.title]="fila.nombre + ': ' + fila.legible">
-                    <span class="carga__barra" [style.width.%]="fila.porcentaje"></span>
-                  </span>
-                  <span class="carga__valor numerico">{{ fila.legible }}</span>
-                </li>
-              }
-            </ul>
-          }
-        </div>
-      </section>
-    }
-
-    <!-- ============ 3. Las cifras, como contexto ============ -->
-    @if (sesion.tienePermiso(PERMISOS.metricasLeer)) {
-      <section class="bloque">
-        <div class="bloque__cabecera">
-          <h2>Cifras del periodo</h2>
-          <span class="bloque__linea" aria-hidden="true"></span>
-          <div class="periodos" role="group" aria-label="Periodo">
-            @for (opcion of opciones; track opcion.clave) {
-              <button
-                type="button"
-                class="periodos__boton"
-                [class.periodos__boton--activo]="periodo() === opcion.clave"
-                [attr.aria-pressed]="periodo() === opcion.clave"
-                (click)="cambiarPeriodo(opcion.clave)"
-              >
-                {{ opcion.etiqueta }}
-              </button>
-            }
-          </div>
-        </div>
-
-        <div class="filtros-dashboard__barra">
-          <p class="filtros-dashboard__estado" aria-live="polite">
-            @if (cantidadFiltrosActivos() > 0) {
-              {{ cantidadFiltrosActivos() }} filtro(s) activo(s) en este resumen
-            } @else {
-              Métricas de toda la clínica · hoy
-            }
-          </p>
-          <button
-            class="boton boton--secundario filtros-dashboard__abrir"
-            type="button"
-            (click)="abrirFiltros()"
-            aria-haspopup="dialog"
-          >
-            <app-icono nombre="configuracion" [tamano]="17" /> Ajustar filtros
-            @if (cantidadFiltrosActivos() > 0) {
-              <span class="filtros-dashboard__contador">{{ cantidadFiltrosActivos() }}</span>
-            }
-          </button>
-        </div>
-        @if (errorFechas()) { <p class="aviso-error" role="alert">{{ errorFechas() }}</p> }
-
-        @if (cargandoResumen()) {
-          <p role="status">Consultando actividad…</p>
-        } @else if (resumen()) {
-          @let r = resumen()!;
-          <div class="rejilla">
-            @if (r.ocupacion_agenda; as ocupacion) {
-            <article class="tarjeta tarjeta-vidrio">
-              <div class="ocupacion-agenda__cabecera">
-                <span class="ocupacion-agenda__icono" aria-hidden="true"><app-icono nombre="metricas" [tamano]="19" /></span>
-                <div>
-                  <p class="cifra__titulo">Ocupación de agenda</p>
-                  <p class="campo__ayuda">Reservas activas sobre minutos disponibles</p>
-                </div>
-              </div>
-              @if (ocupacion.porcentaje === null) {
-                <strong class="ocupacion-agenda__valor">—</strong>
-              } @else {
-                <strong class="ocupacion-agenda__valor numerico">{{ ocupacion.porcentaje }}<span>%</span></strong>
-                <progress
-                  class="ocupacion-agenda__barra"
-                  max="100"
-                  [value]="ocupacion.porcentaje"
-                  [attr.aria-label]="'Ocupación de agenda: ' + ocupacion.porcentaje + ' por ciento'"
-                ></progress>
-              }
-              @if (ocupacion.minutos_disponibles !== null && ocupacion.minutos_ocupados !== null) {
-                <p class="ocupacion-agenda__tiempos numerico">
-                  {{ formatearDuracion(ocupacion.minutos_ocupados) }} reservados
-                  <span aria-hidden="true">·</span>
-                  {{ formatearDuracion(ocupacion.minutos_disponibles) }} disponibles
-                </p>
-              }
-              <p class="campo__ayuda ocupacion-agenda__detalle">{{ ocupacion.detalle }}</p>
-            </article>
-            }
-
-            <article class="tarjeta inasistencia">
-              <p class="inasistencia__titulo">Inasistencia</p>
-              <p class="inasistencia__valor">
-                <strong class="numerico">{{ inasistencia().valor }}</strong>
-                @if (inasistencia().delta !== null) {
-                  <span
-                    class="insignia"
-                    [class.insignia--peligro]="inasistencia().sube"
-                    [class.insignia--exito]="!inasistencia().sube"
-                  >
-                    {{ inasistencia().sube ? '▲' : '▼' }} {{ inasistencia().delta }} pt
-                  </span>
-                }
-              </p>
-              <p class="inasistencia__lectura">{{ inasistencia().lectura }}</p>
-            </article>
-
-            <article class="tarjeta">
-              <p class="cifra__titulo">Citas del periodo</p>
-              <strong class="cifra numerico">{{ r.total_citas }}</strong>
-              <p class="campo__ayuda">{{ r.pacientes }} paciente(s) distintos</p>
-            </article>
-
-            <article class="tarjeta">
-              <p class="cifra__titulo">Pacientes atendidos</p>
-              @if (r.pacientes_nuevos === null || r.pacientes_recurrentes === null) {
-                <p class="campo__ayuda">El filtro por estado impide comparar primeras atenciones completadas.</p>
-              } @else {
-                <dl class="pacientes-tipo">
-                  <div><dt>Nuevos</dt><dd class="numerico">{{ r.pacientes_nuevos }}</dd></div>
-                  <div><dt>Recurrentes</dt><dd class="numerico">{{ r.pacientes_recurrentes }}</dd></div>
-                </dl>
-                <p class="campo__ayuda">Clasificados por su primera atención completada dentro del filtro.</p>
-              }
-            </article>
-
-            <article class="tarjeta tarjeta-vidrio retorno-30d" aria-labelledby="retorno-30d-titulo">
-              <h3 id="retorno-30d-titulo" class="cifra__titulo">Retorno a 30 días</h3>
-              @if (estadoCita()) {
-                <p class="campo__ayuda">Elige “Todos los estados” para calcular cohortes de atenciones completadas.</p>
-              } @else if (r.retorno_30_dias; as retorno) {
-                <strong class="cifra numerico">{{ retorno.porcentaje }}%</strong>
-                <progress
-                  class="ocupacion-agenda__barra"
-                  [value]="retorno.porcentaje"
-                  max="100"
-                  [attr.aria-label]="'Retorno a 30 días: ' + retorno.porcentaje + ' por ciento'"
-                ></progress>
-                <p class="campo__ayuda numerico">
-                  {{ retorno.pacientes_que_regresaron }} de {{ retorno.pacientes_seguimiento_completo }} pacientes regresaron.
-                </p>
-                <p class="campo__ayuda">
-                  Otra atención completada dentro de las 720 horas posteriores a la primera del periodo; solo cohortes con seguimiento completo.
-                </p>
-              } @else {
-                <p class="campo__ayuda">Sin una cohorte con seguimiento completo o el resultado está protegido para grupos pequeños.</p>
-              }
-            </article>
-
-            <article class="tarjeta altas-pacientes" aria-labelledby="altas-pacientes-titulo">
-              <h3 id="altas-pacientes-titulo" class="cifra__titulo">Altas de pacientes</h3>
-              @if (r.pacientes_registrados === null || r.pacientes_registrados === undefined || r.pacientes_registrados_sin_cita === null || r.pacientes_registrados_sin_cita === undefined) {
-                <p class="campo__ayuda">Elige “Todos los estados” para consultar las altas y su registro de citas.</p>
-              } @else {
-                <dl class="pacientes-tipo">
-                  <div><dt>Registrados</dt><dd class="numerico">{{ r.pacientes_registrados }}</dd></div>
-                  <div><dt>Sin cita en los filtros</dt><dd class="numerico">{{ r.pacientes_registrados_sin_cita }}</dd></div>
-                </dl>
-                <p class="campo__ayuda">Alta administrativa dentro del periodo. “Sin cita” significa que no hay un registro de cita dentro de las fechas y filtros actuales.</p>
-              }
-            </article>
-
-            <article class="tarjeta">
-              <p class="cifra__titulo">Sala de espera</p>
-              <strong class="cifra numerico">{{ r.espera.personas_en_espera }}</strong>
-              <p class="campo__ayuda">paciente(s) esperando en el periodo</p>
-              <p class="campo__ayuda">
-                Espera media hasta iniciar:
-                @if (r.espera.promedio_minutos === null) {
-                  sin atenciones iniciadas
-                } @else {
-                  {{ r.espera.promedio_minutos }} min
-                }
-              </p>
-              @if (r.espera.espera_mayor_15_minutos > 0) {
-                <p class="carga__demora" role="status">
-                  {{ r.espera.espera_mayor_15_minutos }} supera 15 minutos
-                </p>
-              }
-            </article>
-
-            <article class="tarjeta">
-              <p class="cifra__titulo">Recuperación de turnos</p>
-              @if (r.recuperacion_turnos.turnos_liberados === null) {
-                <p class="campo__ayuda">Elige “Todos los estados” para consultar cancelaciones y recuperaciones.</p>
-              } @else {
-                <dl class="pacientes-tipo">
-                  <div><dt>Liberados</dt><dd class="numerico">{{ r.recuperacion_turnos.turnos_liberados }}</dd></div>
-                  <div><dt>Recuperados</dt><dd class="numerico">{{ r.recuperacion_turnos.turnos_recuperados }}</dd></div>
-                </dl>
-                <p class="campo__ayuda">
-                  Los liberados usan la fecha de cancelación; los recuperados, la fecha de aceptación.
-                  @if (r.recuperacion_turnos.promedio_minutos_para_recuperar === null) {
-                    Sin ofertas aceptadas en el periodo.
-                  } @else {
-                    Media hasta aceptar una oferta: {{ r.recuperacion_turnos.promedio_minutos_para_recuperar }} min.
-                  }
-                </p>
-              }
-            </article>
-
-            @if (r.adherencia; as a) {
-              <article class="tarjeta">
-                <p class="cifra__titulo">Registro de medicación</p>
-                <strong class="cifra numerico">
-                  @if (a.porcentaje_registro_positivo === null) {
-                    —
-                  } @else {
-                    {{ a.porcentaje_registro_positivo }}%
-                  }
-                </strong>
-                <dl class="pacientes-tipo">
-                  <div><dt>Tomas registradas</dt><dd class="numerico">{{ a.tomas_confirmadas }}</dd></div>
-                  <div><dt>Omitidas</dt><dd class="numerico">{{ a.tomas_omitidas }}</dd></div>
-                </dl>
-                <p class="campo__ayuda">
-                  @if (a.porcentaje_registro_positivo === null) {
-                    Sin tomas confirmadas u omitidas en este periodo.
-                  } @else {
-                    Porcentaje de tomas registradas como realizadas entre las registradas.
-                  }
-                  {{ a.seguimientos_pendientes }}
-                  {{ a.seguimientos_pendientes === 1 ? 'seguimiento pendiente actualmente' : 'seguimientos pendientes actualmente' }}.
-                </p>
-                <p class="campo__ayuda">Dato administrativo del registro, no evalúa el resultado del tratamiento.</p>
-                @if (sedeId() || servicioId()) {
-                  <p class="campo__ayuda">Con filtro de sede o servicio se consideran recetas vinculadas a una cita de ese contexto.</p>
-                }
-              </article>
-            }
-
-            @if (r.pagos; as pagos) {
-              <article class="tarjeta">
-                <p class="cifra__titulo">Pagos de esas citas</p>
-                <ul class="pagos">
-                  @for (par of pagosLegibles(pagos); track par.estado) {
-                    <li>
-                      <span>{{ par.estado }}</span>
-                      <span class="numerico">{{ par.importe }}</span>
-                    </li>
-                  } @empty {
-                    <li class="pagos__vacio">Sin pagos registrados para esas citas.</li>
-                  }
-                </ul>
-              </article>
-            }
-          </div>
-
-          <app-perfil-pacientes [demografia]="r.demografia" />
-
-          <section class="tarjeta cohortes-registro" aria-labelledby="cohortes-registro-titulo">
-            <h3 id="cohortes-registro-titulo">Cohortes de registro</h3>
-            <p class="campo__ayuda">Altas agrupadas por mes · citas registradas dentro del periodo y los filtros actuales.</p>
-            @if (r.cohortes_registro === null || r.cohortes_registro === undefined) {
-              <p class="campo__ayuda">El desglose se oculta al filtrar por estado porque una cita en otro estado no debe contarse como ausencia.</p>
-            } @else if (r.cohortes_registro.length === 0) {
-              <p class="campo__ayuda">No hay altas de pacientes en este periodo.</p>
-            } @else {
-              <div class="cohortes-registro__desplazamiento" role="region" aria-label="Tabla de altas mensuales" tabindex="0">
-                <table class="cohortes-registro__tabla">
-                  <caption>Pacientes según su mes de registro</caption>
-                  <thead>
-                    <tr><th scope="col">Mes</th><th scope="col">Registrados</th><th scope="col">Con cita</th><th scope="col">Sin cita</th></tr>
-                  </thead>
-                  <tbody>
-                    @for (cohorte of r.cohortes_registro; track cohorte.mes) {
-                      <tr>
-                        <th scope="row"><time [attr.datetime]="cohorte.mes">{{ etiquetaMesCohorte(cohorte.mes) }}</time></th>
-                        <td class="numerico">{{ cohorte.registrados }}</td>
-                        <td class="numerico">{{ cohorte.con_cita_en_filtros }}</td>
-                        <td class="numerico">{{ cohorte.sin_cita_en_filtros }}</td>
-                      </tr>
-                    }
-                  </tbody>
-                </table>
-              </div>
-            }
-          </section>
-
-          <div class="tarjeta estados">
-            <p class="cifra__titulo">Reparto por estado</p>
-            @for (estado of estadosConDatos(); track estado.codigo) {
-              <div class="estados__fila">
-                <span class="insignia" [class]="'insignia--' + estado.clase">
-                  {{ estado.etiqueta }}
-                </span>
-                <span class="estados__pista" aria-hidden="true">
-                  <span
-                    class="estados__barra"
-                    [class]="'estados__barra--' + estado.clase"
-                    [style.width.%]="estado.porcentaje"
-                  ></span>
-                </span>
-                <span class="numerico estados__valor">{{ estado.cantidad }}</span>
-              </div>
-            }
-          </div>
-
-          <div class="tendencias" role="group" aria-label="Distribución de citas en el periodo">
-            <section class="tarjeta tendencia" aria-labelledby="tendencia-diaria">
-              <h3 id="tendencia-diaria">Citas por día</h3>
-              @if (r.tendencia_diaria.length === 0) {
-                <p class="campo__ayuda">Sin citas en este periodo.</p>
-              } @else {
-                <ul class="tendencia__lista">
-                  @for (item of r.tendencia_diaria; track item.fecha) {
-                    <li>
-                      <span>{{ etiquetaFecha(item.fecha) }}</span>
-                      <span class="tendencia__pista" aria-hidden="true"><span [style.width.%]="(item.total / maximoTendencia(r.tendencia_diaria)) * 100"></span></span>
-                      <strong class="numerico">{{ item.total }}</strong>
-                    </li>
-                  }
-                </ul>
-              }
-            </section>
-            <section class="tarjeta tendencia" aria-labelledby="tendencia-semanal">
-              <h3 id="tendencia-semanal">Citas por día de la semana</h3>
-              @if (r.por_dia_semana.length === 0) {
-                <p class="campo__ayuda">Sin citas en este periodo.</p>
-              } @else {
-                <ul class="tendencia__lista">
-                  @for (item of r.por_dia_semana; track item.dia) {
-                    <li>
-                      <span>{{ etiquetaDia(item.dia) }}</span>
-                      <span class="tendencia__pista" aria-hidden="true"><span [style.width.%]="(item.total / maximoTendencia(r.por_dia_semana)) * 100"></span></span>
-                      <strong class="numerico">{{ item.total }}</strong>
-                    </li>
-                  }
-                </ul>
-              }
-            </section>
-            <section class="tarjeta tendencia" aria-labelledby="tendencia-horaria">
-              <h3 id="tendencia-horaria">Citas por hora local</h3>
-              @if (r.por_hora.length === 0) {
-                <p class="campo__ayuda">Sin citas en este periodo.</p>
-              } @else {
-                <ul class="tendencia__lista">
-                  @for (item of r.por_hora; track item.hora) {
-                    <li>
-                      <span>{{ etiquetaHora(item.hora) }}</span>
-                      <span class="tendencia__pista" aria-hidden="true"><span [style.width.%]="(item.total / maximoTendencia(r.por_hora)) * 100"></span></span>
-                      <strong class="numerico">{{ item.total }}</strong>
-                    </li>
-                  }
-                </ul>
-              }
-            </section>
-          </div>
-        }
-      </section>
-    } @else {
-      <div class="tarjeta">
+    @if (!vistas().length) {
+      <div class="tarjeta pantalla__fijo">
         <h2>Su espacio de trabajo</h2>
         <p>Use el menú para acceder a las gestiones habilitadas para su rol.</p>
       </div>
     }
 
-    @if (sesion.tienePermiso(PERMISOS.metricasLeer)) {
-      <section class="bloque seguimiento" aria-labelledby="seguimiento-inteligente">
-        <div class="bloque__cabecera">
-        <h2 id="seguimiento-inteligente"><app-icono nombre="actividad-inteligente" [tamano]="18" /> Seguimiento inteligente</h2>
-          <span class="bloque__linea" aria-hidden="true"></span>
-          <span class="seguimiento__metodo">Señales basadas en actividad real</span>
-          <button class="boton boton--pequeno" type="button" (click)="generarResumenLocal()" [disabled]="analizandoLocal()">
-            {{ analizandoLocal() ? 'Preparando…' : 'Resumen operativo' }}
-          </button>
-          @if (sesion.tienePermiso(PERMISOS.configuracionEscribir)) {
-            <button class="boton boton--pequeno" type="button" (click)="generarAnalisisIA()" [disabled]="analizandoIA()">
-              {{ analizandoIA() ? 'Analizando…' : 'Analizar con IA' }}
-            </button>
-          }
-        </div>
-        @if (errorIA()) { <p class="aviso-error" role="alert">{{ errorIA() }}</p> }
-        @if (!resumenLocal().length && !analisisIA()) {
-          <div class="seguimiento__vacio">
-            <img
-              src="/images/seguimiento-inteligente-clinica.svg"
-              alt=""
-              aria-hidden="true"
-              width="192"
-              height="144"
-              loading="lazy"
-            />
-            <div>
-              <p class="ceja"><app-icono nombre="revision-operativa" [tamano]="15" /> LECTURA DEL PERIODO</p>
-              <h3>El pulso operativo de la clínica, en contexto</h3>
-              <p>Prepara un resumen con actividad real o solicita un análisis con IA para este periodo.</p>
-            </div>
-          </div>
-        }
-        @if (resumenLocal().length) {
-          <article class="tarjeta analisis-ia" aria-live="polite">
-            <p class="ceja"><app-icono nombre="revision-operativa" [tamano]="15" /> RESUMEN OPERATIVO LOCAL · {{ etiquetaPeriodo() }}</p>
-            <ul>@for (hallazgo of resumenLocal(); track hallazgo) { <li>{{ hallazgo }}</li> }</ul>
-          </article>
-        }
-        @if (analisisIA()) { <article class="tarjeta analisis-ia"><p class="ceja"><app-icono nombre="analisis-ia" [tamano]="15" /> ANÁLISIS GENERATIVO · {{ etiquetaPeriodo() }}</p><p>{{ analisisIA() }}</p></article> }
-        <div class="seguimiento__rejilla">
-          @for (senal of senalesSeguimiento(); track senal.titulo) {
-            <article class="tarjeta seguimiento__senal" [class.seguimiento__senal--alerta]="senal.alerta">
-              <span class="seguimiento__pictograma" aria-hidden="true"><app-icono [nombre]="senal.icono" [tamano]="18" /></span>
-              <div><h3>{{ senal.titulo }}</h3><p>{{ senal.detalle }}</p></div>
-            </article>
-          }
-        </div>
-        <p class="seguimiento__nota">Estas señales usan reglas transparentes sobre agenda y cobros; no generan diagnósticos ni predicciones clínicas.</p>
-      </section>
+    <!-- Una vista a la vez: el panel apilado medía casi 4000 px de alto. Las
+         vistas inactivas se ocultan, no se desmontan, para no repetir
+         peticiones al volver a ellas. En escritorio cada vista llena el alto y
+         solo desplaza dentro de sus tarjetas. -->
+    @if (vistas().length > 1) {
+      <app-pestanas
+        class="pantalla__fijo"
+        grupo="panel"
+        etiqueta="Vistas del panel"
+        [opciones]="vistas()"
+        [activa]="vistaActiva()"
+        (activaChange)="vista.set($event)"
+      />
     }
+
+    <div class="pantalla__resto">
+      <!-- ============ 0. Tablero de su rol ============
+           Cada grupo aparece solo si el rol alcanza ese módulo: el backend no
+           envía el bloque y aquí no se pinta. Cada tarjeta lleva a donde se
+           resuelve lo que cuenta. -->
+      @if (tablero().length) {
+        <section
+          role="tabpanel"
+          class="panel__vista desplazable"
+          id="panel-panel-resumen"
+          aria-labelledby="panel-pestana-resumen"
+          [hidden]="vistaActiva() !== 'resumen'"
+        >
+          @for (grupo of tablero(); track grupo.titulo) {
+            <section class="bloque">
+              <div class="bloque__cabecera">
+                <h2>{{ grupo.titulo }}</h2>
+                <span class="bloque__linea" aria-hidden="true"></span>
+              </div>
+              <app-tarjetas-indicadores [indicadores]="grupo.tarjetas" [titulo]="grupo.titulo" />
+            </section>
+          }
+        </section>
+      }
+
+      <!-- ============ 1. Lo que tiene plazo y 2. la carga de hoy ============ -->
+      @if (sesion.tienePermiso(PERMISOS.agendaLeer)) {
+        <section
+          role="tabpanel"
+          class="panel__vista pantalla__columnas panel__hoy"
+          id="panel-panel-hoy"
+          aria-labelledby="panel-pestana-hoy"
+          [hidden]="vistaActiva() !== 'hoy'"
+        >
+          <section class="bloque">
+            <div class="bloque__cabecera">
+              <h2>Lo primero</h2>
+              <span class="bloque__linea" aria-hidden="true"></span>
+              <span class="bloque__cuenta numerico">
+                {{ pendientes().length }} tarea(s) con plazo
+              </span>
+            </div>
+            <div class="desplazable" tabindex="0" role="region" aria-label="Tareas con plazo">
+              @if (cargandoHoy()) {
+                <p role="status">Consultando el día…</p>
+              } @else {
+                <app-cola-trabajo
+                  [tareas]="pendientes()"
+                  [rejilla]="true"
+                  (actuar)="irALaAgenda()"
+                  (localizar)="irALaAgenda()"
+                />
+              }
+            </div>
+          </section>
+
+          <section class="bloque">
+            <div class="bloque__cabecera">
+              <h2>Carga de hoy</h2>
+              <span class="bloque__linea" aria-hidden="true"></span>
+            </div>
+            <div class="tarjeta tarjeta--llena">
+              <p class="campo__ayuda carga__nota">
+                Minutos de consulta comprometidos por profesional durante la jornada.
+              </p>
+              <div class="desplazable" tabindex="0" role="region" aria-label="Carga por profesional">
+                @if (carga().length === 0) {
+                  <p class="carga__vacio">Sin citas hoy en su ámbito.</p>
+                } @else {
+                  <ul class="carga">
+                    @for (fila of carga(); track fila.id) {
+                      <li class="carga__fila">
+                        <span class="carga__nombre">{{ fila.nombre }}</span>
+                        <span class="carga__pista" [attr.title]="fila.nombre + ': ' + fila.legible">
+                          <span class="carga__barra" [style.width.%]="fila.porcentaje"></span>
+                        </span>
+                        <span class="carga__valor numerico">{{ fila.legible }}</span>
+                      </li>
+                    }
+                  </ul>
+                }
+              </div>
+            </div>
+          </section>
+        </section>
+      }
+
+      <!-- ============ 3. Las cifras, como contexto ============
+           Tres vistas (cifras, distribución y pacientes) comparten el periodo
+           y los filtros: los mandos se quedan arriba y no se repiten. -->
+      @if (sesion.tienePermiso(PERMISOS.metricasLeer)) {
+        <section
+          role="tabpanel"
+          class="panel__vista panel__cifras"
+          [id]="'panel-panel-' + vistaCifras()"
+          [attr.aria-labelledby]="'panel-pestana-' + vistaCifras()"
+          [hidden]="!esVistaDeCifras()"
+        >
+          <div class="cifras__mandos">
+            <div class="periodos" role="group" aria-label="Periodo">
+              @for (opcion of opciones; track opcion.clave) {
+                <button
+                  type="button"
+                  class="periodos__boton"
+                  [class.periodos__boton--activo]="periodo() === opcion.clave"
+                  [attr.aria-pressed]="periodo() === opcion.clave"
+                  (click)="cambiarPeriodo(opcion.clave)"
+                >
+                  {{ opcion.etiqueta }}
+                </button>
+              }
+            </div>
+            <div class="filtros-dashboard__barra">
+              <p class="filtros-dashboard__estado" aria-live="polite">
+                @if (cantidadFiltrosActivos() > 0) {
+                  {{ cantidadFiltrosActivos() }} filtro(s) activo(s) en este resumen
+                } @else {
+                  Métricas de toda la clínica · hoy
+                }
+              </p>
+              <button
+                class="boton boton--secundario filtros-dashboard__abrir"
+                type="button"
+                (click)="abrirFiltros()"
+                aria-haspopup="dialog"
+              >
+                <app-icono nombre="configuracion" [tamano]="17" /> Ajustar filtros
+                @if (cantidadFiltrosActivos() > 0) {
+                  <span class="filtros-dashboard__contador">{{ cantidadFiltrosActivos() }}</span>
+                }
+              </button>
+            </div>
+            @if (errorFechas()) { <p class="aviso-error" role="alert">{{ errorFechas() }}</p> }
+          </div>
+
+          @if (cargandoResumen()) {
+            <p role="status">Consultando actividad…</p>
+          } @else if (resumen()) {
+            @let r = resumen()!;
+            <div class="rejilla cifras__rejilla" [hidden]="vistaActiva() !== 'cifras'">
+              @if (r.ocupacion_agenda; as ocupacion) {
+              <article class="tarjeta tarjeta-vidrio">
+                <div class="ocupacion-agenda__cabecera">
+                  <span class="ocupacion-agenda__icono" aria-hidden="true"><app-icono nombre="metricas" [tamano]="19" /></span>
+                  <div>
+                    <p class="cifra__titulo">Ocupación de agenda</p>
+                    <p class="campo__ayuda">Reservas activas sobre minutos disponibles</p>
+                  </div>
+                </div>
+                @if (ocupacion.porcentaje === null) {
+                  <strong class="ocupacion-agenda__valor">—</strong>
+                } @else {
+                  <strong class="ocupacion-agenda__valor numerico">{{ ocupacion.porcentaje }}<span>%</span></strong>
+                  <progress
+                    class="ocupacion-agenda__barra"
+                    max="100"
+                    [value]="ocupacion.porcentaje"
+                    [attr.aria-label]="'Ocupación de agenda: ' + ocupacion.porcentaje + ' por ciento'"
+                  ></progress>
+                }
+                @if (ocupacion.minutos_disponibles !== null && ocupacion.minutos_ocupados !== null) {
+                  <p class="ocupacion-agenda__tiempos numerico">
+                    {{ formatearDuracion(ocupacion.minutos_ocupados) }} reservados
+                    <span aria-hidden="true">·</span>
+                    {{ formatearDuracion(ocupacion.minutos_disponibles) }} disponibles
+                  </p>
+                }
+                <p class="campo__ayuda ocupacion-agenda__detalle">{{ ocupacion.detalle }}</p>
+              </article>
+              }
+
+              <article class="tarjeta inasistencia">
+                <p class="inasistencia__titulo">Inasistencia</p>
+                <p class="inasistencia__valor">
+                  <strong class="numerico">{{ inasistencia().valor }}</strong>
+                  @if (inasistencia().delta !== null) {
+                    <span
+                      class="insignia"
+                      [class.insignia--peligro]="inasistencia().sube"
+                      [class.insignia--exito]="!inasistencia().sube"
+                    >
+                      {{ inasistencia().sube ? '▲' : '▼' }} {{ inasistencia().delta }} pt
+                    </span>
+                  }
+                </p>
+                <p class="inasistencia__lectura">{{ inasistencia().lectura }}</p>
+              </article>
+
+              <article class="tarjeta">
+                <p class="cifra__titulo">Citas del periodo</p>
+                <strong class="cifra numerico">{{ r.total_citas }}</strong>
+                <p class="campo__ayuda">{{ r.pacientes }} paciente(s) distintos</p>
+              </article>
+
+              <article class="tarjeta">
+                <p class="cifra__titulo">Pacientes atendidos</p>
+                @if (r.pacientes_nuevos === null || r.pacientes_recurrentes === null) {
+                  <p class="campo__ayuda">El filtro por estado impide comparar primeras atenciones completadas.</p>
+                } @else {
+                  <dl class="pacientes-tipo">
+                    <div><dt>Nuevos</dt><dd class="numerico">{{ r.pacientes_nuevos }}</dd></div>
+                    <div><dt>Recurrentes</dt><dd class="numerico">{{ r.pacientes_recurrentes }}</dd></div>
+                  </dl>
+                  <p class="campo__ayuda">Clasificados por su primera atención completada dentro del filtro.</p>
+                }
+              </article>
+
+              <article class="tarjeta tarjeta-vidrio retorno-30d" aria-labelledby="retorno-30d-titulo">
+                <h3 id="retorno-30d-titulo" class="cifra__titulo">Retorno a 30 días</h3>
+                @if (estadoCita()) {
+                  <p class="campo__ayuda">Elige “Todos los estados” para calcular cohortes de atenciones completadas.</p>
+                } @else if (r.retorno_30_dias; as retorno) {
+                  <strong class="cifra numerico">{{ retorno.porcentaje }}%</strong>
+                  <progress
+                    class="ocupacion-agenda__barra"
+                    [value]="retorno.porcentaje"
+                    max="100"
+                    [attr.aria-label]="'Retorno a 30 días: ' + retorno.porcentaje + ' por ciento'"
+                  ></progress>
+                  <p class="campo__ayuda numerico">
+                    {{ retorno.pacientes_que_regresaron }} de {{ retorno.pacientes_seguimiento_completo }} pacientes regresaron.
+                  </p>
+                  <p class="campo__ayuda">
+                    Otra atención completada dentro de las 720 horas posteriores a la primera del periodo; solo cohortes con seguimiento completo.
+                  </p>
+                } @else {
+                  <p class="campo__ayuda">Sin una cohorte con seguimiento completo o el resultado está protegido para grupos pequeños.</p>
+                }
+              </article>
+
+              <article class="tarjeta altas-pacientes" aria-labelledby="altas-pacientes-titulo">
+                <h3 id="altas-pacientes-titulo" class="cifra__titulo">Altas de pacientes</h3>
+                @if (r.pacientes_registrados === null || r.pacientes_registrados === undefined || r.pacientes_registrados_sin_cita === null || r.pacientes_registrados_sin_cita === undefined) {
+                  <p class="campo__ayuda">Elige “Todos los estados” para consultar las altas y su registro de citas.</p>
+                } @else {
+                  <dl class="pacientes-tipo">
+                    <div><dt>Registrados</dt><dd class="numerico">{{ r.pacientes_registrados }}</dd></div>
+                    <div><dt>Sin cita en los filtros</dt><dd class="numerico">{{ r.pacientes_registrados_sin_cita }}</dd></div>
+                  </dl>
+                  <p class="campo__ayuda">Alta administrativa dentro del periodo. “Sin cita” significa que no hay un registro de cita dentro de las fechas y filtros actuales.</p>
+                }
+              </article>
+
+              <article class="tarjeta">
+                <p class="cifra__titulo">Sala de espera</p>
+                <strong class="cifra numerico">{{ r.espera.personas_en_espera }}</strong>
+                <p class="campo__ayuda">paciente(s) esperando en el periodo</p>
+                <p class="campo__ayuda">
+                  Espera media hasta iniciar:
+                  @if (r.espera.promedio_minutos === null) {
+                    sin atenciones iniciadas
+                  } @else {
+                    {{ r.espera.promedio_minutos }} min
+                  }
+                </p>
+                @if (r.espera.espera_mayor_15_minutos > 0) {
+                  <p class="carga__demora" role="status">
+                    {{ r.espera.espera_mayor_15_minutos }} supera 15 minutos
+                  </p>
+                }
+              </article>
+
+              <article class="tarjeta">
+                <p class="cifra__titulo">Recuperación de turnos</p>
+                @if (r.recuperacion_turnos.turnos_liberados === null) {
+                  <p class="campo__ayuda">Elige “Todos los estados” para consultar cancelaciones y recuperaciones.</p>
+                } @else {
+                  <dl class="pacientes-tipo">
+                    <div><dt>Liberados</dt><dd class="numerico">{{ r.recuperacion_turnos.turnos_liberados }}</dd></div>
+                    <div><dt>Recuperados</dt><dd class="numerico">{{ r.recuperacion_turnos.turnos_recuperados }}</dd></div>
+                  </dl>
+                  <p class="campo__ayuda">
+                    Los liberados usan la fecha de cancelación; los recuperados, la fecha de aceptación.
+                    @if (r.recuperacion_turnos.promedio_minutos_para_recuperar === null) {
+                      Sin ofertas aceptadas en el periodo.
+                    } @else {
+                      Media hasta aceptar una oferta: {{ r.recuperacion_turnos.promedio_minutos_para_recuperar }} min.
+                    }
+                  </p>
+                }
+              </article>
+
+              @if (r.adherencia; as a) {
+                <article class="tarjeta">
+                  <p class="cifra__titulo">Registro de medicación</p>
+                  <strong class="cifra numerico">
+                    @if (a.porcentaje_registro_positivo === null) {
+                      —
+                    } @else {
+                      {{ a.porcentaje_registro_positivo }}%
+                    }
+                  </strong>
+                  <dl class="pacientes-tipo">
+                    <div><dt>Tomas registradas</dt><dd class="numerico">{{ a.tomas_confirmadas }}</dd></div>
+                    <div><dt>Omitidas</dt><dd class="numerico">{{ a.tomas_omitidas }}</dd></div>
+                  </dl>
+                  <p class="campo__ayuda">
+                    @if (a.porcentaje_registro_positivo === null) {
+                      Sin tomas confirmadas u omitidas en este periodo.
+                    } @else {
+                      Porcentaje de tomas registradas como realizadas entre las registradas.
+                    }
+                    {{ a.seguimientos_pendientes }}
+                    {{ a.seguimientos_pendientes === 1 ? 'seguimiento pendiente actualmente' : 'seguimientos pendientes actualmente' }}.
+                  </p>
+                  <p class="campo__ayuda">Dato administrativo del registro, no evalúa el resultado del tratamiento.</p>
+                  @if (sedeId() || servicioId()) {
+                    <p class="campo__ayuda">Con filtro de sede o servicio se consideran recetas vinculadas a una cita de ese contexto.</p>
+                  }
+                </article>
+              }
+
+              @if (r.pagos; as pagos) {
+                <article class="tarjeta">
+                  <p class="cifra__titulo">Pagos de esas citas</p>
+                  <ul class="pagos">
+                    @for (par of pagosLegibles(pagos); track par.estado) {
+                      <li>
+                        <span>{{ par.estado }}</span>
+                        <span class="numerico">{{ par.importe }}</span>
+                      </li>
+                    } @empty {
+                      <li class="pagos__vacio">Sin pagos registrados para esas citas.</li>
+                    }
+                  </ul>
+                </article>
+              }
+            </div>
+
+            <div class="panel__graficos" role="group" aria-label="Distribución de citas en el periodo" [hidden]="vistaActiva() !== 'distribucion'">
+              <div class="tarjeta tarjeta--llena estados panel__grafico">
+                <p class="cifra__titulo">Reparto por estado</p>
+                @for (estado of estadosConDatos(); track estado.codigo) {
+                  <div class="estados__fila">
+                    <span class="insignia" [class]="'insignia--' + estado.clase">
+                      {{ estado.etiqueta }}
+                    </span>
+                    <span class="estados__pista" aria-hidden="true">
+                      <span
+                        class="estados__barra"
+                        [class]="'estados__barra--' + estado.clase"
+                        [style.width.%]="estado.porcentaje"
+                      ></span>
+                    </span>
+                    <span class="numerico estados__valor">{{ estado.cantidad }}</span>
+                  </div>
+                }
+              </div>
+              <section class="tarjeta tarjeta--llena tendencia panel__grafico" aria-labelledby="tendencia-diaria">
+                <h3 id="tendencia-diaria">Citas por día</h3>
+                @if (r.tendencia_diaria.length === 0) {
+                  <p class="campo__ayuda">Sin citas en este periodo.</p>
+                } @else {
+                  <ul class="tendencia__lista desplazable">
+                    @for (item of r.tendencia_diaria; track item.fecha) {
+                      <li>
+                        <span>{{ etiquetaFecha(item.fecha) }}</span>
+                        <span class="tendencia__pista" aria-hidden="true"><span [style.width.%]="(item.total / maximoTendencia(r.tendencia_diaria)) * 100"></span></span>
+                        <strong class="numerico">{{ item.total }}</strong>
+                      </li>
+                    }
+                  </ul>
+                }
+              </section>
+              <section class="tarjeta tarjeta--llena tendencia panel__grafico" aria-labelledby="tendencia-semanal">
+                <h3 id="tendencia-semanal">Citas por día de la semana</h3>
+                @if (r.por_dia_semana.length === 0) {
+                  <p class="campo__ayuda">Sin citas en este periodo.</p>
+                } @else {
+                  <ul class="tendencia__lista desplazable">
+                    @for (item of r.por_dia_semana; track item.dia) {
+                      <li>
+                        <span>{{ etiquetaDia(item.dia) }}</span>
+                        <span class="tendencia__pista" aria-hidden="true"><span [style.width.%]="(item.total / maximoTendencia(r.por_dia_semana)) * 100"></span></span>
+                        <strong class="numerico">{{ item.total }}</strong>
+                      </li>
+                    }
+                  </ul>
+                }
+              </section>
+              <section class="tarjeta tarjeta--llena tendencia panel__grafico" aria-labelledby="tendencia-horaria">
+                <h3 id="tendencia-horaria">Citas por hora local</h3>
+                @if (r.por_hora.length === 0) {
+                  <p class="campo__ayuda">Sin citas en este periodo.</p>
+                } @else {
+                  <ul class="tendencia__lista desplazable">
+                    @for (item of r.por_hora; track item.hora) {
+                      <li>
+                        <span>{{ etiquetaHora(item.hora) }}</span>
+                        <span class="tendencia__pista" aria-hidden="true"><span [style.width.%]="(item.total / maximoTendencia(r.por_hora)) * 100"></span></span>
+                        <strong class="numerico">{{ item.total }}</strong>
+                      </li>
+                    }
+                  </ul>
+                }
+              </section>
+            </div>
+
+            <div class="pantalla__columnas panel__pacientes" [hidden]="vistaActiva() !== 'pacientes'">
+              <div class="desplazable panel__perfil" tabindex="0" role="region" aria-label="Perfil de pacientes">
+                <app-perfil-pacientes [demografia]="r.demografia" />
+              </div>
+              <section class="tarjeta tarjeta--llena cohortes-registro" aria-labelledby="cohortes-registro-titulo">
+                <h3 id="cohortes-registro-titulo">Cohortes de registro</h3>
+                <p class="campo__ayuda">Altas agrupadas por mes · citas registradas dentro del periodo y los filtros actuales.</p>
+                @if (r.cohortes_registro === null || r.cohortes_registro === undefined) {
+                  <p class="campo__ayuda">El desglose se oculta al filtrar por estado porque una cita en otro estado no debe contarse como ausencia.</p>
+                } @else if (r.cohortes_registro.length === 0) {
+                  <p class="campo__ayuda">No hay altas de pacientes en este periodo.</p>
+                } @else {
+                  <div class="cohortes-registro__desplazamiento desplazable" role="region" aria-label="Tabla de altas mensuales" tabindex="0">
+                    <table class="cohortes-registro__tabla">
+                      <caption>Pacientes según su mes de registro</caption>
+                      <thead>
+                        <tr><th scope="col">Mes</th><th scope="col">Registrados</th><th scope="col">Con cita</th><th scope="col">Sin cita</th></tr>
+                      </thead>
+                      <tbody>
+                        @for (cohorte of r.cohortes_registro; track cohorte.mes) {
+                          <tr>
+                            <th scope="row"><time [attr.datetime]="cohorte.mes">{{ etiquetaMesCohorte(cohorte.mes) }}</time></th>
+                            <td class="numerico">{{ cohorte.registrados }}</td>
+                            <td class="numerico">{{ cohorte.con_cita_en_filtros }}</td>
+                            <td class="numerico">{{ cohorte.sin_cita_en_filtros }}</td>
+                          </tr>
+                        }
+                      </tbody>
+                    </table>
+                  </div>
+                }
+              </section>
+            </div>
+          }
+        </section>
+
+        <section
+          role="tabpanel"
+          class="panel__vista bloque seguimiento"
+          id="panel-panel-seguimiento"
+          aria-labelledby="panel-pestana-seguimiento"
+          [hidden]="vistaActiva() !== 'seguimiento'"
+        >
+          <div class="bloque__cabecera">
+            <h2 id="seguimiento-inteligente"><app-icono nombre="actividad-inteligente" [tamano]="18" /> Seguimiento inteligente</h2>
+            <span class="bloque__linea" aria-hidden="true"></span>
+            <span class="seguimiento__metodo">Señales basadas en actividad real</span>
+            <button class="boton boton--pequeno" type="button" (click)="generarResumenLocal()" [disabled]="analizandoLocal()">
+              {{ analizandoLocal() ? 'Preparando…' : 'Resumen operativo' }}
+            </button>
+            @if (sesion.tienePermiso(PERMISOS.configuracionEscribir)) {
+              <button class="boton boton--pequeno" type="button" (click)="generarAnalisisIA()" [disabled]="analizandoIA()">
+                {{ analizandoIA() ? 'Analizando…' : 'Analizar con IA' }}
+              </button>
+            }
+          </div>
+          <div class="desplazable seguimiento__cuerpo" tabindex="0" role="region" aria-labelledby="seguimiento-inteligente">
+            @if (errorIA()) { <p class="aviso-error" role="alert">{{ errorIA() }}</p> }
+            @if (!resumenLocal().length && !analisisIA()) {
+              <div class="seguimiento__vacio">
+                <img
+                  src="/images/seguimiento-inteligente-clinica.svg"
+                  alt=""
+                  aria-hidden="true"
+                  width="192"
+                  height="144"
+                  loading="lazy"
+                />
+                <div>
+                  <p class="ceja"><app-icono nombre="revision-operativa" [tamano]="15" /> LECTURA DEL PERIODO</p>
+                  <h3>El pulso operativo de la clínica, en contexto</h3>
+                  <p>Prepara un resumen con actividad real o solicita un análisis con IA para este periodo.</p>
+                </div>
+              </div>
+            }
+            @if (resumenLocal().length) {
+              <article class="tarjeta analisis-ia" aria-live="polite">
+                <p class="ceja"><app-icono nombre="revision-operativa" [tamano]="15" /> RESUMEN OPERATIVO LOCAL · {{ etiquetaPeriodo() }}</p>
+                <ul>@for (hallazgo of resumenLocal(); track hallazgo) { <li>{{ hallazgo }}</li> }</ul>
+              </article>
+            }
+            @if (analisisIA()) { <article class="tarjeta analisis-ia"><p class="ceja"><app-icono nombre="analisis-ia" [tamano]="15" /> ANÁLISIS GENERATIVO · {{ etiquetaPeriodo() }}</p><p>{{ analisisIA() }}</p></article> }
+            <div class="seguimiento__rejilla">
+              @for (senal of senalesSeguimiento(); track senal.titulo) {
+                <article class="tarjeta seguimiento__senal" [class.seguimiento__senal--alerta]="senal.alerta">
+                  <span class="seguimiento__pictograma" aria-hidden="true"><app-icono [nombre]="senal.icono" [tamano]="18" /></span>
+                  <div><h3>{{ senal.titulo }}</h3><p>{{ senal.detalle }}</p></div>
+                </article>
+              }
+            </div>
+            <p class="seguimiento__nota">Estas señales usan reglas transparentes sobre agenda y cobros; no generan diagnósticos ni predicciones clínicas.</p>
+          </div>
+        </section>
+      }
+    </div>
 
     @if (filtrosAbiertos()) {
       <app-ventana-flotante
@@ -1121,6 +1177,130 @@ const DIAS_POR_PERIODO: Record<string, number> = { hoy: 1, '7': 7, '30': 30 };
       font-weight: 600;
       font-size: 0.9rem;
     }
+
+    /* --- Vistas en pestañas ---
+       Las clases de reparto fijan display; sin !important el atributo hidden
+       perdería contra ellas y se verían dos vistas a la vez. */
+    .panel__vista[hidden],
+    .panel__vista [hidden] { display: none !important; }
+
+    .panel__vista > .bloque,
+    .panel__vista.bloque,
+    .panel__vista .estados { margin-top: 0; }
+
+    .panel__vista > .bloque + .bloque { margin-top: var(--espacio-4); }
+
+    .cifras__mandos {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: var(--espacio-3);
+      margin-bottom: var(--espacio-3);
+    }
+
+    .cifras__mandos .filtros-dashboard__barra {
+      flex: 1 1 320px;
+      min-height: 44px;
+      margin-bottom: 0;
+      padding-block: var(--espacio-1);
+    }
+
+    /* Tarjetas de cifras más densas: caben dos filas en 768 px de alto. */
+    .cifras__rejilla {
+      gap: var(--espacio-3);
+      grid-template-columns: repeat(auto-fill, minmax(min(100%, 180px), 1fr));
+    }
+
+    .cifras__rejilla > .tarjeta { padding: var(--espacio-3); }
+    .cifras__rejilla .cifra__titulo,
+    .cifras__rejilla .inasistencia__titulo { font-size: .76rem; }
+    .cifras__rejilla .cifra,
+    .cifras__rejilla .inasistencia__valor strong { font-size: 1.6rem; }
+    .cifras__rejilla .pacientes-tipo { gap: var(--espacio-2); }
+    .cifras__rejilla .pacientes-tipo dt { font-size: .78rem; }
+    .cifras__rejilla .pacientes-tipo dd { font-size: 1.3rem; }
+    .cifras__rejilla .ocupacion-agenda__icono { display: none; }
+    .cifras__rejilla .ocupacion-agenda__valor { margin: var(--espacio-2) 0; font-size: 2rem; }
+    .cifras__rejilla .campo__ayuda,
+    .cifras__rejilla .inasistencia__lectura,
+    .cifras__rejilla .ocupacion-agenda__tiempos { font-size: .78rem; line-height: 1.35; }
+    .cifras__rejilla .campo__ayuda { margin-block: var(--espacio-1) 0; }
+
+    .panel__graficos {
+      display: grid;
+      gap: var(--espacio-3);
+      grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr));
+    }
+
+    /* Una barra que no cabe se recorta dentro de su pista: nunca pisa la
+       etiqueta ni la cifra de al lado. */
+    .panel__grafico { min-width: 0; }
+    .estados__fila { grid-template-columns: auto minmax(32px, 1fr) 4ch; }
+    .tendencia__lista li { grid-template-columns: minmax(0, 72px) minmax(40px, 1fr) 4ch; }
+    .tendencia__lista li > span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+    .panel__hoy { --pantalla-columnas: minmax(0, 1.25fr) minmax(0, 1fr); }
+    .panel__pacientes { --pantalla-columnas: minmax(0, 1.5fr) minmax(0, 1fr); }
+
+    @media (min-width: 821px) and (min-height: 600px) {
+      .cabecera-pagina {
+        min-height: 0;
+        padding: var(--espacio-2) var(--espacio-5);
+      }
+
+      .cabecera-pagina .ceja { margin-bottom: 2px; font-size: .72rem; }
+      .panel__contexto { margin: 0; font-size: .8rem; }
+
+      .panel__vista:not(.pantalla__columnas) {
+        display: flex;
+        flex: 1 1 0;
+        flex-direction: column;
+        min-height: 0;
+      }
+
+      .panel__vista.desplazable { display: block; }
+
+      .panel__hoy > .bloque > .desplazable,
+      .panel__hoy .tarjeta--llena > .desplazable { flex: 1 1 0; }
+
+      /* El alto sobrante se reparte entre las filas de tarjetas; si no
+         alcanza, la rejilla desplaza y cada tarjeta conserva un alto legible. */
+      .cifras__rejilla,
+      .panel__graficos {
+        flex: 1 1 0;
+        min-height: 0;
+        overflow: auto;
+        overscroll-behavior: contain;
+        scrollbar-width: thin;
+        align-content: stretch;
+      }
+
+      .cifras__rejilla { grid-auto-rows: minmax(150px, 1fr); }
+      .panel__graficos { grid-auto-rows: minmax(220px, 1fr); }
+
+      .cifras__rejilla > .tarjeta,
+      .panel__grafico {
+        min-height: 0;
+        overflow: auto;
+        scrollbar-width: thin;
+      }
+
+      /* Con menos de cinco columnas no caben dos filas: la tarjeta muestra
+         todo lo suyo y solo desplaza la rejilla, nunca las dos cosas. */
+      @media (max-width: 1180px) {
+        .cifras__rejilla { grid-auto-rows: minmax(min-content, 1fr); }
+        .cifras__rejilla > .tarjeta { overflow: visible; }
+      }
+
+      .tendencia__lista { align-content: start; }
+
+      .panel__pacientes { flex: 1 1 0; }
+      .cohortes-registro { margin-top: 0; }
+      .cohortes-registro__desplazamiento { max-height: none; }
+
+      .seguimiento > .bloque__cabecera { flex: none; }
+      .seguimiento__vacio img { max-height: 110px; }
+    }
   `,
 })
 export class PanelComponent {
@@ -1388,6 +1568,44 @@ export class PanelComponent {
     ];
     return grupos.filter((grupo) => grupo.tarjetas.length > 0);
   });
+
+  /**
+   * Vistas del panel, solo las que el rol alcanza. El tablero sale si el
+   * backend envió algún grupo; lo demás depende de los permisos de agenda y
+   * de métricas, igual que antes de repartirlo en pestañas.
+   */
+  protected readonly vistas = computed<readonly OpcionPestana[]>(() => {
+    const lista: OpcionPestana[] = [];
+    if (this.tablero().length) lista.push({ clave: 'resumen', etiqueta: 'Resumen', icono: 'metricas' });
+    if (this.sesion.tienePermiso(PERMISOS.agendaLeer)) {
+      lista.push({ clave: 'hoy', etiqueta: 'Hoy', icono: 'calendario-check', cuenta: this.pendientes().length });
+    }
+    if (this.sesion.tienePermiso(PERMISOS.metricasLeer)) {
+      lista.push(
+        { clave: 'cifras', etiqueta: 'Cifras del periodo' },
+        { clave: 'distribucion', etiqueta: 'Distribución' },
+        { clave: 'pacientes', etiqueta: 'Pacientes' },
+        { clave: 'seguimiento', etiqueta: 'Seguimiento', icono: 'actividad-inteligente' },
+      );
+    }
+    return lista;
+  });
+
+  /** La vista elegida; vacía hasta que se elige una pestaña. */
+  protected readonly vista = signal('');
+
+  /** La vista que se muestra: la elegida si el rol la alcanza, o la primera. */
+  protected readonly vistaActiva = computed(() => {
+    const claves = this.vistas().map((opcion) => opcion.clave);
+    return claves.includes(this.vista()) ? this.vista() : (claves[0] ?? '');
+  });
+
+  protected readonly esVistaDeCifras = computed(() =>
+    ['cifras', 'distribucion', 'pacientes'].includes(this.vistaActiva()),
+  );
+
+  /** La vista de cifras que nombra el panel compartido, aunque esté oculto. */
+  protected readonly vistaCifras = computed(() => (this.esVistaDeCifras() ? this.vistaActiva() : 'cifras'));
 
   constructor() {
     this.indicadoresServicio.refrescar();

@@ -136,6 +136,51 @@ describe('PanelComponent · tablero por rol', () => {
     expect(grupos).toEqual(['Pendiente de atender', 'Gestión de la clínica']);
   });
 
+  it('reparte el panel en pestañas según los permisos y muestra una vista a la vez', () => {
+    const fixture = montar(
+      indicadores({ usuarios: { activos: 10, inactivos: 0, roles: 5 } }),
+      ['agenda.leer', 'dashboard.leer'],
+    );
+    const elemento = fixture.nativeElement as HTMLElement;
+    const pestanas = Array.from(elemento.querySelectorAll<HTMLElement>('[role="tab"]'));
+    expect(pestanas.map((p) => p.id)).toEqual([
+      'panel-pestana-resumen',
+      'panel-pestana-hoy',
+      'panel-pestana-cifras',
+      'panel-pestana-distribucion',
+      'panel-pestana-pacientes',
+      'panel-pestana-seguimiento',
+    ]);
+    const visibles = () =>
+      Array.from(elemento.querySelectorAll<HTMLElement>('[role="tabpanel"]')).filter((panel) => !panel.hidden);
+
+    // Al entrar se ve el tablero y nada más.
+    expect(visibles().map((panel) => panel.id)).toEqual(['panel-panel-resumen']);
+
+    // Las tres vistas de cifras comparten panel y mandos; cambia lo que se muestra dentro.
+    pestanas[3].click();
+    fixture.detectChanges();
+    expect(visibles().map((panel) => panel.id)).toEqual(['panel-panel-distribucion']);
+    expect(visibles()[0].getAttribute('aria-labelledby')).toBe('panel-pestana-distribucion');
+    expect(elemento.querySelector<HTMLElement>('.cifras__rejilla')?.hidden).toBe(true);
+    expect(elemento.querySelector<HTMLElement>('.panel__graficos')?.hidden).toBe(false);
+    expect(elemento.querySelector('.cifras__mandos')?.textContent).toContain('Ajustar filtros');
+  });
+
+  it('sin agenda ni métricas no ofrece pestañas y deja el aviso de espacio de trabajo', () => {
+    const fixture = montar(indicadores({}), []);
+    const elemento = fixture.nativeElement as HTMLElement;
+    expect(elemento.querySelectorAll('[role="tab"]').length).toBe(0);
+    expect(elemento.textContent).toContain('Su espacio de trabajo');
+  });
+
+  it('con una sola vista no pinta la fila de pestañas', () => {
+    const fixture = montar(indicadores({}), ['agenda.leer']);
+    const elemento = fixture.nativeElement as HTMLElement;
+    expect(elemento.querySelector('app-pestanas')).toBeNull();
+    expect(elemento.querySelector<HTMLElement>('#panel-panel-hoy')?.hidden).toBe(false);
+  });
+
   it('usa etiquetas ISO y escala los agregados del periodo', () => {
     const fixture = montar(indicadores({}), ['agenda.leer']);
     const componente = fixture.componentInstance as unknown as {
