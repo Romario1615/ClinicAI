@@ -87,8 +87,6 @@ Proveedores de IA y embeddings: `mock`. WhatsApp y calendario: `sandbox`.
 No se configuraron ni llamaron proveedores externos. Redis de la API E2E usa
 el índice 14 y el límite local de acceso es 200 por minuto. No se cambió `.env`.
 
-## Comandos principales
-
 ## CRUD, faciograma y documentos
 
 Ampliación posterior a la corrección del Panel, sobre `claude/friendly-gates-o240sb`.
@@ -132,7 +130,39 @@ npx playwright test
 ```
 
 Playwright requiere API/BD temporales preparadas y solo datos sintéticos.
-Los resultados finales de esta ampliación se añaden al terminar la regresión.
+| Comprobación de la ampliación | Resultado |
+|---|---|
+| Backend completo, segunda corrida sin cobertura | 1917 aprobadas, 3 omitidas (Anthropic real), 11 min 16 s |
+| Backend focalizado, incluyendo expectativas actualizadas | 66/66, 77,62 s |
+| Cobertura backend, primera corrida | 87,37 %; aquella corrida tuvo dos expectativas antiguas fallidas, posteriormente corregidas y repetidas |
+| Frontend completo | 632/632, 89 archivos, 71,26 s |
+| Cobertura frontend | 86,18 % sentencias; 73,51 % ramas; 81,48 % funciones; 88,63 % líneas |
+| Frontend lint/build | Aprobados; 463,02 kB iniciales, sin avisos de presupuesto |
+| Chromium completo, repetición final | 66/66 en 7,8 minutos; seis roles, axe en las 22 rutas y CRUD/documentos/faciograma |
+| Backend estático | Ruff, formato y mypy (229 fuentes) pasan; Bandit `-ll` sin hallazgos medios/altos |
+| Secretos | Gitleaks sobre los 89 commits de la revisión, sin hallazgos; valores redactados en el log |
+| Base de desarrollo | Migración `031` actual, `alembic check` sin operaciones faltantes |
+| Servicios reiniciados | API lista, frontend 200 y worker sandbox activo; seis roles acceden, abren su manual y cierran sesión |
+
+La primera corrida Chromium completa aprobó 63/66. Al editar la interfaz durante
+esa ejecución, la recarga del servidor cerró la sesión de auditoría. La aserción
+global de rutas produjo otro fallo derivado del reinicio del trabajador de
+Playwright. La prueba de demografía interceptaba `route.fetch` contra la API de
+desarrollo, aunque el resto usaba la API temporal: se corrigió para respetar
+`URL_API`. La repetición completa con archivos estables aprobó **66/66** sin
+reintentos. Se detuvo la API temporal y se eliminó exclusivamente su BD sintética
+`clinicai_e2e_20261007_25eecff3`. Se conservan BD, Redis, frontend, API y worker de
+desarrollo. Las capturas del faciograma a 1440/768/390 px quedan en
+`tmp/qa-20261007/faciograma-*.png`.
+
+### Consolidación en main
+
+El usuario eligió `main` como única rama principal. La `main` anterior y
+`modulo-dental-y-mensajeria` son ancestros de la rama de trabajo; no tenían commits
+exclusivos que requirieran resolver una fusión. Se conservan sus commits mediante
+avance de `main` al resultado revisado. El stash antiguo queda como copia local
+de respaldo, ya integrado en revisiones anteriores; no se reaplica encima del
+trabajo actual.
 
 ## Comandos de la revisión anterior
 

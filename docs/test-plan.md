@@ -14,7 +14,12 @@ con cita y mapa facial con teclado, PDF y límites a 1440/768/390 px. Los manual
 se comprueban por rol, permisos, rutas y ausencia de secciones repetidas.
 El ciclo `031` se verificó en una BD vacía: upgrade, downgrade a `030`, upgrade
 y `alembic check`; los datos del navegador viven en una BD temporal separada.
-Resultados finales y comandos en [el informe](verificacion-2026-10-07.md#crud-faciograma-y-documentos).
+Regresión final: backend 1917 aprobadas/3 omitidas y frontend 632/632;
+Chromium **66/66 en 7,8 minutos**, con seis roles y axe en las 22 rutas;
+lint, formato, mypy, Bandit `-ll` y build pasan. El 87,37 % de cobertura backend
+corresponde a la primera corrida, que encontró dos expectativas antiguas luego
+corregidas; la repetición completa se hizo sin cobertura. Resultados del navegador
+y comandos en [el informe](verificacion-2026-10-07.md#crud-faciograma-y-documentos).
 
 > **Corrección posterior de «Perfil de pacientes» (2026-10-07):** frontend completo **609/609 en 84 archivos**, cobertura 86,13 % sentencias, 72,88 % ramas, 81,60 % funciones y 88,32 % líneas; lint y build aprobados. Chromium focalizado **2/2**: axe del panel y comprobación geométrica de la tarjeta en siete anchos de 320 a 1440 px, con etiquetas largas, valores grandes y «Protegido». El escenario visual usa un desglose agregado sintético sobre la respuesta del dashboard para reproducir esos extremos; la sesión y el resto de la API son reales. [Cambio y comandos](verificacion-2026-10-07.md#corrección-posterior-del-perfil-de-pacientes). La corrida completa E2E anterior de 62/62 se conserva como evidencia separada.
 

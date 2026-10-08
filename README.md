@@ -9,7 +9,9 @@ auditoría.
 
 ## Gestión de registros, faciograma y documentos (2026-10-07)
 
-Cambios sobre `claude/friendly-gates-o240sb`:
+Rama de trabajo consolidada: **`main`**, con el historial de
+`claude/friendly-gates-o240sb`, `modulo-dental-y-mensajeria` y la `main` anterior.
+La ampliación se desarrolló sobre `claude/friendly-gates-o240sb`:
 
 - **Superadministrador → Clínicas:** crear, consultar, editar datos y desactivar/reactivar clínicas; editar y desactivar/reactivar cuentas desde la plataforma. Las cuentas de superadministración están protegidas.
 - **Administrador → Usuarios y roles:** alta, consulta, edición de identidad, asignación de roles/ámbitos y baja/reactivación. Editar identidad o dar de baja revoca sesiones; una clínica desactivada no permite iniciar sesión.
@@ -26,6 +28,15 @@ administrativa conserva las referencias. Los PDFs no son facturas ni documentos
 con firma electrónica certificada. Detalles: [ADR-0022](docs/decisiones/0022-crud-faciograma-y-documentos-privados.md),
 [modelo](docs/data-model.md#registros-y-entregas-de-documentos), [controles](docs/security.md#documentos-y-faciograma)
 y [verificación](docs/verificacion-2026-10-07.md#crud-faciograma-y-documentos).
+
+La regresión final del backend pasa **1917 pruebas** y omite tres que requieren
+Anthropic real; frontend **632/632 en 89 archivos**, cobertura 86,18 % sentencias,
+73,51 % ramas, 81,48 % funciones y 88,63 % líneas. Lint y build pasan (463,02 kB
+iniciales, sin avisos de presupuesto). Chromium aprobó **66/66 en 7,8 minutos**,
+con seis roles, axe en las 22 rutas y los recorridos nuevos de CRUD, PDF y
+faciograma. Los seis roles acceden y abren sus manuales en los servicios locales
+reiniciados. La BD temporal de pruebas se eliminó; los servidores de desarrollo
+siguen disponibles en [el acceso local](http://localhost:4200/acceso).
 
 Las cifras siguientes conservan ejecuciones anteriores; la verificación de esta
 ampliación se registra en la sección específica del informe.

@@ -4,6 +4,14 @@ Navegador real, frontend real, API real y PostgreSQL real. Los proveedores
 externos funcionan con adaptadores locales durante esta verificación; no se
 envían mensajes ni se realizan llamadas pagadas.
 
+**Revisión del 2026-10-07, CRUD y documentos:** 66/66 escenarios Chromium en
+7,8 minutos, seis roles y axe en las 22 rutas del menú. Se añaden edición/baja/
+reactivación administrativa, presupuesto desde la ficha con cita, PDF real,
+versionado/anulación y enlace privado sandbox; faciograma con teclado,
+persistencia, PDF y anchos de 1440/768/390 px. La demografía interceptada respeta
+`URL_API` para mantener el aislamiento. La API y BD temporales se eliminaron al
+terminar; permanecen los servicios de desarrollo. [Informe](../docs/verificacion-2026-10-07.md#crud-faciograma-y-documentos).
+
 ## Qué se prueba aquí, y qué no
 
 **No** se prueban las reglas de dominio. Esas ya tienen más de mil pruebas en el
