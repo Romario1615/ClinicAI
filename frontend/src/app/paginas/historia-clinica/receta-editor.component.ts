@@ -11,6 +11,8 @@
  */
 import { Component, computed, effect, inject, input, output, signal, ChangeDetectionStrategy } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { CapturaFotosComponent, type FotoSeleccionada } from '../../compartido/captura-fotos.component';
+import { FotosRegistroService } from '../../nucleo/servicios/fotos-registro.service';
 import { map } from 'rxjs';
 
 import { ApiService, FalloApi } from '../../nucleo/servicios/api.service';
@@ -20,6 +22,7 @@ import type {
   Receta,
 } from '../../nucleo/servicios/api.service';
 import { SesionService } from '../../nucleo/servicios/sesion.service';
+import { PERMISOS } from '../../nucleo/servicios/configuracion';
 import { VentanaFlotanteComponent } from '../../compartido/ventana-flotante.component';
 
 const VIAS = [
@@ -93,7 +96,7 @@ function lineaVacia(): MedicamentoNuevo {
 @Component({
   selector: 'app-receta-editor',
   standalone: true,
-  imports: [FormsModule, VentanaFlotanteComponent],
+  imports: [FormsModule, VentanaFlotanteComponent, CapturaFotosComponent],
   template: `
     @if (abierta()) {
       <!-- Mientras se guarda no se cierra; con cambios, cerrar pide
@@ -200,6 +203,7 @@ function lineaVacia(): MedicamentoNuevo {
         }
       </div>
       @if (error()) { <p class="aviso-error" role="alert">{{ error() }}</p> }
+      @if (puedeFotos() && firmante === propio()) { <app-captura-fotos titulo="Fotografías del registro" [ocupada]="guardando()" (cambiadas)="fotos=$event" /> }
     </form>
         <div class="acciones acciones--final" pie>
           <button class="boton" type="button" [disabled]="guardando()" (click)="v.solicitarCierre()">Cancelar</button>
@@ -220,6 +224,9 @@ function lineaVacia(): MedicamentoNuevo {
 })
 export class RecetaEditorComponent {
   private readonly api = inject(ApiService);
+  protected readonly operacionFotos = inject(FotosRegistroService).operacion<Receta>();
+  protected fotos: readonly FotoSeleccionada[] = [];
+  protected puedeFotos(): boolean { return this.sesion.tienePermiso(PERMISOS.imagenClinicaCargar); }
   private readonly sesion = inject(SesionService);
 
   readonly pacienteId = input.required<string>();
@@ -353,7 +360,7 @@ export class RecetaEditorComponent {
           medicamentos: datos.medicamentos,
         }).pipe(map((resultado) => resultado.receta))
       : this.api.crearReceta(datos);
-    peticion.subscribe({
+    this.operacionFotos.guardar('receta', peticion, this.fotos).subscribe({
         next: (receta) => {
           this.guardando.set(false);
           this.abierta.set(false);

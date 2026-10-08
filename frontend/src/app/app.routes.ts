@@ -57,6 +57,12 @@ export const routes: Routes = [
       import('./paginas/agenda/agenda.component').then((m) => m.AgendaComponent),
   },
   {
+    path: 'analitica',
+    canActivate: [guardiaAutenticacion, guardiaSegundoFactor, guardiaPermiso(PERMISOS.metricasLeer)],
+    title: 'Analítica IA · ClinicAI',
+    loadComponent: () => import('./paginas/analitica/analitica.component').then(m => m.AnaliticaComponent),
+  },
+  {
     path: 'pacientes',
     canActivate: [
       guardiaAutenticacion,

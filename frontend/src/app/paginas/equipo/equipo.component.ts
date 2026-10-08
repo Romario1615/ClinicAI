@@ -1,6 +1,8 @@
 import { HttpErrorResponse } from '@angular/common/http';
 import { Component, OnInit, inject, signal, ChangeDetectionStrategy } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { CapturaFotosComponent, type FotoSeleccionada } from '../../compartido/captura-fotos.component';
+import { FotosRegistroService } from '../../nucleo/servicios/fotos-registro.service';
 
 import { IconoComponent } from '../../compartido/icono.component';
 import { VentanaFlotanteComponent } from '../../compartido/ventana-flotante.component';
@@ -32,7 +34,7 @@ const ESTADOS: readonly { codigo: FormularioEquipo['estado_disponibilidad']; eti
 @Component({
   selector: 'app-equipo',
   standalone: true,
-  imports: [FormsModule, IconoComponent, VentanaFlotanteComponent],
+  imports: [FormsModule, IconoComponent, VentanaFlotanteComponent, CapturaFotosComponent],
   host: { class: 'pantalla' },
   template: `
     <header class="encabezado pantalla__fijo">
@@ -91,6 +93,7 @@ const ESTADOS: readonly { codigo: FormularioEquipo['estado_disponibilidad']; eti
           <label class="principal"><span>Sede principal</span><select name="sede-principal" [(ngModel)]="form.sede_principal_id" [disabled]="!form.sede_ids.length" required><option value="">Seleccione</option>@for (id of form.sede_ids; track id) { <option [value]="id">{{ nombreSede(id) }}</option> }</select></label>
           <label class="check"><input type="checkbox" name="acepta-pacientes" [(ngModel)]="form.acepta_pacientes_nuevos" /> Acepta pacientes nuevos</label>
           @if (editando()) { <label class="check"><input type="checkbox" name="activo" [(ngModel)]="form.activo" /> Perfil activo</label> }
+          <app-captura-fotos titulo="Fotos del perfil profesional" [ocupada]="guardando()" (cambiadas)="fotos=$event" />
         </form>
         <div pie>
           <button class="boton" type="button" (click)="cancelarFormulario()" [disabled]="guardando()">Cancelar</button>
@@ -122,6 +125,8 @@ const ESTADOS: readonly { codigo: FormularioEquipo['estado_disponibilidad']; eti
   `],
 })
 export class EquipoComponent implements OnInit {
+  protected readonly operacionFotos = inject(FotosRegistroService).operacion<PerfilProfesional>();
+  protected fotos: readonly FotoSeleccionada[] = [];
   private readonly catalogo = inject(CatalogoService);
   private readonly equipo = inject(EquipoService);
   protected readonly sedes = signal<readonly Sede[]>([]);
@@ -179,7 +184,7 @@ export class EquipoComponent implements OnInit {
       correo_calendario: this.form.correo_calendario.trim() || null,
     };
     const operacion = this.editando() ? this.equipo.actualizar(this.editando(), datos) : this.equipo.crear(datos);
-    operacion.subscribe({
+    this.operacionFotos.guardar('profesional',operacion,this.fotos).subscribe({
       next: (perfil) => {
         this.mensaje.set(this.editando() ? 'Perfil profesional actualizado.' : 'Profesional agregado al equipo.');
         this.guardando.set(false); this.nuevo(); this.equipo.invalidarCatalogo();
@@ -190,6 +195,7 @@ export class EquipoComponent implements OnInit {
   }
 
   protected editar(perfil: PerfilProfesional): void {
+    this.operacionFotos.reiniciar(); this.fotos=[];
     this.editando.set(perfil.id);
     this.form = {
       especialidad_id: perfil.especialidad_id, nombre: perfil.nombre, apellido: perfil.apellido,
@@ -218,7 +224,7 @@ export class EquipoComponent implements OnInit {
     this.mensaje.set('');
   }
 
-  protected nuevo(): void { this.editando.set(''); this.form = this.vacio(); this.formularioAbierto.set(false); }
+  protected nuevo(): void { this.operacionFotos.reiniciar(); this.fotos=[]; this.editando.set(''); this.form = this.vacio(); this.formularioAbierto.set(false); }
   protected nombreSede(id: string): string { return this.sedes().find((sede) => sede.id === id)?.nombre ?? 'Sede'; }
   protected etiquetasSedes(ids: readonly string[]): string { return ids.map((id) => this.nombreSede(id)).join(' · '); }
   protected nombreEspecialidad(id: string): string { return this.especialidades().find((item) => item.id === id)?.nombre ?? 'Especialidad'; }
@@ -226,5 +232,5 @@ export class EquipoComponent implements OnInit {
 
   private vacio(): FormularioEquipo { return { especialidad_id: '', nombre: '', apellido: '', numero_registro_profesional: '', telefono_whatsapp: '', correo_calendario: '', estado_disponibilidad: 'DISPONIBLE', acepta_pacientes_nuevos: true, minutos_preparacion_propio: 0, activo: true, sede_ids: [], sede_principal_id: '' }; }
   private fallar(texto: string): void { this.error.set(texto); }
-  private mensajeError(error: unknown, alternativo: string): string { return error instanceof HttpErrorResponse && typeof error.error?.mensaje === 'string' ? error.error.mensaje : alternativo; }
+  private mensajeError(error: unknown, alternativo: string): string { return error instanceof HttpErrorResponse && typeof error.error?.mensaje === 'string' ? error.error.mensaje : error instanceof Error ? error.message : alternativo; }
 }

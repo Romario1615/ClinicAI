@@ -544,6 +544,7 @@
       [anchoMaximo]="460"
       (cerrar)="cerrarPanel()"
     >
+    <app-fotos-registro tipo="cita" [registroId]="cita.id" [puedeEditar]="puedeCrear()" />
       <div class="detalle-cita">
         <p class="panel__titular numerico">
           <span>{{ hora(cita.inicio) }}–{{ hora(cita.fin) }}</span>
@@ -683,6 +684,7 @@
         class="reserva__formulario"
         (ngSubmit)="confirmarReserva()"
       >
+        <fieldset [disabled]="reservando() || operacionFotos.guardado">
         <div class="reserva__contexto">
           <p class="reserva__fecha">{{ fechaDia() }}</p>
           @if (reservaDelDia()) {
@@ -845,6 +847,8 @@
           </span>
         </label>
 
+        </fieldset>
+        <app-captura-fotos titulo="Fotos administrativas de la reserva (primera cita si es una serie)" [ocupada]="reservando()" (cambiadas)="fotos=$event" />
         @if (serieRecurrente && !cantidadSerieValida) {
           <p class="reserva__error" role="alert">Indique una cantidad entre 2 y {{ maximoCitasSerie }}.</p>
         }

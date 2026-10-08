@@ -49,6 +49,7 @@ from app.modulos.conversaciones.modelos import (
     IntencionEntrante,
     MensajeEntrante,
 )
+from app.modulos.dashboard.capturas import CapturaIndicadores
 from app.modulos.documentos.modelos import EntregaDocumento, RegistroPaciente
 from app.modulos.gastos.modelos import Gasto
 from app.modulos.historia.modelos import (
@@ -67,6 +68,7 @@ from app.modulos.historia.modelos import (
     Toma,
     ViaAdministracion,
 )
+from app.modulos.imagenes.adjuntos_modelos import FotoRegistro
 from app.modulos.imagenes.modelos import ImagenPaciente, TipoImagen
 from app.modulos.lista_espera.modelos import (
     EntradaListaEspera,
@@ -86,6 +88,7 @@ from app.modulos.odontologia.modelos import (
     ProcedimientoPlan,
     RegistroPlaca,
 )
+from app.modulos.odontologia.periodontograma_modelos import Periodontograma
 from app.modulos.organizacion.modelos import (
     Clinica,
     ConfiguracionClinica,
@@ -167,6 +170,7 @@ __all__ = [
     "CalendarioEvento",
     "CampanaPromocion",
     "CanalOutbox",
+    "CapturaIndicadores",
     "CargoPago",
     "Cita",
     "CitaHistorial",
@@ -203,6 +207,7 @@ __all__ = [
     "EstadoToma",
     "Feriado",
     "Formulario033",
+    "FotoRegistro",
     "FotoUsuario",
     "Gasto",
     "HistorialAcceso",
@@ -230,6 +235,7 @@ __all__ = [
     "Pago",
     "PagoComprobante",
     "PagoHistorial",
+    "Periodontograma",
     "Permiso",
     "PlanTratamiento",
     "PlantillaAnamnesis",

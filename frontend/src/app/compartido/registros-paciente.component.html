@@ -21,6 +21,7 @@
           <p class="total">Total: {{ total(registro.contenido.partidas) | number:'1.2-2' }} {{ registro.contenido.moneda }}</p>
         }
         @if (registro.contenido.observaciones) { <p class="observaciones">{{ registro.contenido.observaciones }}</p> }
+        @if(sesion.tienePermiso("imagen_clinica.leer")){<app-fotos-registro tipo="registro" [registroId]="registro.id" [puedeEditar]="puedeEscribir() && propia(registro) && registro.vigente && !registro.anulado" />}
         <small>Motivo: {{ registro.motivo }}</small>
         <div class="acciones"><button class="boton boton--pequeno" type="button" (click)="descargar(registro)" [disabled]="ocupado()">Descargar PDF</button>
           @if (puedeEscribir() && propia(registro) && registro.vigente && !registro.anulado) {
@@ -72,6 +73,7 @@
       @if (tipo !== 'RECETA') { <label class="campo">Observaciones generales<textarea class="campo__control" name="observaciones" [(ngModel)]="observaciones" maxlength="4000"></textarea></label> }
       @if (sesion.tienePermiso('historia_clinica.leer_sensible')) { <label class="check"><input type="checkbox" name="sensible" [(ngModel)]="sensible" />Información sensible N3 (entrega presencial)</label> }
       <label class="campo">Motivo del registro o modificación<textarea class="campo__control" name="motivo" [(ngModel)]="motivo" required minlength="5" maxlength="500"></textarea></label>
+      @if(sesion.tienePermiso("imagen_clinica.cargar")){<app-captura-fotos [ocupada]="ocupado()" (cambiadas)="fotos=$event" />}
     </form>
     <div pie class="acciones"><button class="boton" type="button" (click)="cerrarEditor()" [disabled]="ocupado()">Cancelar</button><button class="boton boton--principal" type="submit" form="registro-paciente" [disabled]="ocupado() || formulario.invalid || (!facial() && tipo !== 'RECETA' && partidas.length === 0)">{{ ocupado() ? 'Guardando…' : 'Guardar versión' }}</button></div>
   </app-ventana-flotante>

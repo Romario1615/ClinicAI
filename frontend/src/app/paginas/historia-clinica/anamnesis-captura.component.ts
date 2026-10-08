@@ -1,6 +1,8 @@
 import { Component, effect, inject, input, signal, untracked, ChangeDetectionStrategy } from '@angular/core';
 import { DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { CapturaFotosComponent, type FotoSeleccionada } from '../../compartido/captura-fotos.component';
+import { FotosRegistroService } from '../../nucleo/servicios/fotos-registro.service';
 
 import { IconoComponent } from '../../compartido/icono.component';
 import { VentanaFlotanteComponent } from '../../compartido/ventana-flotante.component';
@@ -41,7 +43,7 @@ interface RespuestaAnamnesis {
 @Component({
   selector: 'app-anamnesis-captura',
   standalone: true,
-  imports: [DatePipe, FormsModule, IconoComponent, VentanaFlotanteComponent],
+  imports: [CapturaFotosComponent,DatePipe, FormsModule, IconoComponent, VentanaFlotanteComponent],
   template: `
     <section class="captura" aria-labelledby="titulo-captura-anamnesis">
       <header class="captura__cabecera">
@@ -108,6 +110,7 @@ interface RespuestaAnamnesis {
             }
             <!-- Junto a las acciones: es donde se mira al pulsar «Guardar». -->
             @if (error()) { <p class="captura__error" role="alert">{{ error() }}</p> }
+            <app-captura-fotos titulo="Fotos de la evaluación" [ocupada]="guardando()" (cambiadas)="fotos=$event" />
           </form>
           <div pie>
             <button class="boton" type="button" (click)="v.solicitarCierre()" [disabled]="guardando()">Cancelar</button>
@@ -177,6 +180,8 @@ interface RespuestaAnamnesis {
   `,
 })
 export class AnamnesisCapturaComponent {
+  protected readonly operacionFotos = inject(FotosRegistroService).operacion<RespuestaAnamnesis>();
+  protected fotos: readonly FotoSeleccionada[] = [];
   private readonly operaciones = inject(OperacionesService);
   private readonly sesion = inject(SesionService);
   readonly pacienteId = input.required<string>();
@@ -206,6 +211,7 @@ export class AnamnesisCapturaComponent {
   }
 
   protected abrirEditor(): void {
+    this.operacionFotos.reiniciar(); this.fotos=[];
     this.valores = {};
     this.error.set('');
     this.editorAbierto.set(true);
@@ -261,11 +267,11 @@ export class AnamnesisCapturaComponent {
     this.guardando.set(true);
     this.error.set('');
     this.aviso.set('');
-    this.operaciones.guardar<RespuestaAnamnesis>(
+    this.operacionFotos.guardar('anamnesis',this.operaciones.guardar<RespuestaAnamnesis>(
       `/historia/pacientes/${this.pacienteId()}/anamnesis/respuestas`,
       { plantilla_id: plantilla.id, respuestas: this.valores },
       crypto.randomUUID(),
-    ).subscribe({
+    ),this.fotos).subscribe({
       next: (respuesta) => {
         this.respuestas.update((actuales) => [respuesta, ...actuales]);
         this.valores = {};

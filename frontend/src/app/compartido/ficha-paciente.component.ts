@@ -65,7 +65,7 @@ import { MENSAJE_SIN_ACCESO_CLINICO, mensajeFalloClinico } from '../nucleo/utili
 import { OperacionesService } from '../nucleo/servicios/operaciones.service';
 import { AtencionPacienteComponent } from './atencion-paciente.component';
 import { EditorPacienteComponent } from '../paginas/pacientes/editor-paciente.component';
-import { IndicePlacaComponent } from '../paginas/historia-clinica/indice-placa.component';
+import { PeriodontogramaComponent } from '../paginas/historia-clinica/periodontograma.component';
 import { VentanaFlotanteComponent } from './ventana-flotante.component';
 
 /** Traducción del nivel de verificación, con lo que implica para quien atiende. */
@@ -119,7 +119,7 @@ const ESTADO_RECETA: Record<string, string> = {
 const DETALLE_CLINICO: Partial<Record<Pestana, string>> = {
   historia: 'Notas de evolución y recetas',
   odontograma: 'Estado por pieza e historial de cada diente',
-  periodoncia: 'Controles periodontales e índice de placa dental',
+  periodoncia: 'Periodontograma de seis sitios e índice de placa dental',
   faciograma: 'Mapa del rostro, zonas y seguimiento estético',
   documentos: 'Presupuestos, cotizaciones, recetas y PDF',
   planes: 'Fases, procedimientos y fotos del tratamiento',
@@ -130,7 +130,7 @@ const DETALLE_CLINICO: Partial<Record<Pestana, string>> = {
   selector: 'app-ficha-paciente',
   standalone: true,
   imports: [
-    IndicePlacaComponent,
+    PeriodontogramaComponent,
     VentanaFlotanteComponent,
     AtencionPacienteComponent,
     EditorPacienteComponent,
@@ -245,7 +245,7 @@ const DETALLE_CLINICO: Partial<Record<Pestana, string>> = {
               @case ('atencion') { <app-atencion-paciente [pacienteId]="pacienteId()" [citaInicial]="citaParaAtencion()" (cambioCita)="citaElegidaId.set($event?.id ?? null)" /> }
               @case ('faciograma') { <app-atencion-paciente [pacienteId]="pacienteId()" [citaInicial]="citaParaAtencion()" moduloInicial="faciograma" (cambioCita)="citaElegidaId.set($event?.id ?? null)" /> }
               @case ('documentos') { <app-atencion-paciente [pacienteId]="pacienteId()" [citaInicial]="citaParaAtencion()" moduloInicial="documentos" (cambioCita)="citaElegidaId.set($event?.id ?? null)" /> }
-              @case ('periodoncia') { <app-indice-placa [pacienteId]="pacienteId()" /> }
+              @case ('periodoncia') { <app-periodontograma [pacienteId]="pacienteId()" [citaId]="citaParaAtencion()" /> }
               @case ('resumen') {
                 <div class="ficha__rejilla">
                   <section class="ficha__bloque">

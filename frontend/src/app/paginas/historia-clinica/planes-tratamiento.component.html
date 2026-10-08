@@ -138,6 +138,7 @@
           </select>
         </label>
       }
+        <app-captura-fotos titulo="Fotografías del plan" [ocupada]="guardando()" (cambiadas)="fotos=$event" />
       </form>
       @if (error()) {
         <p class="aviso-error" role="alert">{{ error() }}</p>
@@ -180,6 +181,7 @@
             </div>
             <strong>{{ dinero(totalPlan(plan)) }}</strong>
           </header>
+          @if(puedeVerFotos()){<app-fotos-registro tipo="plan" [registroId]="plan.id" />}
           <ol class="plan__procedimientos">
             @for (item of plan.procedimientos; track item.id) {
               <li [class.procedimiento--cerrado]="item.estado !== 'PENDIENTE'">

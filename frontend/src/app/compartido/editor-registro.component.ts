@@ -1,10 +1,14 @@
 import { ChangeDetectionStrategy, Component, inject, input, OnInit, output, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { map } from 'rxjs';
+import { CapturaFotosComponent, type FotoSeleccionada } from './captura-fotos.component';
+import { FotosRegistroService } from '../nucleo/servicios/fotos-registro.service';
+import { FotosRegistroComponent } from './fotos-registro.component';
 import { OperacionesService } from '../nucleo/servicios/operaciones.service';
 import { VentanaFlotanteComponent } from './ventana-flotante.component';
 
 @Component({
-  selector: 'app-editor-registro', standalone: true, imports: [FormsModule, VentanaFlotanteComponent],
+  selector: 'app-editor-registro', standalone: true, imports: [FormsModule, VentanaFlotanteComponent, CapturaFotosComponent, FotosRegistroComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <app-ventana-flotante [titulo]="titulo()" ceja="Gestión de registros" forma="centrada" [anchoMaximo]="660" [cierraAlPulsarFuera]="false" [ocupada]="ocupado()" (cerrar)="cancelar()">
@@ -19,7 +23,9 @@ import { VentanaFlotanteComponent } from './ventana-flotante.component';
             <label class="campo">{{ campo.etiqueta }}<input class="campo__control" [disabled]="cargando() || ocupado()" [type]="campo.clave === 'correo' ? 'email' : 'text'" [name]="campo.clave" [attr.name]="campo.clave" [(ngModel)]="datos[campo.clave]" [required]="campo.obligatorio" [maxlength]="campo.maximo" /></label>
           }
         }
+        @if(estado()===null){<app-captura-fotos titulo="Imagen del registro" [perfil]="tipo()==='usuario'" [ocupada]="ocupado()" (cambiadas)="fotos=$event" />}
       </form>
+      @if(tipo()==='clinica' && estado()===null){<app-fotos-registro tipo="clinica" [registroId]="registroId()" [puedeEditar]="true" />}
       <div pie class="acciones"><button class="boton" type="button" (click)="cancelar()" [disabled]="ocupado()">Cancelar</button><button class="boton boton--principal" type="submit" form="editar-registro" [disabled]="ocupado() || cargando() || formulario.invalid">{{ ocupado() ? 'Guardando…' : 'Guardar cambios' }}</button></div>
     </app-ventana-flotante>
   `,
@@ -27,6 +33,9 @@ import { VentanaFlotanteComponent } from './ventana-flotante.component';
 })
 export class EditorRegistroComponent implements OnInit {
   private readonly api = inject(OperacionesService);
+  protected readonly operacionFotos = inject(FotosRegistroService).operacion<{id:string}>();
+  protected fotos: readonly FotoSeleccionada[] = [];
+  protected registroId():string { return this.ruta().split('/').filter(Boolean).at(-1) ?? ''; }
   readonly tipo = input.required<'clinica' | 'usuario'>();
   readonly ruta = input.required<string>();
   readonly titulo = input('Editar datos');
@@ -63,7 +72,8 @@ export class EditorRegistroComponent implements OnInit {
     if (this.ocupado() || this.cargando()) return;
     const datos = this.estado() !== null ? { activo: this.estado(), motivo: this.motivo } : Object.fromEntries(this.campos().map(c => [c.clave, this.datos[c.clave] || null]));
     this.ocupado.set(true); this.error.set('');
-    this.api.guardar(this.ruta() + (this.estado() === null ? '/datos' : '/estado'), datos, crypto.randomUUID(), true).subscribe({
+    const peticion=this.api.guardar(this.ruta() + (this.estado() === null ? '/datos' : '/estado'), datos, crypto.randomUUID(), true).pipe(map(()=>({id:this.registroId()})));
+    this.operacionFotos.guardar(this.tipo()==='usuario'?'perfil_usuario':'clinica',peticion,this.estado()===null?this.fotos:[]).subscribe({
       next: () => { this.ocupado.set(false); this.guardado.emit(); },
       error: error => { this.ocupado.set(false); this.error.set(error.message); },
     });

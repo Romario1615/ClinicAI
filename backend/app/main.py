@@ -58,6 +58,7 @@ from app.modulos.conocimiento import revision_riesgo as rutas_revision_riesgo
 from app.modulos.conocimiento import rutas as rutas_conocimiento
 from app.modulos.conversaciones import demo_rutas
 from app.modulos.conversaciones import rutas as rutas_conversaciones
+from app.modulos.dashboard import analitica_rutas
 from app.modulos.dashboard import indicadores as indicadores_dashboard
 from app.modulos.dashboard import rutas as rutas_dashboard
 from app.modulos.documentos import rutas as rutas_documentos
@@ -67,11 +68,12 @@ from app.modulos.historia import anamnesis_rutas as rutas_anamnesis
 from app.modulos.historia import especialidades as rutas_especialidades_historia
 from app.modulos.historia import resumen_clinico as rutas_resumen_clinico
 from app.modulos.historia import rutas as rutas_historia
+from app.modulos.imagenes import adjuntos_rutas
 from app.modulos.imagenes import rutas as rutas_imagenes
 from app.modulos.lista_espera import rutas as rutas_espera
 from app.modulos.odontologia import formulario_033 as rutas_formulario_033
+from app.modulos.odontologia import periodontograma_rutas, planes_rutas
 from app.modulos.odontologia import placa as rutas_placa
-from app.modulos.odontologia import planes_rutas
 from app.modulos.odontologia import rutas as rutas_odontologia
 from app.modulos.organizacion import agenda_rutas as rutas_configuracion_agenda
 from app.modulos.organizacion import plataforma as rutas_plataforma
@@ -333,6 +335,9 @@ def _registrar_rutas_del_equipo(aplicacion: FastAPI) -> None:
     aplicacion.include_router(rutas_revision_riesgo.enrutador, prefix=PREFIJO_API)
     aplicacion.include_router(rutas_acceso_clinico.enrutador, prefix=PREFIJO_API)
     aplicacion.include_router(rutas_documentos.enrutador, prefix=PREFIJO_API)
+    aplicacion.include_router(periodontograma_rutas.enrutador, prefix=PREFIJO_API)
+    aplicacion.include_router(analitica_rutas.enrutador, prefix=PREFIJO_API)
+    aplicacion.include_router(adjuntos_rutas.enrutador, prefix=PREFIJO_API)
 
 
 def _registrar_rutas(aplicacion: FastAPI) -> None:
