@@ -4,6 +4,54 @@ Rama de trabajo: `claude/friendly-gates-o240sb`. Base de esta revisión:
 `727c9f5`. Se conserva el diseño de pantallas de trabajo, pestañas y ventanas
 incorporado desde GitHub. Todos los datos de esta ejecución son sintéticos.
 
+## Especialidad y área de los roles
+
+Esta ampliación se realiza en `main`. El acceso local indica la especialidad de
+la cuenta que efectivamente abrirá cada rol. Los puestos administrativos y de
+apoyo muestran su área de trabajo. La cabecera y la ventana Mi perfil presentan
+ese contexto; Personal incorpora Especialidad / área y búsqueda por especialidad.
+Las tarjetas de Roles agrupan las especialidades de sus integrantes activos y
+el selector Perfil profesional identifica nombre y especialidad.
+
+La fuente es el perfil profesional y el catálogo existentes. La consulta en lote
+comprueba la pertenencia de usuario, perfil y especialidad a la misma clínica,
+excluyendo perfiles/especialidades inactivos o anulados. El acceso y el listado
+comparten la selección de cuenta sintética. La pantalla de ingreso consulta de
+nuevo sus etiquetas al abrirse; los permisos y ámbitos se resuelven en el backend.
+Los manuales de administración y profesional incluyen las instrucciones propias
+de cada rol.
+
+| Comprobación | Resultado |
+|---|---|
+| API de especialidades, autenticación, usuarios y Ayuda | 64/64, 138,66 s; PostgreSQL exclusivo, eliminado al terminar |
+| Frontend completo | 642/642 en 90 archivos, 173,88 s; dos trabajadores de Vitest |
+| Cobertura frontend | Sentencias 86,28 %; ramas 73,84 %; funciones 81,62 %; líneas 88,76 % |
+| Backend estático | Ruff, formato y mypy aprobados; Bandit sin hallazgos medios/altos en Usuarios |
+| Lint y build | Aprobados, 464,02 kB iniciales, sin avisos de presupuesto |
+| Secretos | Gitleaks sobre los cambios preparados: sin hallazgos |
+| Chromium: acceso a 1440, 768 y 390 px | Seis roles con especialidad/área, sin desbordamiento horizontal; axe WCAG 2 A/AA y 2.1 A/AA sin incidencias |
+| Chromium: sesión profesional y administrativa | Especialidad visible en la sesión y Mi perfil móvil; columna de Personal visible y axe sin incidencias |
+
+Las 11 nuevas pruebas API verifican tres nombres distintos de especialidad,
+actualización del catálogo, ausencia de autenticación, aislamiento entre clínicas
+y seis casos de perfiles o especialidades no vigentes/ajenos. Las pruebas de
+componentes comprueban agrupación de especialidades por rol, búsqueda, contexto de
+la sesión y actualización de etiquetas al volver al acceso.
+
+Logs y capturas locales: `tmp/qa-20261007/backend-especialidades.log`,
+`frontend-especialidades-definitivo.log`, `build-especialidades-definitivo.log`,
+`lint-especialidades-definitivo.log`, `visual-especialidades-definitivo.log`,
+`roles-especialidad-1440.png`, `roles-especialidad-768.png`,
+`roles-especialidad-390.png`, `personal-especialidades.png` y
+`perfil-especialidad-movil.png`. Las ejecuciones completas de backend/E2E de las
+secciones anteriores corresponden a sus commits; esta ampliación registra su
+regresión focalizada y la suite completa del frontend.
+
+La primera ejecución concurrente del frontend excedió los tiempos de dos pruebas
+existentes (Panel y Ficha). La repetición limita a dos los trabajadores de Vitest
+mediante una configuración temporal; conserva los tiempos originales y los
+umbrales de cobertura del proyecto.
+
 ## Cambios realizados
 
 - La barra de fecha de Agenda reparte sus controles en varias líneas en móvil.
@@ -87,8 +135,6 @@ Proveedores de IA y embeddings: `mock`. WhatsApp y calendario: `sandbox`.
 No se configuraron ni llamaron proveedores externos. Redis de la API E2E usa
 el índice 14 y el límite local de acceso es 200 por minuto. No se cambió `.env`.
 
-## Comandos principales
-
 ## CRUD, faciograma y documentos
 
 Ampliación posterior a la corrección del Panel, sobre `claude/friendly-gates-o240sb`.
@@ -132,7 +178,116 @@ npx playwright test
 ```
 
 Playwright requiere API/BD temporales preparadas y solo datos sintéticos.
-Los resultados finales de esta ampliación se añaden al terminar la regresión.
+| Comprobación de la ampliación | Resultado |
+|---|---|
+| Backend completo, segunda corrida sin cobertura | 1917 aprobadas, 3 omitidas (Anthropic real), 11 min 16 s |
+| Backend focalizado, incluyendo expectativas actualizadas | 66/66, 77,62 s |
+| Cobertura backend, primera corrida | 87,37 %; aquella corrida tuvo dos expectativas antiguas fallidas, posteriormente corregidas y repetidas |
+| Frontend completo | 632/632, 89 archivos, 71,26 s |
+| Cobertura frontend | 86,18 % sentencias; 73,51 % ramas; 81,48 % funciones; 88,63 % líneas |
+| Frontend lint/build | Aprobados; 463,02 kB iniciales, sin avisos de presupuesto |
+| Chromium completo, repetición final | 66/66 en 7,8 minutos; seis roles, axe en las 22 rutas y CRUD/documentos/faciograma |
+| Backend estático | Ruff, formato y mypy (229 fuentes) pasan; Bandit `-ll` sin hallazgos medios/altos |
+| Secretos | Gitleaks sobre los 89 commits de la revisión, sin hallazgos; valores redactados en el log |
+| Base de desarrollo | Migración `031` actual, `alembic check` sin operaciones faltantes |
+| Servicios reiniciados | API lista, frontend 200 y worker sandbox activo; seis roles acceden, abren su manual y cierran sesión |
+
+La primera corrida Chromium completa aprobó 63/66. Al editar la interfaz durante
+esa ejecución, la recarga del servidor cerró la sesión de auditoría. La aserción
+global de rutas produjo otro fallo derivado del reinicio del trabajador de
+Playwright. La prueba de demografía interceptaba `route.fetch` contra la API de
+desarrollo, aunque el resto usaba la API temporal: se corrigió para respetar
+`URL_API`. La repetición completa con archivos estables aprobó **66/66** sin
+reintentos. Se detuvo la API temporal y se eliminó exclusivamente su BD sintética
+`clinicai_e2e_20261007_25eecff3`. Se conservan BD, Redis, frontend, API y worker de
+desarrollo. Las capturas del faciograma a 1440/768/390 px quedan en
+`tmp/qa-20261007/faciograma-*.png`.
+
+### Consolidación en main
+
+El usuario eligió `main` como única rama principal. La `main` anterior y
+`modulo-dental-y-mensajeria` son ancestros de la rama de trabajo; no tenían commits
+exclusivos que requirieran resolver una fusión. Se conservan sus commits mediante
+avance de `main` al resultado revisado. El stash antiguo queda como copia local
+de respaldo, ya integrado en revisiones anteriores; no se reaplica encima del
+trabajo actual.
+
+## Faciograma visible y documentos desde la ficha
+
+### Hallazgo en la instalación local
+
+El profesional del acceso local usa Odontología. Sus módulos de historia eran
+odontograma, periodoncia, planes e imágenes; el faciograma no estaba habilitado.
+El gráfico existía dentro de Atención y documentos y no tenía pestaña directa.
+Administración lo habilitó mediante la configuración versionada existente,
+conservando los cuatro módulos y los permisos del rol. Esa configuración vive
+en la BD local: otras clínicas deben habilitarlo para su propia especialidad.
+
+La ficha ahora ofrece Faciograma y Documentos y PDF con atajos desde el resumen.
+La selección de cita se conserva entre las tres vistas de atención y propaga
+su sede/especialidad. La pestaña inicial solo se selecciona si está autorizada.
+En móvil, las pestañas se desplazan horizontalmente. Se revisaron las pantallas
+de los tres roles operativos en el navegador contra los servicios 4200/8000;
+no se escribieron registros clínicos en desarrollo.
+
+### Pruebas ejecutadas
+
+| Comprobación | Resultado |
+|---|---|
+| Frontend | 635/635 en 89 archivos, 54,16 s |
+| Cobertura frontend | Sentencias 86,19 %; ramas 73,62 %; funciones 81,46 %; líneas 88,65 % |
+| Lint y build | Aprobados; 463,02 kB iniciales y sin avisos de presupuesto |
+| Chromium completo | 67/67 en 7,7 minutos; seis roles y axe en las 22 rutas |
+| Faciograma en la ficha | Alta, corrección v2, anulación v3, historial, cita conservada, PDF y escritorio/móvil; axe sin incidencias |
+| Documentos con la API final | 4/4 en 46,3 s; presupuestos, cotizaciones y recetas, PDF y solicitudes sandbox |
+| PDF abiertos con pypdf | Faciograma: dos páginas; presupuesto, cotización y receta: una página cada uno; texto extraíble |
+| Backend focalizado | 73/73 en 55,19 s con ENTORNO=desarrollo del ejecutor de CI |
+| Resumen de semillas | 2/2 unitarias: incluye receta, confirmación, suspensión y tomas adicionales |
+| Copia de receta N3 | 2/2 API en 3,41 s: conserva sensibilidad solicitada, rechaza edición y deniega WhatsApp |
+| Backend global nuevo | 1921 aprobadas, 3 omitidas (Anthropic real), 10 min 36 s; ENTORNO=desarrollo y otra BD exclusiva, sin llamadas a proveedores |
+| Ruff, formato y mypy | Aprobados; 419 archivos formateados y 229 fuentes tipadas |
+
+La primera corrida Chromium dio 66 aprobadas y una aserción fallida: la prueba
+buscaba «Recetas» con nombre exacto cuando existía un borrador y el nombre era
+«Recetas 1». El recorrido con teclado funcionaba. Se hizo estable el selector,
+se comprobó junto al faciograma (2/2) y se repitió toda la suite sin reintentos.
+
+Se descubrió que emitir como N3 una receta originalmente N2 reducía la copia a
+N2. Dos casos reprodujeron ese fallo; ahora se conserva el nivel más restrictivo.
+La copia no permite edición directa (422); la corrección parte de la receta
+original. Las corridas globales anteriores se detuvieron para incorporar la
+corrección y su contrato correcto; no se cuentan como aprobadas ni como cobertura.
+
+### Diferencias encontradas en CI
+
+La [corrida 37716853153](https://github.com/Romario1615/ClinicAI/actions/runs/37716853153)
+del commit `6702084` terminó con fallos. Frontend, calidad estática, dependencias
+y detección de secretos pasaron. Se corrigieron estas causas:
+
+- Imágenes: el ejecutor no pudo resolver `trivy-action@0.28.0`. Se fija la
+  [publicación oficial v0.36.0](https://github.com/aquasecurity/trivy-action/releases/tag/v0.36.0)
+  al commit `ed142fd0673e97e23eac54620cfb913e5ce36c25`, comprobando su etiqueta firmada.
+- Pruebas locales del agente: CI configura ENTORNO=desarrollo; la aplicación
+  aislada de API ahora declara local y proveedores simulados explícitos. Las
+  restricciones de entorno de la aplicación real se conservan.
+- Semillas: la receta extra del acceso local no entraba en el resumen; se
+  contabilizan receta, confirmación, suspensión y tomas sin cambiar los datos clínicos.
+
+La [corrida remota del commit funcional 41aa0dd](https://github.com/Romario1615/ClinicAI/actions/runs/37720408186)
+aprobó secretos, dependencias, calidad estática backend, frontend y las dos
+imágenes. Las pruebas unitarias del backend también pasaron; API/integración y
+los pasos posteriores seguían en ejecución al registrar esta evidencia. No se
+declara una corrida completa CI en verde. La repetición global local final se
+hizo sin cobertura. Se retiraron la API 8020 y ambas BD temporales después de
+terminar; permanecen 4200/8000 y la BD de desarrollo con la habilitación facial.
+
+Los logs, PDF y capturas
+están en `tmp/qa-20261007/` (excluido de Git): `frontend-ficha-final.log`,
+`e2e-completo-ficha-repeticion.log`, `e2e-documentos-api-final.log`,
+`backend-ci-focalizado.log`, `receta-sensible-final.log`,
+`backend-ficha-regresion-definitiva.log`, `local-faciograma.png`,
+`local-documentos.png`, `local-usuarios.png`, `local-clinicas.png` y
+`faciograma-{1440,768,390}.png`.
 
 ## Comandos de la revisión anterior
 

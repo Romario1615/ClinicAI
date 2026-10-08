@@ -313,7 +313,7 @@ async def _sembrar_caso_adherencia(
         indicaciones_generales=f"Escenario sintetico de adherencia {MARCA}.",
     )
     if creada.receta is None:
-        return ResumenClinico(recetas=1, suspendidas=suspendidas)
+        return ResumenClinico(suspendidas=suspendidas)
     confirmacion = await servicio.confirmar_receta(
         creada.receta.id, principal=principal, profesional_id=profesional_id
     )

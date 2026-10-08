@@ -89,7 +89,7 @@
 
       <div class="cabecera__usuario">
         <!-- La foto de la sesión abierta; pulsarla abre «Mi foto» para cambiarla. -->
-        <button type="button" class="cabecera__foto" aria-label="Mi foto" (click)="miFotoAbierta.set(true)">
+        <button type="button" class="cabecera__foto" aria-label="Mi foto" [attr.title]="especialidad()" (click)="miFotoAbierta.set(true)">
           <app-foto-persona [usuarioId]="sesion.identidad()?.usuario_id ?? null" [nombre]="sesion.nombreCompleto()" [tamano]="38" />
         </button>
         <span class="cabecera__identidad">
@@ -97,6 +97,7 @@
           @if (roles(); as listaRoles) {
             <span class="cabecera__roles">{{ listaRoles }}</span>
           }
+          <span class="cabecera__especialidad">{{ especialidad() }}</span>
         </span>
       </div>
 
@@ -125,6 +126,9 @@
             [tamano]="120"
             [puedeEditar]="true"
           />
+          <strong>{{ sesion.nombreCompleto() }}</strong>
+          <span>{{ roles() }}</span>
+          <p>{{ especialidad() }}</p>
           <p>Su foto ayuda al equipo a reconocerle en la agenda, en las tareas y en las firmas.</p>
         </div>
       </app-ventana-flotante>

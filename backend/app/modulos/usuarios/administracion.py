@@ -9,7 +9,9 @@ from sqlalchemy import false, func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.modulos.organizacion.modelos import Especialidad
 from app.modulos.profesionales.modelos import Profesional
+from app.modulos.usuarios.especialidades import especialidades_de_usuarios
 from app.modulos.usuarios.esquemas import (
     CrearRolClinica,
     CrearUsuarioClinica,
@@ -133,6 +135,9 @@ async def listar_usuarios(sesion: AsyncSession, principal: Principal) -> list[Us
     profesionales_por_usuario: dict[uuid.UUID | None, uuid.UUID] = dict(
         filas_profesionales.tuples().all()
     )
+    especialidades = await especialidades_de_usuarios(
+        sesion, [u.id for u in usuarios], clinica_id=principal.clinica_id
+    )
     return [
         UsuarioAdministrado(
             id=u.id,
@@ -142,6 +147,7 @@ async def listar_usuarios(sesion: AsyncSession, principal: Principal) -> list[Us
             activo=u.activo,
             roles=roles_por_usuario[u.id],
             profesional_id=profesionales_por_usuario.get(u.id),
+            especialidad=especialidades.get(u.id),
             ultimo_acceso_en=u.ultimo_acceso_en,
         )
         for u in usuarios
@@ -164,9 +170,13 @@ async def listar_profesionales_asignables(
             raise RecursoNoEncontrado("El usuario no existe.")
     profesionales = (
         await sesion.execute(
-            select(Profesional)
+            select(Profesional, Especialidad.nombre)
+            .join(Especialidad, Especialidad.id == Profesional.especialidad_id)
             .where(
                 Profesional.clinica_id == principal.clinica_id,
+                Especialidad.clinica_id == principal.clinica_id,
+                Especialidad.activa.is_(True),
+                Especialidad.anulado_en.is_(None),
                 Profesional.activo.is_(True),
                 Profesional.anulado_en.is_(None),
                 or_(
@@ -176,9 +186,10 @@ async def listar_profesionales_asignables(
             )
             .order_by(Profesional.apellido, Profesional.nombre)
         )
-    ).scalars()
+    ).all()
     return [
-        ProfesionalDisponible(id=p.id, nombre=p.nombre, apellido=p.apellido) for p in profesionales
+        ProfesionalDisponible(id=p.id, nombre=p.nombre, apellido=p.apellido, especialidad=nombre)
+        for p, nombre in profesionales
     ]
 
 
@@ -264,6 +275,7 @@ async def crear_usuario(
         activo=usuario.activo,
         roles=[r.nombre for r in roles],
         profesional_id=datos.profesional_id,
+        especialidad=(await especialidades_de_usuarios(sesion, [usuario.id])).get(usuario.id),
         ultimo_acceso_en=None,
     )
 
@@ -311,6 +323,7 @@ async def reemplazar_roles_usuario(
         activo=usuario.activo,
         roles=[r.nombre for r in roles],
         profesional_id=profesional_id,
+        especialidad=(await especialidades_de_usuarios(sesion, [usuario.id])).get(usuario.id),
         ultimo_acceso_en=usuario.ultimo_acceso_en,
     )
 

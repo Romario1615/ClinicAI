@@ -34,4 +34,18 @@ describe('ModoLocalService', () => {
         http.expectOne(`${CONFIGURACION_POR_DEFECTO.urlApi}/autenticacion/accesos-locales`).error(new ProgressEvent('network error'));
         expect(servicio.habilitado()).toBe(false);
     });
+
+    it('conserva la especialidad de la cuenta elegida para cada acceso', () => {
+        const servicio = TestBed.inject(ModoLocalService);
+        const respuesta = { habilitado: true, roles: [{ codigo: 'profesional', nombre: 'Profesional de salud', especialidad: 'Dermatología' }] };
+        http.expectOne(`${CONFIGURACION_POR_DEFECTO.urlApi}/autenticacion/accesos-locales`).flush(respuesta);
+        let recibido: unknown;
+        servicio.accesosLocales().subscribe(datos => recibido = datos);
+        http.expectOne(`${CONFIGURACION_POR_DEFECTO.urlApi}/autenticacion/accesos-locales`).flush(respuesta);
+        expect(recibido).toEqual(respuesta);
+        servicio.accesosLocales().subscribe(datos => recibido = datos);
+        const actualizada = { ...respuesta, roles: [{ ...respuesta.roles[0], especialidad: 'Medicina estética' }] };
+        http.expectOne(`${CONFIGURACION_POR_DEFECTO.urlApi}/autenticacion/accesos-locales`).flush(actualizada);
+        expect(recibido).toEqual(actualizada);
+    });
 });

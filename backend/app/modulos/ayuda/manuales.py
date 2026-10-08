@@ -357,7 +357,8 @@ _PROFESIONAL = ManualSistema(
             "/pacientes",
             "Reunir la atención clínica en la ficha conservando sede y especialidad.",
             (
-                "Abra la ficha del paciente desde su cita o desde Pacientes y elija Atención.",
+                "Abra la ficha del paciente desde su cita o desde Pacientes y elija Atención y documentos.",
+                "Compruebe la especialidad indicada bajo su rol al elegir el acceso local y junto a su nombre en la sesión; corresponde a su perfil profesional.",
                 "Seleccione la cita de referencia: sus notas nuevas y documentos conservarán esa cita y sede.",
                 "Use las secciones habilitadas para su especialidad: evolución, piezas dentales, imágenes, planes y recetas.",
             ),
@@ -369,10 +370,11 @@ _PROFESIONAL = ManualSistema(
         _s(
             "profesional.facial",
             "Registrar y versionar el faciograma",
-            "/historia-clinica",
+            "/pacientes",
             "Documentar evaluación y seguimiento estético sobre un rostro frontal.",
             (
-                "Con el paciente abierto, entre en Faciograma si administración habilitó ese módulo para su especialidad.",
+                "En Pacientes, pulse Ver ficha y abra la pestaña Faciograma junto a Odontograma; se muestra si administración habilitó ese módulo para su especialidad.",
+                "Seleccione la cita de referencia para conservar sede y especialidad; la selección se mantiene al pasar a Atención y documentos o Documentos y PDF.",
                 "Pulse Nuevo registro facial y seleccione una zona en el rostro o en la lista; indique observación, estado y procedimiento realizado por usted.",
                 "Agregue las zonas, indique el motivo y guarde; Editar crea una nueva versión y Anular conserva el historial.",
                 "Descargue el PDF para obtener las observaciones y una página con el mapa de las 23 zonas.",
@@ -386,10 +388,10 @@ _PROFESIONAL = ManualSistema(
         _s(
             "profesional.emision-documental",
             "Emitir PDFs y solicitar entrega privada",
-            "/historia-clinica",
+            "/pacientes",
             "Preparar presupuestos, cotizaciones y copias de recetas confirmadas.",
             (
-                "En Documentos, pulse Crear documento y complete conceptos, cantidades, precios, moneda y vigencia del presupuesto o cotización.",
+                "En la ficha del paciente, abra Documentos y PDF y pulse Crear documento; complete conceptos, cantidades, precios, moneda y vigencia del presupuesto o cotización.",
                 "Para una receta, seleccione Receta confirmada; su pauta y firmante se copian del registro confirmado, sin editar medicamentos en el documento.",
                 "Guarde la versión y use Descargar PDF; desde Planes también puede guardar un presupuesto y descargar su archivo.",
                 "Antes de Enviar por WhatsApp, revise teléfono y consentimiento Documentos por WhatsApp; confirme el destinatario en la ventana.",
@@ -835,6 +837,7 @@ _ADMINISTRADOR = ManualSistema(
                 "En Usuarios y roles, cree la cuenta con correo y una contraseña inicial.",
                 "Asigne el rol y limite las sedes si la persona no trabaja en todas.",
                 "Para un profesional, vincule la cuenta a su ficha del equipo clínico.",
+                "Compruebe Especialidad / área en Personal; el selector Perfil profesional muestra la especialidad de cada ficha. Para cambiarla, edite esa ficha en Profesionales.",
             ),
             (
                 "La persona deberá cambiar la contraseña inicial en su primer ingreso.",

@@ -151,7 +151,9 @@ class ServicioRegistros:
             "sede": sede.nombre if sede else None,
         }
         if datos.tipo == "RECETA":
-            nivel = await self._receta(principal, paciente_id, datos, contenido)
+            nivel_receta = await self._receta(principal, paciente_id, datos, contenido)
+            if nivel_receta == "N3":
+                nivel = "N3"
         if actual:
             actual.vigente = False
             await self.sesion.flush()

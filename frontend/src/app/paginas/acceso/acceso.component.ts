@@ -32,6 +32,8 @@ import { ModoLocalService } from '../../nucleo/servicios/modo-local.service';
 import { SesionService } from '../../nucleo/servicios/sesion.service';
 import { GraficoRedComponent } from '../../compartido/grafico-red.component';
 import { MarcaComponent } from '../../compartido/marca.component';
+import type { RolAccesoLocal } from '../../nucleo/modelos/dominio';
+import { especialidadDelRol } from '../../nucleo/utilidades/especialidad-rol';
 
 @Component({
   selector: 'app-acceso',
@@ -57,7 +59,8 @@ export class AccesoComponent implements OnInit {
   protected readonly error = signal<FalloApi | null>(null);
   protected readonly cargandoAccesosLocales = signal(true);
   protected readonly modoAccesoLocal = signal(false);
-  protected readonly rolesLocales = signal<readonly { codigo: string; nombre: string }[]>([]);
+  protected readonly rolesLocales = signal<readonly RolAccesoLocal[]>([]);
+  protected readonly especialidadDelRol = especialidadDelRol;
 
   ngOnInit(): void {
     this.modoLocal.accesosLocales().subscribe({

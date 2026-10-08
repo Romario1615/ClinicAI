@@ -101,7 +101,9 @@ type Pestana =
   | 'odontograma'
   | 'planes'
   | 'imagenes'
-  | 'atencion';
+  | 'atencion'
+  | 'faciograma'
+  | 'documentos';
 
 /** Estados de receta en palabras de quien atiende. */
 const ESTADO_RECETA: Record<string, string> = {
@@ -114,6 +116,8 @@ const ESTADO_RECETA: Record<string, string> = {
 const DETALLE_CLINICO: Partial<Record<Pestana, string>> = {
   historia: 'Notas de evolución y recetas',
   odontograma: 'Estado por pieza e historial de cada diente',
+  faciograma: 'Mapa del rostro, zonas y seguimiento estético',
+  documentos: 'Presupuestos, cotizaciones, recetas y PDF',
   planes: 'Fases, procedimientos y fotos del tratamiento',
   imagenes: 'Radiografías y fotos clínicas',
 };
@@ -229,7 +233,9 @@ const DETALLE_CLINICO: Partial<Record<Pestana, string>> = {
 
           <div class="ficha__cuerpo" role="tabpanel">
             @switch (pestana()) {
-              @case ('atencion') { <app-atencion-paciente [pacienteId]="pacienteId()" [citaInicial]="citaInicial()" /> }
+              @case ('atencion') { <app-atencion-paciente [pacienteId]="pacienteId()" [citaInicial]="citaParaAtencion()" (cambioCita)="citaElegidaId.set($event?.id ?? null)" /> }
+              @case ('faciograma') { <app-atencion-paciente [pacienteId]="pacienteId()" [citaInicial]="citaParaAtencion()" moduloInicial="faciograma" (cambioCita)="citaElegidaId.set($event?.id ?? null)" /> }
+              @case ('documentos') { <app-atencion-paciente [pacienteId]="pacienteId()" [citaInicial]="citaParaAtencion()" moduloInicial="documentos" (cambioCita)="citaElegidaId.set($event?.id ?? null)" /> }
               @case ('resumen') {
                 <div class="ficha__rejilla">
                   <section class="ficha__bloque">
@@ -796,6 +802,18 @@ const DETALLE_CLINICO: Partial<Record<Pestana, string>> = {
         padding: var(--espacio-4);
       }
 
+      .ficha__pestanas {
+        flex-wrap: nowrap;
+        overflow-x: auto;
+        flex-shrink: 0;
+        scrollbar-width: thin;
+      }
+
+      .ficha__pestana {
+        flex-shrink: 0;
+        white-space: nowrap;
+      }
+
       .ficha__rejilla {
         grid-template-columns: 1fr;
       }
@@ -811,6 +829,8 @@ export class FichaPacienteComponent implements OnInit {
 
   readonly pacienteId = input.required<string>();
   readonly citaInicial = input<string | null>(null);
+  protected readonly citaElegidaId = signal<string | null | undefined>(undefined);
+  protected readonly citaParaAtencion = computed(() => this.citaElegidaId() === undefined ? this.citaInicial() : this.citaElegidaId() ?? null);
   protected readonly editandoDatos = signal(false);
   /**
    * Cierto cuando va dentro de una ventana flotante, que ya pone su título
@@ -852,6 +872,10 @@ export class FichaPacienteComponent implements OnInit {
     const clinico = !this.sinAccesoClinico();
     if (clinico && this.sesion.tienePermiso(PERMISOS.odontogramaLeer) && modulo('odontograma')) {
       lista.push({ clave: 'odontograma', etiqueta: 'Odontograma' });
+    }
+    if (clinico && this.puedeLeerHistoria()) {
+      if (modulo('faciograma')) lista.push({ clave: 'faciograma', etiqueta: 'Faciograma' });
+      lista.push({ clave: 'documentos', etiqueta: 'Documentos y PDF' });
     }
     if (clinico && this.sesion.tienePermiso(PERMISOS.planTratamientoLeer) && modulo('planes')) {
       lista.push({ clave: 'planes', etiqueta: 'Plan de tratamiento' });

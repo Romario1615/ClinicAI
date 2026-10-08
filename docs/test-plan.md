@@ -1,5 +1,29 @@
 # Plan de pruebas
 
+## Faciograma visible y documentos desde la ficha (2026-10-07)
+
+Frontend **635/635**, lint y build aprobados; cobertura 86,19 % sentencias,
+73,62 % ramas, 81,46 % funciones y 88,65 % líneas. Chromium **67/67 en 7,7 minutos**:
+pestañas directas, cita conservada, faciograma versionado/anulado y visible a
+1440/768/390 px, axe en su ficha y en las 22 rutas, presupuesto/cotización/receta
+con PDF real y entrega sandbox. La prueba de equipo también edita identidad,
+quita/restaura acceso y comprueba que no se pierde el perfil profesional.
+
+La API de desarrollo 8000/4200 se verificó mediante navegador sin escrituras
+clínicas. El administrador habilitó el módulo facial para su especialidad
+odontológica mediante la API versionada. Las escrituras del navegador se
+hacen en la base E2E exclusiva. Los cuatro recorridos de documentos se repitieron
+con la API reiniciada y la corrección de N3: **4/4 en 46,3 s**.
+
+Backend: **73/73** de las rutas locales/RAG, semillas y manuales con el entorno
+de CI; **2/2** unitarias del conteo de recetas de semillas; **2/2** API para
+copias sensibles de recetas. Las regresiones nuevas se reprodujeron fallando
+antes del arreglo. La corrida global posterior aprobó **1921 pruebas y omitió
+tres de Anthropic real en 10 min 36 s**, con ENTORNO=desarrollo, otra BD temporal
+y proveedores mock/sandbox. Se ejecutó sin cobertura; no se atribuye una medida
+nueva de cobertura backend a esta corrida. Las dos bases desechables se retiraron.
+[Informe y estado de CI](verificacion-2026-10-07.md#faciograma-visible-y-documentos-desde-la-ficha).
+
 ## CRUD, faciograma y documentos (2026-10-07)
 
 La ampliación añade regresiones de clínica/cuenta, versionado y anulación de
@@ -14,7 +38,12 @@ con cita y mapa facial con teclado, PDF y límites a 1440/768/390 px. Los manual
 se comprueban por rol, permisos, rutas y ausencia de secciones repetidas.
 El ciclo `031` se verificó en una BD vacía: upgrade, downgrade a `030`, upgrade
 y `alembic check`; los datos del navegador viven en una BD temporal separada.
-Resultados finales y comandos en [el informe](verificacion-2026-10-07.md#crud-faciograma-y-documentos).
+Regresión final: backend 1917 aprobadas/3 omitidas y frontend 632/632;
+Chromium **66/66 en 7,8 minutos**, con seis roles y axe en las 22 rutas;
+lint, formato, mypy, Bandit `-ll` y build pasan. El 87,37 % de cobertura backend
+corresponde a la primera corrida, que encontró dos expectativas antiguas luego
+corregidas; la repetición completa se hizo sin cobertura. Resultados del navegador
+y comandos en [el informe](verificacion-2026-10-07.md#crud-faciograma-y-documentos).
 
 > **Corrección posterior de «Perfil de pacientes» (2026-10-07):** frontend completo **609/609 en 84 archivos**, cobertura 86,13 % sentencias, 72,88 % ramas, 81,60 % funciones y 88,32 % líneas; lint y build aprobados. Chromium focalizado **2/2**: axe del panel y comprobación geométrica de la tarjeta en siete anchos de 320 a 1440 px, con etiquetas largas, valores grandes y «Protegido». El escenario visual usa un desglose agregado sintético sobre la respuesta del dashboard para reproducir esos extremos; la sesión y el resto de la API son reales. [Cambio y comandos](verificacion-2026-10-07.md#corrección-posterior-del-perfil-de-pacientes). La corrida completa E2E anterior de 62/62 se conserva como evidencia separada.
 

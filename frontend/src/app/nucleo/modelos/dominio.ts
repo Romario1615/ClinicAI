@@ -57,6 +57,7 @@ export interface ResumenAmbito {
 
 export interface Identidad {
   readonly usuario_id: string;
+  readonly especialidad?: string | null;
   readonly correo: string;
   readonly nombre: string;
   readonly apellido: string;
@@ -71,6 +72,17 @@ export interface Identidad {
   readonly ultimo_acceso_en: string | null;
   /** Profesional vinculado a la cuenta, si lo hay. */
   readonly profesional_id?: string | null;
+}
+
+export interface RolAccesoLocal {
+  readonly codigo: string;
+  readonly nombre: string;
+  readonly especialidad?: string | null;
+}
+
+export interface RespuestaAccesosLocales {
+  readonly habilitado: boolean;
+  readonly roles: readonly RolAccesoLocal[];
 }
 
 // ---------------------------------------------------------------------------

@@ -33,6 +33,11 @@ anular el registro invalida sus enlaces anteriores. Descargas con `no-store`,
 `nosniff` y política de referrer restrictiva. Tokens almacenados como hash más
 copia cifrada; no se imprimen en logs. N3 y faciogramas no admiten enlace público.
 Los PDFs conservan trazabilidad, pero no incorporan firma certificada.
+La copia PDF de una receta conserva el nivel más restrictivo entre el solicitado
+para el documento y el de la receta confirmada. Marcarla N3 nunca se reduce a N2
+al copiar la pauta. Las copias de recetas no admiten edición directa: primero se
+corrige la receta original y después se emite su copia. Dos regresiones API
+comprueban la clasificación, el rechazo de edición y la denegación de WhatsApp.
 
 ## 1. Clasificación de la información
 

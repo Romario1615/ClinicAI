@@ -27,7 +27,7 @@
  * pueden sustituir por una versión firmada que conserva el historial y
  * cancela las tomas futuras de la pauta anterior.
  */
-import { Component, DestroyRef, computed, inject, input, OnInit, signal, ChangeDetectionStrategy } from '@angular/core';
+import { Component, DestroyRef, computed, effect, inject, input, OnInit, signal, ChangeDetectionStrategy } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute } from '@angular/router';
 import { forkJoin, of } from 'rxjs';
@@ -172,6 +172,7 @@ export class HistoriaClinicaComponent implements OnInit {
   readonly citaContexto = input<string | null>(null);
   readonly sedeContexto = input<string | null>(null);
   readonly embebida = input(false);
+  readonly moduloInicial = input<'faciograma' | 'documentos' | null>(null);
   private readonly ruta = inject(ActivatedRoute, { optional: true });
   private readonly destroyRef = inject(DestroyRef);
   private readonly api = inject(ApiService);
@@ -403,6 +404,10 @@ export class HistoriaClinicaComponent implements OnInit {
   });
 
   constructor() {
+    effect(() => {
+      const modulo = this.moduloInicial();
+      if (modulo && this.pestanas().some(p => p.clave === modulo)) this.pestana.set(modulo);
+    });
     this.destroyRef.onDestroy(() => this.limpiarTemporizadorAccesoEmergencia());
     this.vigilarPantallaFija();
   }

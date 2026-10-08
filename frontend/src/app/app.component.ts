@@ -25,6 +25,7 @@ import { AutenticacionService } from './nucleo/servicios/autenticacion.service';
 import { PendientesService } from './nucleo/servicios/pendientes.service';
 import { SesionService } from './nucleo/servicios/sesion.service';
 import { ModoLocalService } from './nucleo/servicios/modo-local.service';
+import { especialidadDelRol } from './nucleo/utilidades/especialidad-rol';
 
 interface EnlaceNavegacion {
   readonly ruta: string;
@@ -256,6 +257,10 @@ export class AppComponent {
 
   /** Roles del usuario, ya unidos. Cadena vacia si no hay ninguno. */
   protected readonly roles = computed(() => this.sesion.identidad()?.roles.join(' · ') ?? '');
+  protected readonly especialidad = computed(() => {
+    const identidad = this.sesion.identidad();
+    return identidad ? especialidadDelRol(identidad.especialidad, identidad.roles) : '';
+  });
 
   /** Dos iniciales del nombre para el avatar de la cabecera. */
   protected readonly iniciales = computed(() =>

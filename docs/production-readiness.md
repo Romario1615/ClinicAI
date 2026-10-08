@@ -1,5 +1,23 @@
 # Estado de preparación para producción
 
+> **Revisión actual en main (2026-10-07):** faciograma y Documentos y PDF visibles
+> desde la ficha, cita conservada y CRUD de clínicas/cuentas probado por rol.
+> Frontend 635/635; lint y build aprobados. Chromium 67/67 en 7,7 minutos, axe
+> en las 22 rutas y en la ficha facial; cuatro recorridos documentales repetidos
+> con la API final. Dos pruebas API verifican que emitir una receta sensible
+> conserva N3 y bloquea su entrega por enlace. La regresión global nueva aprobó
+> 1921 pruebas y omitió tres de Anthropic real en 10 min 36 s, sin cobertura.
+> La corrida GitHub 37716853153 falló por la referencia de Trivy,
+> el entorno de las rutas locales y el resumen de semillas; las tres causas
+> están corregidas. La nueva corrida 37720408186 del commit funcional 41aa0dd
+> aprobó seis trabajos; la suite backend remota seguía en ejecución al registrar
+> la evidencia. Esta revisión
+> actualiza funcionalidad local; los requisitos de producción siguientes
+> continúan pendientes. [Informe](verificacion-2026-10-07.md#faciograma-visible-y-documentos-desde-la-ficha).
+
+Las notas de pruebas siguientes conservan las revisiones anteriores a la
+consolidación en main; la revisión vigente es la indicada arriba.
+
 > **Estado actual de la rama (2026-10-07):** `claude/friendly-gates-o240sb` sobre `727c9f5`; frontend 605/605, lint y build pasan. Chromium 62/62 con API/BD temporal, seis roles y axe en 22 rutas. Backend completo: 1855 aprobadas, tres de Anthropic real omitidas y 87,89 % de cobertura en 19 min 39 s. Contrato/métricas 8/8; Ruff, formato, mypy y Bandit `-ll` aprobados. Los seis roles entran y abren su manual propio en los servicios de desarrollo. Las migraciones `029`/`030` están aplicadas y su reversión se verificó en una base vacía. [Informe de verificación](verificacion-2026-10-07.md). El sitio está disponible para revisión local en `http://localhost:4200/acceso`. La validación de proveedores reales y los requisitos de producción detallados abajo siguen pendientes.
 
 > **Última auditoría formal:** 2026‑09‑14. **Actualización de pruebas:** 2026‑10‑07 ·

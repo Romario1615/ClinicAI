@@ -19,6 +19,7 @@ import type {
   CitaDetalle,
   Disponibilidad,
   Identidad,
+  RespuestaAccesosLocales,
   Paciente,
   PaginaCitas,
   ParTokens,
@@ -857,8 +858,8 @@ export class ApiService {
     return this.post<ParTokens>('/autenticacion/sesion', datos);
   }
 
-  accesosLocales(): Observable<{ habilitado: boolean; roles: readonly { codigo: string; nombre: string }[] }> {
-    return this.get<{ habilitado: boolean; roles: readonly { codigo: string; nombre: string }[] }>(
+  accesosLocales(): Observable<RespuestaAccesosLocales> {
+    return this.get<RespuestaAccesosLocales>(
       '/autenticacion/accesos-locales',
     );
   }

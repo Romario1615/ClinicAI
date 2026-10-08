@@ -7,6 +7,22 @@ que se indique explícitamente que la Verificación es manual.
 
 Estado: `pendiente` · `en curso` · `hecho` · `bloqueado`
 
+## Revisión de los pedidos de registros y documentos (2026-10-07)
+
+| Pedido | Estado y acceso |
+|---|---|
+| CRUD de clínicas | Implementado y probado en navegador: Superadministrador → Clínicas → crear, consultar, editar, desactivar/reactivar. La baja conserva las referencias. |
+| CRUD de usuarios | Implementado y probado en navegador: Administración → Usuarios y roles → crear, consultar, Editar datos, Gestionar accesos, Quitar/Restaurar acceso. Conserva el perfil profesional y el rol al editar identidad. Superadministración también gestiona las cuentas de cada clínica. |
+| Atención desde la ficha según la cita | Implementada: la cita fija sede/especialidad; Atención y documentos integra la historia completa y enlaces a Agenda/Pagos. Cambiar entre sus pestañas directas conserva la cita seleccionada. |
+| Faciograma | Implementado: 23 zonas interactivas, seguimiento manual, versiones, anulación, historial y PDF gráfico. Pestaña directa en la ficha. Se habilitó en la especialidad odontológica del acceso local; otras clínicas lo configuran desde Catálogo. |
+| PDF de presupuesto, cotización y receta | Implementado: archivo real generado por el servidor, importes decimales y receta confirmada con su pauta y firmante. También desde los planes dentales. |
+| Entrega por WhatsApp | Flujo privado con consentimiento y verificación de identidad, probado en sandbox. La entrega real con Meta sigue pendiente de configuración y prueba. |
+| Manuales por rol | Actualizados en Ayuda con los accesos directos y la selección de la atención; se conserva un manual diferente por rol. |
+
+Esto verifica los registros solicitados. El inventario de pendientes de otras
+especialidades, facturación e inventario sigue detallado en las fases siguientes.
+Evidencia: [informe](verificacion-2026-10-07.md#faciograma-visible-y-documentos-desde-la-ficha).
+
 ---
 
 ## Fase 0 — Análisis y fundación
@@ -79,7 +95,7 @@ Estado: `pendiente` · `en curso` · `hecho` · `bloqueado`
 | 2.13 | Logs estructurados con redacción | RNF‑14 | Prueba que provoca errores y verifica que no aparecen datos personales | hecho: la ruta real de `structlog` y la de `logging` externo se ejercitan con excepciones que incluyen cédula, correo, teléfono y campos identificativos; se verifica que los identificadores de paciente se conservan y los datos personales no aparecen en JSON. `pruebas/unitarias/test_registro.py`, 55 pruebas. |
 | 2.14 | Cabeceras de seguridad y CORS | — | Prueba de presencia de cabeceras; comodín rechazado en producción | hecho: las pruebas HTTP confirman cabeceras de seguridad y correlación en respuesta normal y 404; preflight valida origen, método y cabeceras permitidas y rechaza un origen ajeno. La validación de configuración de producción rechaza `ORIGENES_CORS=*` (13 casos parametrizados). `pruebas/api/test_seguridad_http_api.py`, `pruebas/unitarias/test_configuración.py`. |
 | 2.15 | OpenAPI y pruebas de contrato | — | `schemathesis` sin fallos sobre el esquema | hecho: valida el documento completo y genera/contrasta un caso por cada operación OpenAPI (100+), por ASGI y sin credenciales. Se documentó el sobre común de errores HTTP y la Verificación alternativa de indicaciones posconsulta; los proveedores quedan simulados y las transacciones de prueba se revierten. `pruebas/api/test_contrato_openapi.py`, 2 pruebas. |
-| 2.16 | Pipeline de CI en verde | — | Todas las comprobaciones del pipeline pasan | en curso: frontend 538/538, lint, tipos y build; backend global 1806 aprobadas, 3 pruebas de Anthropic omitidas por credenciales; una corrida anterior con cobertura midió 87,45 % (mínimo 80 %); `pip-audit`, Ruff, mypy, Bandit, Gitleaks y Trivy de ambas imágenes pasan. La aserción aleatoria corregida pasa en la repetición global. Falta ejecutar el pipeline CI completo en una sola corrida y cerrar cualquier diferencia que aparezca. Evidencia en `docs/test-plan.md`. |
+| 2.16 | Pipeline de CI en verde | — | Todas las comprobaciones del pipeline pasan | en curso: en main, backend local 1921 aprobadas/3 omitidas, frontend 635/635 y Chromium 67/67. La corrida 37716853153 encontró la referencia de Trivy, el entorno de rutas locales y el resumen de semillas; se corrigieron. El commit funcional 41aa0dd pasó seis trabajos remotos (secretos, dependencias, calidad backend, frontend y ambas imágenes); la suite backend remota seguía en ejecución al registrar la evidencia. No se declara una corrida CI completa en verde. Ver docs/verificacion-2026-10-07.md. |
 
 ## Fase 3 — Agenda
 

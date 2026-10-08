@@ -35,6 +35,20 @@ describe('AtencionPacienteComponent', () => {
     TestBed.inject(HttpTestingController).expectOne(`${BASE}/pacientes/pac-1/contextos-atencion`).flush({ mensaje: 'El contexto no está disponible' }, { status: 404, statusText: 'Not Found' }); f.detectChanges();
     expect(f.nativeElement.querySelector('[role="alert"]')).toBeTruthy();
   });
+
+  it('comunica la cita seleccionada y no elimina el contexto ante un id no autorizado', () => {
+    const f = montar(['agenda.leer']);
+    const cambios: (string | null)[] = [];
+    f.componentInstance.cambioCita.subscribe(c => cambios.push(c?.id ?? null));
+    TestBed.inject(HttpTestingController).expectOne(`${BASE}/pacientes/pac-1/contextos-atencion`).flush([cita]);
+    expect(cambios).toEqual(['cita-1']);
+    f.componentInstance['elegir']('ajena');
+    expect(cambios).toEqual(['cita-1']);
+    f.componentInstance['elegir']('');
+    expect(cambios).toEqual(['cita-1', null]);
+    f.componentRef.setInput('moduloInicial', 'faciograma');
+    expect(f.componentInstance.moduloInicial()).toBe('faciograma');
+  });
   it('sin agenda no pide citas y conserva la separación administrativa', () => {
     const f = montar(['paciente.leer_administrativo']);
     expect(f.nativeElement.textContent).toContain('datos administrativos');

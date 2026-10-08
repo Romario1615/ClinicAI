@@ -101,6 +101,16 @@ describe('AppComponent', () => {
         expect(nav).toBeNull();
     });
 
+    it('muestra la especialidad del profesional en la cabecera y en Mi perfil', () => {
+        sesion.establecerTokens({ token_acceso: 't', token_refresco: 'r', tipo_token: 'Bearer', expira_en: new Date().toISOString(), requiere_segundo_factor: false });
+        sesion.establecerIdentidad({ ...identidadCon([]), roles: ['profesional'], especialidad: 'Dermatología' });
+        fixture.detectChanges();
+        expect(fixture.nativeElement.querySelector('.cabecera__especialidad').textContent).toBe('Especialidad: Dermatología');
+        (fixture.componentInstance as unknown as { miFotoAbierta: WritableSignal<boolean> }).miFotoAbierta.set(true);
+        fixture.detectChanges();
+        expect(document.body.textContent).toContain('Especialidad: Dermatología');
+    });
+
     it('con sesion muestra el nombre del usuario', () => {
         sesion.establecerTokens({
             token_acceso: 't',

@@ -134,6 +134,13 @@
   font-size: 0.95rem;
 }
 
+.cabecera__especialidad {
+  font-size: 0.76rem;
+  color: var(--texto-suave);
+  max-width: 260px;
+  overflow-wrap: anywhere;
+}
+
 .cabecera__roles {
   font-size: 0.78rem;
   /* `--texto-suave` y no el tenue: bajo la cabecera puede pasar un banner

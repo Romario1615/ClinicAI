@@ -183,6 +183,7 @@ class UsuarioAdministrado(BaseModel):
     activo: bool
     roles: list[str]
     profesional_id: uuid.UUID | None = None
+    especialidad: str | None = None
     ultimo_acceso_en: datetime | None
 
 
@@ -190,6 +191,7 @@ class ProfesionalDisponible(BaseModel):
     id: uuid.UUID
     nombre: str
     apellido: str
+    especialidad: str | None = None
 
 
 class PeticionAccesoLocal(BaseModel):
@@ -201,6 +203,7 @@ class PeticionAccesoLocal(BaseModel):
 class RolAccesoLocal(BaseModel):
     codigo: str
     nombre: str
+    especialidad: str | None = None
 
 
 class RespuestaAccesosLocales(BaseModel):
@@ -259,6 +262,7 @@ class RespuestaIdentidad(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     usuario_id: uuid.UUID
+    especialidad: str | None = None
     correo: str
     nombre: str
     apellido: str
