@@ -120,7 +120,7 @@ async function medirSecciones(page: Page): Promise<string[]> {
       await page.evaluate(() => Promise.all(document.getAnimations()
         .filter((animacion) => animacion.effect?.getTiming().iterations !== Infinity)
         .map((animacion) => animacion.finished.catch(() => undefined))));
-      const medida = await page.evaluate(() => {
+      const medir = () => page.evaluate(() => {
         const raiz = document.scrollingElement!;
         const anfitrion = document.querySelector('router-outlet')?.nextElementSibling as HTMLElement | null;
         return {
@@ -129,6 +129,16 @@ async function medirSecciones(page: Page): Promise<string[]> {
           anfitrionY: anfitrion ? anfitrion.scrollHeight - anfitrion.clientHeight : 0,
         };
       });
+      // Con datos lentos la animación de entrada puede empezar después de la
+      // espera anterior: se da un margen breve a que la pantalla se asiente y
+      // solo cuenta como fallo el desborde que persiste.
+      const limpio = (m: Awaited<ReturnType<typeof medir>>) =>
+        m.paginaX <= 1 && (!escritorio || (m.paginaY <= 1 && m.anfitrionY <= 1));
+      let medida = await medir();
+      for (let intento = 0; intento < 10 && !limpio(medida); intento++) {
+        await page.waitForTimeout(300);
+        medida = await medir();
+      }
       const etiqueta = `${ruta} a ${dimensiones.width}×${dimensiones.height}`;
       if (medida.paginaX > 1) fallos.push(`${etiqueta}: desborda ${medida.paginaX} px en horizontal`);
       if (escritorio && medida.paginaY > 1) fallos.push(`${etiqueta}: la página desplaza ${medida.paginaY} px`);

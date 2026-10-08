@@ -1078,7 +1078,12 @@ class TestSeriesRecurrentes:
             await sesion.execute(
                 sa.select(sa.func.count())
                 .select_from(Cita)
-                .where(Cita.serie_recurrente_id.is_not(None))
+                # Solo las del paciente de la prueba: la base de desarrollo
+                # guarda series reales de otros recorridos.
+                .where(
+                    Cita.serie_recurrente_id.is_not(None),
+                    Cita.paciente_id == solicitud_serie.paciente_id,
+                )
             )
         ).scalar_one()
         assert series == 0

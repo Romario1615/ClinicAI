@@ -845,7 +845,12 @@ class TestRegistroDeTomas:
         registro de adherencia falso, y ese registro es lo que el profesional
         mira para decidir."""
         toma = (
-            await sesion.execute(sa.select(Toma).order_by(Toma.programada_en).limit(1))
+            await sesion.execute(
+                sa.select(Toma)
+                .where(Toma.paciente_id == receta_confirmada.paciente_id)
+                .order_by(Toma.programada_en)
+                .limit(1)
+            )
         ).scalar_one()
 
         with pytest.raises(ReglaNegocioViolada, match="todavia no llego"):
@@ -860,7 +865,12 @@ class TestRegistroDeTomas:
         reloj_fijo: RelojFijo,
     ) -> None:
         toma = (
-            await sesion.execute(sa.select(Toma).order_by(Toma.programada_en).limit(1))
+            await sesion.execute(
+                sa.select(Toma)
+                .where(Toma.paciente_id == receta_confirmada.paciente_id)
+                .order_by(Toma.programada_en)
+                .limit(1)
+            )
         ).scalar_one()
         reloj_fijo.fijar(toma.programada_en + timedelta(minutes=5))
 
@@ -891,7 +901,12 @@ class TestRegistroDeTomas:
         reloj_fijo: RelojFijo,
     ) -> None:
         toma = (
-            await sesion.execute(sa.select(Toma).order_by(Toma.programada_en).limit(1))
+            await sesion.execute(
+                sa.select(Toma)
+                .where(Toma.paciente_id == receta_confirmada.paciente_id)
+                .order_by(Toma.programada_en)
+                .limit(1)
+            )
         ).scalar_one()
         reloj_fijo.fijar(toma.programada_en + timedelta(minutes=5))
 
@@ -912,7 +927,12 @@ class TestRegistroDeTomas:
         """Es el caso del paciente que escribe por WhatsApp: su principal solo
         alcanza su propia ficha."""
         toma = (
-            await sesion.execute(sa.select(Toma).order_by(Toma.programada_en).limit(1))
+            await sesion.execute(
+                sa.select(Toma)
+                .where(Toma.paciente_id == receta_confirmada.paciente_id)
+                .order_by(Toma.programada_en)
+                .limit(1)
+            )
         ).scalar_one()
         reloj_fijo.fijar(toma.programada_en + timedelta(minutes=5))
 

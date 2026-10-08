@@ -731,7 +731,14 @@ async def test_total_historico_se_concilia_una_vez_y_se_puede_repetir(
         headers=cabeceras,
     )
     assert distinto.status_code == 409
-    acciones = list((await sesion.execute(sa.select(Auditoria.accion))).scalars())
+    # Solo las del cargo de la prueba: la base de desarrollo guarda otras.
+    acciones = list(
+        (
+            await sesion.execute(
+                sa.select(Auditoria.accion).where(Auditoria.entidad_id == historico.id)
+            )
+        ).scalars()
+    )
     assert acciones.count(AccionAuditada.CARGO_PAGO_CONCILIADO.value) == 1
 
 
