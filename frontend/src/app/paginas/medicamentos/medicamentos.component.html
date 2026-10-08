@@ -1,4 +1,4 @@
-<header class="modulo-cabecera">
+<header class="modulo-cabecera pantalla__fijo">
   <div class="modulo-cabecera__texto">
     <p class="ceja">SEGUIMIENTO</p>
     <h1>Medicación y adherencia</h1>
@@ -7,10 +7,10 @@
   <img class="modulo-cabecera__imagen" src="/images/medicacion-seguimiento.png" alt="" aria-hidden="true" loading="lazy" />
 </header>
 
-<app-resumen-modulo modulo="clinico" />
+<app-resumen-modulo class="pantalla__fijo" modulo="clinico" />
 
 @if (!hayPaciente()) {
-  <section class="tarjeta buscador" aria-label="Buscar paciente">
+  <section class="tarjeta buscador pantalla__fijo" aria-label="Buscar paciente">
     <form (ngSubmit)="cargarPacientes()">
       <label class="campo">
         <span class="campo__etiqueta">Buscar paciente</span>
@@ -29,9 +29,10 @@
   </section>
 
   @if (cargandoPacientes()) {
-    <app-cargando mensaje="Cargando pacientes..." />
+    <app-cargando class="pantalla__fijo" mensaje="Cargando pacientes..." />
   } @else if (errorPacientes()) {
     <app-error
+      class="pantalla__fijo"
       titulo="No se pudo cargar el listado"
       [mensaje]="errorPacientes()!.message"
       [codigo]="errorPacientes()!.codigo"
@@ -39,14 +40,14 @@
       (reintentar)="cargarPacientes()"
     />
   } @else if (pacientes().length === 0) {
-    <div class="tarjeta">
+    <div class="tarjeta pantalla__fijo">
       <app-vacio
         titulo="Sin pacientes"
         detalle="No hay pacientes de su ámbito que coincidan con la búsqueda."
       />
     </div>
   } @else {
-    <div class="tabla-envoltorio">
+    <div class="tabla-envoltorio desplazable" tabindex="0" role="region" aria-label="Pacientes">
       <table class="tabla">
         <thead>
           <tr>
@@ -72,7 +73,7 @@
     </div>
   }
 } @else {
-  <header class="cabecera tarjeta">
+  <header class="cabecera tarjeta pantalla__fijo">
     <div>
       <h2>{{ nombreCompleto(paciente()!) }}</h2>
       <p class="cabecera__sub">
@@ -83,9 +84,9 @@
   </header>
 
   @if (cargando()) {
-    <app-cargando mensaje="Cargando el calendario de tomas..." />
+    <app-cargando class="pantalla__fijo" mensaje="Cargando el calendario de tomas..." />
   } @else if (error()) {
-    <app-error
+    <app-error class="pantalla__fijo"
       titulo="No se pudo cargar la medicación"
       [mensaje]="error()!.message"
       [codigo]="error()!.codigo"
@@ -94,7 +95,7 @@
     />
   } @else {
     @if (errorAlertas()) {
-      <app-error
+      <app-error class="pantalla__fijo"
         titulo="No se pudieron cargar las alertas"
         [mensaje]="errorAlertas()!.message"
         [codigo]="errorAlertas()!.codigo"
@@ -103,7 +104,7 @@
       />
     }
     @if (errorAtendiendoAlerta()) {
-      <app-error
+      <app-error class="pantalla__fijo"
         titulo="No se pudo atender la alerta"
         [mensaje]="errorAtendiendoAlerta()!.message"
         [codigo]="errorAtendiendoAlerta()!.codigo"
@@ -112,7 +113,7 @@
       />
     }
     @if (errorRegistro()) {
-      <app-error
+      <app-error class="pantalla__fijo"
         titulo="No se pudo registrar la toma"
         [mensaje]="errorRegistro()!.message"
         [codigo]="errorRegistro()!.codigo"
@@ -121,128 +122,132 @@
       />
     }
 
-    @if (alertas().length > 0) {
-      <section class="tarjeta vencidas" aria-labelledby="alertas-adherencia-titulo">
-        <h3 id="alertas-adherencia-titulo">Alertas de adherencia abiertas</h3>
-        <p>Recuento operativo de tomas pendientes u omitidas; requiere revisión del equipo clínico.</p>
-        @for (alerta of alertas(); track alerta.id) {
-          <article class="alerta-adherencia" [attr.aria-label]="'Alerta de adherencia ' + ($index + 1)" [attr.data-alerta]="alerta.id">
-            <div>
-              <strong>{{ alerta.severidad === 'URGENTE' ? 'Prioridad urgente' : 'Requiere seguimiento' }}</strong>
-              @if (medicamentosDe(alerta); as nombres) { <p>Receta: {{ nombres }}</p> }
-              <p>{{ alerta.tomas_omitidas }} de {{ alerta.tomas_esperadas }} tomas sin registrar en el periodo.</p>
+    <!-- Avisos a un lado, tomas al otro. Lo que hay que atender hoy (tomas
+         sin registrar) va primero en la columna de avisos. -->
+    <div class="pantalla__columnas medicacion__columnas">
+      <div class="medicacion__avisos desplazable" tabindex="0" role="region" aria-label="Avisos y recuento de tomas">
+        @if (presentadas().length > 0) {
+          @if (vencidas().length > 0) {
+            <div class="tarjeta vencidas">
+              <h3>{{ vencidas().length }} toma(s) sin registrar</h3>
+              <p>
+                Su hora ya pasó y nadie ha indicado si se tomaron. Mientras sigan así cuentan como
+                omisiones al medir la adherencia.
+              </p>
             </div>
-            @if (sesion.tienePermiso('alerta_adherencia.atender')) {
-              <button class="boton boton--pequeno" type="button" [disabled]="atendiendoAlerta() === alerta.id" (click)="atender(alerta)">
-                {{ atendiendoAlerta() === alerta.id ? 'Guardando…' : 'Marcar atendida' }}
-              </button>
-            }
-          </article>
-        }
-      </section>
-    }
-
-    @if (presentadas().length === 0) {
-      <div class="tarjeta">
-        <app-vacio
-          titulo="Sin tomas programadas"
-          detalle="Este paciente no tiene calendario de tomas en esta ventana. Solo una receta confirmada por un profesional genera tomas; un medicamento «cuando sea necesario» nunca las genera."
-        />
-      </div>
-    } @else {
-
-    <!-- Lo único de esta pantalla sobre lo que hay que actuar hoy. Una toma
-         vencida y una futura están ambas en estado PENDIENTE, pero significan
-         cosas opuestas: mostrarlas igual esconde justo lo que hay que ver. -->
-    @if (vencidas().length > 0) {
-      <div class="tarjeta vencidas">
-        <h3>{{ vencidas().length }} toma(s) sin registrar</h3>
-        <p>
-          Su hora ya pasó y nadie ha indicado si se tomaron. Mientras sigan así cuentan como
-          omisiones al medir la adherencia.
-        </p>
-      </div>
-    }
-
-    <div class="resumen">
-      @for (fila of resumen(); track fila.estado) {
-        <div class="resumen__celda">
-          <span class="resumen__cantidad">{{ fila.cantidad }}</span>
-          <span [class]="'estado estado--' + fila.tono">{{ fila.etiqueta }}</span>
-        </div>
-      }
-    </div>
-
-    <div class="tabla-envoltorio">
-      <table class="tabla">
-        <thead>
-          <tr>
-            <th scope="col">Día</th>
-            <th scope="col">Hora</th>
-            <th scope="col">Medicamento</th>
-            <th scope="col">Estado</th>
-            <th scope="col"><span class="oculto-visual">Acciones</span></th>
-          </tr>
-        </thead>
-        <tbody>
-          @for (fila of presentadas(); track fila.toma.id) {
-            <tr [class.fila-vencida]="fila.vencida">
-              <td>{{ dia(fila.toma.programada_en) }}</td>
-              <td class="numerico">{{ hora(fila.toma.programada_en) }}</td>
-              <td>{{ fila.toma.medicamento }}</td>
-              <td>
-                <span [class]="'estado estado--' + estado(fila.toma.estado).tono">
-                  {{ estado(fila.toma.estado).texto }}
-                </span>
-                @if (fila.vencida) {
-                  <span class="marca-vencida">sin registrar</span>
-                }
-              </td>
-              <td class="acciones">
-                @if (fila.toma.estado !== 'PENDIENTE') {
-                  <span class="registrada">
-                    @if (fila.toma.registrada_en) {
-                      registrada {{ hora(fila.toma.registrada_en) }}
-                    }
-                  </span>
-                } @else if (fila.futura) {
-                  <!-- Sin botón a propósito: marcar como tomada una dosis que
-                       todavía no toca produce un registro de adherencia falso,
-                       y ese registro es lo que el profesional mira para
-                       decidir. El backend lo rechaza; ofrecerlo y que falle
-                       sería peor que no ofrecerlo. -->
-                  <span class="aun-no">aún no toca</span>
-                } @else if (!puedeRegistrar()) {
-                  <span class="aun-no">sin permiso</span>
-                } @else {
-                  <button
-                    class="boton boton--pequeno"
-                    type="button"
-                    [disabled]="registrando() === fila.toma.id"
-                    (click)="registrar(fila.toma, true)"
-                  >
-                    Tomada
-                  </button>
-                  <button
-                    class="boton boton--pequeno boton--peligro"
-                    type="button"
-                    [disabled]="registrando() === fila.toma.id"
-                    (click)="registrar(fila.toma, false)"
-                  >
-                    Omitida
-                  </button>
-                }
-              </td>
-            </tr>
           }
-        </tbody>
-      </table>
+        }
+        @if (alertas().length > 0) {
+          <section class="tarjeta vencidas" aria-labelledby="alertas-adherencia-titulo">
+            <h3 id="alertas-adherencia-titulo">Alertas de adherencia abiertas</h3>
+            <p>Recuento operativo de tomas pendientes u omitidas; requiere revisión del equipo clínico.</p>
+            @for (alerta of alertas(); track alerta.id) {
+              <article class="alerta-adherencia" [attr.aria-label]="'Alerta de adherencia ' + ($index + 1)" [attr.data-alerta]="alerta.id">
+                <div>
+                  <strong>{{ alerta.severidad === 'URGENTE' ? 'Prioridad urgente' : 'Requiere seguimiento' }}</strong>
+                  @if (medicamentosDe(alerta); as nombres) { <p>Receta: {{ nombres }}</p> }
+                  <p>{{ alerta.tomas_omitidas }} de {{ alerta.tomas_esperadas }} tomas sin registrar en el periodo.</p>
+                </div>
+                @if (sesion.tienePermiso('alerta_adherencia.atender')) {
+                  <button class="boton boton--pequeno" type="button" [disabled]="atendiendoAlerta() === alerta.id" (click)="atender(alerta)">
+                    {{ atendiendoAlerta() === alerta.id ? 'Guardando…' : 'Marcar atendida' }}
+                  </button>
+                }
+              </article>
+            }
+          </section>
+        }
+        @if (presentadas().length > 0) {
+          <div class="resumen">
+            @for (fila of resumen(); track fila.estado) {
+              <div class="resumen__celda">
+                <span class="resumen__cantidad">{{ fila.cantidad }}</span>
+                <span [class]="'estado estado--' + fila.tono">{{ fila.etiqueta }}</span>
+              </div>
+            }
+          </div>
+        }
+      </div>
+      <div class="medicacion__tomas">
+        @if (presentadas().length === 0) {
+          <div class="tarjeta">
+            <app-vacio
+              titulo="Sin tomas programadas"
+              detalle="Este paciente no tiene calendario de tomas en esta ventana. Solo una receta confirmada por un profesional genera tomas; un medicamento «cuando sea necesario» nunca las genera."
+            />
+          </div>
+        } @else {
+          <div class="tabla-envoltorio desplazable" tabindex="0" role="region" aria-label="Calendario de tomas">
+            <table class="tabla">
+              <thead>
+                <tr>
+                  <th scope="col">Día</th>
+                  <th scope="col">Hora</th>
+                  <th scope="col">Medicamento</th>
+                  <th scope="col">Estado</th>
+                  <th scope="col"><span class="oculto-visual">Acciones</span></th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (fila of presentadas(); track fila.toma.id) {
+                  <tr [class.fila-vencida]="fila.vencida">
+                    <td>{{ dia(fila.toma.programada_en) }}</td>
+                    <td class="numerico">{{ hora(fila.toma.programada_en) }}</td>
+                    <td>{{ fila.toma.medicamento }}</td>
+                    <td>
+                      <span [class]="'estado estado--' + estado(fila.toma.estado).tono">
+                        {{ estado(fila.toma.estado).texto }}
+                      </span>
+                      @if (fila.vencida) {
+                        <span class="marca-vencida">sin registrar</span>
+                      }
+                    </td>
+                    <td class="acciones">
+                      @if (fila.toma.estado !== 'PENDIENTE') {
+                        <span class="registrada">
+                          @if (fila.toma.registrada_en) {
+                            registrada {{ hora(fila.toma.registrada_en) }}
+                          }
+                        </span>
+                      } @else if (fila.futura) {
+                        <!-- Sin botón a propósito: marcar como tomada una dosis que
+                             todavía no toca produce un registro de adherencia falso,
+                             y ese registro es lo que el profesional mira para
+                             decidir. El backend lo rechaza; ofrecerlo y que falle
+                             sería peor que no ofrecerlo. -->
+                        <span class="aun-no">aún no toca</span>
+                      } @else if (!puedeRegistrar()) {
+                        <span class="aun-no">sin permiso</span>
+                      } @else {
+                        <button
+                          class="boton boton--pequeno"
+                          type="button"
+                          [disabled]="registrando() === fila.toma.id"
+                          (click)="registrar(fila.toma, true)"
+                        >
+                          Tomada
+                        </button>
+                        <button
+                          class="boton boton--pequeno boton--peligro"
+                          type="button"
+                          [disabled]="registrando() === fila.toma.id"
+                          (click)="registrar(fila.toma, false)"
+                        >
+                          Omitida
+                        </button>
+                      }
+                    </td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+          <p class="pie">
+            Este listado es un <strong>recuento</strong>, no una valoración: no dice si el
+            tratamiento funciona ni si hay que cambiarlo. Esa lectura es del profesional.
+          </p>
+        }
+      </div>
     </div>
-
-    <p class="pie">
-      Este listado es un <strong>recuento</strong>, no una valoración: no dice si el
-      tratamiento funciona ni si hay que cambiarlo. Esa lectura es del profesional.
-    </p>
-    }
   }
 }

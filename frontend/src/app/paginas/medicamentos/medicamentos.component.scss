@@ -165,3 +165,86 @@
   white-space: nowrap;
   border: 0;
 }
+
+/* Pantalla de trabajo: la tabla desplaza dentro de su marco con la cabecera
+   a la vista; las alertas desplazan con un alto acotado. El aviso de tomas
+   sin registrar no entra en ningún marco: siempre tiene que verse. */
+@media (min-width: 821px) and (min-height: 600px) {
+  .tabla-envoltorio thead th {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    background: var(--superficie-elevada);
+  }
+
+  .pie {
+    margin: 0;
+  }
+
+  /* El espacio entre bloques lo pone la pantalla; los márgenes propios lo
+     duplicaban. */
+  .buscador,
+  .cabecera,
+  .vencidas,
+  .resumen {
+    margin-bottom: 0;
+  }
+}
+
+.medicacion__columnas {
+  --pantalla-columnas: minmax(220px, 0.6fr) minmax(0, 2fr);
+}
+
+.medicacion__avisos {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--espacio-3);
+  align-content: start;
+  overflow-x: hidden;
+}
+
+.medicacion__tomas {
+  display: flex;
+  flex-direction: column;
+  gap: var(--espacio-2);
+  min-width: 0;
+  min-height: 0;
+}
+
+.medicacion__tomas > .pie {
+  flex: none;
+}
+
+.medicacion__avisos .vencidas,
+.medicacion__avisos .resumen {
+  margin-bottom: 0;
+}
+
+.medicacion__avisos .resumen {
+  flex-wrap: wrap;
+}
+
+/* La hora en una línea; el día puede usar dos sin empujar fuera las
+   acciones de la fila. */
+.medicacion__tomas td.numerico {
+  white-space: nowrap;
+}
+
+.medicacion__tomas td:first-child {
+  min-width: 8rem;
+}
+
+.medicacion__tomas td:nth-child(3) {
+  min-width: 11rem;
+}
+
+/* En la columna de avisos el botón de cada alerta pasa debajo del texto si
+   no cabe al lado: nunca recorta la alerta. */
+.medicacion__avisos .alerta-adherencia {
+  flex-wrap: wrap;
+}
+
+.medicacion__avisos .alerta-adherencia > div {
+  flex: 1 1 10rem;
+  min-width: 0;
+}

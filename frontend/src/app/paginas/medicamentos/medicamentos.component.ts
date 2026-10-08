@@ -71,6 +71,7 @@ import { ResumenModuloComponent } from '../../compartido/resumen-modulo.componen
   selector: 'app-medicamentos',
   standalone: true,
   imports: [ResumenModuloComponent, FormsModule, CargandoComponent, ErrorComponent, VacioComponent],
+  host: { class: 'pantalla' },
   templateUrl: './medicamentos.component.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './medicamentos.component.scss',
