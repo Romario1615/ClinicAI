@@ -236,7 +236,9 @@ export class RecetaEditorComponent {
   protected indicaciones = '';
   protected nivelSensibilidad: 'N2' | 'N3' = 'N2';
   protected motivoVersion = '';
-  protected firmante = '';
+  private firmanteElegido = '';
+  protected get firmante(): string { return this.versionDe()?.profesional_id ?? this.firmanteElegido; }
+  protected set firmante(valor: string) { this.firmanteElegido = valor; }
 
   protected readonly propio = computed(() => this.sesion.identidad()?.profesional_id ?? null);
   protected readonly puedeLeerSensible = computed(() => this.sesion.tienePermiso('historia_clinica.leer_sensible'));
@@ -270,8 +272,8 @@ export class RecetaEditorComponent {
 
   /**
    * Hay algo escrito que cerrar perdería. Se compara con lo que el editor
-   * muestra al abrir: una línea vacía o la receta de la que parte la versión,
-   * firmada por quien tiene la sesión.
+   * muestra al abrir: una línea vacía firmada por quien tiene la sesión, o la
+   * receta de la que parte la versión con su responsable original.
    */
   protected hayCambios(): boolean {
     const origen = this.versionDe();
@@ -280,7 +282,7 @@ export class RecetaEditorComponent {
       indicaciones: origen?.indicaciones_generales ?? '',
       nivel: origen?.nivel_sensibilidad ?? 'N2',
       motivo: '',
-      firmante: this.propio() ?? '',
+      firmante: origen?.profesional_id ?? this.propio() ?? '',
     });
     const actual = huellaReceta({
       lineas: this.lineas(),

@@ -198,6 +198,7 @@ class PeticionAccesoLocal(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     codigo_rol: str = Field(min_length=1, max_length=50)
+    especialidad_id: uuid.UUID | None = None
 
 
 class RolAccesoLocal(BaseModel):
@@ -209,6 +210,7 @@ class RolAccesoLocal(BaseModel):
 class RespuestaAccesosLocales(BaseModel):
     habilitado: bool
     roles: list[RolAccesoLocal]
+    especialidades_profesionales: list[dict[str, str]] = Field(default_factory=list)
 
 
 class RespuestaTokens(BaseModel):

@@ -83,6 +83,7 @@ export interface RolAccesoLocal {
 export interface RespuestaAccesosLocales {
   readonly habilitado: boolean;
   readonly roles: readonly RolAccesoLocal[];
+  readonly especialidades_profesionales?: readonly { id: string; nombre: string }[];
 }
 
 // ---------------------------------------------------------------------------

@@ -866,8 +866,8 @@ export class ApiService {
     );
   }
 
-  iniciarSesionLocal(codigoRol: string): Observable<ParTokens> {
-    return this.post<ParTokens>('/autenticacion/sesion-local', { codigo_rol: codigoRol });
+  iniciarSesionLocal(codigoRol: string, especialidadId?: string): Observable<ParTokens> {
+    return this.post<ParTokens>('/autenticacion/sesion-local', { codigo_rol: codigoRol, ...(especialidadId ? { especialidad_id: especialidadId } : {}) });
   }
 
   clinicasPlataforma(): Observable<readonly ClinicaPlataforma[]> {

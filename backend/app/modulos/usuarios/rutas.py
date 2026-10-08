@@ -189,6 +189,10 @@ async def accesos_locales(servicio: ServicioAuth) -> RespuestaAccesosLocales:
     roles = await servicio.detalles_accesos_locales()
     return RespuestaAccesosLocales(
         habilitado=bool(roles),
+        especialidades_profesionales=[
+            {"id": str(id_), "nombre": nombre}
+            for id_, nombre in await servicio.especialidades_acceso_local()
+        ],
         roles=[
             {"codigo": codigo, "nombre": nombres[codigo], "especialidad": especialidad}
             for codigo, especialidad in roles
@@ -224,6 +228,7 @@ async def iniciar_sesion_local(
     )
     resultado = await servicio.iniciar_sesion_rol_local(
         codigo_rol=datos.codigo_rol,
+        especialidad_id=datos.especialidad_id,
         ip=_ip(peticion),
         agente_usuario=_agente(peticion),
     )

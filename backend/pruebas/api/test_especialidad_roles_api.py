@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from uuid import uuid4
+
 import pytest
 import sqlalchemy as sa
 from httpx import AsyncClient
@@ -170,3 +172,50 @@ async def test_identidad_y_personal_siguen_exigiendo_autenticacion(
 ) -> None:
     for ruta in ["/autenticacion/yo", "/usuarios", "/usuarios/profesionales"]:
         assert (await cliente.get(api + ruta)).status_code == 401
+
+
+@pytest.mark.parametrize(
+    "caso", ["valido", "perfil_inactivo", "sin_marcador", "otra_area", "otro_rol"]
+)
+async def test_ingreso_local_por_especialidad_solo_elige_cuentas_sinteticas_validas(
+    cliente,
+    api,
+    sesion,
+    usuario,
+    profesional,
+    especialidad,
+    caso,
+):
+    await _seleccionar_profesional_local(sesion, usuario)
+    especialidad.nombre = "Salud estética sintética"
+    especialidad.codigo = "EST"
+    if caso == "perfil_inactivo":
+        profesional.activo = False
+    elif caso == "sin_marcador":
+        usuario.apellido = "Cuenta sin marcador"
+    await sesion.flush()
+    opciones = await cliente.get(f"{api}/autenticacion/accesos-locales")
+    areas = opciones.json()["especialidades_profesionales"]
+    assert any(e["id"] == str(especialidad.id) for e in areas) == (
+        caso not in {"perfil_inactivo", "sin_marcador"}
+    )
+
+    seleccion = uuid4() if caso == "otra_area" else especialidad.id
+    ingreso = await cliente.post(
+        f"{api}/autenticacion/sesion-local",
+        json={
+            "codigo_rol": "recepcion" if caso == "otro_rol" else "profesional",
+            "especialidad_id": str(seleccion),
+        },
+    )
+    assert ingreso.status_code == (200 if caso == "valido" else 404), ingreso.text
+    if caso == "valido":
+        headers = {"Authorization": f"Bearer {ingreso.json()['token_acceso']}"}
+        yo = await cliente.get(f"{api}/autenticacion/yo", headers=headers)
+        assert yo.json()["usuario_id"] == str(usuario.id)
+        assert yo.json()["profesional_id"] == str(profesional.id)
+        areas = await cliente.get(f"{api}/historia/especialidades", headers=headers)
+        assert areas.json()[0]["modulos"] == ["faciograma", "imagenes"]
+        assert (
+            await cliente.get(f"{api}/historia/faciograma/zonas", headers=headers)
+        ).status_code == 200

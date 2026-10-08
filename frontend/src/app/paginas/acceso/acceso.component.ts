@@ -31,6 +31,7 @@ import { AutenticacionService } from '../../nucleo/servicios/autenticacion.servi
 import { ModoLocalService } from '../../nucleo/servicios/modo-local.service';
 import { SesionService } from '../../nucleo/servicios/sesion.service';
 import { GraficoRedComponent } from '../../compartido/grafico-red.component';
+import { FondoIAComponent } from '../../compartido/fondo-ia.component';
 import { MarcaComponent } from '../../compartido/marca.component';
 import type { RolAccesoLocal } from '../../nucleo/modelos/dominio';
 import { especialidadDelRol } from '../../nucleo/utilidades/especialidad-rol';
@@ -38,7 +39,7 @@ import { especialidadDelRol } from '../../nucleo/utilidades/especialidad-rol';
 @Component({
   selector: 'app-acceso',
   standalone: true,
-  imports: [FormsModule, MarcaComponent, GraficoRedComponent],
+  imports: [FormsModule, MarcaComponent, GraficoRedComponent, FondoIAComponent],
   templateUrl: './acceso.component.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './acceso.component.scss',
@@ -60,12 +61,15 @@ export class AccesoComponent implements OnInit {
   protected readonly cargandoAccesosLocales = signal(true);
   protected readonly modoAccesoLocal = signal(false);
   protected readonly rolesLocales = signal<readonly RolAccesoLocal[]>([]);
+  protected readonly especialidadesLocales = signal<readonly { id: string; nombre: string }[]>([]);
+  protected especialidadLocal = '';
   protected readonly especialidadDelRol = especialidadDelRol;
 
   ngOnInit(): void {
     this.modoLocal.accesosLocales().subscribe({
       next: (respuesta) => {
         this.rolesLocales.set(respuesta.roles);
+        this.especialidadesLocales.set(respuesta.especialidades_profesionales ?? []);
         this.modoAccesoLocal.set(respuesta.habilitado && respuesta.roles.length > 0);
         this.cargandoAccesosLocales.set(false);
       },
@@ -145,7 +149,10 @@ export class AccesoComponent implements OnInit {
     }
     this.error.set(null);
     this.enviando.set(true);
-    this.autenticacion.iniciarSesionLocal(codigoRol).subscribe({
+    const ingreso = codigoRol === 'profesional' && this.especialidadLocal
+      ? this.autenticacion.iniciarSesionLocal(codigoRol, this.especialidadLocal)
+      : this.autenticacion.iniciarSesionLocal(codigoRol);
+    ingreso.subscribe({
       next: () => {
         this.enviando.set(false);
         const destino = this.ruta.snapshot.queryParamMap.get('destino') ?? '/panel';
@@ -160,5 +167,11 @@ export class AccesoComponent implements OnInit {
         );
       },
     });
+  }
+
+  protected especialidadParaRol(rol: RolAccesoLocal): string | null | undefined {
+    return rol.codigo === 'profesional' && this.especialidadLocal
+      ? this.especialidadesLocales().find(e => e.id === this.especialidadLocal)?.nombre
+      : rol.especialidad;
   }
 }

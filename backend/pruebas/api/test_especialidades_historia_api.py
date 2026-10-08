@@ -340,7 +340,7 @@ async def test_conceder_consulta_de_otra_area_no_acredita_sus_herramientas(
     assert asignacion is not None
     sesion.add(
         AmbitoAsignacion(
-            usuario_rol_id=asignacion.id, tipo=TipoAmbito.ESPECIALIDAD.value, entidad_id=derm.id
+            usuario_rol_id=asignacion.id, tipo=TipoAmbito.ESPECIALIDAD.value, valor_id=derm.id
         )
     )
     await sesion.flush()
