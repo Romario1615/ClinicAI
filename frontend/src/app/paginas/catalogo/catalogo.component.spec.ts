@@ -218,8 +218,38 @@ describe('CatalogoComponent', () => {
 
         expect(fixture.nativeElement.textContent).not.toContain('Crear consultorio');
         expect(catalogo.consultorios).toHaveBeenCalled();
-        expect(fixture.nativeElement.getAttribute('tabindex')).toBe('0');
+        // El host ya no desplaza: lo hacen los marcos de cada pestaña, que son
+        // los que necesitan el foco de teclado.
         expect(fixture.nativeElement.getAttribute('role')).toBe('region');
         expect(fixture.nativeElement.getAttribute('aria-label')).toBe('Catálogo de la clínica');
+        expect((fixture.nativeElement as HTMLElement).querySelector('#catalogo-panel-sedes .desplazable')?.getAttribute('tabindex')).toBe('0');
+        // Sin gestión de especialidades no se ofrecen sus pestañas.
+        const pestanas = Array.from((fixture.nativeElement as HTMLElement).querySelectorAll('[role="tab"]')).map((p) => p.id);
+        expect(pestanas).toEqual(['catalogo-pestana-sedes', 'catalogo-pestana-servicios', 'catalogo-pestana-profesionales']);
+    });
+
+    it('muestra una parte del catálogo a la vez', () => {
+        const raiz = fixture.nativeElement as HTMLElement;
+        const visibles = () => Array.from(raiz.querySelectorAll<HTMLElement>('[role="tabpanel"]')).filter((p) => !p.hidden).map((p) => p.id);
+        expect(visibles()).toEqual(['catalogo-panel-sedes']);
+        raiz.querySelector<HTMLElement>('#catalogo-pestana-servicios')?.click();
+        fixture.detectChanges();
+        expect(visibles()).toEqual(['catalogo-panel-servicios']);
+    });
+
+    it('no cierra la ventana mientras se guarda', () => {
+        const c = fixture.componentInstance as unknown as {
+            abrirNuevoServicio(): void;
+            cerrarVentana(): void;
+            guardando: { set(valor: boolean): void };
+            ventanaFormulario(): string | null;
+        };
+        c.abrirNuevoServicio();
+        c.guardando.set(true);
+        c.cerrarVentana();
+        expect(c.ventanaFormulario()).toBe('servicio');
+        c.guardando.set(false);
+        c.cerrarVentana();
+        expect(c.ventanaFormulario()).toBeNull();
     });
 });

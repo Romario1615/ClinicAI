@@ -1,7 +1,8 @@
-import { Component, inject, signal, ChangeDetectionStrategy } from '@angular/core';
+import { Component, computed, inject, signal, ChangeDetectionStrategy } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { forkJoin, of } from 'rxjs';
 
+import { PestanasComponent, type OpcionPestana } from '../../compartido/pestanas.component';
 import { VentanaFlotanteComponent } from '../../compartido/ventana-flotante.component';
 import { CatalogoService } from '../../nucleo/servicios/catalogo.service';
 import { SesionService } from '../../nucleo/servicios/sesion.service';
@@ -18,77 +19,101 @@ const TIPOS: readonly { readonly valor: TipoConsultorio; readonly etiqueta: stri
 ];
 
 @Component({
-  selector: 'app-catalogo', standalone: true, imports: [FormsModule, ModulosEspecialidadComponent, VentanaFlotanteComponent],
-  host: { tabindex: '0', role: 'region', 'aria-label': 'Catálogo de la clínica' },
+  selector: 'app-catalogo', standalone: true, imports: [FormsModule, ModulosEspecialidadComponent, VentanaFlotanteComponent, PestanasComponent],
+  host: { class: 'pantalla', role: 'region', 'aria-label': 'Catálogo de la clínica' },
   template: `
-    <header class="modulo-cabecera"><div class="modulo-cabecera__texto"><p class="ceja">CONFIGURACIÓN</p><h1>Catálogo de la clínica</h1><p>Sedes, consultorios, servicios y profesionales disponibles para su sesión.</p></div><img class="modulo-cabecera__imagen" src="/images/catalogo-clinica.png" alt="" aria-hidden="true" loading="lazy" /></header>
-    @if (error()) { <p class="aviso error" role="alert">{{ error() }}</p><button (click)="cargar()" class="boton">Reintentar</button> }
-    @if (mensaje()) { <p class="aviso exito" role="status">{{ mensaje() }}</p> }
-    @if (cargando()) { <p role="status">Cargando catálogo…</p> }
-    <h2>Sedes</h2><div class="rejilla">@for (s of sedes(); track s.id) { <article class="tarjeta"><h3>{{ s.nombre }}</h3><p>{{ s.direccion || 'Dirección no registrada' }}</p><small>{{ s.zona_horaria }}</small></article> }</div>
+    <header class="modulo-cabecera pantalla__fijo"><div class="modulo-cabecera__texto"><p class="ceja">CONFIGURACIÓN</p><h1>Catálogo de la clínica</h1><p>Sedes, consultorios, servicios y profesionales disponibles para su sesión.</p></div><img class="modulo-cabecera__imagen" src="/images/catalogo-clinica.png" alt="" aria-hidden="true" loading="lazy" /></header>
+    @if (error()) { <div class="aviso-carga pantalla__fijo"><p class="aviso error" role="alert">{{ error() }}</p><button (click)="cargar()" class="boton">Reintentar</button></div> }
+    @if (mensaje()) { <p class="aviso exito pantalla__fijo" role="status">{{ mensaje() }}</p> }
+    @if (cargando()) { <p class="pantalla__fijo" role="status">Cargando catálogo…</p> }
+    <!-- Una parte del catálogo a la vez: apiladas, la pantalla medía 3000 px.
+         Las demás se ocultan sin desmontarse. -->
+    <app-pestanas class="pantalla__fijo" grupo="catalogo" etiqueta="Partes del catálogo" [opciones]="vistas()" [activa]="vistaActiva()" (activaChange)="vista.set($event)" />
 
-    <section class="gestion" aria-labelledby="titulo-consultorios">
-      <div class="seccion-cabecera"><div><p class="ceja">ESPACIOS DE ATENCIÓN</p><h2 id="titulo-consultorios">Consultorios</h2><p>Administre los espacios disponibles en cada sede.</p></div>
-        @if (puedeGestionar()) { <div class="acciones-sede"><label class="campo sede"><span>Sede</span><select [ngModel]="sedeSeleccionada()" (ngModelChange)="seleccionarSede($event)"><option value="">Seleccione una sede</option>@for (s of sedes(); track s.id) { <option [value]="s.id">{{ s.nombre }}</option> }</select></label><button class="boton boton--principal" type="button" [disabled]="!sedeSeleccionada()" (click)="abrirNuevoConsultorio()">Nuevo consultorio</button></div> }
+    <div class="pantalla__resto">
+      <div class="panel-catalogo pantalla__columnas catalogo__sedes" role="tabpanel" id="catalogo-panel-sedes" aria-labelledby="catalogo-pestana-sedes" [hidden]="vistaActiva() !== 'sedes'">
+        <section class="gestion" aria-labelledby="titulo-sedes">
+          <div class="seccion-cabecera"><div><p class="ceja">UBICACIONES</p><h2 id="titulo-sedes">Sedes · {{ sedes().length }}</h2></div></div>
+          <div class="desplazable" tabindex="0" role="region" aria-labelledby="titulo-sedes">
+            <div class="rejilla">@for (s of sedes(); track s.id) { <article class="tarjeta"><h3>{{ s.nombre }}</h3><p>{{ s.direccion || 'Dirección no registrada' }}</p><small>{{ s.zona_horaria }}</small></article> }</div>
+          </div>
+        </section>
+
+        <section class="gestion" aria-labelledby="titulo-consultorios">
+          <div class="seccion-cabecera"><div><p class="ceja">ESPACIOS DE ATENCIÓN</p><h2 id="titulo-consultorios">Consultorios</h2><p>Administre los espacios disponibles en cada sede.</p></div>
+            @if (puedeGestionar()) { <div class="acciones-sede"><label class="campo sede"><span>Sede</span><select [ngModel]="sedeSeleccionada()" (ngModelChange)="seleccionarSede($event)"><option value="">Seleccione una sede</option>@for (s of sedes(); track s.id) { <option [value]="s.id">{{ s.nombre }}</option> }</select></label><button class="boton boton--principal" type="button" [disabled]="!sedeSeleccionada()" (click)="abrirNuevoConsultorio()">Nuevo consultorio</button></div> }
+          </div>
+          @if (!puedeGestionar()) {
+            <div class="rejilla desplazable" tabindex="0" role="region" aria-labelledby="titulo-consultorios">@for (sala of consultorios(); track sala.id) { <article class="tarjeta"><span class="etiqueta">{{ etiquetaTipo(sala.tipo) }}</span><h3>{{ sala.nombre }}</h3><p>Capacidad: {{ sala.capacidad }}</p></article> } @empty { <p>No hay consultorios disponibles.</p> }</div>
+          } @else if (sedeSeleccionada()) {
+            <div class="tabla-envoltorio desplazable" tabindex="0" role="region" aria-labelledby="titulo-consultorios"><table class="tabla"><thead><tr><th>Consultorio</th><th>Tipo</th><th>Capacidad</th><th>Estado</th><th>Acciones</th></tr></thead><tbody>
+              @for (sala of consultorios(); track sala.id) { <tr><td>{{ sala.nombre }}</td><td>{{ etiquetaTipo(sala.tipo) }}</td><td>{{ sala.capacidad }}</td><td><span class="estado" [class.inactivo]="!sala.activo">{{ sala.activo ? 'Activo' : 'Inactivo' }}</span></td><td class="acciones-fila"><button class="boton compacto" type="button" (click)="editar(sala)">Editar</button><button class="boton compacto" type="button" (click)="cambiarEstado(sala)">{{ sala.activo ? 'Desactivar' : 'Activar' }}</button></td></tr> }
+              @empty { <tr><td colspan="5">No hay consultorios registrados en esta sede.</td></tr> }
+            </tbody></table></div>
+          } @else { <p class="ayuda">Seleccione una sede para consultar y administrar sus consultorios.</p> }
+        </section>
       </div>
-      @if (!puedeGestionar()) {
-        <div class="rejilla">@for (sala of consultorios(); track sala.id) { <article class="tarjeta"><span class="etiqueta">{{ etiquetaTipo(sala.tipo) }}</span><h3>{{ sala.nombre }}</h3><p>Capacidad: {{ sala.capacidad }}</p></article> } @empty { <p>No hay consultorios disponibles.</p> }</div>
-      } @else if (sedeSeleccionada()) {
-        <div class="tabla-envoltorio"><table class="tabla"><thead><tr><th>Consultorio</th><th>Tipo</th><th>Capacidad</th><th>Estado</th><th>Acciones</th></tr></thead><tbody>
-          @for (sala of consultorios(); track sala.id) { <tr><td>{{ sala.nombre }}</td><td>{{ etiquetaTipo(sala.tipo) }}</td><td>{{ sala.capacidad }}</td><td><span class="estado" [class.inactivo]="!sala.activo">{{ sala.activo ? 'Activo' : 'Inactivo' }}</span></td><td class="acciones-fila"><button class="boton compacto" type="button" (click)="editar(sala)">Editar</button><button class="boton compacto" type="button" (click)="cambiarEstado(sala)">{{ sala.activo ? 'Desactivar' : 'Activar' }}</button></td></tr> }
-          @empty { <tr><td colspan="5">No hay consultorios registrados en esta sede.</td></tr> }
-        </tbody></table></div>
-      } @else { <p class="ayuda">Seleccione una sede para consultar y administrar sus consultorios.</p> }
-    </section>
 
-    @if (puedeGestionarEspecialidades()) {
-      <section class="gestion catalogo-admin" aria-labelledby="titulo-especialidades">
-        <div class="seccion-cabecera"><div><p class="ceja">ORGANIZACIÓN CLÍNICA</p><h2 id="titulo-especialidades">Especialidades</h2><p>Organice las áreas de atención y mantenga actualizado su catálogo.</p></div><button class="boton boton--principal" type="button" (click)="abrirNuevaEspecialidad()">Nueva especialidad</button></div>
-        <div class="tabla-envoltorio"><table class="tabla"><thead><tr><th>Especialidad</th><th>Código</th><th>Estado</th><th>Acciones</th></tr></thead><tbody>
-          @for (esp of especialidadesGestion(); track esp.id) { <tr><td>{{ esp.nombre }}<small class="descripcion">{{ esp.descripcion }}</small></td><td>{{ esp.codigo || '—' }}</td><td><span class="estado" [class.inactivo]="!esp.activa">{{ esp.activa ? 'Activa' : 'Inactiva' }}</span></td><td class="acciones-fila"><button class="boton compacto" type="button" (click)="editarEspecialidad(esp)">Editar</button><button class="boton compacto" type="button" (click)="cambiarEstadoEspecialidad(esp)">{{ esp.activa ? 'Desactivar' : 'Activar' }}</button></td></tr> } @empty { <tr><td colspan="4">Aún no hay especialidades registradas.</td></tr> }
-        </tbody></table></div>
-      </section>
-      <app-modulos-especialidad />
-    }
+      @if (puedeGestionarEspecialidades()) {
+        <section class="gestion catalogo-admin panel-catalogo" role="tabpanel" id="catalogo-panel-especialidades" aria-labelledby="catalogo-pestana-especialidades" [hidden]="vistaActiva() !== 'especialidades'">
+          <div class="seccion-cabecera"><div><p class="ceja">ORGANIZACIÓN CLÍNICA</p><h2 id="titulo-especialidades">Especialidades</h2><p>Organice las áreas de atención y mantenga actualizado su catálogo.</p></div><button class="boton boton--principal" type="button" (click)="abrirNuevaEspecialidad()">Nueva especialidad</button></div>
+          <div class="tabla-envoltorio desplazable" tabindex="0" role="region" aria-labelledby="titulo-especialidades"><table class="tabla"><thead><tr><th>Especialidad</th><th>Código</th><th>Estado</th><th>Acciones</th></tr></thead><tbody>
+            @for (esp of especialidadesGestion(); track esp.id) { <tr><td>{{ esp.nombre }}<small class="descripcion">{{ esp.descripcion }}</small></td><td>{{ esp.codigo || '—' }}</td><td><span class="estado" [class.inactivo]="!esp.activa">{{ esp.activa ? 'Activa' : 'Inactiva' }}</span></td><td class="acciones-fila"><button class="boton compacto" type="button" (click)="editarEspecialidad(esp)">Editar</button><button class="boton compacto" type="button" (click)="cambiarEstadoEspecialidad(esp)">{{ esp.activa ? 'Desactivar' : 'Activar' }}</button></td></tr> } @empty { <tr><td colspan="4">Aún no hay especialidades registradas.</td></tr> }
+          </tbody></table></div>
+        </section>
+        <div class="panel-catalogo desplazable" role="tabpanel" tabindex="0" id="catalogo-panel-modulos" aria-labelledby="catalogo-pestana-modulos" [hidden]="vistaActiva() !== 'modulos'">
+          <app-modulos-especialidad />
+        </div>
+      }
 
-    @if (puedeGestionarServicios()) {
-      <section class="gestion catalogo-admin" aria-labelledby="titulo-servicios">
-        <div class="seccion-cabecera"><div><p class="ceja">OFERTA CLÍNICA</p><h2 id="titulo-servicios">Servicios</h2><p>Configure duración, preparación, precio y requisitos de agenda.</p></div><button class="boton boton--principal" type="button" (click)="abrirNuevoServicio()">Nuevo servicio</button></div>
-        <div class="tabla-envoltorio"><table class="tabla"><thead><tr><th>Servicio</th><th>Especialidad</th><th>Duración</th><th>Precio</th><th>Estado</th><th>Acciones</th></tr></thead><tbody>
-          @for (s of serviciosGestion(); track s.id) { <tr><td>{{ s.nombre }}</td><td>{{ nombreEspecialidad(s.especialidad_id) }}</td><td>{{ s.duracion_minutos }} min</td><td>{{ s.precio === null ? 'Consultar' : s.moneda + ' ' + s.precio }}</td><td><span class="estado" [class.inactivo]="!s.activo">{{ s.activo ? 'Activo' : 'Inactivo' }}</span></td><td class="acciones-fila"><button class="boton compacto" type="button" (click)="editarServicio(s)">Editar</button><button class="boton compacto" type="button" (click)="cambiarEstadoServicio(s)">{{ s.activo ? 'Desactivar' : 'Activar' }}</button></td></tr> } @empty { <tr><td colspan="6">Aún no hay servicios registrados.</td></tr> }
-        </tbody></table></div>
+      @if (puedeGestionarServicios()) {
+        <section class="gestion catalogo-admin panel-catalogo" role="tabpanel" id="catalogo-panel-servicios" aria-labelledby="catalogo-pestana-servicios" [hidden]="vistaActiva() !== 'servicios'">
+          <div class="seccion-cabecera"><div><p class="ceja">OFERTA CLÍNICA</p><h2 id="titulo-servicios">Servicios</h2><p>Configure duración, preparación, precio y requisitos de agenda.</p></div><button class="boton boton--principal" type="button" (click)="abrirNuevoServicio()">Nuevo servicio</button></div>
+          <div class="tabla-envoltorio desplazable" tabindex="0" role="region" aria-labelledby="titulo-servicios"><table class="tabla"><thead><tr><th>Servicio</th><th>Especialidad</th><th>Duración</th><th>Precio</th><th>Estado</th><th>Acciones</th></tr></thead><tbody>
+            @for (s of serviciosGestion(); track s.id) { <tr><td>{{ s.nombre }}</td><td>{{ nombreEspecialidad(s.especialidad_id) }}</td><td>{{ s.duracion_minutos }} min</td><td>{{ s.precio === null ? 'Consultar' : s.moneda + ' ' + s.precio }}</td><td><span class="estado" [class.inactivo]="!s.activo">{{ s.activo ? 'Activo' : 'Inactivo' }}</span></td><td class="acciones-fila"><button class="boton compacto" type="button" (click)="editarServicio(s)">Editar</button><button class="boton compacto" type="button" (click)="cambiarEstadoServicio(s)">{{ s.activo ? 'Desactivar' : 'Activar' }}</button></td></tr> } @empty { <tr><td colspan="6">Aún no hay servicios registrados.</td></tr> }
+          </tbody></table></div>
+        </section>
+      } @else {
+        <section class="gestion panel-catalogo" role="tabpanel" id="catalogo-panel-servicios" aria-labelledby="catalogo-pestana-servicios" [hidden]="vistaActiva() !== 'servicios'">
+          <div class="seccion-cabecera"><div><p class="ceja">OFERTA CLÍNICA</p><h2 id="titulo-servicios">Servicios</h2></div></div>
+          <div class="tabla-envoltorio desplazable" tabindex="0" role="region" aria-labelledby="titulo-servicios"><table class="tabla"><thead><tr><th>Servicio</th><th>Duración</th><th>Preparación</th><th>Precio</th></tr></thead><tbody>
+                  @for (s of servicios(); track s.id) { <tr><td>{{ s.nombre }}</td><td>{{ s.duracion_minutos }} min</td><td>{{ s.minutos_preparacion }} min</td><td>{{ s.precio === null ? 'Consultar' : (s.moneda || '$') + ' ' + s.precio }}</td></tr> }
+                </tbody></table></div>
+        </section>
+      }
+
+      <section class="gestion panel-catalogo" role="tabpanel" id="catalogo-panel-profesionales" aria-labelledby="catalogo-pestana-profesionales" [hidden]="vistaActiva() !== 'profesionales'">
+        <div class="seccion-cabecera"><div><p class="ceja">EQUIPO</p><h2 id="titulo-profesionales">Profesionales · {{ profesionales().length }}</h2></div></div>
+        <div class="desplazable" tabindex="0" role="region" aria-labelledby="titulo-profesionales">
+          <div class="rejilla">@for (p of profesionales(); track p.id) { <article class="tarjeta"><h3>{{ p.nombre }} {{ p.apellido }}</h3><p>Registro {{ p.numero_registro_profesional || 'no registrado' }}</p></article> }</div>
+        </div>
       </section>
-    } @else {
-      <h2>Servicios</h2><div class="tabla-envoltorio"><table class="tabla"><thead><tr><th>Servicio</th><th>Duración</th><th>Preparación</th><th>Precio</th></tr></thead><tbody>
-        @for (s of servicios(); track s.id) { <tr><td>{{ s.nombre }}</td><td>{{ s.duracion_minutos }} min</td><td>{{ s.minutos_preparacion }} min</td><td>{{ s.precio === null ? 'Consultar' : (s.moneda || '$') + ' ' + s.precio }}</td></tr> }
-      </tbody></table></div>
-    }
-    <h2>Profesionales</h2><div class="rejilla">@for (p of profesionales(); track p.id) { <article class="tarjeta"><h3>{{ p.nombre }} {{ p.apellido }}</h3><p>Registro {{ p.numero_registro_profesional || 'no registrado' }}</p></article> }</div>
+    </div>
 
     @if (ventanaFormulario() === 'consultorio') {
-      <app-ventana-flotante ceja="Espacios de atención" [titulo]="editando() ? 'Editar consultorio' : 'Nuevo consultorio'" forma="centrada" [anchoMaximo]="560" [cierraAlPulsarFuera]="false" (cerrar)="nuevo()">
+      <app-ventana-flotante ceja="Espacios de atención" [titulo]="editando() ? 'Editar consultorio' : 'Nuevo consultorio'" forma="centrada" [anchoMaximo]="560" [cierraAlPulsarFuera]="false" [ocupada]="guardando()" (cerrar)="cerrarVentana()">
         @if (error()) { <p class="aviso error" role="alert">{{ error() }}</p> }
         <form id="form-consultorio" class="formulario-modal" (ngSubmit)="guardar()">
           <label class="campo"><span>Nombre</span><input name="nombre" [(ngModel)]="form.nombre" required maxlength="100" placeholder="Ej. Consultorio 1" /></label>
           <label class="campo"><span>Tipo</span><select name="tipo" [(ngModel)]="form.tipo">@for (tipo of tipos; track tipo.valor) { <option [value]="tipo.valor">{{ tipo.etiqueta }}</option> }</select></label>
           <label class="campo"><span>Capacidad</span><input name="capacidad" type="number" [(ngModel)]="form.capacidad" min="1" max="100" required /></label>
         </form>
-        <div pie class="acciones"><button class="boton" type="button" (click)="nuevo()">Cancelar</button><button class="boton boton--principal" type="submit" form="form-consultorio" [disabled]="guardando()">{{ guardando() ? 'Guardando…' : editando() ? 'Guardar cambios' : 'Crear consultorio' }}</button></div>
+        <div pie class="acciones"><button class="boton" type="button" (click)="cerrarVentana()" [disabled]="guardando()">Cancelar</button><button class="boton boton--principal" type="submit" form="form-consultorio" [disabled]="guardando()">{{ guardando() ? 'Guardando…' : editando() ? 'Guardar cambios' : 'Crear consultorio' }}</button></div>
       </app-ventana-flotante>
     }
     @if (ventanaFormulario() === 'especialidad') {
-      <app-ventana-flotante ceja="Organización clínica" [titulo]="editandoEspecialidad() ? 'Editar especialidad' : 'Nueva especialidad'" forma="centrada" [anchoMaximo]="560" [cierraAlPulsarFuera]="false" (cerrar)="nuevaEspecialidad()">
+      <app-ventana-flotante ceja="Organización clínica" [titulo]="editandoEspecialidad() ? 'Editar especialidad' : 'Nueva especialidad'" forma="centrada" [anchoMaximo]="560" [cierraAlPulsarFuera]="false" [ocupada]="guardando()" (cerrar)="cerrarVentana()">
         @if (error()) { <p class="aviso error" role="alert">{{ error() }}</p> }
         <form id="form-especialidad" class="formulario-modal" (ngSubmit)="guardarEspecialidad()">
           <label class="campo"><span>Nombre</span><input name="especialidad-nombre" [(ngModel)]="formEspecialidad.nombre" maxlength="150" required /></label>
           <label class="campo"><span>Código</span><input name="especialidad-codigo" [(ngModel)]="formEspecialidad.codigo" maxlength="32" /></label>
           <label class="campo"><span>Descripción</span><textarea name="especialidad-descripcion" [(ngModel)]="formEspecialidad.descripcion" rows="3"></textarea></label>
         </form>
-        <div pie class="acciones"><button class="boton" type="button" (click)="nuevaEspecialidad()">Cancelar</button><button class="boton boton--principal" type="submit" form="form-especialidad" [disabled]="guardando()">{{ guardando() ? 'Guardando…' : editandoEspecialidad() ? 'Guardar cambios' : 'Crear especialidad' }}</button></div>
+        <div pie class="acciones"><button class="boton" type="button" (click)="cerrarVentana()" [disabled]="guardando()">Cancelar</button><button class="boton boton--principal" type="submit" form="form-especialidad" [disabled]="guardando()">{{ guardando() ? 'Guardando…' : editandoEspecialidad() ? 'Guardar cambios' : 'Crear especialidad' }}</button></div>
       </app-ventana-flotante>
     }
     @if (ventanaFormulario() === 'servicio') {
-      <app-ventana-flotante ceja="Oferta clínica" [titulo]="editandoServicio() ? 'Editar servicio' : 'Nuevo servicio'" forma="centrada" [anchoMaximo]="680" [cierraAlPulsarFuera]="false" (cerrar)="nuevoServicio()">
+      <app-ventana-flotante ceja="Oferta clínica" [titulo]="editandoServicio() ? 'Editar servicio' : 'Nuevo servicio'" forma="centrada" [anchoMaximo]="680" [cierraAlPulsarFuera]="false" [ocupada]="guardando()" (cerrar)="cerrarVentana()">
         @if (error()) { <p class="aviso error" role="alert">{{ error() }}</p> }
         <form id="form-servicio" class="formulario-modal" (ngSubmit)="guardarServicio()">
           <label class="campo"><span>Especialidad</span><select name="servicio-especialidad" [(ngModel)]="formServicio.especialidad_id" [disabled]="!!editandoServicio()" required><option value="">Seleccione</option>@for (esp of especialidades(); track esp.id) { <option [value]="esp.id">{{ esp.nombre }}</option> }</select></label>
@@ -100,13 +125,13 @@ const TIPOS: readonly { readonly valor: TipoConsultorio; readonly etiqueta: stri
           <label class="campo"><span class="opcion"><input name="servicio-pago-previo" type="checkbox" [(ngModel)]="formServicio.requiere_pago_previo" /> Requiere pago previo</span></label>
           <label class="campo campo--completo"><span>Indicaciones de preparación</span><textarea name="servicio-indicaciones" [(ngModel)]="formServicio.instrucciones_preparacion" rows="2"></textarea></label>
         </form>
-        <div pie class="acciones"><button class="boton" type="button" (click)="nuevoServicio()">Cancelar</button><button class="boton boton--principal" type="submit" form="form-servicio" [disabled]="guardando()">{{ guardando() ? 'Guardando…' : editandoServicio() ? 'Guardar cambios' : 'Crear servicio' }}</button></div>
+        <div pie class="acciones"><button class="boton" type="button" (click)="cerrarVentana()" [disabled]="guardando()">Cancelar</button><button class="boton boton--principal" type="submit" form="form-servicio" [disabled]="guardando()">{{ guardando() ? 'Guardando…' : editandoServicio() ? 'Guardar cambios' : 'Crear servicio' }}</button></div>
       </app-ventana-flotante>
     }
   `,
   changeDetection: ChangeDetectionStrategy.Eager,
   styles: `
-    h2 { margin-top: 24px; } .gestion { margin-top: 30px; padding: 22px; border: 1px solid var(--borde); border-radius: var(--radio); background: var(--superficie-elevada); } .catalogo-admin h2 { margin-top: 4px; }
+    h2 { margin-top: 24px; } .gestion { padding: 22px; border: 1px solid var(--borde); border-radius: var(--radio); background: var(--superficie-elevada); } .catalogo-admin h2 { margin-top: 4px; }
     .seccion-cabecera { display:flex; align-items:end; justify-content:space-between; gap:20px; margin-bottom:18px; } .seccion-cabecera h2 { margin:4px 0; } .seccion-cabecera p { margin:4px 0; color:var(--texto-suave); }
     .acciones-sede { display:flex; align-items:end; gap:10px; } .ceja { font-size:.72rem; font-weight:700; letter-spacing:.09em; color:var(--acento); } .sede { min-width:230px; }
     .formulario-modal { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:var(--espacio-3); } .campo--completo { grid-column:1/-1; }
@@ -114,6 +139,17 @@ const TIPOS: readonly { readonly valor: TipoConsultorio; readonly etiqueta: stri
     .acciones,.acciones-fila { display:flex; align-items:center; gap:8px; flex-wrap:wrap; } .compacto { padding:6px 9px; font-size:.82rem; }
     .estado,.etiqueta { display:inline-block; border-radius:999px; padding:4px 9px; color:#087443; background:#e8f7ef; font-size:.78rem; font-weight:650; } .estado.inactivo { color:var(--texto-tenue); background:#eef2f6; } .etiqueta { color:#176b76; background:#e8f5f6; }
     .aviso { padding:12px 14px; border-radius:9px; } .aviso.error { background:#fff0ef; color:#a12820; } .aviso.exito { background:#e8f7ef; color:#087443; } .ayuda { color:var(--texto-tenue); }
+    /* Pantalla de trabajo: cada pestaña llena el alto y desplaza dentro. */
+    .panel-catalogo[hidden] { display: none !important; }
+    .gestion { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+    .catalogo__sedes { --pantalla-columnas: minmax(0, 1fr) minmax(0, 1.6fr); }
+    @media (min-width: 821px) and (min-height: 600px) {
+      .panel-catalogo:not(.pantalla__columnas) { flex: 1 1 0; min-height: 0; }
+      .gestion { padding: var(--espacio-4); }
+      .seccion-cabecera { flex: none; margin-bottom: var(--espacio-3); }
+      .seccion-cabecera h2 { font-size: 1.15rem; }
+      .gestion .rejilla { grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: var(--espacio-3); align-content: start; }
+    }
     @media (max-width:850px) { .formulario-modal,.campos-dos { grid-template-columns:1fr; } .formulario-modal > *, .campo { min-width:0; } .campo--completo { grid-column:auto; } .seccion-cabecera,.acciones-sede { align-items:stretch; flex-direction:column; } .sede { min-width:0; } .tabla-envoltorio { overflow-x:auto; } }
   `,
 })
@@ -147,6 +183,23 @@ export class CatalogoComponent {
     minutos_preparacion: number; precio: number | null; moneda: string; requiere_pago_previo: boolean;
     instrucciones_preparacion: string | null; tipo_consultorio_requerido: TipoConsultorio | null;
   } = this.formularioServicioVacio();
+
+  /** Partes del catálogo que el rol alcanza, una por pestaña. */
+  protected readonly vistas = computed<readonly OpcionPestana[]>(() => [
+    { clave: 'sedes', etiqueta: 'Sedes y consultorios', cuenta: this.sedes().length },
+    ...(this.puedeGestionarEspecialidades()
+      ? [
+          { clave: 'especialidades', etiqueta: 'Especialidades', cuenta: this.especialidadesGestion().length },
+          { clave: 'modulos', etiqueta: 'Módulos de historia' },
+        ]
+      : []),
+    { clave: 'servicios', etiqueta: 'Servicios', cuenta: (this.puedeGestionarServicios() ? this.serviciosGestion() : this.servicios()).length },
+    { clave: 'profesionales', etiqueta: 'Profesionales', cuenta: this.profesionales().length },
+  ]);
+  protected readonly vista = signal('sedes');
+  protected readonly vistaActiva = computed(() =>
+    this.vistas().some((opcion) => opcion.clave === this.vista()) ? this.vista() : 'sedes',
+  );
 
   constructor() { this.cargar(); }
 
@@ -189,6 +242,18 @@ export class CatalogoComponent {
 
   protected editar(sala: Consultorio): void {
     this.editando.set(sala.id); this.form = { nombre: sala.nombre, tipo: sala.tipo, capacidad: sala.capacidad }; this.mensaje.set(''); this.error.set(''); this.ventanaFormulario.set('consultorio');
+  }
+
+  /**
+   * Cierra la ventana abierta y limpia su formulario. A mitad del guardado no
+   * se cierra: el resultado se perdería o se informaría con la ventana cerrada.
+   */
+  protected cerrarVentana(): void {
+    if (this.guardando()) return;
+    const ventana = this.ventanaFormulario();
+    if (ventana === 'consultorio') this.nuevo();
+    else if (ventana === 'especialidad') this.nuevaEspecialidad();
+    else if (ventana === 'servicio') this.nuevoServicio();
   }
 
   protected nuevo(): void { this.editando.set(''); this.form = { nombre: '', tipo: 'CONSULTA', capacidad: 1 }; this.ventanaFormulario.set(null); }
