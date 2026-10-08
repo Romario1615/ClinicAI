@@ -398,6 +398,8 @@ test('recepción registra la llegada y asistencia clínica mide la espera y cier
     await irA(page, 'Panel');
     await expect(page.locator('.rejilla .tarjeta').filter({ hasText: 'Sala de espera' }))
       .toContainText('paciente(s) esperando en el periodo');
+    // Las métricas de ocupación están en la pestaña del periodo del nuevo Panel.
+    await page.getByRole('tab', { name: 'Cifras del periodo', exact: true }).click();
     const ocupacion = page.locator('.tarjeta').filter({
       has: page.getByText('Ocupación de agenda', { exact: true }),
     });

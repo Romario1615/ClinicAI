@@ -155,13 +155,42 @@ por la memoria disponible. Una primera corrida detectó cuatro selectores de
 pruebas que pulsaban Fotos en lugar de Editar; se corrigió la selección del
 botón explícito y se repitió la batería.
 
+Después del ajuste de estilos de Datos personales se repitieron las **20
+pruebas de FichaPacienteComponent**, todas aprobadas en **9,05 s**. Lint y
+compilación volvieron a aprobar, con **467,40 kB** iniciales y sin avisos de
+presupuesto. La cobertura de la batería completa anterior se conserva como
+una medición separada; el ajuste posterior está comprobado en navegador.
+
 ## 6. Recorridos de navegador
 
-Chromium con API 8020 y PostgreSQL exclusivo: **4/4**, en **49,3 s**, archivo
-`18-periodontograma-analitica-agente.spec.ts`. Ficha profesional con historial,
-resumen local, citas y cierre; recepción sin lectura clínica; periodontograma
-con PS/MG/sangrado, foto privada, persistencia, PDF y móvil; tres análisis.
-Axe WCAG A/AA sin incidencias en los estados revisados.
+Corrida completa final de Chromium con API 8020 y PostgreSQL exclusivo:
+**73/73 aprobadas en 12,6 min**, con `npx.cmd playwright test --reporter=list`.
+Incluye seis roles, sus pantallas autorizadas, axe WCAG A/AA, pacientes,
+agenda, sala de espera, atención, pagos, conocimiento, imágenes, herramientas
+clínicas y documentos. El agente se prueba junto al historial, con resumen
+local, citas, descarte y confirmación; recepción conserva sus límites.
+Periodontograma con PS/MG/sangrado, foto privada, persistencia, PDF y móvil;
+faciograma propio de Dermatología con versiones/PDF; tres análisis y
+presupuestos/cotizaciones/recetas con entrega sandbox.
+
+Una corrida anterior aprobó 71/72 y encontró una expectativa que buscaba
+Ocupación sin abrir Cifras del periodo. Se actualizó la navegación, manteniendo
+las aserciones de API, porcentaje y atención. La repetición final incluye
+esa corrección y la nueva regresión de datos personales largos.
+
+La revisión visual posterior reprodujo un desborde de correo largo en Datos
+personales cuando el agente ocupa una tercera columna. Se permitió ajustar
+etiquetas y valores al ancho disponible. **8/8 recorridos** aprobaron en
+**1,3 min**, incluyendo seis tamaños de 390 a 1440 px y llegada/atención,
+agenda y pagos. La nueva prueba usa únicamente una respuesta visual sintética
+y falló antes del cambio; no modifica los datos del paciente.
+
+También se revisó la instancia de desarrollo **4200/8000**, sin redirección
+a la API de pruebas: profesional con resumen local y recepción con opciones
+administrativas. Ambos abrieron la ficha y el agente; la API de readiness y
+el sitio devolvieron 200. Evidencia: `agente-local-smoke.log/json`,
+`agente-local-profesional.png`, `agente-local-recepcion.png` y
+`e2e-ficha-y-panel-corregidos.log`.
 
 ## 7. Cobertura
 
@@ -207,6 +236,10 @@ Frontend local 4200 y API local 8000; pruebas de navegador dirigidas a 8020.
 Los datos de pruebas son sintéticos y se alojan en bases exclusivas. El acceso
 por botones sigue restringido al entorno de desarrollo.
 
+Al concluir se detuvo únicamente la API temporal 8020 y se eliminó su base
+`clinicai_e2e_20261007_55df21cc`, con `limpiado: true` registrado. API 8000,
+frontend 4200 y la base de desarrollo se conservaron.
+
 ## 13. Producción
 
 Configurar dominios, autenticación definitiva, roles y ámbitos del cliente,
@@ -239,6 +272,11 @@ Registros en `tmp/qa-20261007`: `backend-periodontograma-total.log`,
 `frontend-agente-total-verificado.log`, `e2e-agente-4.log`,
 `e2e-agente-confirmacion-corregido.log`, `frontend-agente-build-verificado.log`,
 `frontend-agente-lint-verificado.log` y salidas finales de Ruff/Mypy/Bandit.
+El cierre se registra en `e2e-clinicai-total-73.log`,
+`frontend-ficha-estilos-final.log`, `frontend-ficha-build-final.log`,
+`frontend-ficha-lint-final.log` y los informes Gitleaks finales del índice
+y de `main`. El primer corte de cuatro recorridos se conserva como evidencia
+histórica, separado de la ejecución completa actual.
 Las imágenes `agente-en-ficha.png`, `periodontograma-fotos.png`,
 `periodontograma-movil.png` y `analitica-predictiva.png` usan datos sintéticos.
 La revisión final de cambios posteriores se añade debajo.

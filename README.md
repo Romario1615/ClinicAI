@@ -37,6 +37,13 @@ modo local y WhatsApp conserva su sandbox.
 Las cifras de revisiones anteriores describen esas entregas; el informe
 enlazado distingue las corridas completas y focalizadas de esta ampliación.
 
+**Verificación de esta ampliación:** 168 pruebas del backend afectado;
+743 frontend con cobertura y 20 de la ficha repetidas tras el ajuste de
+estilos; **73/73 recorridos completos de Chromium**. Se comprobó también el
+agente en la instancia local 4200/8000 para profesional y recepción. Lint,
+build, Ruff, Mypy, Bandit y revisión de secretos aprobados. Los resultados
+y las limitaciones se detallan en el informe enlazado.
+
 ## Portada y gestión con IA (2026-10-08)
 
 - **Identidad visual:** portada a pantalla completa con núcleo IA, conexiones y partículas SVG; azul profundo, cobalto y cian compartidos por navegación, panel, botones y ventanas de vidrio. Los formularios y datos conservan fondos claros. La preferencia de movimiento reducido detiene las animaciones y el contraste aumentado elimina el fondo decorativo.

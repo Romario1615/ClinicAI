@@ -760,7 +760,8 @@ const DETALLE_CLINICO: Partial<Record<Pestana, string>> = {
     }
 
     .ficha__datos dt {
-      flex: 0 0 110px;
+      flex: 0 1 110px;
+      max-width: 40%;
       color: var(--texto-tenue);
       font-size: 0.86rem;
     }
@@ -768,6 +769,8 @@ const DETALLE_CLINICO: Partial<Record<Pestana, string>> = {
     .ficha__datos dd {
       margin: 0;
       flex: 1 1 auto;
+      min-width: 0;
+      overflow-wrap: anywhere;
       font-size: 0.9rem;
     }
 

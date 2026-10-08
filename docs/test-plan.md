@@ -24,6 +24,11 @@ y proveedores mock/sandbox. Se ejecutó sin cobertura; no se atribuye una medida
 nueva de cobertura backend a esta corrida. Las dos bases desechables se retiraron.
 [Informe y estado de CI](verificacion-2026-10-07.md#faciograma-visible-y-documentos-desde-la-ficha).
 
+Ese recorrido es histórico. La política actual separa las herramientas por
+especialidad: la prueba facial usa **Dermatología**, con relación asistencial
+y cita propias; Odontología no obtiene Faciograma aunque tenga lectura de
+otra especialidad. El recorrido actualizado conserva versiones, PDF y móvil.
+
 ## CRUD, faciograma y documentos (2026-10-07)
 
 La ampliación añade regresiones de clínica/cuenta, versionado y anulación de
@@ -524,7 +529,12 @@ en una base exclusiva; no se ejecutan escrituras de pruebas en la clínica local
   contexto al actualizar citas, fechas e importes legibles, captura y galerías.
 - Chromium: `18-periodontograma-analitica-agente.spec.ts` ejecuta la ficha real
   del profesional y recepción, captura de seis sitios/foto/PDF, los tres
-  análisis, axe y ancho móvil. El resumen sigue al lado del historial.
+  análisis, axe y ancho móvil. Comprueba preparación, descarte y confirmación
+  contra el estado real de una cita. El resumen sigue al lado del historial.
+- `19-ficha-agente-diseno.spec.ts` inyecta solo en la respuesta de una ficha
+  sintética un correo largo y mide sus celdas en seis anchos. La regresión
+  falló antes de permitir que el texto se ajustase al ancho de la tarjeta;
+  no modifica datos persistidos ni utiliza pacientes reales.
 - Migraciones: `upgrade`, `downgrade -4`, `upgrade` y `alembic check` en la
   base temporal de los recorridos; limpieza exclusiva al terminar.
 
