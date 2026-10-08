@@ -798,7 +798,6 @@ const DIAS_POR_PERIODO: Record<string, number> = { hoy: 1, '7': 7, '30': 30 };
     .seguimiento__vacio p:last-child { max-width:62ch; margin:var(--espacio-1) 0 0; color:var(--texto-suave); }
     @keyframes seguimiento-flotar { 0%,100% { transform:translateY(0); } 50% { transform:translateY(-4px); } }
     @keyframes seguimiento-fondo { from { background-position:15% 0%, center; } to { background-position:85% 100%, center; } }
-    .tendencias { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,280px),1fr)); gap:var(--espacio-3); margin-top:var(--espacio-3); }
     .tendencia h3 { margin:0 0 var(--espacio-3); font-size:.9rem; }
     .tendencia .campo__ayuda { margin:0; }
     .tendencia__lista { display:grid; gap:var(--espacio-2); list-style:none; margin:0; padding:0; }

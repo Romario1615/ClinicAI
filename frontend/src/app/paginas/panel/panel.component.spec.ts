@@ -18,7 +18,11 @@ function indicadores(extra: Partial<Indicadores>): Indicadores {
   };
 }
 
-describe('PanelComponent · tablero por rol', () => {
+// La primera prueba monta el panel entero (seis vistas con sus tarjetas) y
+// paga el arranque del árbol de componentes: menos de 1 s en solitario, pero
+// más de 5 s cuando corre junto a las otras 93 especificaciones en paralelo.
+// El límite se amplía solo para este bloque; ninguna aserción cambia.
+describe('PanelComponent · tablero por rol', { timeout: 15_000 }, () => {
   function montar(datos: Indicadores, permisos: readonly string[]) {
     TestBed.configureTestingModule({
       imports: [PanelComponent],

@@ -140,10 +140,10 @@ Siguen pendientes:
 * Las páginas públicas (solo adaptación).
 * Automatizar estas mediciones en
   `pruebas-e2e/escenarios/15-pantallas-trabajo.spec.ts`.
-* En la batería completa de Vitest, la primera prueba de
-  `panel.component.spec.ts` supera el límite de 5 s (en solitario pasa en
-  menos de 1 s): coste de compilar el panel con 94 archivos en paralelo.
-  Falta decidir si se acota el montaje de la prueba o se ajusta el límite.
+* Los estilos del panel superan el aviso de presupuesto por componente
+  (16,9 kB minificados frente a 14 kB; el error está en 24 kB). Ya pasaban de
+  18 kB sin minificar antes de este rediseño; reducirlos pide separar las
+  vistas en componentes propios.
 
 ---
 
