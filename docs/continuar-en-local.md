@@ -125,6 +125,8 @@ Alto previo a 1366×768 entre paréntesis.
 | Conversaciones, Asistente, Agente demo | Historial desplazable; campo de escribir y acciones siempre visibles. |
 | Configuración (hasta 1636 px) | Cada sección desplaza en su marco; Integraciones compacta. |
 | Usuarios (6514 px) | Pestañas propias con filtros fijos y tabla desplazable. |
+| Plataforma (33 954 px) | Organizaciones (y sus sedes) y accesos del personal en dos columnas. |
+| Medicamentos (3418 px) | Listado con tabla desplazable; detalle con avisos y tomas en dos columnas. |
 
 Correcciones de paso en esas pantallas: la ventana no se cierra durante el
 guardado en Equipo, Catálogo, Automatizaciones y Accesos del documento
@@ -134,8 +136,10 @@ de Configuración que desbordaba la página a 768 px.
 
 Siguen pendientes:
 
-* Plataforma (superadministración), Delegaciones, Seguridad, Promociones,
-  Gastos y caja y Medicamentos: no se midieron con un rol que las alcance.
+* Gastos y caja: ningún rol del acceso local la alcanza; falta medirla.
+  Delegaciones, Seguridad y Promociones ya caben sin cambios.
+* Plataforma en móvil sigue siendo muy larga: las listas de clínicas y
+  cuentas no se paginan.
 * La pantalla de Analítica que está en curso en `main`.
 * Las páginas públicas (solo adaptación).
 * Automatizar estas mediciones en
