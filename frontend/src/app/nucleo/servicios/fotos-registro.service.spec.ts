@@ -27,6 +27,15 @@ describe('FotosRegistroService',()=>{
     op.guardar('gasto',crear,[foto]).subscribe();http.expectOne(`${BASE}/fotos-registro/gasto/g-1`).flush({});expect(altas).toBe(1);
     op.reiniciar();expect(op.guardado).toBe(false);op.guardar('gasto',crear,[]).subscribe();expect(altas).toBe(2);
   });
+  it('tras un guardado completo el siguiente vuelve a enviar el registro',()=>{
+    // Si recordara el registro, una corrección guardada después devolvería
+    // la versión anterior sin llegar al servidor.
+    let altas=0;const crear=defer(()=>{altas++;return of({id:'g-1'});}), op=api.operacion<{id:string}>();
+    op.guardar('gasto',crear,[foto]).subscribe();http.expectOne(`${BASE}/fotos-registro/gasto/g-1`).flush({});
+    expect(op.guardado).toBe(false);
+    op.guardar('gasto',crear,[]).subscribe();
+    expect(altas).toBe(2);
+  });
   it('devuelve solo fotos pendientes y conserva la primera causa',()=>{
     let fallo='',pendientes=0;
     api.finalizar('gasto',{id:'g'},[foto,{...foto,id:'foto-2',descripcion:''}]).subscribe(r=>{fallo=r.fallo;pendientes=r.pendientes.length;});
