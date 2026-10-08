@@ -1,5 +1,18 @@
 # ClinicAI — Plataforma de gestión clínica
 
+> **Roles entre especialistas (2026-10-07, `main`):** la sesión clínica se limita
+> a su especialidad y a las áreas concedidas expresamente; compartir clínica o
+> paciente no concede todas las historias ni permite corregir registros ajenos.
+> Notas, imágenes, planes, odontograma, periodoncia, anamnesis, Formulario 033 y
+> resumen clínico aplican filtros de autor/especialidad en el servidor. Las
+> recetas requieren al responsable o su delegación vigente para confirmar,
+> suspender o sustituir; la interfaz presenta esas acciones según esa capacidad.
+> Se conservan alergias y medicación confirmada como información compartida,
+> con los permisos de sensibilidad correspondientes. Perfiles desactivados
+> pierden el acceso clínico; un perfil con historia conserva su especialidad.
+> Ayuda incorpora instrucciones distintas para administración y profesionales.
+> [Política y controles](docs/security.md#acceso-entre-especialistas).
+
 Sistema de gestión clínica multi‑sede con agenda, agente de WhatsApp, sincronización de
 calendarios, lista de espera inteligente, historia clínica versionada, recetas con
 seguimiento de adherencia, base de conocimiento con RAG, pagos asistidos, dashboard y

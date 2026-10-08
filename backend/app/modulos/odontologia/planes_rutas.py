@@ -30,6 +30,7 @@ from app.modulos.odontologia.planes_esquemas import (
     ProcedimientoPlanSalida,
 )
 from app.modulos.odontologia.planes_servicios import ServicioPlanesTratamiento
+from app.modulos.profesionales.ambito_clinico import autores_en_ambito
 from app.nucleo.auditoria import AccionAuditada, EntradaAuditoria, construir_entrada
 from app.nucleo.autorizacion import NivelSensibilidad, Principal
 from app.nucleo.dependencias import Auditor, RelojActual, Sesion
@@ -103,6 +104,7 @@ async def listar_planes(
                     exists().where(
                         PlanTratamiento.paciente_id == paciente_id,
                         PlanTratamiento.clinica_id == principal.clinica_id,
+                        PlanTratamiento.profesional_id.in_(autores_en_ambito(principal, "planes")),
                         PlanTratamiento.nivel_sensibilidad == "N3",
                     )
                 )

@@ -321,11 +321,14 @@ def _a_nota(nota: NotaEvolucion) -> NotaSalida:
     )
 
 
-def _a_receta(receta: Receta, medicamentos: list[RecetaMedicamento]) -> RecetaSalida:
+def _a_receta(
+    receta: Receta, medicamentos: list[RecetaMedicamento], *, puede_gestionar: bool = False
+) -> RecetaSalida:
     return RecetaSalida(
         id=receta.id,
         paciente_id=receta.paciente_id,
         profesional_id=receta.profesional_id,
+        puede_gestionar=puede_gestionar,
         estado=receta.estado,
         confirmada_en=receta.confirmada_en,
         suspendida_en=receta.suspendida_en,
@@ -516,9 +519,12 @@ async def listar_recetas(
         await auditor.registrar(auditorias)
         await sesion.commit()
     salida: list[RecetaSalida] = []
+    firmantes = await servicio.firmantes_autorizados(principal)
     for receta in recetas:
         medicamentos = await repo.medicamentos_de(receta.id)
-        salida.append(_a_receta(receta, medicamentos))
+        salida.append(
+            _a_receta(receta, medicamentos, puede_gestionar=receta.profesional_id in firmantes)
+        )
     return salida
 
 
@@ -570,7 +576,7 @@ async def crear_receta(
     if resultado.receta is None:  # pragma: sin cobertura - el servicio devuelve receta o lanza
         raise ErrorDominio("No se pudo crear la receta.")
     medicamentos = await repo.medicamentos_de(resultado.receta.id)
-    return _a_receta(resultado.receta, medicamentos)
+    return _a_receta(resultado.receta, medicamentos, puede_gestionar=True)
 
 
 @enrutador.post(
@@ -622,7 +628,7 @@ async def versionar_receta(
         raise ErrorDominio("No se pudo crear la nueva versión de la receta.")
     medicamentos = await repo.medicamentos_de(resultado.receta.id)
     return ResultadoVersionReceta(
-        receta=_a_receta(resultado.receta, medicamentos),
+        receta=_a_receta(resultado.receta, medicamentos, puede_gestionar=True),
         tomas_canceladas=resultado.tomas_canceladas,
         tomas_generadas=resultado.tomas_generadas,
     )
@@ -666,7 +672,7 @@ async def confirmar_receta(
         raise ErrorDominio("No se pudo confirmar la receta.")
     medicamentos = await repo.medicamentos_de(resultado.receta.id)
     return ResultadoConfirmacion(
-        receta=_a_receta(resultado.receta, medicamentos),
+        receta=_a_receta(resultado.receta, medicamentos, puede_gestionar=True),
         tomas_generadas=resultado.tomas_generadas,
     )
 
@@ -703,7 +709,7 @@ async def suspender_receta(
         raise ErrorDominio("No se pudo suspender la receta.")
     medicamentos = await repo.medicamentos_de(resultado.receta.id)
     return ResultadoSuspension(
-        receta=_a_receta(resultado.receta, medicamentos),
+        receta=_a_receta(resultado.receta, medicamentos, puede_gestionar=True),
         tomas_canceladas=resultado.tomas_canceladas,
     )
 

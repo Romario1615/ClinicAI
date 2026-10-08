@@ -261,6 +261,7 @@ class RecetaSalida(BaseModel):
     nivel_sensibilidad: Literal["N2", "N3"]
     creado_en: datetime
     medicamentos: list[MedicamentoSalida]
+    puede_gestionar: bool = False
 
 
 class ResultadoConfirmacion(BaseModel):

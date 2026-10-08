@@ -30,12 +30,11 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from zoneinfo import ZoneInfo
 
-from sqlalchemy import select
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.mensajeria.recordatorios import ServicioRecordatorios
-from app.modulos.agenda.modelos import Cita
+from app.modulos.agenda.repositorio import RepositorioAgenda
 from app.modulos.historia.modelos import (
     AlertaAdherencia,
     Diagnostico,
@@ -48,7 +47,7 @@ from app.modulos.historia.modelos import (
     Toma,
 )
 from app.modulos.historia.repositorio import RepositorioHistoria
-from app.modulos.profesionales.modelos import DelegacionFirma
+from app.modulos.profesionales.ambito_clinico import firmantes_delegados
 from app.nucleo.auditoria import AccionAuditada, EntradaAuditoria, construir_entrada
 from app.nucleo.autorizacion import NivelSensibilidad, Principal
 from app.nucleo.errores import (
@@ -231,6 +230,8 @@ class ServicioHistoria:
         actual = await self._repo.obtener_version_vigente(raiz_id, principal=principal, ahora=ahora)
         if actual is None:
             raise RecursoNoEncontrado("La nota solicitada no existe.")
+        if actual.profesional_id != autor:
+            raise PermisoDenegado("Solo el autor puede corregir esta nota clínica.")
 
         await self._exigir_relacion(principal, actual.paciente_id)
         nivel = self._nivel_nota(
@@ -464,6 +465,9 @@ class ServicioHistoria:
         if receta is None:
             raise RecursoNoEncontrado("La receta solicitada no existe.")
 
+        if profesional_id != receta.profesional_id:
+            raise PermisoDenegado("La firma debe corresponder al responsable de esta receta.")
+
         if receta.estado != EstadoReceta.BORRADOR.value:
             raise ConflictoEstado(
                 f"Solo se confirma una receta en borrador (estado actual: {receta.estado})."
@@ -529,6 +533,8 @@ class ServicioHistoria:
         if receta.estado == EstadoReceta.SUSPENDIDA.value:
             raise ConflictoEstado("La receta ya esta suspendida.")
 
+        firmante, delegada = await self._firma(principal, receta.profesional_id)
+
         receta.estado = EstadoReceta.SUSPENDIDA.value
         receta.suspendida_en = ahora
         receta.motivo_suspension = motivo_limpio
@@ -553,6 +559,8 @@ class ServicioHistoria:
                     paciente_id=receta.paciente_id,
                     nivel_sensibilidad=NivelSensibilidad(receta.nivel_sensibilidad),
                     motivo=motivo_limpio,
+                    profesional_firmante=str(firmante),
+                    firma_delegada=delegada,
                 ),
                 construir_entrada(
                     accion=AccionAuditada.TOMAS_CANCELADAS,
@@ -597,6 +605,8 @@ class ServicioHistoria:
         )
         if anterior is None:
             raise RecursoNoEncontrado("La receta solicitada no existe.")
+        if firmante != anterior.profesional_id:
+            raise PermisoDenegado("Solo su responsable o delegado puede sustituir esta receta.")
         if anterior.estado != EstadoReceta.CONFIRMADA.value:
             raise ConflictoEstado(
                 "Solo se puede crear una versión nueva de una receta confirmada "
@@ -981,17 +991,9 @@ class ServicioHistoria:
         if firmante == principal.profesional_id:
             return firmante, False
         ahora = self._reloj.ahora()
+        consulta = firmantes_delegados(principal, ahora)
         vigente = (
-            await self._sesion.execute(
-                select(DelegacionFirma.id).where(
-                    DelegacionFirma.clinica_id == principal.clinica_id,
-                    DelegacionFirma.delegante_id == firmante,
-                    DelegacionFirma.delegado_id == principal.profesional_id,
-                    DelegacionFirma.revocada_en.is_(None),
-                    DelegacionFirma.vigente_desde <= ahora,
-                    DelegacionFirma.vigente_hasta > ahora,
-                )
-            )
+            await self._sesion.execute(consulta.where(consulta.selected_columns[0] == firmante))
         ).first()
         if vigente is None:
             raise PermisoDenegado(
@@ -999,19 +1001,29 @@ class ServicioHistoria:
             )
         return firmante, True
 
+    async def firmantes_autorizados(self, principal: Principal) -> frozenset[uuid.UUID]:
+        """Capacidad para la interfaz; cada escritura vuelve a validar la firma."""
+        if principal.profesional_id is None or not (
+            principal.tiene_permiso("receta.crear") or principal.tiene_permiso("receta.confirmar")
+        ):
+            return frozenset()
+        delegados = (
+            await self._sesion.execute(firmantes_delegados(principal, self._reloj.ahora()))
+        ).scalars()
+        return frozenset({principal.profesional_id, *delegados})
+
     async def _exigir_cita_del_paciente(
         self, cita_id: uuid.UUID, paciente_id: uuid.UUID, principal: Principal
     ) -> None:
-        cita = (
-            await self._sesion.execute(
-                select(Cita.id).where(
-                    Cita.id == cita_id,
-                    Cita.paciente_id == paciente_id,
-                    Cita.clinica_id == principal.clinica_id,
-                )
+        cita = await RepositorioAgenda(self._sesion).obtener_cita(cita_id, principal=principal)
+        if (
+            cita is None
+            or cita.paciente_id != paciente_id
+            or (
+                principal.profesional_id is not None
+                and cita.profesional_id != principal.profesional_id
             )
-        ).scalar_one_or_none()
-        if cita is None:
+        ):
             raise RecursoNoEncontrado("La cita indicada no existe para este paciente.")
 
     async def _exigir_relacion(self, principal: Principal, paciente_id: uuid.UUID) -> None:

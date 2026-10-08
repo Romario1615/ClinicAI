@@ -345,7 +345,7 @@
                     <!-- La historia clínica no se borra: se versiona. Si la interfaz
                          solo mostrara la versión vigente, esa garantía existiría en la
                          base de datos y no le serviría de nada a quien la audita. -->
-                    @if (puedeEscribirNotas() && editando() === undefined) {
+                    @if (puedeCorregirNota(historia.vigente) && editando() === undefined) {
                       <button class="boton boton--plano boton--pequeno nota__corregir" type="button" (click)="editando.set(historia.vigente)">
                         Corregir (crea versión nueva)
                       </button>
@@ -438,7 +438,7 @@
                         indicación vigente: solo una receta confirmada por el profesional produce
                         calendario de tomas.
                       </p>
-                      @if (puedeConfirmarRecetas()) {
+                      @if (puedeConfirmarRecetas() && receta.puede_gestionar) {
                         <button class="boton boton--principal boton--pequeno" type="button" [disabled]="confirmando()" (click)="confirmarReceta(receta)">
                           Confirmar y generar tomas
                         </button>
@@ -485,7 +485,7 @@
                         </li>
                       }
                     </ul>
-                    @if (receta.estado === 'CONFIRMADA' && puedeCrearRecetas() && puedeConfirmarRecetas()) {
+                    @if (receta.estado === 'CONFIRMADA' && puedeCrearRecetas() && puedeConfirmarRecetas() && receta.puede_gestionar) {
                       <button class="boton boton--pequeno receta__version" type="button" [disabled]="creandoReceta()"
                               (click)="versionandoReceta.set(receta); creandoReceta.set(true)">
                         Crear nueva versión

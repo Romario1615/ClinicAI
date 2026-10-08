@@ -30,7 +30,7 @@ origen, se evade con direcciones rotatorias.
 from __future__ import annotations
 
 import uuid
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime, timedelta
 
 from sqlalchemy import func, select
@@ -58,6 +58,7 @@ from app.nucleo.auditoria import (
     construir_entrada,
 )
 from app.nucleo.autorizacion import (
+    PERMISOS_SOLO_ASISTENCIALES,
     Ambito,
     NivelSensibilidad,
     Principal,
@@ -748,7 +749,15 @@ class ServicioAutenticacion:
             and (usuario_rol.vigente_hasta is None or usuario_rol.vigente_hasta >= hoy)
         ]
 
-        profesional_id = await self._profesional_de(usuario.id)
+        perfil = await self._perfil_profesional_de(usuario.id)
+        profesional_id = (
+            perfil.id
+            if perfil is not None
+            and perfil.clinica_id == usuario.clinica_id
+            and perfil.activo
+            and perfil.anulado_en is None
+            else None
+        )
 
         if not vigentes:
             # Sin rol vigente no hay permisos.  Un usuario recien creado o con
@@ -775,6 +784,14 @@ class ServicioAutenticacion:
             .where(RolPermiso.rol_id.in_(ids_rol))
         )
         permisos = frozenset((await self._sesion.execute(consulta_permisos)).scalars())
+        if profesional_id is None and (perfil is not None or "profesional" in codigos_rol):
+            # Un perfil desactivado o incoherente no se convierte en personal
+            # clinico sin relacion asistencial al perder su identificador.
+            permisos -= PERMISOS_SOLO_ASISTENCIALES | {
+                "adherencia.leer",
+                "alerta_adherencia.atender",
+                "acceso_emergencia.solicitar",
+            }
 
         # --- Ambito ---
         ids_usuario_rol = [ur.id for ur, _ in vigentes]
@@ -784,6 +801,17 @@ class ServicioAutenticacion:
         ambitos = list((await self._sesion.execute(consulta_ambitos)).scalars())
 
         ambito = self._construir_ambito(ambitos, clinica_id=usuario.clinica_id)
+        if (
+            profesional_id is not None
+            and perfil is not None
+            and ("profesional" in codigos_rol or permisos & PERMISOS_SOLO_ASISTENCIALES)
+            and not (codigos_rol & {"administrador_clinica", "superadministrador"})
+        ):
+            ambito = replace(
+                ambito,
+                todas_las_especialidades=False,
+                especialidades=ambito.especialidades | {perfil.especialidad_id},
+            )
 
         return Principal(
             actor_tipo=TipoActor.USUARIO,
@@ -879,7 +907,7 @@ class ServicioAutenticacion:
     # ==================================================================
     #  Auxiliares
     # ==================================================================
-    async def _profesional_de(self, usuario_id: uuid.UUID) -> uuid.UUID | None:
+    async def _perfil_profesional_de(self, usuario_id: uuid.UUID) -> Profesional | None:
         """Profesional ligado a este usuario, si lo hay.
 
         Es lo que activa la comprobacion de **relacion asistencial** en la
@@ -893,10 +921,8 @@ class ServicioAutenticacion:
         """
         return (
             await self._sesion.execute(
-                select(Profesional.id).where(
+                select(Profesional).where(
                     Profesional.usuario_id == usuario_id,
-                    Profesional.anulado_en.is_(None),
-                    Profesional.activo.is_(True),
                 )
             )
         ).scalar_one_or_none()

@@ -24,6 +24,7 @@ export interface ModulosDeEspecialidad {
   readonly nombre: string;
   readonly activa: boolean;
   readonly modulos: readonly string[];
+  readonly disponibles?: readonly string[];
 }
 
 interface Configuracion {
@@ -99,7 +100,7 @@ interface Configuracion {
         <form class="formulario" (ngSubmit)="guardar(esp)">
           <fieldset class="modulos">
             <legend>Se activan al revisar desde {{ esp.nombre }}</legend>
-            @for (modulo of catalogo(); track modulo.codigo) {
+            @for (modulo of catalogoDisponible(esp); track modulo.codigo) {
               <label class="modulo">
                 <input
                   type="checkbox"
@@ -191,7 +192,13 @@ export class ModulosEspecialidadComponent {
     this.editando.set(esp);
   }
 
+  protected catalogoDisponible(esp: ModulosDeEspecialidad): readonly ModuloCatalogo[] {
+    return this.catalogo().filter(m => esp.disponibles?.includes(m.codigo) ?? false);
+  }
+
   protected alternar(codigo: string): void {
+    const esp = this.editando();
+    if (!esp || !this.catalogoDisponible(esp).some(m => m.codigo === codigo)) return;
     this.elegidos.update((actual) => {
       const nuevo = new Set(actual);
       if (nuevo.has(codigo)) nuevo.delete(codigo);
@@ -208,7 +215,7 @@ export class ModulosEspecialidadComponent {
     }
     this.guardando.set(true);
     this.errorCambio.set('');
-    const modulos = this.catalogo()
+    const modulos = this.catalogoDisponible(esp)
       .map((m) => m.codigo)
       .filter((codigo) => this.elegidos().has(codigo));
     this.http

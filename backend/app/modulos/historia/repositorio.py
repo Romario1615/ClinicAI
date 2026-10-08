@@ -41,6 +41,7 @@ from app.modulos.historia.modelos import (
     Toma,
 )
 from app.modulos.pacientes.modelos import RelacionAsistencial
+from app.modulos.profesionales.ambito_clinico import autores_en_ambito, firmantes_delegados
 from app.modulos.profesionales.modelos import Profesional
 from app.nucleo.autorizacion import Principal
 
@@ -347,6 +348,7 @@ class RepositorioHistoria:
         if principal.clinica_id is None:
             return consulta.where(NotaEvolucion.clinica_id == _NINGUNO)
         consulta = consulta.where(NotaEvolucion.clinica_id == principal.clinica_id)
+        consulta = consulta.where(NotaEvolucion.profesional_id.in_(autores_en_ambito(principal)))
         if not principal.tiene_permiso("historia_clinica.leer_sensible"):
             consulta = consulta.where(NotaEvolucion.nivel_sensibilidad != "N3")
 
@@ -364,6 +366,15 @@ class RepositorioHistoria:
         if principal.clinica_id is None:
             return consulta.where(Receta.clinica_id == _NINGUNO)
         consulta = consulta.where(Receta.clinica_id == principal.clinica_id)
+        # La medicación confirmada se comparte por seguridad. Borradores e
+        # historial ajeno requieren su especialidad o una delegación vigente.
+        consulta = consulta.where(
+            or_(
+                Receta.profesional_id.in_(autores_en_ambito(principal)),
+                Receta.estado == EstadoReceta.CONFIRMADA.value,
+                Receta.profesional_id.in_(firmantes_delegados(principal, ahora)),
+            )
+        )
         if not principal.tiene_permiso("historia_clinica.leer_sensible"):
             consulta = consulta.where(Receta.nivel_sensibilidad != "N3")
 

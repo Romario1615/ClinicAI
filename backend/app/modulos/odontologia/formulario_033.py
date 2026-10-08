@@ -27,6 +27,7 @@ from app.modulos.odontologia.modelos import Formulario033, Odontograma, Registro
 from app.modulos.organizacion.modelos import Clinica, Sede
 from app.modulos.pacientes.acceso_clinico import GuardiaClinica
 from app.modulos.pacientes.modelos import Paciente
+from app.modulos.profesionales.ambito_clinico import autores_en_ambito
 from app.modulos.profesionales.modelos import Profesional
 from app.nucleo.auditoria import AccionAuditada, construir_entrada
 from app.nucleo.autorizacion import NivelSensibilidad, Principal
@@ -152,7 +153,7 @@ async def _validar_fuentes(
         (RegistroPlaca, registro_placa_id),
     )
     for modelo, identificador in fuentes:
-        await _validar_fuente(sesion, modelo, identificador, paciente.id, clinica_id)
+        await _validar_fuente(sesion, modelo, identificador, paciente.id, clinica_id, principal)
     if cita is not None and nota_id is not None:
         await _validar_nota_atencion(sesion, nota_id, cita.id)
 
@@ -254,6 +255,7 @@ async def _validar_fuente(
     identificador: uuid.UUID | None,
     paciente_id: uuid.UUID,
     clinica_id: uuid.UUID,
+    principal: Principal,
 ) -> None:
     if identificador is None:
         return
@@ -262,6 +264,7 @@ async def _validar_fuente(
             modelo.id == identificador,
             modelo.paciente_id == paciente_id,
             modelo.clinica_id == clinica_id,
+            modelo.profesional_id.in_(autores_en_ambito(principal, "odontograma")),
         )
     )
     if fila is None:
@@ -325,6 +328,7 @@ async def listar_formularios_033(
                 select(Formulario033)
                 .where(
                     Formulario033.clinica_id == principal.clinica_id,
+                    Formulario033.profesional_id.in_(autores_en_ambito(principal, "odontograma")),
                     Formulario033.paciente_id == paciente_id,
                     Formulario033.vigente.is_(True),
                 )
@@ -454,6 +458,7 @@ async def obtener_formulario_033(
         Formulario033.raiz_id == raiz_id,
         Formulario033.paciente_id == paciente_id,
         Formulario033.clinica_id == principal.clinica_id,
+        Formulario033.profesional_id.in_(autores_en_ambito(principal, "odontograma")),
     )
     consulta = (
         consulta.where(Formulario033.version == version)
@@ -504,6 +509,7 @@ async def auditar_exportacion_formulario_033(
         Formulario033.raiz_id == raiz_id,
         Formulario033.paciente_id == paciente_id,
         Formulario033.clinica_id == principal.clinica_id,
+        Formulario033.profesional_id.in_(autores_en_ambito(principal, "odontograma")),
     )
     consulta = (
         consulta.where(Formulario033.version == version)
@@ -557,6 +563,7 @@ async def listar_versiones_formulario_033(
                     Formulario033.raiz_id == raiz_id,
                     Formulario033.paciente_id == paciente_id,
                     Formulario033.clinica_id == principal.clinica_id,
+                    Formulario033.profesional_id.in_(autores_en_ambito(principal, "odontograma")),
                 )
                 .order_by(Formulario033.version.desc())
             )
@@ -608,12 +615,15 @@ async def versionar_formulario_033(
             Formulario033.raiz_id == raiz_id,
             Formulario033.paciente_id == paciente.id,
             Formulario033.clinica_id == paciente.clinica_id,
+            Formulario033.profesional_id.in_(autores_en_ambito(principal, "odontograma")),
             Formulario033.vigente.is_(True),
         )
         .with_for_update()
     )
     if actual is None:
         raise RecursoNoEncontrado("El formulario solicitado no existe.")
+    if actual.profesional_id != principal.profesional_id:
+        raise PermisoDenegado("Solo el autor puede corregir este formulario clínico.")
     if actual.version != datos.version_base:
         raise ConflictoEstado(
             "El formulario cambió desde que se abrió. Recargue la versión vigente.",

@@ -430,7 +430,7 @@ const CATEGORIAS: Record<string, string> = {
               <option [value]="profesional.id">{{ profesional.nombre }} {{ profesional.apellido }} · {{ profesional.especialidad || 'Sin especialidad asignada' }}</option>
             }
           </select>
-          <span class="campo__ayuda">La especialidad se toma de este perfil profesional. Para cambiarla, edite su ficha en Profesionales. El rol determina sus permisos.</span>
+          <span class="campo__ayuda">El rol define los permisos y este perfil define la especialidad. Los registros clínicos de otras áreas requieren acceso expreso. Una ficha con historia conserva su especialidad.</span>
         </label>
       }
     </ng-template>

@@ -164,6 +164,7 @@ export class Formulario033Component {
   }
 
   protected corregir(formulario: Formulario033Api): void {
+    if (!this.puedeCorregir(formulario)) return;
     this.creando.set(false);
     this.seleccionado.set(formulario);
     this.datos = structuredClone(formulario.datos);
@@ -176,6 +177,10 @@ export class Formulario033Component {
     this.exito.set('');
     this.error.set('');
     this.cargarFuentes();
+  }
+
+  protected puedeCorregir(formulario: Formulario033Api): boolean {
+    return this.puedeEditar() && formulario.profesional_id === this.sesion.identidad()?.profesional_id;
   }
 
   protected guardar(): void {

@@ -90,6 +90,7 @@ function medicamento(extra: Partial<Medicamento> = {}): Medicamento {
 
 function receta(extra: Partial<Receta> = {}): Receta {
     return {
+        puede_gestionar: true,
         id: 'rec-1',
         paciente_id: PACIENTE_ID,
         profesional_id: 'prof-1',
@@ -142,6 +143,7 @@ describe('HistoriaClinicaComponent', () => {
 
     /** Fija los permisos del principal, que es de donde la pantalla los lee. */
     function conPermisos(...codigos: readonly string[]): void {
+        vi.spyOn(sesion, 'identidad').mockReturnValue({ profesional_id: 'prof-1' } as ReturnType<SesionService['identidad']>);
         vi.spyOn(sesion, 'tienePermiso').mockImplementation((codigo: string) => codigos.includes(codigo));
     }
 
@@ -346,6 +348,43 @@ describe('HistoriaClinicaComponent', () => {
     });
 
     describe('degradacion por rol', () => {
+        it('permite corregir solo notas propias aunque pueda leer las del colega', () => {
+            conPermisos('historia_clinica.leer', 'historia_clinica.escribir');
+            listar();
+            abrir({ notas: [nota(), nota({ id: 'nota-ajena', raiz_id: 'raiz-ajena', profesional_id: 'colega' })] });
+            expect(fixture.componentInstance['puedeCorregirNota'](nota())).toBe(true);
+            expect(fixture.componentInstance['puedeCorregirNota'](nota({ profesional_id: 'colega' }))).toBe(false);
+            fixture.componentInstance['pestana'].set('evolucion');
+            fixture.detectChanges();
+            expect(fixture.nativeElement.querySelectorAll('.nota__corregir').length).toBe(1);
+        });
+
+        it('muestra medicación ajena sin botones para firmarla o sustituirla', () => {
+            conPermisos('receta.leer', 'receta.crear', 'receta.confirmar');
+            listar();
+            const ajena = receta({ profesional_id: 'colega', puede_gestionar: false });
+            abrir({ recetas: [ajena] });
+            fixture.componentInstance['pestana'].set('recetas');
+            fixture.detectChanges();
+            const botones = Array.from((fixture.nativeElement as HTMLElement).querySelectorAll('button')).map(b => b.textContent);
+            expect(botones.some(b => b?.includes('Nueva versión'))).toBe(false);
+            fixture.componentInstance['confirmarReceta'](ajena);
+            http.expectNone(p => p.url.includes('/confirmacion'));
+            expect(texto()).toContain('Medicamento de ejemplo A');
+        });
+
+        it('una confirmación delegada mantiene la firma del responsable', () => {
+            conPermisos('receta.leer', 'receta.confirmar');
+            listar();
+            const delegada = receta({ estado: 'BORRADOR', profesional_id: 'responsable', puede_gestionar: true });
+            abrir({ recetas: [delegada] });
+            fixture.componentInstance['confirmarReceta'](delegada);
+            const solicitud = http.expectOne(`${BASE}/historia/recetas/rec-1/confirmacion`);
+            expect(solicitud.request.body).toEqual({ profesional_id: 'responsable' });
+            solicitud.flush({ codigo: 'PERMISO_DENEGADO', mensaje: 'Delegación revocada.' }, { status: 403, statusText: 'Forbidden' });
+            expect(fixture.componentInstance['errorHistoria']()?.message).toBe('Delegación revocada.');
+        });
+
         it('un asistente ve las recetas y no pide las notas', () => {
             // `receta.leer` sin `historia_clinica.leer`: es el caso real del rol
             // asistente, y la pantalla no puede fallar entera por ello.

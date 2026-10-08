@@ -427,8 +427,12 @@ _PROFESIONAL = ManualSistema(
                 "activos primero.",
                 "Si el sistema indica que no tiene acceso clínico, es que no consta relación "
                 "asistencial con esa persona.",
+                "Revise desde su especialidad; las notas, imágenes, planes y formularios de otras áreas requieren un ámbito concedido expresamente.",
             ),
-            ("Cada lectura de la historia queda registrada en la auditoría.",),
+            (
+                "Cada lectura de la historia queda registrada en la auditoría.",
+                "Compartir paciente o especialidad permite consultar lo autorizado; las notas y el Formulario 033 de un colega conservan su autor y no admiten su corrección.",
+            ),
             requiere=("historia_clinica.leer",),
         ),
         _s(
@@ -512,6 +516,7 @@ _PROFESIONAL = ManualSistema(
             (
                 "Cree la receta con medicamento, dosis, vía y frecuencia.",
                 "Confírmela usted: solo una receta confirmada genera el calendario de tomas.",
+                "Confirme, sustituya o suspenda únicamente sus recetas o aquellas cuya firma le haya sido delegada; la sustitución conserva al responsable original.",
                 "Para cambiarla, cree una nueva versión; las tomas futuras pendientes se cancelan y "
                 "se reprograman con la nueva confirmación.",
             ),
@@ -837,7 +842,7 @@ _ADMINISTRADOR = ManualSistema(
                 "En Usuarios y roles, cree la cuenta con correo y una contraseña inicial.",
                 "Asigne el rol y limite las sedes si la persona no trabaja en todas.",
                 "Para un profesional, vincule la cuenta a su ficha del equipo clínico.",
-                "Compruebe Especialidad / área en Personal; el selector Perfil profesional muestra la especialidad de cada ficha. Para cambiarla, edite esa ficha en Profesionales.",
+                "Compruebe Especialidad / área en Personal; el selector Perfil profesional muestra la especialidad de cada ficha. Un perfil sin registros clínicos permite cambiarla desde Profesionales.",
             ),
             (
                 "La persona deberá cambiar la contraseña inicial en su primer ingreso.",
@@ -881,7 +886,10 @@ _ADMINISTRADOR = ManualSistema(
                 "En Delegaciones de firma, registre periodo y motivo cuando un profesional firme "
                 "recetas a nombre de otro.",
             ),
-            ("Sin delegación vigente, cada profesional firma solo sus propias recetas.",),
+            (
+                "Sin delegación vigente, cada profesional firma solo sus propias recetas.",
+                "Una delegación no concede acceso a notas de otras especialidades. La especialidad de un perfil con historia se conserva; para otra área cree un perfil distinto.",
+            ),
             requiere=("profesional.gestionar",),
         ),
         _s(

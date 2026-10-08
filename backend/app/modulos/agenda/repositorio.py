@@ -130,6 +130,7 @@ class RepositorioAgenda:
                     Servicio.id == Cita.servicio_id,
                     Servicio.especialidad_id.in_(ambito.especialidades),
                 )
+                .correlate(Cita)
                 .exists()
             )
 

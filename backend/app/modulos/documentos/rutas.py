@@ -29,7 +29,7 @@ from app.modulos.documentos.esquemas import (
 )
 from app.modulos.documentos.modelos import EntregaDocumento, RegistroPaciente
 from app.modulos.documentos.servicios import ServicioRegistros, pdf_registro
-from app.modulos.historia.especialidades import especialidades_permitidas
+from app.modulos.historia.especialidades import especialidades_permitidas, exige_modulo
 from app.modulos.historia.modelos import Receta
 from app.modulos.odontologia.modelos import PlanTratamiento
 from app.modulos.odontologia.planes_servicios import ServicioPlanesTratamiento
@@ -128,7 +128,9 @@ async def auditar(
 
 
 @enrutador.get("/historia/faciograma/zonas", response_model=list[dict[str, str | int]])
-async def zonas_faciales(principal: Leer) -> list[dict[str, str | int]]:
+async def zonas_faciales(
+    principal: Annotated[Principal, Depends(exige_modulo("faciograma", "historia_clinica.leer"))],
+) -> list[dict[str, str | int]]:
     del principal
     return [
         {"codigo": codigo, "nombre": nombre, "x": x, "y": y}

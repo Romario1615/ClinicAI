@@ -359,7 +359,7 @@ export class HistoriaClinicaComponent implements OnInit {
    * una delegación vigente y lo audita.
    */
   protected confirmarReceta(receta: Receta): void {
-    if (this.confirmando()) return;
+    if (this.confirmando() || !this.puedeConfirmarRecetas() || !receta.puede_gestionar) return;
     this.confirmando.set(true);
     this.api.confirmarReceta(receta.id, receta.profesional_id).subscribe({
       next: () => {
@@ -377,6 +377,10 @@ export class HistoriaClinicaComponent implements OnInit {
 
   /** `undefined`: sin editor; `null`: nota nueva; una nota: su corrección. */
   protected readonly editando = signal<Nota | null | undefined>(undefined);
+
+  protected puedeCorregirNota(nota: Nota): boolean {
+    return this.puedeEscribirNotas() && nota.profesional_id === this.sesion.identidad()?.profesional_id;
+  }
 
   protected readonly hayPaciente = computed(() => this.paciente() !== null);
 

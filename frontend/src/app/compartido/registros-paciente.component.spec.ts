@@ -98,6 +98,30 @@ describe('RegistrosPacienteComponent', () => {
     c['agregarPartida'](); c['quitarPartida'](0); expect(c['partidas']).toHaveLength(1);
     c['cerrarEditor']();
   });
+  it('pulsar el punto abre su evaluación y guarda la corrección como versión', async () => {
+    const facial: RegistroPaciente = { ...registro, tipo: 'FACIOGRAMA', contenido: { ...registro.contenido, partidas: [], zonas: [{ zona: 'menton', estado: 'PLANIFICADO', observacion: 'Evaluación previa sintética', procedimiento: null }] } };
+    const f = montar(true, true, [facial]);
+    f.nativeElement.querySelector('g[role="button"]').dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    f.detectChanges(); await f.whenStable();
+    expect(f.nativeElement.querySelector('[name="observacionZona"]').value).toBe('Evaluación previa sintética');
+    f.componentInstance['zonaObservacion'] = 'Control actualizado sintético';
+    f.componentInstance['motivo'] = 'Corrección de la evaluación';
+    f.componentInstance['guardar']();
+    const http = TestBed.inject(HttpTestingController);
+    const post = http.expectOne(r => r.method === 'POST');
+    expect(post.request.body).toMatchObject({ raiz_id: 'r-1', version_base: 1, tipo: 'FACIOGRAMA', zonas: [{ zona: 'menton', observacion: 'Control actualizado sintético' }] });
+    post.flush({}); http.expectOne(r => r.method === 'GET' && r.url.endsWith('/registros')).flush([]);
+    http.expectOne(`${BASE}/historia/faciograma/zonas`).flush([]);
+  });
+  it('consultar el punto de un colega o sin escritura conserva el registro', () => {
+    const facial: RegistroPaciente = { ...registro, profesional_id: 'colega', tipo: 'FACIOGRAMA' };
+    const f = montar(true, true, [facial]);
+    f.componentInstance['abrirPunto']('menton'); f.detectChanges();
+    expect(f.componentInstance['detalleZona']()).toBe('menton');
+    expect(f.nativeElement.querySelector('#registro-paciente')).toBeNull();
+    expect(f.componentInstance['editor']()).toBe(false);
+    TestBed.inject(HttpTestingController).expectNone(r => r.method === 'POST');
+  });
   it('redondea cada concepto igual que el PDF, incluso con cantidades fraccionarias', () => {
     const f = montar();
     expect(f.componentInstance['total']([{ descripcion: 'Sintético', cantidad: '0.29', precio_unitario: '0.50' }])).toBe(0.15);

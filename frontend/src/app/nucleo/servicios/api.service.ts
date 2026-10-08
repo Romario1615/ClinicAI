@@ -716,6 +716,8 @@ export interface Medicamento {
 }
 
 export interface Receta {
+  /** Capacidad resuelta por el servidor: responsable o delegación vigente. */
+  puede_gestionar?: boolean;
   readonly id: string;
   readonly paciente_id: string;
   readonly profesional_id: string;

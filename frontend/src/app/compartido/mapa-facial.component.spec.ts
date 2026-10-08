@@ -17,11 +17,10 @@ describe('MapaFacialComponent', () => {
     expect(fixture.nativeElement.textContent).toContain('no son puntos de inyección');
   });
 
-  it('asigna identificadores distintos a mapas simultáneos', () => {
-    const mapas = [TestBed.createComponent(MapaFacialComponent), TestBed.createComponent(MapaFacialComponent)];
-    mapas.forEach(f => { f.componentRef.setInput('puntos', []); f.detectChanges(); });
-    const ids = mapas.map(f => f.nativeElement.querySelector('linearGradient').id);
-    expect(ids[0]).not.toBe(ids[1]);
-    mapas.forEach((f, i) => expect(f.nativeElement.querySelector('path').getAttribute('fill')).toBe(`url(#${ids[i]})`));
+  it('muestra la ilustración anatómica con controles independientes', () => {
+    const f = TestBed.createComponent(MapaFacialComponent);
+    f.componentRef.setInput('puntos', []); f.detectChanges();
+    expect(f.nativeElement.querySelector('image').getAttribute('href')).toBe('/images/faciograma-anatomia-v1.png');
+    expect(f.nativeElement.querySelector('svg').getAttribute('role')).toBe('group');
   });
 });

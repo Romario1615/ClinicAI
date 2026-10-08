@@ -285,8 +285,8 @@ describe('FichaPacienteComponent con permisos clínicos', () => {
         const claves = c.pestanas().map((p: {
             clave: string;
         }) => p.clave);
-        expect(claves).toEqual(['resumen', 'citas', 'contacto', 'atencion', 'historia', 'odontograma', 'documentos', 'planes']);
-        expect((fixture.nativeElement as HTMLElement).textContent).toContain('Información clínica');
+        expect(claves).toEqual(['resumen', 'citas', 'contacto', 'atencion', 'historia', 'odontograma', 'periodoncia', 'documentos', 'planes']);
+        expect((fixture.nativeElement as HTMLElement).textContent).toContain('Herramientas de su especialidad');
         expect((fixture.nativeElement as HTMLElement).textContent).not.toContain('su rol no los alcanza');
 
         c.elegir('historia');
@@ -333,12 +333,14 @@ describe('FichaPacienteComponent con permisos clínicos', () => {
         expect(texto).not.toContain('no existe');
     });
 
-    it('ofrece el faciograma junto al odontograma cuando está habilitado en la especialidad', () => {
+    it('ofrece faciograma en estética y herramientas dentales en odontología', () => {
         const especialidades = TestBed.inject(EspecialidadHistoriaService);
-        especialidades.disponibles.set([{ ...ODONTOLOGIA_SINTETICA, modulos: [...ODONTOLOGIA_SINTETICA.modulos, 'faciograma'] }]);
+        especialidades.disponibles.set([{ id: 'esp-est', nombre: 'Salud estética', propia: true, modulos: ['faciograma', 'imagenes'] }]);
         fixture.detectChanges();
         const pestañas = [...(fixture.nativeElement as HTMLElement).querySelectorAll('[role="tab"]')].map(p => p.textContent?.trim());
         expect(pestañas).toContain('Faciograma');
+        expect(pestañas).not.toContain('Odontograma');
+        expect(pestañas).not.toContain('Periodoncia');
         expect(pestañas).toContain('Documentos y PDF');
         expect(c.accesosClinicos().find((p: {clave: string}) => p.clave === 'faciograma')?.detalle).toContain('rostro');
         c.accesoClinico.set(false);
