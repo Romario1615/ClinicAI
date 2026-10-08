@@ -21,22 +21,31 @@ import {
   selector: 'app-plataforma',
   standalone: true,
   imports: [FormsModule, VentanaFlotanteComponent, EditorRegistroComponent],
+  host: { class: 'pantalla' },
   template: `
-    <header class="encabezado">
+    <header class="encabezado pantalla__fijo">
       <div><p class="sobretitulo">Administración global</p><h1>Clínicas</h1>
         <p>Provisiona cada organización con su sede inicial y su administrador responsable.</p></div>
-      <button class="boton" type="button" (click)="cargar()" [disabled]="cargando()">Actualizar</button>
+      <div class="acciones-clinica">
+        <button class="boton" type="button" (click)="cargar()" [disabled]="cargando()">Actualizar</button>
+        <button class="boton boton--principal" type="button" (click)="abrirNuevoUsuario()" [disabled]="!tieneClinicasActivas()" title="La cuenta se vincula a una clínica, recibe los módulos seleccionados y deberá cambiar su contraseña temporal.">Dar acceso a una persona</button>
+      </div>
     </header>
 
-    @if (error()) { <p class="mensaje mensaje--error" role="alert">{{ error() }}</p> }
-    @if (aviso()) { <p class="mensaje mensaje--bien" role="status">{{ aviso() }}</p> }
+    @if (error()) { <p class="mensaje mensaje--error pantalla__fijo" role="alert">{{ error() }}</p> }
+    @if (aviso()) { <p class="mensaje mensaje--bien pantalla__fijo" role="status">{{ aviso() }}</p> }
 
-    <section class="tarjeta">
+    <!-- Dos listas lado a lado: organizaciones (y sus sedes) y accesos del
+         personal. Cada una desplaza dentro de su tarjeta. -->
+    <div class="pantalla__columnas plataforma__columnas">
+    <div class="plataforma__columna">
+    <section class="tarjeta tarjeta--llena">
       <div class="seccion-titulo"><div><h2>Organizaciones registradas</h2>
         <p>{{ clinicas().length }} clínicas en la plataforma</p></div>
         <button class="boton boton--principal" type="button" (click)="abrirNuevaClinica()">Registrar clínica</button></div>
       @if (cargando()) { <p role="status">Cargando clínicas…</p> }
       @if (!cargando() && clinicas().length === 0) { <p class="vacio">Todavía no se han registrado clínicas.</p> }
+      <div class="desplazable" tabindex="0" role="region" aria-label="Organizaciones registradas">
       @for (clinica of clinicas(); track clinica.id) {
         <article class="fila">
           <div class="datos"><strong>{{ clinica.nombre }}</strong>
@@ -50,24 +59,28 @@ import {
           </div>
         </article>
       }
+      </div>
     </section>
 
     @if (clinicaSedesId()) {
-      <section class="tarjeta">
+      <section class="tarjeta tarjeta--llena plataforma__sedes">
         <div class="seccion-titulo"><div><h2>Sedes de {{ nombreClinicaSedes() }}</h2>
           <p>Administra las sucursales que pertenecen a esta clínica.</p></div>
           <div class="acciones-clinica"><button class="boton boton--principal" type="button" (click)="abrirNuevaSede()">Agregar sucursal</button><button class="boton" type="button" (click)="cargarSedes()" [disabled]="cargandoSedes()">Actualizar sedes</button></div></div>
         @if (errorSedes()) { <p class="mensaje mensaje--error" role="alert">{{ errorSedes() }}</p> }
         @if (avisoSede()) { <p class="mensaje mensaje--bien" role="status">{{ avisoSede() }}</p> }
         @if (cargandoSedes()) { <p role="status">Cargando sedes…</p> }
+        <div class="desplazable" tabindex="0" role="region" [attr.aria-label]="'Sedes de ' + nombreClinicaSedes()">
         @for (sede of sedes(); track sede.id) {
           <article class="fila"><div class="datos"><strong>{{ sede.nombre }}</strong>
             <span>{{ sede.direccion || 'Dirección no registrada' }} · {{ sede.zona_horaria || 'Zona horaria heredada' }}</span>
             @if (sede.telefono) { <span>{{ sede.telefono }}</span> }
           </div><span class="etiqueta">{{ sede.activa ? 'Activa' : 'Inactiva' }}</span></article>
         }
+        </div>
       </section>
     }
+    </div>
 
     @if (nuevaSedeAbierta()) {
       <app-ventana-flotante ceja="{{ nombreClinicaSedes() }}" titulo="Agregar sede" forma="centrada" [anchoMaximo]="600" [cierraAlPulsarFuera]="false" (cerrar)="cerrarNuevaSede()">
@@ -90,7 +103,7 @@ import {
       </app-ventana-flotante>
     }
 
-    <section class="tarjeta">
+    <section class="tarjeta tarjeta--llena">
       <div class="seccion-titulo"><div><h2>Accesos del personal</h2>
         <p>Asigna a cada cuenta una clínica y los módulos habilitados para su función.</p></div>
         <button class="boton" type="button" (click)="cargarUsuarios()" [disabled]="cargandoUsuarios()">Actualizar cuentas</button></div>
@@ -98,6 +111,7 @@ import {
       @if (avisoUsuario()) { <p class="mensaje mensaje--bien" role="status">{{ avisoUsuario() }}</p> }
       @if (cargandoUsuarios()) { <p role="status">Cargando cuentas…</p> }
       @if (!cargandoUsuarios() && usuarios().length === 0) { <p class="vacio">No hay cuentas de personal registradas.</p> }
+      <div class="desplazable" tabindex="0" role="region" aria-label="Accesos del personal">
       @for (usuario of usuarios(); track usuario.id) {
         <article class="fila">
           <div class="datos"><strong>{{ usuario.nombre }} {{ usuario.apellido }}</strong>
@@ -112,7 +126,9 @@ import {
           }
         </article>
       }
+      </div>
     </section>
+    </div>
 
     @if (registro(); as r) {
       <app-editor-registro [tipo]="r.tipo" [ruta]="'/plataforma/clinicas/' + (r.tipo === 'usuario' ? 'usuarios/' : '') + r.fila.id" [inicial]="r.fila" [estado]="r.estado" [titulo]="(r.estado === null ? 'Editar ' : r.estado ? 'Reactivar ' : 'Desactivar ') + r.fila.nombre" (cerrar)="registro.set(null)" (guardado)="registro.set(null); cargar(); cargarUsuarios()" />
@@ -152,11 +168,6 @@ import {
       </app-ventana-flotante>
     }
 
-    <section class="tarjeta">
-      <div class="seccion-titulo"><div><h2>Dar acceso a una persona</h2>
-        <p>La cuenta se vincula a una clínica, recibe los módulos seleccionados y deberá cambiar su contraseña temporal.</p></div>
-        <button class="boton boton--principal" type="button" (click)="abrirNuevoUsuario()" [disabled]="!tieneClinicasActivas()">Dar acceso a una persona</button></div>
-    </section>
 
     @if (nuevoUsuarioAbierto()) {
       <app-ventana-flotante ceja="Roles, módulos y sedes" titulo="Dar acceso a una persona" forma="centrada" [anchoMaximo]="720" [altoCompleto]="true" [cierraAlPulsarFuera]="false" (cerrar)="cerrarNuevoUsuario()">
@@ -240,14 +251,15 @@ import {
   `,
   changeDetection: ChangeDetectionStrategy.Eager,
   styles: [`
-    :host { display: grid; gap: 1.25rem; }
     .encabezado { display:flex; align-items:flex-start; justify-content:space-between; gap:1rem; }
     .tarjeta { background:var(--superficie, #fff); border:1px solid var(--borde, #dce5ed); border-radius:1rem; padding:clamp(1rem, 2.5vw, 1.5rem); }
     .seccion-titulo { margin-bottom:1rem; }
     .seccion-titulo h2, h3 { margin:0 0 .4rem; }
     .seccion-titulo p, form>p { color:var(--texto-secundario, #5d6b79); margin:.25rem 0 1rem; }
     .fila { display:flex; align-items:center; justify-content:space-between; gap:1rem; padding:.9rem 0; border-top:1px solid var(--borde, #dce5ed); }
-    .acciones-clinica { display:flex; align-items:center; gap:.6rem; }
+    /* Tres botones y la etiqueta: en pantallas estrechas saltan de línea en
+       lugar de ensanchar la página. */
+    .acciones-clinica { display:flex; flex-wrap:wrap; align-items:center; gap:.6rem; }
     .datos { display:grid; gap:.25rem; }.datos span { color:var(--texto-secundario, #5d6b79); font-size:.9rem; }
   .campos { display:grid; grid-template-columns:repeat(auto-fit, minmax(min(100%, 14rem), 1fr)); gap:1rem; margin:1rem 0 1.4rem; }
     .opciones { display:grid; grid-template-columns:repeat(auto-fit, minmax(min(100%, 17rem), 1fr)); gap:.7rem; margin:1rem 0; }
@@ -260,6 +272,25 @@ import {
     .mensaje { padding:.8rem 1rem; border-radius:.6rem; }.mensaje--error { background:#fff0ef; color:#a32720; }.mensaje--bien { background:#eaf8f1; color:#126644; }
     .vacio { color:var(--texto-secundario, #5d6b79); }
     @media (max-width:600px) { .encabezado { flex-direction:column; } }
+    /* Pantalla de trabajo: cada lista desplaza dentro de su tarjeta. */
+    .plataforma__columna { display:flex; flex-direction:column; gap:var(--espacio-3); min-width:0; min-height:0; }
+    .tarjeta--llena > :not(.desplazable) { flex:none; }
+    .fila { flex-wrap:wrap; }
+    .fila .datos { flex:1 1 16rem; min-width:0; }
+    .datos span { overflow-wrap:anywhere; }
+    @media (min-width:821px) and (min-height:600px) {
+      .plataforma__columnas { --pantalla-columnas: minmax(0, 1fr) minmax(0, 1.15fr); }
+      .tarjeta { padding:var(--espacio-4); }
+      .seccion-titulo { display:flex; flex-wrap:wrap; align-items:flex-start; justify-content:space-between; gap:var(--espacio-2); margin-bottom:var(--espacio-2); }
+      .seccion-titulo h2 { font-size:1.1rem; }
+      /* Las sedes suelen ser pocas: toman su alto, como mucho la mitad larga
+         de la columna, y las organizaciones el resto. */
+      .plataforma__sedes { flex:0 1 auto; max-height:55%; }
+      .plataforma__sedes > .desplazable { flex:1 1 auto; min-height:3rem; }
+      .seccion-titulo p { margin:2px 0 0; }
+      .encabezado h1 { margin:0; font-size:1.45rem; }
+      .encabezado p { margin:2px 0 0; }
+    }
   `],
 })
 export class PlataformaComponent implements OnInit {
