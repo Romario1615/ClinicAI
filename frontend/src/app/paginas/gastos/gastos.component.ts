@@ -13,7 +13,8 @@ import { FotosRegistroComponent } from '../../compartido/fotos-registro.componen
  * Gráficos en movimiento: las cifras del resultado cuentan hasta su valor y
  * las barras crecen al llegar (`data-crecer`), con la coreografía global.
  */
-import { Component, computed, inject, signal, ChangeDetectionStrategy } from '@angular/core';
+import { ChangeDetectionStrategy, Component, DestroyRef, computed, inject, signal } from '@angular/core';
+import { DOCUMENT, NgTemplateOutlet } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { CapturaFotosComponent, type FotoSeleccionada } from '../../compartido/captura-fotos.component';
 import { FotosRegistroService } from '../../nucleo/servicios/fotos-registro.service';
@@ -69,7 +70,7 @@ function aFallo(error: unknown, mensaje: string): FalloApi {
   selector: 'app-gastos',
   standalone: true,
   imports: [
-    FormsModule, CapturaFotosComponent, FotosRegistroComponent,
+    FormsModule, NgTemplateOutlet, CapturaFotosComponent, FotosRegistroComponent,
     IconoComponent,
     TarjetasIndicadoresComponent,
     VentanaFlotanteComponent,
@@ -77,8 +78,9 @@ function aFallo(error: unknown, mensaje: string): FalloApi {
     ErrorComponent,
     VacioComponent,
   ],
+  host: { class: 'pantalla' },
   template: `
-    <header class="modulo-cabecera">
+    <header class="modulo-cabecera pantalla__fijo">
       <div class="modulo-cabecera__texto">
         <p class="ceja"><app-icono nombre="gastos" [tamano]="16" /> FINANZAS</p>
         <h1>Gastos y caja</h1>
@@ -94,11 +96,7 @@ function aFallo(error: unknown, mensaje: string): FalloApi {
       }
     </header>
 
-    @if (aviso()) {
-      <p class="exito" role="status">{{ aviso() }}</p>
-    }
-
-    <form class="tarjeta gastos__filtros" (ngSubmit)="aplicar()" aria-label="Periodo y filtros">
+    <form class="tarjeta gastos__filtros pantalla__fijo" (ngSubmit)="aplicar()" aria-label="Periodo y filtros">
       <label class="campo campo--linea">
         <span class="campo__etiqueta">Desde</span>
         <input class="campo__control" type="date" name="desde" required [max]="hasta" [(ngModel)]="desde" />
@@ -134,15 +132,19 @@ function aFallo(error: unknown, mensaje: string): FalloApi {
       </div>
     </form>
 
-    @if (puedeVerFlujo()) {
+    @if (puedeVerFlujo() && !estrecho() && !cargandoFlujo() && !falloFlujo() && flujo()) {
+      <app-tarjetas-indicadores class="pantalla__fijo" [indicadores]="indicadoresFlujo()" titulo="Resultado de caja del periodo" />
+    }
+
+    <!-- Movimientos del periodo: una sola definición, que se pinta en la
+         columna (escritorio ancho y móvil) o en una ventana (escritorio
+         estrecho, donde el libro necesita todo el ancho). -->
+    <ng-template #movimientos>
       @if (cargandoFlujo()) {
         <app-cargando mensaje="Calculando el flujo de caja…" />
       } @else if (falloFlujo(); as fallo) {
         <app-error titulo="No se pudo calcular el flujo" [mensaje]="fallo.message" [codigo]="fallo.codigo" (reintentar)="cargarFlujo()" />
       } @else if (flujo(); as f) {
-        <section class="gastos__flujo" aria-labelledby="titulo-flujo">
-          <h2 id="titulo-flujo" class="solo-lectores">Resultado de caja del periodo</h2>
-          <app-tarjetas-indicadores [indicadores]="indicadoresFlujo()" titulo="Resultado de caja del periodo" />
           <div class="rejilla gastos__graficos">
             <section class="tarjeta" aria-labelledby="titulo-categorias">
               <h3 id="titulo-categorias">Gastos por categoría</h3>
@@ -190,11 +192,20 @@ function aFallo(error: unknown, mensaje: string): FalloApi {
             </section>
           </div>
           <p class="campo__ayuda gastos__base">{{ f.base }}</p>
-        </section>
       }
+    </ng-template>
+
+    <div class="pantalla__columnas gastos__columnas" [class.gastos__columnas--sin-flujo]="!puedeVerFlujo() || estrecho()">
+    @if (puedeVerFlujo() && !estrecho()) {
+      <section class="tarjeta tarjeta--llena gastos__flujo" aria-labelledby="titulo-flujo">
+        <h2 id="titulo-flujo">Movimientos del periodo</h2>
+        <div class="desplazable gastos__flujo-cuerpo" tabindex="0" role="region" aria-labelledby="titulo-flujo">
+          <ng-container [ngTemplateOutlet]="movimientos" />
+        </div>
+      </section>
     }
 
-    <section class="tarjeta gastos__libro" aria-labelledby="titulo-libro">
+    <section class="tarjeta tarjeta--llena gastos__libro" aria-labelledby="titulo-libro">
       <div class="gastos__libro-cabecera">
         <h2 id="titulo-libro">Libro de gastos</h2>
         @if (pagina(); as p) {
@@ -202,35 +213,40 @@ function aFallo(error: unknown, mensaje: string): FalloApi {
             {{ p.total }} registro(s) · vigentes por {{ dinero(p.importe_total) }}
           </p>
         }
+        @if (puedeVerFlujo() && estrecho()) {
+          <button type="button" class="boton boton--pequeno" aria-haspopup="dialog" (click)="movimientosAbiertos.set(true)">
+            <app-icono nombre="gastos" [tamano]="15" /> Movimientos del periodo
+          </button>
+        }
       </div>
+      <!-- El aviso va en la tarjeta que cambia: no le quita alto a la lista. -->
+      @if (aviso()) {
+        <p class="exito gastos__aviso" role="status">{{ aviso() }}</p>
+      }
       @if (cargandoLibro()) {
         <app-cargando mensaje="Cargando el libro…" />
       } @else if (falloLibro(); as fallo) {
         <app-error titulo="No se pudo cargar el libro de gastos" [mensaje]="fallo.message" [codigo]="fallo.codigo" (reintentar)="cargarLibro()" />
       } @else if (pagina()?.elementos?.length) {
-        <div class="tabla-envoltorio">
+        <div class="tabla-envoltorio desplazable" tabindex="0" role="region" aria-label="Gastos del periodo">
           <table class="tabla">
             <caption class="solo-lectores">Gastos del periodo</caption>
             <thead>
               <tr>
                 <th scope="col">Fecha</th>
-                <th scope="col">Categoría</th>
-                <th scope="col">Descripción</th>
-                <th scope="col">Método</th>
+                <th scope="col">Gasto</th>
                 <th scope="col" class="numerico">Importe</th>
                 <th scope="col">Estado</th>
-                @if (puedeRegistrar()) {
-                  <th scope="col"><span class="solo-lectores">Acciones</span></th>
-                }
+                <th scope="col"><span class="solo-lectores">Acciones</span></th>
               </tr>
             </thead>
             <tbody>
               @for (gasto of pagina()!.elementos; track gasto.id) {
                 <tr [class.gastos__fila--anulada]="gasto.estado === 'ANULADO'">
                   <td class="numerico">{{ fechaCorta(gasto.fecha) }}</td>
-                  <td>{{ etiquetaCategoria(gasto.categoria) }}</td>
                   <td>
                     {{ gasto.descripcion }}
+                    <span class="gastos__detalle">{{ etiquetaCategoria(gasto.categoria) }} · {{ etiquetaMetodo(gasto.metodo) }}</span>
                     @if (gasto.proveedor || gasto.referencia) {
                       <span class="gastos__detalle">{{ gasto.proveedor }}{{ gasto.proveedor && gasto.referencia ? ' · ' : '' }}{{ gasto.referencia }}</span>
                     }
@@ -238,23 +254,20 @@ function aFallo(error: unknown, mensaje: string): FalloApi {
                       <span class="gastos__detalle">Anulado: {{ gasto.motivo_anulacion }}</span>
                     }
                   </td>
-                  <td>{{ etiquetaMetodo(gasto.metodo) }}</td>
                   <td class="numerico">{{ dinero(gasto.importe) }}</td>
                   <td>
-                    <app-fotos-registro tipo="gasto" [registroId]="gasto.id" [puedeEditar]="puedeRegistrar() && gasto.estado === 'REGISTRADO'" />
                     <span class="insignia" [class.insignia--peligro]="gasto.estado === 'ANULADO'">
                       {{ gasto.estado === 'ANULADO' ? 'Anulado' : 'Vigente' }}
                     </span>
                   </td>
-                  @if (puedeRegistrar()) {
-                    <td class="acciones">
-                      @if (gasto.estado === 'REGISTRADO') {
-                        <button type="button" class="boton boton--pequeno boton--peligro" (click)="abrirAnulacion(gasto)">
-                          Anular
-                        </button>
-                      }
-                    </td>
-                  }
+                  <td class="acciones gastos__acciones">
+                    <app-fotos-registro tipo="gasto" [registroId]="gasto.id" [puedeEditar]="puedeRegistrar() && gasto.estado === 'REGISTRADO'" />
+                    @if (puedeRegistrar() && gasto.estado === 'REGISTRADO') {
+                      <button type="button" class="boton boton--pequeno boton--peligro" (click)="abrirAnulacion(gasto)">
+                        Anular
+                      </button>
+                    }
+                  </td>
                 </tr>
               }
             </tbody>
@@ -269,6 +282,18 @@ function aFallo(error: unknown, mensaje: string): FalloApi {
         <app-vacio titulo="Sin gastos en este periodo" detalle="Cambie el periodo o los filtros, o registre el primer gasto." />
       }
     </section>
+    </div>
+
+    @if (movimientosAbiertos() && estrecho()) {
+      <app-ventana-flotante ceja="Gastos" titulo="Movimientos del periodo" [anchoMaximo]="520" (cerrar)="movimientosAbiertos.set(false)">
+        <div class="gastos__flujo-cuerpo">
+          @if (!cargandoFlujo() && !falloFlujo() && flujo()) {
+            <app-tarjetas-indicadores [indicadores]="indicadoresFlujo()" titulo="Resultado de caja del periodo" />
+          }
+          <ng-container [ngTemplateOutlet]="movimientos" />
+        </div>
+      </app-ventana-flotante>
+    }
 
     @if (altaAbierta()) {
       <app-ventana-flotante ceja="Gastos" titulo="Registrar gasto" forma="centrada" [anchoMaximo]="560" [cierraAlPulsarFuera]="false" [ocupada]="guardando()" (cerrar)="altaAbierta.set(false)">
@@ -372,10 +397,15 @@ function aFallo(error: unknown, mensaje: string): FalloApi {
     .gastos__anulados {
       min-height: var(--toque-minimo);
     }
-    .gastos__flujo {
+    .gastos__flujo h2,
+    .gastos__libro-cabecera h2 {
+      margin: 0;
+      font-size: 1.05rem;
+    }
+    .gastos__flujo-cuerpo {
       display: grid;
+      align-content: start;
       gap: var(--espacio-4);
-      margin-bottom: var(--espacio-4);
     }
     .gastos__graficos {
       grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr));
@@ -472,7 +502,11 @@ function aFallo(error: unknown, mensaje: string): FalloApi {
       gap: var(--espacio-3);
       margin-bottom: var(--espacio-3);
     }
-    .gastos__libro-cabecera h2 {
+    .gastos__acciones {
+      flex-wrap: nowrap;
+      justify-content: flex-end;
+    }
+    .gastos__aviso {
       margin: 0;
     }
     .gastos__detalle {
@@ -483,7 +517,7 @@ function aFallo(error: unknown, mensaje: string): FalloApi {
     .gastos__fila--anulada td {
       color: var(--texto-tenue);
     }
-    .gastos__fila--anulada td:nth-child(5) {
+    .gastos__fila--anulada td:nth-child(3) {
       text-decoration: line-through;
     }
     .gastos__paginas {
@@ -503,6 +537,49 @@ function aFallo(error: unknown, mensaje: string): FalloApi {
       border-color: var(--peligro);
       background: var(--peligro-fondo);
       color: var(--peligro);
+    }
+    /* Escritorio: cabecera y filtros fijos; el resultado de caja y el libro
+       se reparten el alto y cada uno desplaza dentro de su tarjeta. */
+    @media (min-width: 821px) and (min-height: 600px) {
+      .gastos__filtros {
+        margin-bottom: 0;
+        padding-block: var(--espacio-3);
+      }
+      .gastos__columnas {
+        --pantalla-columnas: minmax(0, 1fr) minmax(0, 2fr);
+      }
+      .gastos__columnas--sin-flujo {
+        --pantalla-columnas: minmax(0, 1fr);
+      }
+      .gastos__flujo .gastos__graficos {
+        grid-template-columns: minmax(0, 1fr);
+      }
+      .gastos__libro-cabecera {
+        margin-bottom: 0;
+      }
+      .gastos__paginas {
+        flex: none;
+        margin-top: 0;
+      }
+    }
+    /* Escritorio ancho: los filtros caben en una sola fila. */
+    @media (min-width: 1280px) and (min-height: 600px) {
+      .gastos__filtros {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 0.8fr)) repeat(2, minmax(0, 1fr)) auto auto;
+      }
+    }
+    /* Escritorio bajo: la descripción de la cabecera cede su alto a la lista. */
+    @media (min-width: 821px) and (min-height: 600px) and (max-height: 800px) {
+      .modulo-cabecera__texto > p:not(.ceja) {
+        display: none;
+      }
+    }
+    /* Escritorio estrecho: la descripción es contexto y cede su alto. */
+    @media (min-width: 821px) and (max-width: 1365px) and (min-height: 600px) {
+      .modulo-cabecera__texto > p:not(.ceja) {
+        display: none;
+      }
     }
   `,
 })
@@ -533,6 +610,12 @@ export class GastosComponent {
   protected readonly falloFlujo = signal<FalloApi | null>(null);
   protected readonly aviso = signal('');
 
+  /**
+   * Escritorio estrecho: el libro ocupa todo el ancho y los movimientos se
+   * abren en una ventana. Misma consulta que el CSS de la pantalla.
+   */
+  protected readonly estrecho = signal(false);
+  protected readonly movimientosAbiertos = signal(false);
   protected readonly altaAbierta = signal(false);
   protected readonly anulando = signal<Gasto | null>(null);
   protected readonly guardando = signal(false);
@@ -580,6 +663,14 @@ export class GastosComponent {
   );
 
   constructor() {
+    const vista = inject(DOCUMENT).defaultView;
+    if (typeof vista?.matchMedia === 'function') {
+      const consulta = vista.matchMedia('(min-width: 821px) and (max-width: 1365px) and (min-height: 600px)');
+      this.estrecho.set(consulta.matches);
+      const alCambiar = (evento: MediaQueryListEvent) => this.estrecho.set(evento.matches);
+      consulta.addEventListener('change', alCambiar);
+      inject(DestroyRef).onDestroy(() => consulta.removeEventListener('change', alCambiar));
+    }
     this.fijarPeriodoPorDefecto();
     this.catalogo.sedes().subscribe({ next: (sedes) => this.sedes.set(sedes), error: () => this.sedes.set([]) });
     this.catalogo.clinica().subscribe({

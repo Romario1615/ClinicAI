@@ -104,6 +104,33 @@ describe('GastosComponent', () => {
     expect(texto()).toContain('Anular');
   });
 
+  it('en escritorio estrecho deja el ancho al libro y abre los movimientos en una ventana', () => {
+    // jsdom no implementa matchMedia: se simula una pantalla de 1024 px.
+    const original = window.matchMedia;
+    window.matchMedia = ((consulta: string) => ({
+      matches: true, media: consulta, addEventListener: () => undefined, removeEventListener: () => undefined,
+    })) as unknown as typeof window.matchMedia;
+    try {
+      iniciar(['gasto.leer', 'gasto.registrar', 'pago.leer']);
+      http.expectOne((peticion) => peticion.url === `${BASE}/gastos`).flush({ elementos: [GASTO], total: 1, importe_total: '84.30' });
+      http.expectOne((peticion) => peticion.url === `${BASE}/gastos/flujo`).flush(FLUJO);
+      fixture.detectChanges();
+
+      const raiz = fixture.nativeElement as HTMLElement;
+      expect(raiz.querySelector('.gastos__flujo')).toBeNull();
+      expect(texto()).not.toContain('Gastos por categoría');
+      Array.from(raiz.querySelectorAll('button')).find((b) => b.textContent?.includes('Movimientos del periodo'))!.click();
+      fixture.detectChanges();
+
+      const ventana = raiz.querySelector('app-ventana-flotante') as HTMLElement;
+      expect(ventana.textContent).toContain('Gastos por categoría');
+      expect(ventana.textContent).toContain('Resultado de caja');
+      expect(raiz.querySelectorAll('#titulo-categorias').length).toBe(1);
+    } finally {
+      window.matchMedia = original;
+    }
+  });
+
   it('sin pago.leer no calcula el flujo y sin gasto.registrar no ofrece escribir', () => {
     iniciar(['gasto.leer']);
 

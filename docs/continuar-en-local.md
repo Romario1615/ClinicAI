@@ -127,6 +127,7 @@ Alto previo a 1366×768 entre paréntesis.
 | Usuarios (6514 px) | Pestañas propias con filtros fijos y tabla desplazable. |
 | Plataforma (33 954 px) | Organizaciones (y sus sedes) y accesos del personal en dos columnas. |
 | Medicamentos (3418 px) | Listado con tabla desplazable; detalle con avisos y tomas en dos columnas. |
+| Gastos y caja | Indicadores fijos; movimientos y libro en dos columnas. Por debajo de 1366 px de ancho el libro ocupa todo el ancho y los movimientos se abren en una ventana flotante. |
 
 Correcciones de paso en esas pantallas: la ventana no se cierra durante el
 guardado en Equipo, Catálogo, Automatizaciones y Accesos del documento
@@ -134,20 +135,21 @@ guardado en Equipo, Catálogo, Automatizaciones y Accesos del documento
 en Conversaciones; el título de Conocimiento ilegible; la barra de secciones
 de Configuración que desbordaba la página a 768 px.
 
+Delegaciones, Seguridad, Promociones y Analítica caben sin cambios.
+
 Siguen pendientes:
 
-* Gastos y caja: ningún rol del acceso local la alcanza; falta medirla.
-  Delegaciones, Seguridad y Promociones ya caben sin cambios.
 * Plataforma en móvil sigue siendo muy larga: las listas de clínicas y
   cuentas no se paginan.
-* La pantalla de Analítica que está en curso en `main`.
 * Las páginas públicas (solo adaptación).
 * Automatizar estas mediciones en
   `pruebas-e2e/escenarios/15-pantallas-trabajo.spec.ts`.
-* Los estilos del panel superan el aviso de presupuesto por componente
-  (16,9 kB minificados frente a 14 kB; el error está en 24 kB). Ya pasaban de
-  18 kB sin minificar antes de este rediseño; reducirlos pide separar las
-  vistas en componentes propios.
+
+Gastos y caja no se veía con ningún rol porque la base local no tenía los
+permisos `gasto.leer` y `gasto.registrar`. Si `python -m app.semillas.cargar
+--verificar` informa de permisos ausentes, sincronice con
+`python -m app.semillas.cargar --solo-catalogos` (idempotente, no toca los
+datos sintéticos).
 
 ---
 
