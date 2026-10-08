@@ -76,7 +76,9 @@ def modulos_por_omision(especialidad: Especialidad) -> tuple[str, ...]:
     codigo = (especialidad.codigo or "").upper()
     if codigo.startswith("ODO") or "odont" in _sin_tildes(especialidad.nombre):
         return DENTALES
-    if any(p in _sin_tildes(especialidad.nombre) for p in ("estetic", "dermat", "plastica")):
+    if codigo.startswith(("EST", "DERM", "PLA")) or any(
+        p in _sin_tildes(especialidad.nombre) for p in ("estetic", "dermat", "plastica")
+    ):
         return ("faciograma", "imagenes")
     return GENERALES
 
@@ -117,7 +119,7 @@ async def modulos_de_clinica(
     for especialidad in await _especialidades_de_clinica(sesion, clinica_id):
         valor = guardado.get(str(especialidad.id))
         modulos = (
-            tuple(m for m in valor if isinstance(m, str) and m in MODULOS)
+            tuple(m for m in valor if isinstance(m, str) and m in modulos_por_omision(especialidad))
             if isinstance(valor, list)
             else modulos_por_omision(especialidad)
         )
@@ -153,7 +155,13 @@ async def especialidades_permitidas(
         else:
             permitida = ambito.cubre_especialidad(especialidad.id)
         if permitida and (es_propia or especialidad.activa):
-            resultado.append((especialidad, modulos, es_propia))
+            # Consultar otra área no acredita para usar sus herramientas.
+            habilitados = (
+                tuple(m for m in modulos if m == "imagenes")
+                if principal.profesional_id is not None and not es_propia
+                else modulos
+            )
+            resultado.append((especialidad, habilitados, es_propia))
     resultado.sort(key=lambda fila: (not fila[2], fila[0].nombre))
     return resultado
 
@@ -236,6 +244,7 @@ class ModulosEspecialidadSalida(BaseModel):
     nombre: str
     activa: bool
     modulos: list[str]
+    disponibles: list[str] = Field(default_factory=list)
 
 
 class ConfiguracionModulosSalida(BaseModel):
@@ -278,7 +287,11 @@ async def ver_modulos(principal: PuedeGestionar, sesion: Sesion) -> Configuracio
         catalogo=_catalogo(),
         especialidades=[
             ModulosEspecialidadSalida(
-                id=e.id, nombre=e.nombre, activa=e.activa, modulos=list(modulos)
+                id=e.id,
+                nombre=e.nombre,
+                activa=e.activa,
+                modulos=list(modulos),
+                disponibles=list(modulos_por_omision(e)),
             )
             for e, modulos in await modulos_de_clinica(sesion, principal.clinica_id)
         ],
@@ -304,6 +317,10 @@ async def cambiar_modulos(
     if especialidad is None or especialidad.clinica_id != clinica_id:
         raise RecursoNoEncontrado("La especialidad indicada no existe.")
     # Orden del catálogo y sin repetidos, para que dos guardados iguales lo sean.
+    if any(m not in modulos_por_omision(especialidad) for m in cambio.modulos):
+        raise DatosInvalidos(
+            "Las herramientas deben corresponder a la especialidad: odontograma y periodoncia para odontología; faciograma para estética."
+        )
     modulos = [m for m in MODULOS if m in cambio.modulos]
 
     actual = await _vigente(sesion, clinica_id)
@@ -344,7 +361,11 @@ async def cambiar_modulos(
     )
     await sesion.commit()
     return ModulosEspecialidadSalida(
-        id=especialidad.id, nombre=especialidad.nombre, activa=especialidad.activa, modulos=modulos
+        id=especialidad.id,
+        nombre=especialidad.nombre,
+        activa=especialidad.activa,
+        modulos=modulos,
+        disponibles=list(modulos_por_omision(especialidad)),
     )
 
 

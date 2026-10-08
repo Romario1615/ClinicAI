@@ -22,8 +22,9 @@ from app.modulos.historia.modelos import NotaEvolucion
 from app.modulos.organizacion.modelos import Clinica, ConfiguracionClinica, Especialidad, Sede
 from app.modulos.pacientes.modelos import Paciente, RelacionAsistencial
 from app.modulos.profesionales.modelos import Profesional
-from app.modulos.usuarios.modelos import Usuario
+from app.modulos.usuarios.modelos import AmbitoAsignacion, Usuario, UsuarioRol
 from app.nucleo.auditoria import AccionAuditada
+from app.nucleo.autorizacion import TipoAmbito
 from pruebas.api.conftest import cabecera_bearer, conceder_permisos
 
 pytestmark = [pytest.mark.api, pytest.mark.seguridad, pytest.mark.asyncio]
@@ -210,7 +211,7 @@ async def test_administracion_configura_los_modulos_de_cada_especialidad(
     sin_motivo = await cliente.put(ruta, headers=cabeceras, json={"modulos": []})
     assert sin_motivo.status_code == 422
 
-    for modulos in (["imagenes", "planes", "imagenes"], []):
+    for modulos in (["imagenes", "faciograma", "imagenes"], []):
         cambio = await cliente.put(
             ruta, headers=cabeceras, json={"modulos": modulos, "motivo": "Ajuste sintetico"}
         )
@@ -249,3 +250,106 @@ async def test_administracion_configura_los_modulos_de_cada_especialidad(
         json={"modulos": [], "motivo": "Intento cruzado"},
     )
     assert cruzada.status_code == 404
+
+
+async def test_configuracion_antigua_no_habilita_faciograma_al_odontologo(
+    cliente,
+    api,
+    sesion,
+    usuario,
+    clinica,
+    sede,
+    especialidad,
+    profesional,
+    paciente,
+):
+    sesion.add(
+        ConfiguracionClinica(
+            clinica_id=clinica.id,
+            clave="modulos_historia",
+            valor={str(especialidad.id): ["odontograma", "periodoncia", "faciograma"]},
+            vigente=True,
+            version=1,
+        )
+    )
+    sesion.add(
+        RelacionAsistencial(paciente_id=paciente.id, profesional_id=profesional.id, origen="CITA")
+    )
+    await sesion.flush()
+    await conceder_permisos(
+        sesion,
+        usuario,
+        clinica,
+        "historia_clinica.leer",
+        "historia_clinica.escribir",
+        "especialidad.gestionar",
+        sedes=(sede.id,),
+    )
+    headers = await cabecera_bearer(cliente, usuario, clinica)
+    areas = await cliente.get(f"{api}/historia/especialidades", headers=headers)
+    assert areas.status_code == 200
+    assert areas.json()[0]["modulos"] == ["odontograma", "periodoncia"]
+    assert (
+        await cliente.get(f"{api}/historia/faciograma/zonas", headers=headers)
+    ).status_code == 403
+    cambio = await cliente.put(
+        f"{api}/catalogo/especialidades/{especialidad.id}/modulos-historia",
+        headers=headers,
+        json={"modulos": ["faciograma"], "motivo": "Intento de herramienta ajena"},
+    )
+    assert cambio.status_code == 422
+    facial = await cliente.post(
+        f"{api}/historia/pacientes/{paciente.id}/registros",
+        headers=headers,
+        json={
+            "clave_idempotencia": str(uuid.uuid4()),
+            "tipo": "FACIOGRAMA",
+            "titulo": "Evaluación sintética",
+            "especialidad_id": str(especialidad.id),
+            "sede_id": str(sede.id),
+            "motivo": "Registro inicial",
+            "zonas": [{"zona": "menton", "observacion": "Observación sintética"}],
+        },
+    )
+    assert facial.status_code == 404
+
+
+async def test_conceder_consulta_de_otra_area_no_acredita_sus_herramientas(
+    cliente,
+    api,
+    sesion,
+    usuario,
+    clinica,
+    sede,
+    especialidad,
+    profesional,
+    sufijo,
+):
+    derm, _ = await _dermatologia(sesion, clinica, sufijo)
+    await conceder_permisos(
+        sesion,
+        usuario,
+        clinica,
+        "historia_clinica.leer",
+        "odontograma.leer",
+        sedes=(sede.id,),
+    )
+    asignacion = await sesion.scalar(
+        sa.select(UsuarioRol).where(UsuarioRol.usuario_id == usuario.id)
+    )
+    assert asignacion is not None
+    sesion.add(
+        AmbitoAsignacion(
+            usuario_rol_id=asignacion.id, tipo=TipoAmbito.ESPECIALIDAD.value, entidad_id=derm.id
+        )
+    )
+    await sesion.flush()
+    headers = await cabecera_bearer(cliente, usuario, clinica)
+    areas = await cliente.get(f"{api}/historia/especialidades", headers=headers)
+    assert areas.status_code == 200
+    por_id = {e["id"]: e for e in areas.json()}
+    assert "odontograma" in por_id[str(especialidad.id)]["modulos"]
+    assert por_id[str(derm.id)]["modulos"] == ["imagenes"]
+    assert (
+        await cliente.get(f"{api}/historia/faciograma/zonas", headers=headers)
+    ).status_code == 403

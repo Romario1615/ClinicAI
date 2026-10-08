@@ -24,6 +24,7 @@ from app.modulos.historia.modelos import (
     RespuestaAnamnesis,
 )
 from app.modulos.historia.rutas import _exigir_acceso_anamnesis, _exigir_profesional
+from app.modulos.profesionales.ambito_clinico import autores_en_ambito
 from app.nucleo.auditoria import AccionAuditada, construir_entrada
 from app.nucleo.autorizacion import NivelSensibilidad, Principal
 from app.nucleo.dependencias import Auditor, RelojActual, Sesion, exige_permiso
@@ -480,6 +481,7 @@ async def listar_respuestas(
         .where(
             RespuestaAnamnesis.clinica_id == principal.clinica_id,
             RespuestaAnamnesis.paciente_id == paciente_id,
+            RespuestaAnamnesis.profesional_id.in_(autores_en_ambito(principal)),
         )
         .order_by(RespuestaAnamnesis.registrada_en.desc())
     )

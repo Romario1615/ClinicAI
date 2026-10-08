@@ -7,6 +7,45 @@
 
 ---
 
+## Acceso entre especialistas
+
+El rol concede operaciones; el perfil profesional determina la especialidad.
+En una sesión clínica, el comodín de especialidades se reduce a la propia y a
+los identificadores concedidos expresamente. Las cuentas administrativas sin
+capacidades clínicas conservan su ámbito operativo. Un perfil inactivo, anulado
+o vinculado a otra clínica pierde las capacidades clínicas y de adherencia.
+Perder el perfil nunca convierte al especialista en asistencia con alcance general.
+
+La lectura de notas, imágenes clínicas, planes, odontogramas, periodoncia,
+anamnesis capturada y Formulario 033 filtra autores en SQL dentro de la clínica
+y de las especialidades autorizadas. El resumen clínico conserva ese filtro;
+medicación/adherencia mantienen la reserva N3 y las fechas de citas respetan
+el ámbito de agenda. Paciente, relación asistencial, permisos y módulos siguen
+siendo requisitos independientes. Los identificadores directos y referencias
+entre registros están sujetos a los mismos controles.
+
+| Operación clínica | Responsabilidad exigida |
+|---|---|
+| Corregir una nota o Formulario 033 | Autor de la versión vigente |
+| Anular una imagen clínica | Persona que la cargó |
+| Cambiar un plan o sus procedimientos | Profesional responsable del plan |
+| Editar/anular faciograma o documento | Profesional autor; conserva historial |
+| Confirmar, suspender o sustituir receta | Responsable o delegación vigente de su firma; la nueva versión mantiene al responsable |
+| Anexar hallazgos al odontograma compartido | Permiso, relación y área autorizada; nueva versión trazable |
+
+Las recetas confirmadas continúan disponibles entre especialidades para
+consultar medicación, respetando N3. Borradores e historial de otra área requieren
+ámbito explícito o delegación vigente. La delegación de firma no concede acceso
+a las notas del delegante; al revocarla se niega inmediatamente la siguiente
+escritura. `puede_gestionar` permite presentar acciones en la interfaz; el
+servidor vuelve a comprobar permiso, firma y vigencia en cada mutación.
+
+Una atención de un colega no puede usarse para firmar una nota, cargar una
+imagen clínica o crear un documento propio. Una vez que un perfil tiene
+registros clínicos, la edición de su especialidad responde 409: trasladar el
+perfil trasladaría también el acceso a la historia anterior. Su nombre,
+contactos, sedes y estado siguen siendo editables.
+
 ## Documentos y faciograma
 
 La ampliación del 2026-10-07 reutiliza permisos existentes; no concede lectura

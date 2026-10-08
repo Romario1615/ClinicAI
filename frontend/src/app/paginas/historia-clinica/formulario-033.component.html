@@ -42,7 +42,7 @@
               <button class="boton boton--plano boton--pequeno" type="button" (click)="verVersiones(formulario)">
                 {{ raizHistorial() === formulario.raiz_id ? 'Ocultar historial' : 'Ver historial' }}
               </button>
-              @if (puedeEditar()) { <button [id]="'formulario-033-corregir-' + formulario.raiz_id" class="boton boton--pequeno" type="button" (click)="corregir(formulario)">Crear corrección</button> }
+              @if (puedeCorregir(formulario)) { <button [id]="'formulario-033-corregir-' + formulario.raiz_id" class="boton boton--pequeno" type="button" (click)="corregir(formulario)">Crear corrección</button> }
             </div>
           </div>
           <p class="registro__motivo"><strong>Motivo de consulta:</strong> {{ formulario.datos.motivo_consulta }}</p>

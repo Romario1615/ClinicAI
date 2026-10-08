@@ -154,11 +154,11 @@ describe('RecetaEditorComponent', () => {
         expect(c.error()).toBe('Sin delegacion vigente.');
     });
 
-    it('prefija la receta vigente y la sustituye con motivo y firma', () => {
+    it.each(['prof-yo', 'prof-adjunto'])('prefija la receta vigente y conserva la firma de %s al sustituirla', (responsable: string) => {
         const receta: Receta = {
             id: 'rec-vigente',
             paciente_id: 'pac-1',
-            profesional_id: 'prof-yo',
+            profesional_id: responsable,
             estado: 'CONFIRMADA',
             confirmada_en: '2026-04-15T14:00:00Z',
             suspendida_en: null,
@@ -182,6 +182,8 @@ describe('RecetaEditorComponent', () => {
         c.motivoVersion = 'x';
         expect(c.hayCambios()).toBe(true);
         c.motivoVersion = '';
+        expect(c.firmante).toBe(responsable);
+        expect(fixture.nativeElement.querySelector('select[name="firmante"]')).toBeNull();
 
         c.crear();
         expect(c.error()).toContain('motivo');
@@ -190,7 +192,7 @@ describe('RecetaEditorComponent', () => {
         const request = http.expectOne(`${BASE}/historia/recetas/rec-vigente/versiones`);
         expect(request.request.method).toBe('POST');
         expect(request.request.body).toEqual({
-            profesional_id: 'prof-yo',
+            profesional_id: responsable,
             motivo: 'Cambio revisado en consulta',
             indicaciones_generales: 'Indicaciones actuales',
             medicamentos: [{

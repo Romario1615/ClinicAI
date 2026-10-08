@@ -27,11 +27,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.ia.resumen_clinico import RedactorResumenClinico
 from app.modulos.agenda.modelos import Cita
+from app.modulos.agenda.repositorio import RepositorioAgenda
 from app.modulos.historia.autorizacion import PuedeLeerHistoriaDiscreta
 from app.modulos.historia.modelos import NotaEvolucion, Receta, RecetaMedicamento, Toma
+from app.modulos.historia.repositorio import RepositorioHistoria
 from app.modulos.odontologia.modelos import PlanTratamiento, ProcedimientoPlan
 from app.modulos.pacientes.acceso_clinico import GuardiaClinica
 from app.modulos.pacientes.modelos import Alergia, Antecedente
+from app.modulos.profesionales.ambito_clinico import autores_en_ambito
 from app.nucleo.auditoria import AccionAuditada, construir_entrada
 from app.nucleo.autorizacion import NivelSensibilidad, Principal
 from app.nucleo.dependencias import (
@@ -148,32 +151,39 @@ async def construir(
         consulta_antecedentes = consulta_antecedentes.where(Antecedente.nivel_sensibilidad != "N3")
     antecedentes = (await sesion.execute(consulta_antecedentes)).scalars()
 
-    medicamentos = (
-        await sesion.execute(
-            select(RecetaMedicamento, Receta.confirmada_en)
-            .join(Receta, Receta.id == RecetaMedicamento.receta_id)
-            .where(Receta.paciente_id == paciente_id, Receta.estado == "CONFIRMADA")
-            .order_by(Receta.confirmada_en.desc())
-        )
-    ).all()
+    repo = RepositorioHistoria(sesion)
+    consulta_medicamentos = repo.consulta_receta_autorizada(
+        select(RecetaMedicamento, Receta.confirmada_en)
+        .join(Receta, Receta.id == RecetaMedicamento.receta_id)
+        .where(Receta.paciente_id == paciente_id, Receta.estado == "CONFIRMADA")
+        .order_by(Receta.confirmada_en.desc()),
+        principal=principal,
+        ahora=ahora,
+    )
+    medicamentos = (await sesion.execute(consulta_medicamentos)).all()
 
     dias = 14
     desde = ahora - timedelta(days=dias)
-    filas_tomas = (
-        await sesion.execute(
-            select(Toma.estado, func.count())
-            .where(
-                Toma.paciente_id == paciente_id,
-                Toma.programada_en >= desde,
-                Toma.programada_en <= ahora,
-            )
-            .group_by(Toma.estado)
+    consulta_tomas = repo.consulta_receta_autorizada(
+        select(Toma.estado, func.count())
+        .join(RecetaMedicamento, RecetaMedicamento.id == Toma.receta_medicamento_id)
+        .join(Receta, Receta.id == RecetaMedicamento.receta_id)
+        .where(
+            Toma.paciente_id == paciente_id,
+            Toma.programada_en >= desde,
+            Toma.programada_en <= ahora,
         )
-    ).all()
+        .group_by(Toma.estado),
+        principal=principal,
+        ahora=ahora,
+    )
+    filas_tomas = (await sesion.execute(consulta_tomas)).all()
     conteos = {str(estado): int(cantidad) for estado, cantidad in filas_tomas}
 
     consulta_notas = select(NotaEvolucion).where(
         NotaEvolucion.paciente_id == paciente_id,
+        NotaEvolucion.clinica_id == principal.clinica_id,
+        NotaEvolucion.profesional_id.in_(autores_en_ambito(principal)),
         NotaEvolucion.vigente.is_(True),
     )
     if not principal.tiene_permiso("historia_clinica.leer_sensible"):
@@ -194,6 +204,8 @@ async def construir(
         .outerjoin(ProcedimientoPlan, ProcedimientoPlan.plan_id == PlanTratamiento.id)
         .where(
             PlanTratamiento.paciente_id == paciente_id,
+            PlanTratamiento.clinica_id == principal.clinica_id,
+            PlanTratamiento.profesional_id.in_(autores_en_ambito(principal, "planes")),
             PlanTratamiento.estado.in_(["BORRADOR", "PROPUESTO", "ACEPTADO"]),
         )
         .group_by(PlanTratamiento.id)
@@ -202,16 +214,17 @@ async def construir(
         consulta_planes = consulta_planes.where(PlanTratamiento.nivel_sensibilidad != "N3")
     planes = (await sesion.execute(consulta_planes)).all()
 
+    citas = RepositorioAgenda(sesion).consulta_autorizada(principal)
     ultima = (
         await sesion.execute(
-            select(func.max(Cita.inicio)).where(
+            citas.with_only_columns(func.max(Cita.inicio)).where(
                 Cita.paciente_id == paciente_id, Cita.estado == "COMPLETED"
             )
         )
     ).scalar_one()
     proxima = (
         await sesion.execute(
-            select(func.min(Cita.inicio)).where(
+            citas.with_only_columns(func.min(Cita.inicio)).where(
                 Cita.paciente_id == paciente_id,
                 Cita.inicio >= ahora,
                 Cita.estado.in_(["PENDING", "HELD", "CONFIRMED", "RESCHEDULED"]),

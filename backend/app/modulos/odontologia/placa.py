@@ -36,6 +36,7 @@ from app.modulos.historia.especialidades import exige_modulo
 from app.modulos.odontologia.modelos import CARAS_OLEARY, RegistroPlaca
 from app.modulos.odontologia.vocabulario import es_pieza_valida
 from app.modulos.pacientes.acceso_clinico import GuardiaClinica
+from app.modulos.profesionales.ambito_clinico import autores_en_ambito
 from app.nucleo.auditoria import AccionAuditada, construir_entrada
 from app.nucleo.autorizacion import NivelSensibilidad, Principal
 from app.nucleo.dependencias import Auditor, RelojActual, Sesion
@@ -135,6 +136,7 @@ async def listar(
                 .where(
                     RegistroPlaca.paciente_id == paciente_id,
                     RegistroPlaca.clinica_id == principal.clinica_id,
+                    RegistroPlaca.profesional_id.in_(autores_en_ambito(principal, "periodoncia")),
                 )
                 .order_by(RegistroPlaca.creado_en.desc())
                 .limit(100)

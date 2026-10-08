@@ -471,6 +471,17 @@ describe('Formulario033Component', { timeout: 20_000 }, () => {
         fixture.detectChanges();
         expect(fixture.nativeElement.textContent).toContain('Formulario 033 corregido como versión 2.');
     });
+
+    it('conserva la consulta del formulario ajeno y oculta su corrección', () => {
+        const ajeno = salida({ profesional_id: 'colega-sintetico' });
+        abrir([ajeno]);
+        const botones = Array.from((fixture.nativeElement as HTMLElement).querySelectorAll('button')).map(b => b.textContent);
+        expect(botones.some(b => b?.includes('Crear corrección'))).toBe(false);
+        expect(botones.some(b => b?.includes('Imprimir / guardar PDF'))).toBe(true);
+        fixture.componentInstance['corregir'](ajeno);
+        expect(fixture.componentInstance['seleccionado']()).toBeNull();
+        http.expectNone(p => p.url.endsWith('/versiones'));
+    });
 });
 
 function salida(cambios: Partial<Formulario033Api> = {}): Formulario033Api {

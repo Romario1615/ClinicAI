@@ -181,16 +181,24 @@ function lineaVacia(): MedicamentoNuevo {
           <span class="campo__ayuda">N3 restringe esta receta a personal con permiso clínico sensible y queda auditada con ese nivel.</span>
         </label>
       }
-      <label class="campo"><span class="campo__etiqueta">Firma</span>
-        <select class="campo__control" name="firmante" [(ngModel)]="firmante">
+      <div class="campo">
+        @if (versionDe()) {
+          <span class="campo__etiqueta">Firma</span>
+          <span class="campo__control">{{ versionDe()?.profesional_id === propio() ? 'Su propia firma' : 'Firma delegada del responsable' }}</span>
+        } @else {
+        <label class="campo__etiqueta" for="firmante-receta">Firma</label>
+        <select id="firmante-receta" class="campo__control" name="firmante" [(ngModel)]="firmante">
           @for (opcion of firmantes(); track opcion.id) {
             <option [value]="opcion.id">{{ opcion.texto }}</option>
           }
         </select>
-        @if (firmantes().length > 1) {
+        }
+        @if (versionDe()) {
+          <span class="campo__ayuda">La nueva versión conserva al responsable de la receta. Actuar por delegación requiere que siga vigente.</span>
+        } @else if (firmantes().length > 1) {
           <span class="campo__ayuda">Firmar por otro profesional requiere una delegación vigente; queda auditado.</span>
         }
-      </label>
+      </div>
       @if (error()) { <p class="aviso-error" role="alert">{{ error() }}</p> }
     </form>
         <div class="acciones acciones--final" pie>
@@ -245,7 +253,7 @@ export class RecetaEditorComponent {
 
   constructor() {
     effect(() => {
-      this.firmante = this.propio() ?? '';
+      this.firmante = this.versionDe()?.profesional_id ?? this.propio() ?? '';
     });
     effect(() => {
       const receta = this.versionDe();
@@ -330,7 +338,7 @@ export class RecetaEditorComponent {
     this.error.set('');
     const datos = {
       paciente_id: this.pacienteId(),
-      profesional_id: this.firmante,
+      profesional_id: origen?.profesional_id ?? this.firmante,
       indicaciones_generales: this.indicaciones.trim() || null,
       nivel_sensibilidad: origen?.nivel_sensibilidad ?? this.nivelSensibilidad,
       medicamentos,

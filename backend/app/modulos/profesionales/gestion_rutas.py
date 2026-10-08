@@ -14,6 +14,7 @@ from app.modulos.profesionales.gestion_esquemas import (
     DatosPerfilProfesional,
     RespuestaPerfilProfesional,
 )
+from app.modulos.profesionales.historial import preservar_especialidad
 from app.modulos.profesionales.modelos import EstadoDisponibilidad, Profesional, ProfesionalSede
 from app.nucleo.auditoria import AccionAuditada, construir_entrada
 from app.nucleo.autorizacion import NivelSensibilidad, Principal
@@ -260,6 +261,7 @@ async def actualizar_perfil_profesional(
     if profesional is None or not principal.ambito.cubre_profesional(profesional_id):
         raise RecursoNoEncontrado("No se encontró el profesional dentro de su ámbito.")
     especialidad, sedes = await _validar_destino(datos, principal, sesion)
+    await preservar_especialidad(sesion, profesional, especialidad.id)
     profesional.especialidad_id = especialidad.id
     profesional.nombre = datos.nombre
     profesional.apellido = datos.apellido

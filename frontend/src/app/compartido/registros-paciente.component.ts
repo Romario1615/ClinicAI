@@ -99,6 +99,14 @@ export class RegistrosPacienteComponent {
     if (!this.facial() && this.sesion.tienePermiso('receta.leer')) this.pacientes.recetas(this.pacienteId()).subscribe({ next: recetas => this.recetas.set(recetas.filter(r => r.estado === 'CONFIRMADA')), error: error => this.error.set(error.message) });
   }
   protected propia(registro: RegistroPaciente): boolean { return registro.profesional_id === this.sesion.identidad()?.profesional_id; }
+  protected abrirPunto(codigo: string): void {
+    this.detalleZona.set(codigo);
+    if (!this.puedeEscribir() || this.ocupado() || this.cargando()) return;
+    const registro = this.seleccionado();
+    if (registro && (!this.propia(registro) || !registro.vigente || registro.anulado)) return;
+    this.editar(registro);
+    this.elegirZona(codigo);
+  }
   protected elegirZona(codigo: string): void {
     this.zonaElegida = codigo;
     const zona = this.zonas.find(z => z.zona === codigo);

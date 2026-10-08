@@ -17,6 +17,7 @@ from app.modulos.odontologia.vocabulario import (
 )
 from app.modulos.pacientes.acceso_clinico import GuardiaClinica
 from app.modulos.pacientes.modelos import Paciente
+from app.modulos.profesionales.ambito_clinico import autores_en_ambito
 from app.nucleo.autorizacion import Principal
 from app.nucleo.errores import ConflictoEstado, PermisoDenegado, RecursoNoEncontrado
 from app.nucleo.reloj import Reloj
@@ -43,6 +44,7 @@ class ServicioOdontograma:
         consulta = select(Odontograma).where(
             Odontograma.paciente_id == paciente_id,
             Odontograma.clinica_id == principal.clinica_id,
+            Odontograma.profesional_id.in_(autores_en_ambito(principal, "odontograma")),
         )
         if not principal.tiene_permiso("historia_clinica.leer_sensible"):
             consulta = consulta.where(Odontograma.nivel_sensibilidad != "N3")
@@ -63,6 +65,7 @@ class ServicioOdontograma:
             .where(
                 Odontograma.paciente_id == paciente_id,
                 Odontograma.clinica_id == principal.clinica_id,
+                Odontograma.profesional_id.in_(autores_en_ambito(principal, "odontograma")),
             )
             .order_by(Odontograma.version.desc())
         )
@@ -112,7 +115,9 @@ class ServicioOdontograma:
         nivel_sensibilidad: str = "N2",
     ) -> Odontograma:
         paciente = await self._bloquear_paciente(paciente_id, principal, "odontograma.escribir")
-        actual = await self._vigente(paciente_id, paciente.clinica_id, bloquear=True)
+        actual = await self._vigente(
+            paciente_id, paciente.clinica_id, bloquear=True, principal=principal
+        )
         if actual is None:
             raise RecursoNoEncontrado("El paciente todavía no tiene un odontograma.")
         if actual.version != version_base:
@@ -165,7 +170,9 @@ class ServicioOdontograma:
         valida con el mismo esquema que una edicion manual.
         """
         paciente = await self._bloquear_paciente(paciente_id, principal, "odontograma.escribir")
-        actual = await self._vigente(paciente_id, paciente.clinica_id, bloquear=True)
+        actual = await self._vigente(
+            paciente_id, paciente.clinica_id, bloquear=True, principal=principal
+        )
         if (
             actual is not None
             and actual.nivel_sensibilidad == "N3"
@@ -251,7 +258,12 @@ class ServicioOdontograma:
         return bloqueado
 
     async def _vigente(
-        self, paciente_id: uuid.UUID, clinica_id: uuid.UUID | None, *, bloquear: bool = False
+        self,
+        paciente_id: uuid.UUID,
+        clinica_id: uuid.UUID | None,
+        *,
+        bloquear: bool = False,
+        principal: Principal | None = None,
     ) -> Odontograma | None:
         consulta = select(Odontograma).where(
             Odontograma.paciente_id == paciente_id,
@@ -260,6 +272,18 @@ class ServicioOdontograma:
         )
         if bloquear:
             consulta = consulta.with_for_update()
+        if principal is not None:
+            permitida = consulta.where(
+                Odontograma.profesional_id.in_(autores_en_ambito(principal, "odontograma"))
+            )
+            actual = (await self._sesion.execute(permitida)).scalar_one_or_none()
+            if actual is not None:
+                return actual
+            # Un odontograma ajeno no es ausencia: no se puede crear encima
+            # de él ni provocar un conflicto del índice único del paciente.
+            if await self._sesion.scalar(consulta.with_only_columns(Odontograma.id)) is not None:
+                raise RecursoNoEncontrado("El odontograma solicitado no existe.")
+            return None
         return (await self._sesion.execute(consulta)).scalar_one_or_none()
 
     @staticmethod

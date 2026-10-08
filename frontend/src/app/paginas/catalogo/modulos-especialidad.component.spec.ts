@@ -34,8 +34,8 @@ describe('ModulosEspecialidadComponent', () => {
         http.expectOne(`${RUTA}/modulos-historia`).flush({
             catalogo: CATALOGO,
             especialidades: [
-                { id: 'odo', nombre: 'Odontología', activa: true, modulos: ['odontograma', 'imagenes'] },
-                { id: 'derm', nombre: 'Dermatología', activa: false, modulos: ['imagenes'] },
+                { id: 'odo', nombre: 'Odontología', activa: true, modulos: ['odontograma', 'imagenes'], disponibles: ['odontograma', 'imagenes'] },
+                { id: 'derm', nombre: 'Dermatología', activa: false, modulos: ['imagenes'], disponibles: ['imagenes'] },
             ],
         });
         fixture.detectChanges();
@@ -54,6 +54,7 @@ describe('ModulosEspecialidadComponent', () => {
         c.abrir(derm);
         fixture.detectChanges();
         c.alternar('odontograma');
+        expect(c.elegidos().has('odontograma')).toBe(false);
         c.alternar('imagenes');
         c.alternar('imagenes');
 
@@ -61,12 +62,12 @@ describe('ModulosEspecialidadComponent', () => {
         c.guardar(derm);
         expect(c.errorCambio()).toContain('motivo');
 
-        c.motivo = 'Empieza a registrar piezas';
+        c.motivo = 'Ajuste de imágenes clínicas';
         c.guardar(derm);
         const peticion = http.expectOne({ method: 'PUT', url: `${RUTA}/derm/modulos-historia` });
-        expect(peticion.request.body).toEqual({ modulos: ['odontograma', 'imagenes'], motivo: 'Empieza a registrar piezas' });
-        peticion.flush({ id: 'derm', nombre: 'Dermatología', activa: false, modulos: ['odontograma', 'imagenes'] });
-        expect(c.especialidades()[1].modulos).toEqual(['odontograma', 'imagenes']);
+        expect(peticion.request.body).toEqual({ modulos: ['imagenes'], motivo: 'Ajuste de imágenes clínicas' });
+        peticion.flush({ id: 'derm', nombre: 'Dermatología', activa: false, modulos: ['imagenes'], disponibles: ['imagenes'] });
+        expect(c.especialidades()[1].modulos).toEqual(['imagenes']);
         expect(c.editando()).toBeNull();
         expect(c.aviso()).toContain('Dermatología');
     });

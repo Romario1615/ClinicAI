@@ -29,13 +29,14 @@ import uuid
 from dataclasses import dataclass
 from datetime import date
 
-from sqlalchemy import func, literal, select
+from sqlalchemy import ColumnElement, and_, func, literal, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.modulos.agenda.modelos import Cita
+from app.modulos.agenda.repositorio import RepositorioAgenda
 from app.modulos.imagenes.modelos import ImagenPaciente, TipoImagen
 from app.modulos.odontologia.vocabulario import es_pieza_valida
 from app.modulos.pacientes.acceso_clinico import GuardiaClinica
+from app.modulos.profesionales.ambito_clinico import autores_en_ambito
 from app.nucleo.almacen import AlmacenObjetos, ErrorAlmacen
 from app.nucleo.archivos import sanear_imagen
 from app.nucleo.auditoria import AccionAuditada, EntradaAuditoria, construir_entrada
@@ -124,18 +125,23 @@ class ServicioImagenes:
         else:
             nivel = NivelSensibilidad.ADMINISTRATIVO
 
+        responsable = principal.profesional_id
         if datos.cita_id is not None:
-            cita = (
-                await self._sesion.execute(
-                    select(Cita.id).where(
-                        Cita.id == datos.cita_id,
-                        Cita.paciente_id == datos.paciente_id,
-                        Cita.clinica_id == principal.clinica_id,
-                    )
+            cita = await RepositorioAgenda(self._sesion).obtener_cita(
+                datos.cita_id, principal=principal
+            )
+            if (
+                cita is None
+                or cita.paciente_id != datos.paciente_id
+                or (
+                    datos.tipo.es_clinica
+                    and principal.profesional_id is not None
+                    and cita.profesional_id != principal.profesional_id
                 )
-            ).scalar_one_or_none()
-            if cita is None:
+            ):
                 raise RecursoNoEncontrado("La cita solicitada no existe para este paciente.")
+            if datos.tipo.es_clinica:
+                responsable = cita.profesional_id
 
         piezas = tuple(sorted(set(datos.piezas)))
         invalidas = [pieza for pieza in piezas if not es_pieza_valida(pieza)]
@@ -165,7 +171,7 @@ class ServicioImagenes:
             descripcion=(datos.descripcion or "").strip() or None,
             cita_id=datos.cita_id,
             procedimiento_id=datos.procedimiento_id,
-            profesional_id=principal.profesional_id,
+            profesional_id=responsable,
             tipo_mime=saneada.tipo_mime,
             tamano_bytes=len(saneada.datos),
             sha256=saneada.sha256,
@@ -223,6 +229,7 @@ class ServicioImagenes:
         consulta = select(ImagenPaciente).where(
             ImagenPaciente.paciente_id == paciente_id,
             ImagenPaciente.clinica_id == principal.clinica_id,
+            self._autores(principal),
             ImagenPaciente.tipo != TipoImagen.PERFIL.value,
             ImagenPaciente.anulado_en.is_(None),
         )
@@ -293,6 +300,7 @@ class ServicioImagenes:
                 ProcedimientoPlan.id == procedimiento_id,
                 PlanTratamiento.paciente_id == paciente_id,
                 PlanTratamiento.clinica_id == principal.clinica_id,
+                PlanTratamiento.profesional_id.in_(autores_en_ambito(principal)),
             )
         )
         if not principal.tiene_permiso("historia_clinica.leer_sensible"):
@@ -305,6 +313,10 @@ class ServicioImagenes:
         consulta = select(ImagenPaciente).where(
             ImagenPaciente.id == imagen_id,
             ImagenPaciente.clinica_id == principal.clinica_id,
+            or_(
+                ImagenPaciente.tipo == TipoImagen.PERFIL.value,
+                self._autores(principal),
+            ),
         )
         if not principal.tiene_permiso("historia_clinica.leer_sensible"):
             consulta = consulta.where(ImagenPaciente.nivel_sensibilidad != "N3")
@@ -312,6 +324,21 @@ class ServicioImagenes:
         if imagen is None:
             raise RecursoNoEncontrado("La imagen solicitada no existe.")
         return imagen
+
+    @staticmethod
+    def _autores(principal: Principal) -> ColumnElement[bool]:
+        """Las cargas sin responsable no abren registros de otras áreas.
+
+        Se conservan las cargas propias de asistencia y su revisión por personal
+        clínico con ámbito completo. Una carga ligada a cita tiene su responsable.
+        """
+        sin_responsable = and_(
+            ImagenPaciente.profesional_id.is_(None),
+            ImagenPaciente.creado_por == principal.actor_id,
+        )
+        if principal.profesional_id is None and principal.ambito.todas_las_especialidades:
+            sin_responsable = ImagenPaciente.profesional_id.is_(None)
+        return or_(ImagenPaciente.profesional_id.in_(autores_en_ambito(principal)), sin_responsable)
 
     async def descargar(
         self, imagen_id: uuid.UUID, *, principal: Principal
@@ -360,6 +387,8 @@ class ServicioImagenes:
             raise DatosInvalidos("Indique el motivo de la anulacion.")
         imagen = await self._obtener(imagen_id, principal)
         await self._alcance(principal, imagen.paciente_id, TipoImagen(imagen.tipo), escribir=True)
+        if TipoImagen(imagen.tipo).es_clinica and imagen.creado_por != principal.actor_id:
+            raise PermisoDenegado("Solo quien cargó la imagen clínica puede anularla.")
         if imagen.esta_anulado:
             raise RecursoNoEncontrado("La imagen solicitada no existe.")
 

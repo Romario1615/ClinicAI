@@ -5,7 +5,7 @@
 @if (aviso()) { <p role="status" class="aviso">{{ aviso() }}</p> }
 @if (cargando()) { <p role="status">Cargando registros…</p> }
 <div class="contenido" [class.contenido--facial]="facial()">
-  @if (facial()) { <app-mapa-facial [puntos]="puntos()" [zonas]="seleccionado()?.contenido?.zonas ?? []" [seleccion]="detalleZona()" (elegir)="detalleZona.set($event)" /> }
+  @if (facial()) { <div><app-mapa-facial [puntos]="puntos()" [zonas]="seleccionado()?.contenido?.zonas ?? []" [seleccion]="detalleZona()" (elegir)="abrirPunto($event)" /><p class="campo__ayuda">{{ puedeEscribir() && (!seleccionado() || (propia(seleccionado()!) && seleccionado()!.vigente && !seleccionado()!.anulado)) ? 'Pulse una zona para registrar o editar su evaluación.' : 'Pulse una zona para consultar su detalle.' }}</p></div> }
   <div class="registros">
     @if (!cargando() && !listado().length && !error()) { <div class="vacio"><h4>{{ facial() ? 'Empiece el seguimiento facial' : 'Todavía no hay documentos' }}</h4><p>{{ facial() ? 'Seleccione las zonas del rostro y registre la evaluación del profesional.' : 'Prepare un presupuesto o cotización, o genere el PDF de una receta confirmada.' }}</p></div> }
     @for (registro of listado(); track registro.id) {
@@ -48,7 +48,7 @@
               <label class="campo">Estado<select class="campo__control" name="estadoZona" aria-label="Estado de la zona" [(ngModel)]="zonaEstado"><option value="OBSERVACION">Observación</option><option value="PLANIFICADO">Planificado</option><option value="REALIZADO">Realizado</option></select></label>
               <label class="campo">Observación de la zona<textarea class="campo__control" name="observacionZona" [(ngModel)]="zonaObservacion" maxlength="1500"></textarea></label>
               <label class="campo">Procedimiento registrado por el especialista<input class="campo__control" name="procedimiento" [(ngModel)]="zonaProcedimiento" maxlength="500" /></label>
-              <button class="boton" type="button" (click)="registrarZona()" [disabled]="!zonaObservacion.trim()">Agregar al registro</button>
+              <button class="boton" type="button" (click)="registrarZona()" [disabled]="!zonaObservacion.trim()">Actualizar zona</button>
             }
             <ul class="zonas">@for (z of zonas; track z.zona) { <li><button class="boton boton--plano" type="button" (click)="elegirZona(z.zona)">{{ nombreZona(z.zona) }} · {{ z.estado }}</button><span>{{ z.observacion }}</span><button class="boton boton--pequeno" type="button" (click)="quitarZona(z.zona)" [attr.aria-label]="'Quitar ' + nombreZona(z.zona)">Quitar zona</button></li> }</ul>
           </section>

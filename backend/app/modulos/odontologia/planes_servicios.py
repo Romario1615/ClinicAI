@@ -32,6 +32,7 @@ from app.modulos.organizacion.modelos import Clinica, Servicio
 from app.modulos.outbox.modelos import CanalOutbox, TipoMensajeOutbox
 from app.modulos.pacientes.acceso_clinico import GuardiaClinica
 from app.modulos.pacientes.modelos import Paciente
+from app.modulos.profesionales.ambito_clinico import autores_en_ambito
 from app.nucleo.autorizacion import Principal
 from app.nucleo.errores import (
     ConflictoEstado,
@@ -63,6 +64,7 @@ class ServicioPlanesTratamiento:
         consulta_planes = select(PlanTratamiento).where(
             PlanTratamiento.paciente_id == paciente_id,
             PlanTratamiento.clinica_id == principal.clinica_id,
+            PlanTratamiento.profesional_id.in_(autores_en_ambito(principal, "planes")),
         )
         if not principal.tiene_permiso("historia_clinica.leer_sensible"):
             consulta_planes = consulta_planes.where(PlanTratamiento.nivel_sensibilidad != "N3")
@@ -499,6 +501,7 @@ class ServicioPlanesTratamiento:
                 .where(
                     ProcedimientoPlan.id == procedimiento_id,
                     PlanTratamiento.clinica_id == principal.clinica_id,
+                    PlanTratamiento.profesional_id.in_(autores_en_ambito(principal, "planes")),
                 )
                 .with_for_update(of=ProcedimientoPlan)
             )
@@ -522,6 +525,7 @@ class ServicioPlanesTratamiento:
         consulta = select(PlanTratamiento).where(
             PlanTratamiento.id == plan_id,
             PlanTratamiento.clinica_id == principal.clinica_id,
+            PlanTratamiento.profesional_id.in_(autores_en_ambito(principal, "planes")),
         )
         if bloquear:
             consulta = consulta.with_for_update()

@@ -188,7 +188,14 @@ class ServicioRegistros:
             cita = await RepositorioAgenda(self.sesion).obtener_cita(
                 datos.cita_id, principal=principal
             )
-            if cita is None or cita.paciente_id != paciente.id:
+            if (
+                cita is None
+                or cita.paciente_id != paciente.id
+                or (
+                    principal.profesional_id is not None
+                    and cita.profesional_id != principal.profesional_id
+                )
+            ):
                 raise RecursoNoEncontrado("La cita no pertenece al paciente o a su ámbito.")
             profesional = await self.sesion.get(Profesional, cita.profesional_id)
             if profesional is None or profesional.especialidad_id != datos.especialidad_id:

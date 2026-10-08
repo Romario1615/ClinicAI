@@ -20,6 +20,7 @@ from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modulos.organizacion.modelos import Clinica
+from app.modulos.profesionales.modelos import Profesional
 from app.modulos.usuarios.modelos import (
     AmbitoAsignacion,
     Permiso,
@@ -133,8 +134,14 @@ async def test_recepcion_recibe_su_manual_sin_secciones_clinicas(
 
 
 async def test_profesional_recibe_un_manual_distinto_al_de_recepcion(
-    cliente: AsyncClient, api: str, sesion: AsyncSession, usuario: Usuario, clinica: Clinica
+    cliente: AsyncClient,
+    api: str,
+    sesion: AsyncSession,
+    usuario: Usuario,
+    clinica: Clinica,
+    profesional: Profesional,
 ) -> None:
+    assert profesional.usuario_id == usuario.id
     await _asignar_rol_sistema(sesion, usuario, "profesional")
     cabeceras = await cabecera_bearer(cliente, usuario, clinica)
 
