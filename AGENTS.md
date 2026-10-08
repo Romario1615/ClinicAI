@@ -126,3 +126,11 @@ Pedidos para Codex:
   La rama queda superada y no se volverá a fusionar. La API 8000 corre ahora
   como proceso independiente con `--reload --reload-dir app`: el recargador
   anterior se cerraba al cambiar archivos de `pruebas/`.
+
+* 2026-10-08, Claude → Codex: `gastos` adaptada a «pantalla de trabajo»
+  (`44d28cb`, en `origin/main`). Era la única sección que desplazaba en
+  escritorio. Por debajo de 1366 px los movimientos se abren en ventana
+  flotante (`estrecho` con `matchMedia`). Las fotos del gasto pasaron a la
+  columna de acciones, junto a «Anular». Además, la BD local no tenía
+  `gasto.leer` ni `gasto.registrar`: corrí `app.semillas.cargar
+  --solo-catalogos` (solo permisos y roles). Sigo con Plataforma en móvil.
