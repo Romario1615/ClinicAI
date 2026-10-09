@@ -137,7 +137,28 @@ describe('PanelComponent · tablero por rol', { timeout: 15_000 }, () => {
     );
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const grupos = (fixture.componentInstance as any).tablero().map((g: { titulo: string }) => g.titulo);
-    expect(grupos).toEqual(['Pendiente de atender', 'Gestión de la clínica']);
+    expect(grupos).toEqual(['Requiere atención', 'Pendiente de atender', 'Gestión de la clínica']);
+  });
+
+  it('pone primero adherencia, pagos pendientes y verificación con acceso directo; atenúa ceros', () => {
+    const fixture = montar(indicadores({
+      agenda: { citas_hoy: 4, por_confirmar_hoy: 0, en_sala: 0, en_atencion: 0, atendidas_hoy: 4, inasistencias_hoy: 0, citas_proximos_7_dias: 4 },
+      adherencia: { alertas_abiertas: 3 },
+      clinico: { recetas_por_confirmar: 0, planes_propuestos: 0, planes_en_curso: 0 },
+      pagos: { pendientes: 2, por_validar: 0, confirmado_30_dias: '0' },
+      pacientes: { total: 12, nuevos_30_dias: 2, sin_verificar: 1, sin_whatsapp: 0 },
+    }), ['dashboard.leer', 'paciente.leer']);
+    const raiz = fixture.nativeElement as HTMLElement;
+    const panel = raiz.querySelector('#panel-panel-resumen')!;
+    const prioridad = panel.querySelector('.bloque');
+    expect(prioridad?.querySelector('h2')?.textContent).toContain('Requiere atención');
+    expect(prioridad?.textContent).toContain('Alertas de adherencia');
+    expect(prioridad?.textContent).toContain('Pagos pendientes');
+    expect(prioridad?.textContent).toContain('Sin verificar');
+    expect(prioridad?.querySelector('a[href="/medicamentos"]')).not.toBeNull();
+    expect(prioridad?.querySelector('a[href="/pagos"]')).not.toBeNull();
+    expect(prioridad?.querySelector('a[href="/pacientes"]')).not.toBeNull();
+    expect(panel.querySelector('.indicador--cero')).not.toBeNull();
   });
 
   it('reparte el panel en pestañas según los permisos y muestra una vista a la vez', () => {

@@ -120,6 +120,7 @@ describe('PacientesComponent', () => {
         responderCargaInicial(pagina([paciente('1', 'NO_VERIFICADO')]));
 
         expect(texto()).toContain('Apellido1, Nombre1');
+        expect(fixture.nativeElement.querySelector('.paciente-ficha h2')?.textContent).toContain('Apellido1, Nombre1');
         // El texto legible, no el codigo: «NO_VERIFICADO» no le dice nada a
         // quien atiende el mostrador.
         expect(texto()).toContain('Sin verificar');

@@ -47,7 +47,13 @@ test('agenda y pacientes conservan sus acciones al desplazar el contenido en esc
       await page.getByRole('button', { name: 'Alternar navegación', exact: true }).click();
     }
     await irA(page, 'Pacientes');
-    await expect(page.getByRole('table')).toBeVisible();
+    if (dimensiones.width <= 600) {
+      const fichas = page.locator('app-pacientes .pacientes__fichas');
+      await expect(fichas).toBeVisible();
+      await expect(fichas.locator('.paciente-ficha h2').first()).not.toBeEmpty();
+    } else {
+      await expect(page.getByRole('table')).toBeVisible();
+    }
     await sinDesbordamiento(page, dimensiones.width >= 821);
     if (dimensiones.width >= 821) {
       const lista = page.locator('app-pacientes .tabla-envoltorio');

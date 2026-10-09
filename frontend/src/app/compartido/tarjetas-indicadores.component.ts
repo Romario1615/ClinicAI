@@ -32,14 +32,14 @@ export interface Indicador {
             <a
               role="listitem"
               data-aparecer
-              [class]="'indicador indicador--' + (item.tono ?? 'normal') + ' indicador--enlace'"
+              [class]="clases(item, true)"
               [routerLink]="item.enlace"
               [queryParams]="item.consulta ?? null"
             >
               <ng-container *ngTemplateOutlet="cuerpo; context: { $implicit: item }" />
             </a>
           } @else {
-            <div role="listitem" data-aparecer [class]="'indicador indicador--' + (item.tono ?? 'normal')">
+            <div role="listitem" data-aparecer [class]="clases(item, false)">
               <ng-container *ngTemplateOutlet="cuerpo; context: { $implicit: item }" />
             </div>
           }
@@ -86,6 +86,8 @@ export interface Indicador {
     .indicador--alerta { background: var(--aviso-fondo); border-color: color-mix(in srgb, var(--aviso) 45%, transparent); }
     .indicador--alerta .indicador__valor { color: var(--aviso); }
     .indicador--bien .indicador__valor { color: var(--exito); }
+    .indicador--cero { border-style: dashed; background: var(--superficie); box-shadow: none; }
+    .indicador--cero .indicador__valor { color: var(--texto-suave); }
 
     /* Pantalla de trabajo (escritorio): ficha apaisada de una sola altura, con
        la cifra a la izquierda. Ocupa la mitad y deja el alto a la lista. */
@@ -110,4 +112,10 @@ export interface Indicador {
 export class TarjetasIndicadoresComponent {
   readonly indicadores = input<readonly Indicador[]>([]);
   readonly titulo = input('');
+  readonly atenuarCero = input(false);
+
+  protected clases(item: Indicador, enlace: boolean): string {
+    const cero = this.atenuarCero() && Number(item.valor) === 0;
+    return `indicador indicador--${item.tono ?? 'normal'}${enlace ? ' indicador--enlace' : ''}${cero ? ' indicador--cero' : ''}`;
+  }
 }

@@ -112,7 +112,9 @@ interface Turno {
     .enlace { display: inline-block; margin-top: var(--espacio-2); font-weight: 600; }
     .vacio, .pensando { color: var(--texto-suave); }
     @media (max-width: 820px) {
-      .asistente { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); min-height: 0; gap: var(--espacio-2); }
+      .asistente { grid-template-areas: 'chat' 'contexto'; grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) auto; min-height: max(32rem, calc(100dvh - 230px)); gap: var(--espacio-2); }
+      .asistente__chat { grid-area: chat; }
+      .asistente__contexto { grid-area: contexto; }
       .asistente__contexto { padding: var(--espacio-2) var(--espacio-3); }
       .asistente__contexto h2, .asistente__contexto .campo__ayuda, .asistente__contexto .aviso { display: none; }
       .asistente__contexto app-selector-paciente { display: block; }

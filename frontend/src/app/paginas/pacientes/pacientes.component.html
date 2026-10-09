@@ -162,6 +162,23 @@
     </table>
   </div>
 
+  <div class="pacientes__fichas desplazable" aria-label="Pacientes">
+    @for (paciente of pacientes(); track paciente.id) {
+      <article class="paciente-ficha">
+        <h2>{{ paciente.apellido }}, {{ paciente.nombre }}</h2>
+        <p><span class="tipo-doc">{{ paciente.tipo_documento | tipoDocumento }}</span> {{ paciente.numero_documento }}</p>
+        <p>{{ contacto(paciente) }}</p>
+        <div class="paciente-ficha__pie">
+          <span class="verificacion" [class]="'verificacion verificacion--' + verificacion(paciente.nivel_verificacion).tono"
+            [title]="verificacion(paciente.nivel_verificacion).detalle">
+            {{ verificacion(paciente.nivel_verificacion).texto }}
+          </span>
+          <button class="boton boton--pequeno" type="button" (click)="abrir(paciente)">Ver ficha</button>
+        </div>
+      </article>
+    }
+  </div>
+
   <div class="pie-lista">
     <p class="recuento">
       Mostrando <strong>{{ desde() + 1 }}–{{ hasta() }}</strong> de

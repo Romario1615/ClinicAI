@@ -131,7 +131,7 @@ const DIAS_POR_PERIODO: Record<string, number> = { hoy: 1, '7': 7, '30': 30 };
                 <h2>{{ grupo.titulo }}</h2>
                 <span class="bloque__linea" aria-hidden="true"></span>
               </div>
-              <app-tarjetas-indicadores [indicadores]="grupo.tarjetas" [titulo]="grupo.titulo" />
+              <app-tarjetas-indicadores [indicadores]="grupo.tarjetas" [titulo]="grupo.titulo" [atenuarCero]="true" />
             </section>
           }
         </section>
@@ -1091,6 +1091,7 @@ const DIAS_POR_PERIODO: Record<string, number> = { hoy: 1, '7': 7, '30': 30 };
     .cifras__rejilla .ocupacion-agenda__tiempos { font-size: .78rem; line-height: 1.35; }
     .cifras__rejilla .campo__ayuda { margin-block: var(--espacio-1) 0; }
 
+
     .panel__graficos {
       display: grid;
       gap: var(--espacio-3);
@@ -1397,7 +1398,14 @@ export class PanelComponent {
   /** Grupos del tablero en el orden en que se atienden: lo mío, la clínica hoy, lo pendiente y la gestión. */
   protected readonly tablero = computed(() => {
     const datos = this.indicadores();
+    const prioridad = [
+      ...indicadoresDe(datos, 'clinico'),
+      ...indicadoresDe(datos, 'pagos'),
+      ...indicadoresDe(datos, 'pacientes'),
+    ].filter((item) => ['Alertas de adherencia', 'Pagos pendientes', 'Por validar', 'Sin verificar'].includes(item.etiqueta) && Number(item.valor) > 0);
+    const accionesPrioritarias = new Set(['Alertas de adherencia', 'Pagos pendientes', 'Por validar', 'Sin verificar']);
     const grupos = [
+      ...(prioridad.length ? [{ titulo: 'Requiere atención', tarjetas: prioridad }] : []),
       { titulo: 'Mi día', tarjetas: indicadoresDe(datos, 'mi_dia') },
       { titulo: 'La clínica hoy', tarjetas: indicadoresDe(datos, 'agenda') },
       {
@@ -1407,12 +1415,12 @@ export class PanelComponent {
           ...indicadoresDe(datos, 'mensajes'),
           ...indicadoresDe(datos, 'lista_espera'),
           ...indicadoresDe(datos, 'pagos'),
-        ],
+        ].filter((item) => !accionesPrioritarias.has(item.etiqueta)),
       },
       {
         titulo: 'Gestión de la clínica',
         tarjetas: [
-          ...indicadoresDe(datos, 'pacientes'),
+          ...indicadoresDe(datos, 'pacientes').filter((item) => !accionesPrioritarias.has(item.etiqueta)),
           ...indicadoresDe(datos, 'conocimiento'),
           ...indicadoresDe(datos, 'promociones'),
           ...indicadoresDe(datos, 'usuarios'),

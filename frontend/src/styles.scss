@@ -555,6 +555,10 @@ textarea.campo__control {
   min-height: 0;
 }
 
+@media (max-width: 820px) {
+  .panel__cifras .cifras__rejilla { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
 @media (min-width: 821px) and (min-height: 600px) {
   main.contenido:not(.contenido--suelto) > :not(router-outlet) {
     flex: 1 1 auto;
