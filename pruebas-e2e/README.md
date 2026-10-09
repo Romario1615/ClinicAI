@@ -4,6 +4,14 @@ Navegador real, frontend real, API real y PostgreSQL real. Los proveedores
 externos funcionan con adaptadores locales durante esta verificación; no se
 envían mensajes ni se realizan llamadas pagadas.
 
+**Ficha y odontograma (2026-10-09):** escenario 26 **4/4**, frontend **836/836**
+y backend afectado **126 casos**. Chromium completo obtuvo **99/100**; el
+único fallo midió contraste durante la entrada animada de Analítica. Tras
+esperar la animación real y añadir una serie vacía determinista, el escenario
+21 aprueba **6/6**. Son **101 casos distintos aprobados entre las corridas**,
+sin reintentos automáticos. No se omiten reglas WCAG.
+[Matriz, resultados y alcance](../docs/verificacion-odontograma-ficha-2026-10-09.md).
+
 **Menú de la ficha (2026-10-09):** el escenario 24 comprueba apertura visible
 y foco de las diez herramientas, consulta por recepción, reapertura en
 escritorio/móvil, menú de Historia clínica y conservación de la cita.
@@ -241,6 +249,7 @@ escribe datos ni evalúa cálculos demográficos del backend.
 | `23-formularios-consultas.spec.ts` | Gastos: requeridos, precisión monetaria, guardado exacto, idempotencia, filtros y anulación con historial conservado |
 | `24-menu-herramientas.spec.ts` | Las diez herramientas de ficha/historia quedan visibles y enfocadas; reapertura y contexto de cita |
 | `25-ficha-desde-agenda.spec.ts` | Acceso normal/directo desde la cita, ventanas anidadas en escritorio/móvil, inicio profesional y nota vinculada; recepción en consulta |
+| `26-ficha-odontograma.spec.ts` | Piezas legibles y extremos accesibles, hallazgos/notas, dos versiones inmutables, consulta por recepción y accesos a pagos/agenda conservando paciente |
 
 ## Lo que falta
 

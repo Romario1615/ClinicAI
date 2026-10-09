@@ -1,5 +1,25 @@
 # Limitaciones conocidas y riesgos residuales
 
+## Odontograma legible y accesos de ficha (2026-10-09)
+
+Las piezas conservan un mínimo legible y el mapa se organiza por hemiarcadas
+cuando el contenedor es estrecho. En móvil se puede desplazar horizontalmente
+el mapa; el resto de la ficha conserva su ancho. Si el marco de escritorio
+es bajo, se desplaza la tarjeta en lugar de reducir las piezas. Guardar y
+adjuntar fotos se revisa en una ventana con controles de cierre y error.
+El historial clínico permanece por versiones; estas mejoras no sustituyen
+la aceptación del equipo odontológico.
+
+Pagos desde una ficha ya filtra por paciente y conserva su cita si existe.
+El filtro también se aplica al total y no amplía las sedes concedidas. La
+exportación financiera sigue mostrando agregados del ámbito y periodo
+elegidos; no es un extracto financiero individual.
+
+No hay un MCP de WhatsApp conectado. La [evaluación](whatsapp-mcp.md) identifica
+proyectos sobre Cloud API y distingue conexión al asistente de desarrollo de
+integración en el agente del backend. Falta el servidor que desea usar el
+usuario y su cuenta de prueba. No se verificó entrega real con Meta.
+
 ## Ficha abierta desde Agenda (2026-10-09)
 
 La consulta normal y el selector directo conservan la cita de origen y regresan

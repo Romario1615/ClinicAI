@@ -1,5 +1,25 @@
 # Arquitectura
 
+## Odontograma y accesos de la ficha (2026-10-09)
+
+El mapa conserva un tamaño mínimo de pieza independiente del alto disponible.
+Las hemiarcadas se distribuyen según el ancho de su contenedor y el interior
+de la tarjeta admite desplazamiento. El selector compacto de especialidad
+conserva las opciones y permisos del selector común. Los hallazgos permanecen
+en un borrador; el motivo y fotografías se revisan en una ventana de guardado.
+Un fallo de carga no se confunde con un rechazo del guardado: este último
+mantiene el mapa, borrador y ventana para reintentar. Se bloquea el segundo
+envío y el cierre mientras la petición está en curso. Si el registro se creó
+y falla una foto, el reintento usa la misma versión; cerrar explícitamente
+la revisión recarga esa versión, que permite añadir fotos desde su galería.
+
+El acceso «Pagos del paciente» transmite `paciente` y, si existe, `cita`.
+Pagos conserva esa identidad en el alta y aplica `paciente_id` a pagos y
+cargos. El repositorio añade el filtro a la consulta autorizada antes del
+conteo y paginación; no amplía clínica, sede ni profesional. Cuando se
+transmiten paciente y cita, ambos filtros deben coincidir. No hay migración.
+La evaluación de un adaptador MCP externo está en [whatsapp-mcp.md](whatsapp-mcp.md).
+
 ## Consulta y primera atención (2026-10-09)
 
 `HerramientasPacienteComponent` comparte el selector entre ficha e historia.

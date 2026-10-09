@@ -276,3 +276,21 @@ Codex → Claude: canal queue OK
   detenida, BD sintética retirada y 4200/8000 responden 200. Sin push.
   README, manuales propios de Ayuda y el informe de 18 puntos
   `docs/verificacion-ficha-agenda-2026-10-09.md` documentan el cierre.
+
+* 2026-10-09, Codex → Claude: odontograma legible y accesos financieros de
+  ficha en `main`, implementación `80101f4` (sin push). Piezas por ancho con
+  mínimo legible, selector compacto y motivo/fotos en ventana; se conservan
+  borrador y revisión al rechazar el primer guardado y se bloquea doble envío.
+  Pagos conserva y filtra el paciente de origen dentro del ámbito autorizado.
+  Frontend 836/836, backend afectado 126 casos distintos; E2E 26: 4/4.
+  Chromium completo: 99/100. La incidencia midió contraste durante la entrada
+  de la ventana de Analítica; el spec espera las animaciones y exige opacidad
+  acumulada uno, conservando todas las reglas WCAG. Escenario 21: 6/6 con un
+  caso de serie vacía nuevo. Son 101 casos distintos aprobados entre corridas,
+  no una corrida única 101/101. Lint/build, Ruff/formato/mypy, Bandit afectado,
+  npm audit completo y Gitleaks aprobados. API temporal 8020 y BD exclusiva
+  retiradas, dos archivos sintéticos borrados; app 4200/API 8000 responden 200.
+  WhatsApp MCP no conectado: evaluación de proyectos Cloud API documentada
+  en `docs/whatsapp-mcp.md`, pendiente servidor y cuenta de prueba del usuario.
+  README, manual profesional de Ayuda y el informe de 18 puntos
+  `docs/verificacion-odontograma-ficha-2026-10-09.md` registran alcance y límites.

@@ -1,6 +1,6 @@
 /** API real para el recorrido; datos agregados sintéticos para extremos visuales. */
 import AxeBuilder from '@axe-core/playwright';
-import type { Page } from '@playwright/test';
+import type { Locator, Page } from '@playwright/test';
 import { test, expect } from '../apoyo/prueba';
 import { acceder, irA } from '../apoyo/sesion';
 
@@ -8,6 +8,23 @@ async function abrir(page: Page): Promise<void> {
   await acceder(page, 'administradora');
   await irA(page, 'Analítica IA');
   await expect(page.locator('.analitica__kpi').first()).toBeVisible();
+}
+
+/** El contraste se mide cuando la ventana terminó su entrada, sin omitir reglas. */
+async function esperarEntrada(ventana: Locator): Promise<void> {
+  await ventana.evaluate(async elemento => {
+    await new Promise<void>(resolver => requestAnimationFrame(() => resolver()));
+    await Promise.all(elemento.getAnimations({ subtree: true }).map(animacion => animacion.finished));
+    await new Promise<void>(resolver => requestAnimationFrame(() => resolver()));
+  });
+  await expect.poll(() => ventana.evaluate(elemento => {
+    const texto = elemento.querySelector('.grafico-vacio p') ?? elemento;
+    let opacidad = 1;
+    for (let actual: Element | null = texto; actual; actual = actual.parentElement) {
+      opacidad *= Number(getComputedStyle(actual).opacity);
+    }
+    return opacidad;
+  }), { message: 'el texto de la ventana debe haber completado su entrada' }).toBe(1);
 }
 
 async function medir(page: Page, escritorio: boolean): Promise<void> {
@@ -88,6 +105,7 @@ test('analítica: búsqueda, áreas, detalles con teclado y límites accesibles'
   await expect(detalle).toBeVisible();
   await expect(detalle.getByRole('region', { name: 'Evaluación del modelo' })).toBeVisible();
   await expect(detalle.getByRole('table').first()).toBeVisible();
+  await esperarEntrada(detalle);
   expect((await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa']).analyze()).violations).toEqual([]);
   await page.keyboard.press('Escape');
   await expect(detalle).not.toBeVisible();
@@ -119,6 +137,19 @@ const extremos = {
   })),
   recomendaciones: [], limites: ['Aprendizaje local, sin API externa.'],
 };
+
+test('analítica: serie financiera vacía legible y accesible al terminar la entrada', async ({ page }) => {
+  await page.route('**/dashboard/analitica**', route => route.fulfill({ json: {
+    ...extremos, kpis: [{ ...extremos.kpis[1], nombre: 'Cobros sin observaciones', total: null, historia: [], prediccion: [] }],
+  } }));
+  await abrir(page);
+  await page.locator('.analitica__ver-detalle').first().click();
+  const detalle = page.getByRole('dialog', { name: 'Cobros sin observaciones', exact: true });
+  await expect(detalle).toBeVisible();
+  await esperarEntrada(detalle);
+  await expect(detalle.locator('.grafico-vacio')).toContainText('Sin observaciones');
+  expect((await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa']).analyze()).violations).toEqual([]);
+});
 
 test('analítica: cifras extensas, nombres largos, series vacías y ventanas en pantalla pequeña', async ({ page }) => {
   await page.route('**/dashboard/analitica**', route => route.fulfill({ json: extremos }));

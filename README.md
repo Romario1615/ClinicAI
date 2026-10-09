@@ -1,5 +1,30 @@
 # ClinicAI — Plataforma de gestión clínica
 
+## Odontograma legible y accesos del paciente (2026-10-09)
+
+El odontograma conserva piezas grandes en Historia y ficha, distribuye las
+hemiarcadas según el ancho y desplaza el interior de su tarjeta. El selector
+compacto de especialidad deja espacio para trabajar. **Crear odontograma** y
+**Guardar nueva versión** abren una ventana para revisar motivo y fotos; los
+errores mantienen el borrador y se bloquean envíos duplicados. Las versiones
+anteriores y el acceso de recepción permanecen de consulta.
+
+**Pagos del paciente** conserva el paciente de la ficha al filtrar pagos,
+cargos y seleccionar citas para un abono. **Gestionar citas** mantiene el
+paciente sugerido de Agenda. El backend aplica el filtro financiero dentro
+del ámbito autorizado, antes de contar y paginar. El manual del Profesional
+explica el guardado desde Ayuda.
+
+Frontend completo **836/836**, cobertura de líneas **88,10 %**; backend
+afectado **126 casos distintos** y **101 casos distintos de navegador**
+aprobados entre la corrida completa y la regresión de Analítica. La primera
+obtuvo 99/100; el fallo de contraste durante la animación se corrigió en
+la sincronización del spec y el escenario 21 aprueba 6/6. La
+[verificación de ficha](docs/verificacion-odontograma-ficha-2026-10-09.md)
+incluye la matriz funcional, comandos, resultados e incidencias.
+La [evaluación de WhatsApp MCP](docs/whatsapp-mcp.md) identifica opciones sobre
+Cloud API; falta el servidor/cuenta del usuario y no hay una conexión real.
+
 ## Ficha y registro desde Agenda (2026-10-09)
 
 Abra una cita y pulse **Ver ficha del paciente** para consultar su expediente,

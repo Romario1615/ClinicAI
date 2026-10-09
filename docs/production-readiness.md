@@ -1,5 +1,29 @@
 # Estado de preparación para producción
 
+## Odontograma y accesos de la ficha (2026-10-09)
+
+Mapa legible por ancho, selector compacto y guardado con motivo/fotos en
+ventana. Se recupera el primer guardado rechazado sin perder la revisión y
+se impiden envíos simultáneos. Versiones anteriores y recepción permanecen
+en consulta. El acceso financiero desde la ficha aplica paciente y cita
+dentro del ámbito autorizado y conserva al paciente para registrar abonos.
+
+Frontend **836/836**, cobertura de líneas **88,10 %**; backend afectado
+**126 casos distintos**. Los cuatro escenarios nuevos de navegador aprueban
+persistencia, consulta y diseño adaptable. Lint/build, Ruff/formato/mypy,
+Bandit de archivos modificados y auditoría npm aprobados. La
+[verificación del bloque](verificacion-odontograma-ficha-2026-10-09.md)
+registra la matriz funcional y el cierre de la regresión completa.
+
+Chromium: corrida completa **99/100**, seguida de **6/6** en el escenario 21
+con el fallo de contraste transitorio corregido y una prueba de serie vacía
+añadida. **101 casos distintos aprobados** entre ambas; no son una corrida
+única 101/101. Todas las funciones de ficha del recorrido completo aprobaron.
+
+WhatsApp continúa en sandbox. El [MCP](whatsapp-mcp.md) se evaluó como posible
+conexión sobre Cloud API, con servidor/cuenta aún pendientes. No se declara
+entrega externa, aceptación clínica integral ni despliegue de producción.
+
 ## Ficha y herramientas desde Agenda (2026-10-09)
 
 Accesos normal/directo desde la cita y apertura de ventanas anidadas comprobados

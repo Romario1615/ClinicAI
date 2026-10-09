@@ -9,6 +9,16 @@
 
 ## Acceso entre especialistas
 
+En los listados de pagos y cargos, `paciente_id` solo restringe la consulta
+ya autorizada. El total y la página usan el mismo filtro, combinado con
+`cita_id` si se proporciona. Las pruebas incluyen otro paciente y una sede
+excluida para impedir que el acceso desde la ficha amplíe el ámbito.
+
+El odontograma mantiene escritura por permiso/especialidad, versiones
+inmutables y consulta de recepción con controles deshabilitados. El posible
+MCP de WhatsApp sigue sin conectar; [su evaluación](whatsapp-mcp.md) exige
+conservar configuración por clínica, consentimiento, outbox y auditoría.
+
 Con cita, el inicio explícito de atención en Agenda establece el vínculo
 `CITA` únicamente para su profesional asignado y activo. Requiere llegada,
 estado confirmado/reprogramado y `cita.iniciar_atencion`; clínica y ámbito
