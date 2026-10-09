@@ -239,6 +239,8 @@ escribe datos ni evalúa cálculos demográficos del backend.
 | `21-analitica-diseno.spec.ts` | Búsqueda, vistas, metodología, accesibilidad y ocho tamaños de Analítica IA |
 | `22-ficha-compartida-marca.spec.ts` | Seis roles, herramientas vacías, primera atención sin cita, edición por profesional y marca adaptable |
 | `23-formularios-consultas.spec.ts` | Gastos: requeridos, precisión monetaria, guardado exacto, idempotencia, filtros y anulación con historial conservado |
+| `24-menu-herramientas.spec.ts` | Las diez herramientas de ficha/historia quedan visibles y enfocadas; reapertura y contexto de cita |
+| `25-ficha-desde-agenda.spec.ts` | Acceso normal/directo desde la cita, ventanas anidadas en escritorio/móvil, inicio profesional y nota vinculada; recepción en consulta |
 
 ## Lo que falta
 

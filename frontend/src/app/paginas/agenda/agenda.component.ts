@@ -993,13 +993,17 @@ export class AgendaComponent {
   }
 
   protected readonly citaEnFicha = signal<string | null>(null);
-  protected abrirFicha(pacienteId: string, citaId: string | null = null): void {
+  protected readonly elegirRegistroEnFicha = signal(false);
+  protected abrirFicha(pacienteId: string, citaId: string | null = null, elegirRegistro = false): void {
     this.citaEnFicha.set(citaId);
+    this.elegirRegistroEnFicha.set(elegirRegistro);
     this.pacienteEnFicha.set(pacienteId);
   }
 
   protected cerrarFicha(): void {
     this.pacienteEnFicha.set(null);
+    this.citaEnFicha.set(null);
+    this.elegirRegistroEnFicha.set(false);
   }
 
   /** El botón principal de una tarea de la cola. */

@@ -18,6 +18,34 @@ describe('Herramientas del paciente desde su primera atención', () => {
     (f.nativeElement as HTMLElement).querySelector('button')!.click(); f.detectChanges();
     return f;
   }
+  it('abre el selector solicitado al terminar de montar la ficha de agenda', async () => {
+    iniciarSesionCon(LECTURAS);
+    const f = TestBed.createComponent(HerramientasPacienteComponent);
+    f.componentRef.setInput('pacienteId', 'pac-nuevo');
+    f.componentRef.setInput('citaId', 'cita-1');
+    f.componentRef.setInput('abrirInicialmente', true);
+    f.detectChanges();
+    await f.whenStable();
+    f.detectChanges();
+    expect(f.nativeElement.querySelector('dialog[open]')?.getAttribute('aria-label')).toBe('Herramientas del paciente');
+    expect(f.componentInstance['puedeIniciar']()).toBe(false);
+    TestBed.inject(HttpTestingController).expectNone(r => r.method !== 'GET');
+  });
+  it('la apertura normal espera la elección del usuario y no vuelve a abrir al cerrar', async () => {
+    iniciarSesionCon(LECTURAS);
+    const f = TestBed.createComponent(HerramientasPacienteComponent);
+    f.componentRef.setInput('pacienteId', 'pac-nuevo');
+    f.detectChanges();
+    await f.whenStable();
+    expect(f.nativeElement.querySelector('dialog[open]')).toBeNull();
+    (f.nativeElement as HTMLElement).querySelector('button')!.click();
+    f.detectChanges();
+    expect(f.nativeElement.querySelector('dialog[open]')).not.toBeNull();
+    f.componentInstance['abierta'].set(false);
+    f.detectChanges();
+    await f.whenStable();
+    expect(f.nativeElement.querySelector('dialog[open]')).toBeNull();
+  });
   it('recepción ve las herramientas vacías en solo consulta y no pide datos clínicos al abrir el selector', () => {
     const f = montar();
     TestBed.inject(SesionService).establecerIdentidad({ ...identidadCon(LECTURAS), roles: ['recepcion'], profesional_id: null }); f.detectChanges();

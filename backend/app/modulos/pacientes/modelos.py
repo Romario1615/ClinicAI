@@ -405,7 +405,7 @@ class RelacionAsistencial(Base, MezclaIdentificador, MezclaAuditoria):
     profesional de la clinica podria abrir cualquier historia, que es
     exactamente lo que la matriz de permisos pretende evitar.
 
-    Se crea de forma automatica al agendar una cita y se puede crear de forma
+    Se crea al iniciar la atencion de una cita y se puede crear de forma
     explicita en una derivacion o al asignar un paciente.  El acceso de
     emergencia genera una relacion temporal con caducidad.
     """

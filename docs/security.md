@@ -9,6 +9,14 @@
 
 ## Acceso entre especialistas
 
+Con cita, el inicio explícito de atención en Agenda establece el vínculo
+`CITA` únicamente para su profesional asignado y activo. Requiere llegada,
+estado confirmado/reprogramado y `cita.iniciar_atencion`; clínica y ámbito
+se validan antes. Se bloquea el paciente para serializar el vínculo y se
+audita junto al inicio. El vínculo no concede permisos de escritura ni
+habilita herramientas de otra especialidad. Abrir la ficha, reservar el turno
+o registrar la llegada conserva el acceso de consulta, sin crear ese vínculo.
+
 Desde el 2026-10-09, por decisión del propietario, todos los roles base consultan
 el historial clínico N2 y las herramientas de los pacientes de su clínica y ámbito.
 `historia_clinica.consultar_compartida` habilita la consulta aunque todavía no exista

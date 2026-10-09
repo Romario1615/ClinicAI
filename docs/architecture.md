@@ -12,6 +12,18 @@ si repite la anterior. Historia la aplica una vez al terminar la carga y
 dirige desplazamiento y foco al panel autorizado después del renderizado;
 una recarga posterior conserva la navegación del operador.
 
+Agenda usa la misma ficha y transmite `citaInicial`. Su acceso directo
+«Elegir qué registrar» solicita abrir el selector después de montar la ventana
+de la ficha, conservando el orden de las ventanas modales. Cerrar la ficha
+restaura el detalle de la cita y limpia la solicitud de apertura inicial.
+
+`POST /agenda/citas/{id}/inicio-atencion` crea el vínculo asistencial `CITA`
+del profesional asignado, si no tiene uno permanente vigente. Valida la cita
+confirmada, su llegada y el perfil activo. Bloquea el paciente para serializar
+el vínculo; comparte transacción con el inicio y su auditoría. Consultar,
+agendar o registrar la llegada no otorga ese vínculo. Una concesión temporal
+de emergencia permanece separada del nuevo vínculo asistencial.
+
 La capacidad `historia_clinica.consultar_compartida` permite lectura N2
 sin relación asistencial previa, dentro de clínica y ámbito. Los filtros SQL
 de paciente, autores, especialidad y sensibilidad permanecen. Las escrituras

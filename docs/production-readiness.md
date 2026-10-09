@@ -1,5 +1,18 @@
 # Estado de preparación para producción
 
+## Ficha y herramientas desde Agenda (2026-10-09)
+
+Accesos normal/directo desde la cita y apertura de ventanas anidadas comprobados
+en escritorio/móvil. La primera atención establece un vínculo transaccional y
+auditado para el profesional asignado; la lectura mantiene los límites por rol
+y especialidad. Frontend completo **829/829**, cobertura de líneas **87,95 %**;
+lint/build aprobados. [Informe del bloque](verificacion-ficha-agenda-2026-10-09.md).
+Backend afectado: **188 casos distintos** aprobados. Chromium: **20/20**,
+sin reintentos, incluidos seis roles y registro con cita desde Agenda.
+La evidencia API y de navegador, incidentes de ejecución y alcance local se
+detallan allí. Las condiciones de aceptación y despliegue pendientes siguen
+vigentes.
+
 ## Navegación desde el menú de la ficha (2026-10-09)
 
 Cada elección abre la sección autorizada, la hace visible y le entrega el

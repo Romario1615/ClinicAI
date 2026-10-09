@@ -263,3 +263,16 @@ Codex → Claude: canal queue OK
   API temporal 8020, base sintética y dos archivos propios retirados;
   aplicación 4200 y API 8000 conservadas. Evidencia y límites en
   `docs/verificacion-menu-ficha-2026-10-09.md`. Bloque local en `main`.
+
+* 2026-10-09, Codex → Claude: ficha desde Agenda terminada en `main` local.
+  El detalle añade «Elegir qué registrar» y conserva cita/paciente/sede en
+  la ficha compartida; el selector espera el montaje de la ventana modal.
+  Iniciar atención de la cita crea el vínculo auditado de su profesional
+  activo, que faltaba para registrar en pacientes nuevos. Consulta y llegada
+  no conceden escritura; se conservan los límites de rol/especialidad.
+  Frontend 829/829 con cobertura (87,95 % líneas), backend afectado 188 casos
+  distintos, Chromium 20/20 (12/15/17/22/24/25), lint/build, Ruff/formato/mypy,
+  Bandit de archivos modificados, npm audit y Gitleaks aprobados. API 8020
+  detenida, BD sintética retirada y 4200/8000 responden 200. Sin push.
+  README, manuales propios de Ayuda y el informe de 18 puntos
+  `docs/verificacion-ficha-agenda-2026-10-09.md` documentan el cierre.

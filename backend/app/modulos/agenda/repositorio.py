@@ -51,7 +51,7 @@ from app.modulos.organizacion.modelos import (
     Sede,
     Servicio,
 )
-from app.modulos.pacientes.modelos import Paciente
+from app.modulos.pacientes.modelos import Paciente, RelacionAsistencial
 from app.modulos.profesionales.modelos import AgendaPlantilla, Profesional
 from app.nucleo.autorizacion import Principal
 
@@ -568,6 +568,32 @@ class RepositorioAgenda:
     ) -> Profesional | None:
         consulta = select(Profesional).where(
             Profesional.id == profesional_id, Profesional.clinica_id == clinica_id
+        )
+        return (await self._sesion.execute(consulta)).scalar_one_or_none()
+
+    async def relacion_permanente_de_cita(self, cita: Cita) -> RelacionAsistencial | None:
+        """Serializa el vínculo de un paciente ya validado por la cita.
+
+        Dos citas del mismo paciente pueden iniciar atención a la vez. El
+        bloqueo del paciente impide crear dos vínculos del mismo profesional.
+        Una concesión de emergencia no sustituye un vínculo asistencial normal.
+        """
+        await self._sesion.execute(
+            select(Paciente.id)
+            .where(Paciente.id == cita.paciente_id, Paciente.clinica_id == cita.clinica_id)
+            .with_for_update()
+        )
+        consulta = (
+            select(RelacionAsistencial)
+            .where(
+                RelacionAsistencial.paciente_id == cita.paciente_id,
+                RelacionAsistencial.profesional_id == cita.profesional_id,
+                RelacionAsistencial.revocada_en.is_(None),
+                RelacionAsistencial.origen != "EMERGENCIA",
+                RelacionAsistencial.vigente_hasta.is_(None),
+            )
+            .order_by(RelacionAsistencial.creado_en)
+            .limit(1)
         )
         return (await self._sesion.execute(consulta)).scalar_one_or_none()
 

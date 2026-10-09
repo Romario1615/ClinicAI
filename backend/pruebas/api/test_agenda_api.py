@@ -27,9 +27,10 @@ from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modulos.agenda.modelos import Cita, EstadoCita
+from app.modulos.auditoria.modelos import Auditoria
 from app.modulos.odontologia.modelos import PlanTratamiento, ProcedimientoPlan
 from app.modulos.organizacion.modelos import Clinica, Consultorio, Sede, Servicio
-from app.modulos.pacientes.modelos import Paciente
+from app.modulos.pacientes.modelos import Paciente, RelacionAsistencial
 from app.modulos.profesionales.modelos import Profesional
 from app.modulos.usuarios.modelos import Usuario, UsuarioRol
 from app.nucleo.reloj import RelojFijo
@@ -1205,6 +1206,142 @@ class TestAislamientoPorAmbito:
 #  Ciclo de vida
 # ===========================================================================
 class TestCicloDeVida:
+    @pytest.mark.parametrize("baja", ["inactivo", "anulado"])
+    async def test_no_inicia_atencion_ni_otorga_vinculo_con_profesional_de_baja(
+        self,
+        cliente: AsyncClient,
+        api: str,
+        sesion: AsyncSession,
+        usuario: Usuario,
+        clinica: Clinica,
+        sede: Sede,
+        profesional: Profesional,
+        paciente: Paciente,
+        cuerpo_reserva: dict[str, str],
+        reloj: RelojFijo,
+        baja: str,
+    ) -> None:
+        headers = await _recepcion(cliente, sesion, usuario, clinica, sede)
+        creada = await cliente.post(_ruta(api, "/citas"), headers=headers, json=cuerpo_reserva)
+        assert creada.status_code == 201, creada.text
+        cita_id = creada.json()["id"]
+        llegada = await cliente.post(_ruta(api, f"/citas/{cita_id}/llegada"), headers=headers)
+        assert llegada.status_code == 200
+        if baja == "inactivo":
+            profesional.activo = False
+        else:
+            profesional.anulado_en = reloj.ahora()
+        await sesion.flush()
+        inicio = await cliente.post(
+            _ruta(api, f"/citas/{cita_id}/inicio-atencion"), headers=headers
+        )
+        assert inicio.status_code == 409
+        assert (
+            await sesion.scalar(
+                sa.select(RelacionAsistencial.id).where(
+                    RelacionAsistencial.paciente_id == paciente.id,
+                    RelacionAsistencial.profesional_id == profesional.id,
+                )
+            )
+            is None
+        )
+        cita = await sesion.get(Cita, uuid.UUID(cita_id))
+        assert cita is not None and cita.atencion_iniciada_en is None
+
+    @pytest.mark.parametrize("vinculo", ["ninguno", "vigente", "revocado", "emergencia"])
+    async def test_iniciar_atencion_habilita_registro_del_responsable_y_audita(
+        self,
+        cliente: AsyncClient,
+        api: str,
+        sesion: AsyncSession,
+        usuario: Usuario,
+        clinica: Clinica,
+        sede: Sede,
+        paciente: Paciente,
+        profesional: Profesional,
+        cuerpo_reserva: dict[str, str],
+        reloj: RelojFijo,
+        vinculo: str,
+    ) -> None:
+        await conceder_permisos(
+            sesion,
+            usuario,
+            clinica,
+            *PERMISOS_RECEPCION,
+            "historia_clinica.leer",
+            "historia_clinica.consultar_compartida",
+            "historia_clinica.escribir",
+            sedes=(sede.id,),
+        )
+        headers = await cabecera_bearer(cliente, usuario, clinica)
+        anterior = None
+        if vinculo != "ninguno":
+            anterior = RelacionAsistencial(
+                paciente_id=paciente.id,
+                profesional_id=profesional.id,
+                origen="EMERGENCIA" if vinculo == "emergencia" else "CITA",
+                motivo="Acceso sintético para la prueba" if vinculo == "emergencia" else None,
+                vigente_hasta=reloj.ahora() + timedelta(minutes=30)
+                if vinculo == "emergencia"
+                else None,
+                revocada_en=reloj.ahora() if vinculo == "revocado" else None,
+            )
+            sesion.add(anterior)
+            await sesion.flush()
+        creada = await cliente.post(_ruta(api, "/citas"), headers=headers, json=cuerpo_reserva)
+        assert creada.status_code == 201, creada.text
+        cita_id = creada.json()["id"]
+        consulta = sa.select(RelacionAsistencial).where(
+            RelacionAsistencial.paciente_id == paciente.id,
+            RelacionAsistencial.profesional_id == profesional.id,
+        )
+        assert len(list((await sesion.scalars(consulta)).all())) == int(anterior is not None)
+        # Abrir la ficha compartida no otorga el vínculo ni permite registrar.
+        lectura = await cliente.get(
+            f"{api}/historia/pacientes/{paciente.id}/notas", headers=headers
+        )
+        assert lectura.status_code == 200
+        cuerpo_nota = {
+            "paciente_id": str(paciente.id),
+            "profesional_id": str(profesional.id),
+            "cita_id": cita_id,
+            "tipo": "EVOLUCION",
+            "motivo_consulta": "Control sintético",
+        }
+        if vinculo in {"ninguno", "revocado"}:
+            denegada = await cliente.post(
+                f"{api}/historia/notas", headers=headers, json=cuerpo_nota
+            )
+            assert denegada.status_code == 404
+        llegada = await cliente.post(_ruta(api, f"/citas/{cita_id}/llegada"), headers=headers)
+        assert llegada.status_code == 200
+        assert len(list((await sesion.scalars(consulta)).all())) == int(anterior is not None)
+        inicio = await cliente.post(
+            _ruta(api, f"/citas/{cita_id}/inicio-atencion"), headers=headers
+        )
+        assert inicio.status_code == 200, inicio.text
+        relaciones = list((await sesion.scalars(consulta)).all())
+        assert len(relaciones) == (1 if vinculo in {"ninguno", "vigente"} else 2)
+        permanentes = [r for r in relaciones if r.revocada_en is None and r.vigente_hasta is None]
+        assert len(permanentes) == 1
+        if vinculo != "vigente":
+            assert permanentes[0].cita_id == uuid.UUID(cita_id)
+            auditada = await sesion.scalar(
+                sa.select(Auditoria.id).where(
+                    Auditoria.entidad_id == permanentes[0].id,
+                    Auditoria.accion == "paciente.atencion_abierta",
+                )
+            )
+            assert auditada is not None
+        nota = await cliente.post(f"{api}/historia/notas", headers=headers, json=cuerpo_nota)
+        assert nota.status_code == 201, nota.text
+        assert nota.json()["cita_id"] == cita_id
+        repetida = await cliente.post(
+            _ruta(api, f"/citas/{cita_id}/inicio-atencion"), headers=headers
+        )
+        assert repetida.status_code == 409
+        assert len(list((await sesion.scalars(consulta)).all())) == len(relaciones)
+
     async def test_llegada_inicio_espera_y_cierre_quedan_registrados(
         self,
         cliente: AsyncClient,

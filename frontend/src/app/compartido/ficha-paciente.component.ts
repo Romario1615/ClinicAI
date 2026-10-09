@@ -225,7 +225,7 @@ const DETALLE_CLINICO: Partial<Record<Pestana, string>> = {
         } @else {
           <app-selector-especialidad class="ficha__especialidad" (cambio)="cambiarEspecialidad()" />
           @if (accesosClinicos().length && !sinAccesoClinico()) {
-            <app-herramientas-paciente class="ficha__herramientas" [pacienteId]="pacienteId()" [citaId]="citaParaAtencion()" (elegida)="abrirHerramienta($event)" />
+            <app-herramientas-paciente class="ficha__herramientas" [pacienteId]="pacienteId()" [citaId]="citaParaAtencion()" [abrirInicialmente]="elegirRegistroInicial()" (elegida)="abrirHerramienta($event)" />
           }
           <div class="ficha__pestanas" role="tablist" aria-label="Secciones de la ficha">
             @for (tab of pestanas(); track tab.clave) {
@@ -864,6 +864,7 @@ export class FichaPacienteComponent implements OnInit {
 
   readonly pacienteId = input.required<string>();
   readonly citaInicial = input<string | null>(null);
+  readonly elegirRegistroInicial = input(false);
   protected readonly citaElegidaId = signal<string | null | undefined>(undefined);
   protected readonly citaParaAtencion = computed(() => this.citaElegidaId() === undefined ? this.citaInicial() : this.citaElegidaId() ?? null);
   protected readonly editandoDatos = signal(false);

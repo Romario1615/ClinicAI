@@ -1,5 +1,20 @@
 # Limitaciones conocidas y riesgos residuales
 
+## Ficha abierta desde Agenda (2026-10-09)
+
+La consulta normal y el selector directo conservan la cita de origen y regresan
+a su detalle al cerrar. Las herramientas siguen dependiendo del permiso y la
+especialidad para editar. Una primera cita no concede escritura al reservarla:
+hay que registrar la llegada e iniciar la atención, que establece el vínculo
+del profesional asignado. Una cita antigua ya iniciada sin vínculo no se repara
+al leerla; el profesional puede iniciar una atención explícita desde la ficha
+sin cita para establecer su responsabilidad, conservando la referencia al
+volver a seleccionar la cita. No se ejecuta una actualización masiva histórica.
+
+La [verificación de Agenda](verificacion-ficha-agenda-2026-10-09.md) utiliza
+datos sintéticos y proveedores locales. Incluye escritorio/móvil y registro
+profesional frente a consulta administrativa. No sustituye aceptación clínica.
+
 ## Apertura de herramientas en la ficha (2026-10-09)
 
 El selector lleva el panel elegido al área visible y le entrega el foco al

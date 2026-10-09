@@ -156,7 +156,7 @@
     </div>
   } @else {
     @if (embebida() && citaContexto()) {
-      <p class="pantalla__fijo">Especialidad de la cita: {{ especialidades.elegida()?.nombre }}</p>
+      <p class="pantalla__fijo">Revisando historia de {{ especialidades.elegida()?.nombre }} · cita de referencia conservada</p>
     } @else {
       <app-selector-especialidad class="historia__especialidad pantalla__fijo" (cambio)="cambiarEspecialidad()" />
     }

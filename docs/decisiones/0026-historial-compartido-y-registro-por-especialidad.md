@@ -30,6 +30,10 @@ de lectura administrativa documentada en ADR-0022 y la lectura entre áreas.
 - **Comenzar atención sin cita** crea, por decisión explícita del profesional,
   una relación asistencial propia auditada e idempotente. No crea citas,
   notas, tratamientos ni mediciones. El motivo es obligatorio.
+- Con cita, **Iniciar atención** en Agenda crea el vínculo del profesional
+  asignado después de registrar la llegada. La apertura de la ficha y la
+  consulta del historial no conceden escritura. El vínculo se audita en la
+  misma transacción y se reutiliza si ya existe uno permanente vigente.
 - El alta prepara secciones vacías mediante las rutas existentes. No se
   inventan registros para representar disponibilidad ni se confunde falta
   de medición con cero.

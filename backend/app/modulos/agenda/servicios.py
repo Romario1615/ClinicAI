@@ -64,6 +64,7 @@ from app.modulos.agenda.modelos import (
 from app.modulos.agenda.repositorio import RepositorioAgenda, rango_de_dias
 from app.modulos.lista_espera.servicios import ServicioListaEspera
 from app.modulos.outbox.modelos import TipoMensajeOutbox
+from app.modulos.pacientes.modelos import RelacionAsistencial
 from app.nucleo.auditoria import (
     AccionAuditada,
     EntradaAuditoria,
@@ -1307,7 +1308,11 @@ class ServicioAgenda:
     async def iniciar_atencion(
         self, cita_id: uuid.UUID, *, principal: Principal
     ) -> ResultadoOperacion:
-        """Marca el inicio para medir la espera real del paciente."""
+        """Inicia la atención y vincula al profesional asignado a la cita.
+
+        Abrir una ficha o registrar la llegada no concede escritura clínica.
+        El vínculo se crea en esta acción explícita, junto con su auditoría.
+        """
         if not principal.tiene_permiso("cita.iniciar_atencion"):
             raise PermisoDenegado("No tiene permiso para iniciar la atención.")
 
@@ -1321,7 +1326,37 @@ class ServicioAgenda:
         if cita.atencion_iniciada_en is not None:
             raise ConflictoEstado("La atención de esta cita ya está en curso.")
 
+        profesional = await self._repo.obtener_profesional(
+            cita.profesional_id, clinica_id=cita.clinica_id
+        )
+        if profesional is None or not profesional.activo or profesional.anulado_en is not None:
+            raise ConflictoEstado("El profesional asignado a la cita no está activo.")
+
         ahora = self._reloj.ahora()
+        auditoria_relacion: tuple[EntradaAuditoria, ...] = ()
+        if await self._repo.relacion_permanente_de_cita(cita) is None:
+            relacion = RelacionAsistencial(
+                paciente_id=cita.paciente_id,
+                profesional_id=cita.profesional_id,
+                origen="CITA",
+                cita_id=cita.id,
+                creado_por=principal.actor_id,
+            )
+            self._sesion.add(relacion)
+            await self._sesion.flush()
+            auditoria_relacion = (
+                construir_entrada(
+                    accion=AccionAuditada.PACIENTE_ATENCION_ABIERTA,
+                    principal=principal,
+                    ahora=ahora,
+                    entidad_tipo="relacion_asistencial",
+                    entidad_id=relacion.id,
+                    sede_id=cita.sede_id,
+                    paciente_id=cita.paciente_id,
+                    cita_id=str(cita.id),
+                    profesional_id=str(cita.profesional_id),
+                ),
+            )
         cita.atencion_iniciada_en = ahora
         cita.actualizado_por = principal.actor_id
         await self._sesion.flush()
@@ -1346,7 +1381,7 @@ class ServicioAgenda:
             paciente_id=cita.paciente_id,
             estado_anterior=cita.estado,
         )
-        return ResultadoOperacion(cita, (entrada,))
+        return ResultadoOperacion(cita, (entrada, *auditoria_relacion))
 
     async def _cerrar(
         self,

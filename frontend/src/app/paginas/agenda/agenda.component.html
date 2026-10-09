@@ -558,6 +558,11 @@
         <button type="button" class="boton boton--pequeno detalle-cita__ficha" (click)="abrirFicha(cita.paciente_id, cita.id)">
           Ver ficha del paciente
         </button>
+        @if (sesion.tieneAlgunPermiso('historia_clinica.leer', 'receta.leer')) {
+          <button type="button" class="boton boton--principal boton--pequeno detalle-cita__ficha" (click)="abrirFicha(cita.paciente_id, cita.id, true)">
+            Elegir qué registrar
+          </button>
+        }
 
         @if (cita.estado === 'HELD' && cita.expira_en) {
           <p class="aviso-llamar">
@@ -887,7 +892,7 @@
       [altoCompleto]="true"
       (cerrar)="cerrarFicha()"
     >
-      <app-ficha-paciente [pacienteId]="pacienteId" [citaInicial]="citaEnFicha()" [zona]="zona()" [sinCabecera]="true" />
+      <app-ficha-paciente [pacienteId]="pacienteId" [citaInicial]="citaEnFicha()" [elegirRegistroInicial]="elegirRegistroEnFicha()" [zona]="zona()" [sinCabecera]="true" />
     </app-ventana-flotante>
   }
 

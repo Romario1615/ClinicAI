@@ -1,4 +1,4 @@
-import { Component, computed, inject, input, output, signal } from '@angular/core';
+import { Component, afterNextRender, computed, inject, input, output, signal } from '@angular/core';
 import { Router } from '@angular/router';
 import { EspecialidadHistoriaService, type ModuloHistoria } from '../nucleo/servicios/especialidad-historia.service';
 import { SesionService } from '../nucleo/servicios/sesion.service';
@@ -32,6 +32,7 @@ const HERRAMIENTAS: readonly Herramienta[] = [
       <app-ventana-flotante titulo="Herramientas del paciente" ceja="Consulta y atención" forma="centrada" [anchoMaximo]="860" [ocupada]="iniciando()" (cerrar)="!iniciando() && abierta.set(false)">
         <p class="campo__ayuda">Disponibles desde la creación del paciente. Cada sección conserva sus registros y comienza vacía hasta la primera atención. El registro depende de su rol y especialidad.</p>
         @if (puedeIniciar()) { <p class="campo__ayuda">Para empezar una primera atención sin cita, pulse Comenzar atención. Quedará registrado como profesional responsable.</p> }
+        @if (citaId() && especialidades.puedeRegistrar()) { <p class="campo__ayuda">Si es la primera atención con este paciente, registre su llegada e inicie la atención desde la agenda antes de guardar registros clínicos.</p> }
         @if (error()) { <p class="aviso-error" role="alert">{{ error() }}</p> }
         <div class="herramientas">
           @for (opcion of opciones(); track opcion.clave) {
@@ -59,12 +60,20 @@ export class HerramientasPacienteComponent {
   private readonly api = inject(OperacionesService);
   readonly pacienteId = input.required<string>();
   readonly citaId = input<string | null>(null);
+  readonly abrirInicialmente = input(false);
   readonly elegida = output<HerramientaHistoria>();
   protected readonly abierta = signal(false);
   protected readonly iniciando = signal(false);
   protected readonly error = signal('');
   protected readonly puedeIniciar = computed(() => !this.citaId() && this.especialidades.puedeRegistrar() && this.sesion.tienePermiso('historia_clinica.escribir'));
   private claveInicio = crypto.randomUUID();
+  constructor() {
+    // La ventana de la ficha debe entrar primero en la capa modal. Abrir el
+    // selector antes dejaría sus controles detrás e inactivos desde la agenda.
+    afterNextRender(() => {
+      if (this.abrirInicialmente()) this.abierta.set(true);
+    });
+  }
   protected readonly opciones = computed<OpcionHerramienta[]>(() => HERRAMIENTAS.flatMap(herramienta => {
     const seleccionada = this.especialidades.elegida();
     const especialidad = !herramienta.modulo ? seleccionada :

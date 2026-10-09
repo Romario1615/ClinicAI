@@ -1,5 +1,23 @@
 # ClinicAI — Plataforma de gestión clínica
 
+## Ficha y registro desde Agenda (2026-10-09)
+
+Abra una cita y pulse **Ver ficha del paciente** para consultar su expediente,
+o **Elegir qué registrar** para abrir directamente sus herramientas. La ficha
+conserva paciente, cita y sede; al cerrarla vuelve al detalle del mismo turno.
+Funciona también en móvil. El profesional registra en su especialidad y los
+otros roles consultan según sus permisos.
+
+En una primera visita agendada, registre la llegada y pulse **Iniciar atención**
+antes de guardar contenido clínico. Esa acción establece el vínculo auditado
+del profesional asignado. Consultar la ficha no concede escritura ni crea
+notas. Los manuales propios de Profesional y Recepción están actualizados en
+Ayuda. [Implementación, pruebas y límites](docs/verificacion-ficha-agenda-2026-10-09.md).
+
+Verificación: frontend **829/829** con cobertura, backend afectado **188 casos
+distintos** y Chromium **20/20**, sin reintentos. Lint/build, Ruff/formato/mypy,
+Bandit de archivos modificados, auditoría npm y Gitleaks aprobados.
+
 ## Menú «Elegir qué registrar» de la ficha (2026-10-09)
 
 La herramienta elegida ahora queda visible y recibe el foco dentro de la

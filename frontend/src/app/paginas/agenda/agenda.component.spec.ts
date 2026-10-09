@@ -170,6 +170,35 @@ describe('AgendaComponent · reserva y series', { timeout: 20_000 }, () => {
     fixture.detectChanges();
   }
 
+  it('abre las herramientas con el paciente y la cita elegida, conservando el detalle de agenda', () => {
+    montar();
+    const elegida = cita(turnos[0].inicio);
+    const agenda = fixture.componentInstance;
+    agenda['abrirCita'](elegida);
+    agenda['abrirFicha'](elegida.paciente_id, elegida.id, true);
+    expect(agenda['pacienteEnFicha']()).toBe(elegida.paciente_id);
+    expect(agenda['citaEnFicha']()).toBe(elegida.id);
+    expect(agenda['elegirRegistroEnFicha']()).toBe(true);
+    expect(agenda['citaSeleccionada']()).toBe(elegida);
+    agenda['cerrarFicha']();
+    expect(agenda['pacienteEnFicha']()).toBeNull();
+    expect(agenda['citaEnFicha']()).toBeNull();
+    expect(agenda['elegirRegistroEnFicha']()).toBe(false);
+    expect(agenda['citaSeleccionada']()).toBe(elegida);
+    agenda['cerrarPanel']();
+  });
+
+  it('Ver ficha abre la consulta normal sin activar el selector automáticamente', () => {
+    montar();
+    const agenda = fixture.componentInstance;
+    agenda['abrirFicha'](PACIENTE.id, 'cita-1', true);
+    agenda['cerrarFicha']();
+    agenda['abrirFicha'](PACIENTE.id, 'cita-2');
+    expect(agenda['citaEnFicha']()).toBe('cita-2');
+    expect(agenda['elegirRegistroEnFicha']()).toBe(false);
+    agenda['cerrarFicha']();
+  });
+
   function raiz(): HTMLElement {
     return fixture.nativeElement as HTMLElement;
   }

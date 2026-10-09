@@ -195,6 +195,7 @@ _RECEPCION = ManualSistema(
             "Mantener el contexto administrativo y el consentimiento específico de entrega.",
             (
                 "Abra la ficha, entre en Atención y seleccione la cita para comprobar sede, servicio y especialista.",
+                "Desde Agenda también puede abrir el detalle y elegir Ver ficha del paciente o Elegir qué registrar; ambos conservan el turno y permiten consultar las herramientas clínicas sin editarlas.",
                 "En Contacto y consentimientos, registre Documentos por WhatsApp únicamente si el paciente lo autoriza y compruebe su teléfono.",
                 "Use Pagos de esta cita para consultar sus cargos; el presupuesto lo emite el profesional en su acceso clínico.",
             ),
@@ -421,6 +422,7 @@ _PROFESIONAL = ManualSistema(
             (
                 "Después del alta administrativa, abra la ficha y pulse Elegir qué registrar; las herramientas ya están disponibles aunque estén vacías.",
                 "Si la atención no tiene cita ni vínculo previo, use Comenzar atención sin cita para registrar su responsabilidad y abrir Evolución.",
+                "Para una visita agendada, registre primero la llegada y pulse Iniciar atención en el detalle de la cita; después use allí Elegir qué registrar para abrir la ficha con esa cita conservada.",
                 "Seleccione la herramienta de su especialidad y use su acción de nuevo registro; las herramientas de otras áreas permanecen en Solo consulta.",
                 "En el historial completo, Periodoncia abre el periodontograma de seis sitios y permite cambiar al índice de placa.",
             ),
