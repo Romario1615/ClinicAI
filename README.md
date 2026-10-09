@@ -1,5 +1,35 @@
 # ClinicAI — Plataforma de gestión clínica
 
+## Pruebas de formularios, consultas y lógica (2026-10-09)
+
+Inventario de **66 formularios en 45 plantillas**, con suites de componente y
+pruebas API/integración de persistencia, validación, ámbito, auditoría,
+idempotencia, paginación, agenda y datos clínicos.
+
+- Los formularios administrativos bloquean envíos adicionales mientras guardan.
+- Contraseña y chat validan sus entradas antes de enviar; el chat conserva
+  controles accesibles y el simulador muestra los horarios ofrecidos.
+- **Confirmar cita** usa la reserva existente del canal después de las barreras
+  clínicas; evita que el clasificador vuelva a buscar horarios.
+- Gastos exige dos decimales como máximo y conserva el importe exacto y el
+  historial al anular. Catálogo muestra el error específico de fotos pendientes.
+- Las descripciones de roles reflejan consulta N2 compartida y edición por
+  especialidad; recepción y asistencia continúan sin escritura clínica.
+- Alembic conserva el respaldo de permisos 038 para su reversión. Las pruebas
+  de roles preparan sus catálogos dentro de una transacción reversible.
+
+**Verificación final:** backend **2220 aprobadas / tres externas omitidas**,
+**88,89 %** de cobertura; frontend **817/817** con cobertura; Chromium
+**90/90 sin reintentos**. Ruff, formato, mypy, Bandit, lint/build y Gitleaks
+aprobados; auditorías npm y Python base/dev/LLM sin vulnerabilidades conocidas.
+Paquete inicial 468,69 kB. API 8020, seis bases temporales y cuatro archivos
+de pruebas retirados; aplicación 4200 y API 8000 responden 200. Las correcciones,
+comandos y límites están en
+[la verificación de formularios](docs/verificacion-formularios-2026-10-09.md).
+[Inventario y reglas por dominio](docs/matriz-formularios-consultas.md).
+Las pruebas externas usan adaptadores sandbox y datos sintéticos; no se
+configuran ni envían mensajes reales en esta revisión.
+
 ## Ficha e historial compartidos, registro por especialidad (2026-10-09)
 
 **Pacientes → Ver ficha → Elegir qué registrar** reúne evolución y antecedentes,

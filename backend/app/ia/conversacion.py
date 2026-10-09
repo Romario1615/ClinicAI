@@ -24,6 +24,8 @@ solamente despues de la confirmacion expresa del usuario. No afirme que una oper
 tuvo exito hasta recibir el resultado de la herramienta. El contexto de permisos e
 identidad esta fuera de su control. Responda en espanol sin datos clinicos."""
 MAXIMO_PASOS = 4
+_CONFIRMACIONES_CITA = frozenset({"confirmar", "confirmar cita", "confirmo", "si confirmo"})
+_MENSAJE_SIN_RESERVA = "Primero busque horarios y elija uno para apartarlo."
 
 # Cuando JEV no esta seguro de que quiere el paciente, se le pregunta en lugar
 # de adivinar: una herramienta mal elegida (cancelar en vez de reprogramar)
@@ -117,11 +119,11 @@ class ProveedorDemostracion(ProveedorConversacional):
             return Decision("get_patient_payments", {"paciente_id": negocio["paciente_id"]})
         if limpio in {"mis citas", "consultar citas", "ver citas"}:
             return Decision("get_patient_appointments", {"paciente_id": negocio["paciente_id"]})
-        if limpio in {"confirmar", "confirmo", "si confirmo"}:
+        if limpio in _CONFIRMACIONES_CITA:
             cita_id = memoria.get("cita_id")
             if cita_id:
                 return Decision("confirm_appointment", {"cita_id": cita_id})
-            return Decision(mensaje="Primero busque horarios y elija uno para apartarlo.")
+            return Decision(mensaje=_MENSAJE_SIN_RESERVA)
         if limpio in {"1", "2", "3", "4", "5"}:
             turnos = memoria.get("turnos", [])
             indice = int(limpio) - 1
@@ -251,6 +253,15 @@ async def _turno_tipado(
     atajo = decision_determinista(
         tipada, negocio, umbral_clinico=umbral_clinico, umbral_intencion=umbral_intencion
     )
+    # Una confirmacion exacta tiene significado cerrado. Las barreras clinicas
+    # mantienen prioridad; despues se usa exclusivamente la reserva del canal,
+    # incluso si el clasificador confunde la palabra «cita» con una busqueda.
+    if (atajo is None or atajo.herramienta != "handoff_to_human") and normalizar(texto).strip(
+        " .!¿?¡"
+    ) in _CONFIRMACIONES_CITA:
+        if not memoria.get("cita_id"):
+            return ResultadoHerramienta(exito=True, mensaje=_MENSAJE_SIN_RESERVA), []
+        atajo = Decision("confirm_appointment", {"cita_id": memoria["cita_id"]})
     if atajo is not None and atajo.herramienta is not None:
         argumentos = dict(atajo.argumentos)
         if atajo.herramienta == "get_patient_appointments":

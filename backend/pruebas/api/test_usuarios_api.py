@@ -15,7 +15,7 @@ from app.modulos.usuarios.modelos import Permiso, Rol, RolPermiso, Usuario
 from app.nucleo.autorizacion import PERMISOS_POR_ROL
 from pruebas.api.conftest import cabecera_bearer, conceder_permisos
 
-pytestmark = [pytest.mark.api, pytest.mark.asyncio]
+pytestmark = [pytest.mark.api, pytest.mark.asyncio, pytest.mark.usefixtures("catalogos_sistema")]
 
 
 async def _autorizar_administrador(

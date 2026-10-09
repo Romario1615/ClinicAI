@@ -51,10 +51,14 @@ def _incluir_objeto(
     """Filtra objetos que Alembic no debe gestionar.
 
     Las tablas internas de la extension `vector` y las de Alembic no forman
-    parte del modelo y no deben aparecer en las migraciones.
+    parte del modelo y no deben aparecer en las migraciones. El respaldo de
+    permisos de la revision 038 pertenece a su upgrade/downgrade: quitarlo
+    con autogenerate impediria restaurar las asignaciones originales.
     """
     del objeto, reflejado, comparar_con
     if tipo == "table" and nombre is not None:
+        if nombre == "respaldo_consulta_roles_20261009":
+            return False
         return not nombre.startswith(("pg_", "sql_", "alembic_"))
     return True
 

@@ -1,5 +1,25 @@
 # Limitaciones conocidas y riesgos residuales
 
+## Formularios y consultas (2026-10-09)
+
+Se inventariaron 66 formularios en 45 plantillas y se añadieron regresiones
+de validación, envíos pendientes, precisión monetaria, paginación, aislamiento
+y lectura posterior. El chat y el simulador recuperan sus controles; una
+confirmación exacta usa solo la reserva del canal tras las barreras clínicas.
+
+Las pruebas usan PostgreSQL/Redis reales y datos sintéticos exclusivos. La
+interfaz aprobó 817 pruebas con cobertura. Los resultados completos de API y
+navegador están en [el informe](verificacion-formularios-2026-10-09.md), junto
+con las incidencias iniciales y sus correcciones. Una suite por plantilla no
+equivale a agotar todas las combinaciones de entradas ni a aceptación clínica.
+
+WhatsApp/calendario siguen en sandbox en esta verificación; no se comprueban
+credenciales contratadas, entregas reales ni cámaras físicas. La auditoría
+Python cubre base, desarrollo y LLM; conserva la exclusión documentada del
+extra opcional `embeddings` (E-12). No se ejecutaron DAST ni una nueva carga
+representativa o un pipeline remoto; las condiciones de producción existentes
+continúan pendientes.
+
 ## Actualización de ficha y marca (2026-10-09)
 
 La consulta N2 se habilita para los seis roles base dentro de clínica y ámbito,

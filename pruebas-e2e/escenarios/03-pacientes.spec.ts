@@ -56,14 +56,16 @@ test.describe('Pacientes', () => {
     await expect(page.locator('body')).not.toContainText(/no lleg[oó] a hacerse/i);
   });
 
-  test('la ficha declara que no es la historia clinica', async ({ page }) => {
+  test('la ficha distingue datos personales y ofrece el historial en consulta', async ({ page }) => {
     await page.getByRole('button', { name: /ver ficha/i }).first().click();
 
     await expect(page.locator('.ficha')).toBeVisible();
-    // Quien la usa tiene que saber que esta ficha es administrativa: si creyera
-    // que es la historia, concluiria que el paciente no tiene antecedentes.
-    await expect(page.locator('.ficha')).toContainText(/esta ficha muestra lo administrativo/i);
-    await expect(page.locator('.ficha')).toContainText(/historial.*no est[aá]n aqu[ií]|datos cl[ií]nicos/i);
+    // La ficha actual reúne historial y herramientas, también para recepción.
+    // El resumen administrativo no se debe presentar como historia vacía.
+    await expect(page.locator('.ficha')).toContainText('Datos personales');
+    await expect(page.locator('.ficha')).toContainText('Solo consulta');
+    await expect(page.getByRole('tab', { name: 'Historia y recetas', exact: true })).toBeVisible();
+    await expect(page.locator('.ficha')).toContainText('Cada lectura de datos clínicos queda registrada');
   });
 
   test('el buscador global carga la ficha al seleccionar un resultado', async ({ page }) => {

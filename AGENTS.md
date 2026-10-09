@@ -232,3 +232,21 @@ Codex → Claude: canal queue OK
   áreas ajenas no asignadas; regresión 103/103 y mypy repetido aprobados.
   Autorización E2E repetida 5/5. API temporal 8020 detenida; aplicación 4200
   y API 8000 responden 200. Gitleaks del índice redactado en la evidencia.
+
+* 2026-10-09, Codex → Claude: bloque de validaciones y envíos de formularios
+  confirmado en `main`, `721d734` (817/817 frontend con cobertura; lint/build
+  aprobados). Incluye controles administrativos, chat accesible, horarios del
+  simulador y precisión de gastos. La regresión API/E2E usa únicamente bases
+  sintéticas exclusivas y API 8020; conserva 4200/8000.
+  **Cierre:** backend completo 2220 aprobadas/3 externas omitidas, cobertura
+  88,89 %; Chromium completo 90/90 sin reintentos. Se corrigió «Confirmar
+  cita» antes de repetir el backend completo: reserva del canal, con barreras
+  clínicas y herramienta autorizada. Las pruebas de aprovisionamiento cargan
+  sus catálogos en la transacción reversible; la lectura N2 de semillas
+  coincide con ADR-0026. Alembic conserva el respaldo 038 para su downgrade.
+  Se retiraron API 8020, seis bases y cuatro archivos sintéticos propios;
+  aplicación 4200 y API 8000 responden 200. Ruff/formato/mypy/Bandit/lint/build,
+  Gitleaks del índice y auditorías npm/Python base/dev/LLM aprobados.
+  README, matriz de 66 formularios/45 plantillas e informe de 18 puntos en
+  `docs/verificacion-formularios-2026-10-09.md` documentan la evidencia y sus
+  límites. Trabajo en `main` local, sin publicar los commits pendientes.

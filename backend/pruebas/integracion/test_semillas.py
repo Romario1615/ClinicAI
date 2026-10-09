@@ -38,6 +38,7 @@ from app.modulos.usuarios.modelos import (
 )
 from app.nucleo.autorizacion import (
     CATALOGO_PERMISOS,
+    PERMISOS_CONSULTA_CLINICA,
     PERMISOS_POR_ROL,
     PERMISOS_SOLO_ASISTENCIALES,
 )
@@ -116,7 +117,7 @@ class TestCatalogos:
         for rol in filas:
             assert rol.clinica_id is None
 
-    async def test_recepcion_no_tiene_permisos_clinicos_en_la_base(
+    async def test_roles_no_profesionales_consultan_sin_escritura_clinica_en_la_base(
         self, sesion: AsyncSession
     ) -> None:
         """La matriz del codigo y la de la base deben coincidir.
@@ -127,7 +128,13 @@ class TestCatalogos:
         await cargar_catalogos(sesion)
         await sesion.flush()
 
-        for codigo_rol in ("recepcion", "superadministrador", "auditor"):
+        for codigo_rol in (
+            "recepcion",
+            "asistente",
+            "administrador_clinica",
+            "superadministrador",
+            "auditor",
+        ):
             rol = (
                 await sesion.execute(
                     sa.select(Rol).where(Rol.codigo == codigo_rol, Rol.clinica_id.is_(None))
@@ -143,10 +150,12 @@ class TestCatalogos:
                     )
                 ).scalars()
             )
-            clinicos = concedidos & PERMISOS_SOLO_ASISTENCIALES
-            assert not clinicos, (
-                f"El rol '{codigo_rol}' tiene permisos clinicos en la base de "
-                f"datos: {sorted(clinicos)}"
+            assert concedidos >= PERMISOS_CONSULTA_CLINICA
+            assert "historia_clinica.leer_sensible" not in concedidos
+            operaciones = (concedidos & PERMISOS_SOLO_ASISTENCIALES) - PERMISOS_CONSULTA_CLINICA
+            assert not operaciones, (
+                f"El rol '{codigo_rol}' tiene operaciones clinicas en la base de "
+                f"datos: {sorted(operaciones)}"
             )
 
     async def test_solo_el_profesional_escribe_datos_clinicos(self, sesion: AsyncSession) -> None:

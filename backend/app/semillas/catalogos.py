@@ -40,35 +40,38 @@ from app.nucleo.autorizacion import (
 NOMBRES_DE_ROL: dict[str, tuple[str, str]] = {
     "superadministrador": (
         "Superadministrador",
-        "Administra la plataforma. NO accede a informacion clinica: separar la "
-        "administracion tecnica del acceso clinico evita que una cuenta "
-        "tecnica comprometida exponga datos de pacientes.",
+        "Administra la plataforma y consulta historia N2 dentro de la clinica "
+        "y el ambito autorizado. No registra informacion clinica; N3 exige "
+        "permiso independiente.",
     ),
     "administrador_clinica": (
         "Administrador de clinica",
-        "Gestiona la organizacion, el personal y la configuracion. Ve "
-        "metadatos clinicos para poder auditar la operacion, pero no el "
-        "contenido de las historias.",
+        "Gestiona organizacion, personal y configuracion. Consulta historia "
+        "N2 de su ambito sin editarla; N3 exige permiso independiente.",
     ),
     "recepcion": (
         "Recepcion",
-        "Agenda, registra pacientes y gestiona pagos. Ve que existe una cita y "
-        "con quien, no el motivo de consulta ni el diagnostico.",
+        "Agenda, registra pacientes y gestiona pagos. Consulta historia N2 "
+        "y herramientas de las especialidades autorizadas sin registrar "
+        "informacion clinica; N3 exige permiso independiente.",
     ),
     "profesional": (
         "Profesional",
-        "Atiende pacientes. Unico rol que escribe historia clinica y recetas, "
-        "y solo de los pacientes con los que tiene relacion asistencial.",
+        "Atiende pacientes y registra historia clinica y recetas segun su "
+        "especialidad y relacion asistencial. Consulta las otras areas "
+        "autorizadas; N3 exige su permiso correspondiente.",
     ),
     "asistente": (
         "Asistente o enfermeria",
-        "Apoya la atencion y el seguimiento de medicacion. Ve recetas y "
-        "adherencia, no la evolucion clinica.",
+        "Apoya la atencion y consulta historia N2, recetas y adherencia de su "
+        "ambito. No registra ni modifica informacion clinica; N3 exige "
+        "permiso independiente.",
     ),
     "auditor": (
         "Auditor",
-        "Verifica quien accedio a que y cuando. Puede comprobar sin ver: lee "
-        "la pista de auditoria y los metadatos, nunca el contenido clinico.",
+        "Verifica quien accedio a que y cuando. Consulta auditoria e historia "
+        "N2 dentro de su ambito, sin modificar registros; N3 exige permiso "
+        "independiente.",
     ),
 }
 

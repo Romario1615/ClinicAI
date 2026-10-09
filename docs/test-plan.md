@@ -1,5 +1,28 @@
 # Plan de pruebas
 
+## Formularios y consultas (2026-10-09)
+
+[Matriz](matriz-formularios-consultas.md): 66 formularios en 45 plantillas,
+todos con suite de componente. Se complementan con la batería completa
+API/integración/concurrencia/seguridad y 90 recorridos Chromium. Los escenarios
+usan bases PostgreSQL exclusivas y Redis separado; ningún envío externo real.
+
+Frontend: **817/817**, 107 archivos, 200,74 s; cobertura 85,28 % sentencias,
+72,56 % ramas, 81,12 % funciones y 87,74 % líneas. Lint/build aprobados. Las
+regresiones nuevas verifican envíos pendientes, entrada por teclado, contraseña,
+errores de fotos, importes rechazados sin mutación, consultas y paginación
+aislada. El escenario 23 recorre alta exacta de gasto, filtros y anulación
+con trazabilidad; el simulador confirma su cita real por el botón visible.
+
+Backend definitivo: **2220 aprobadas y tres de Anthropic real omitidas**,
+1231,90 s, **88,89 %** de cobertura global. Chromium completo **90/90 en
+21,0 min**, sin reintentos. Se corrigieron los fallos originales y se repitió
+la batería completa después del último cambio del agente. Análisis estático,
+auditorías y migraciones aprobados; entorno temporal retirado.
+
+[Informe de 18 puntos y resultados completos](verificacion-formularios-2026-10-09.md).
+Las cifras de capítulos siguientes se conservan como evidencia histórica.
+
 ## Ficha compartida y marca celeste turquesa (2026-10-09)
 
 Frontend completo **777/777**, cobertura 85,09 % sentencias, 71,95 % ramas,
@@ -45,10 +68,10 @@ y proveedores mock/sandbox. Se ejecutó sin cobertura; no se atribuye una medida
 nueva de cobertura backend a esta corrida. Las dos bases desechables se retiraron.
 [Informe y estado de CI](verificacion-2026-10-07.md#faciograma-visible-y-documentos-desde-la-ficha).
 
-Ese recorrido es histórico. La política actual separa las herramientas por
-especialidad: la prueba facial usa **Dermatología**, con relación asistencial
-y cita propias; Odontología no obtiene Faciograma aunque tenga lectura de
-otra especialidad. El recorrido actualizado conserva versiones, PDF y móvil.
+Ese recorrido es histórico. La escritura facial usa **Dermatología**, con
+relación asistencial propia. Desde ADR-0026, las otras especialidades
+autorizadas y los roles base pueden consultar Faciograma N2 sin editarlo.
+N3 conserva su permiso independiente. El recorrido conserva versiones, PDF y móvil.
 
 ## CRUD, faciograma y documentos (2026-10-07)
 

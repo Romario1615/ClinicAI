@@ -78,6 +78,74 @@ async def test_confianza_baja_de_jev_pregunta_con_opciones() -> None:
     assert resultado.mensaje == MENSAJE_ACLARACION
 
 
+@pytest.mark.parametrize("texto", ["confirmar", "Confirmar cita", "sí confirmo"])
+@pytest.mark.parametrize("confianza", [0.4, 0.95])
+@pytest.mark.parametrize("configurado", [False, True])
+async def test_confirmacion_explicita_usa_solo_la_reserva_de_memoria(texto, confianza, configurado):
+    llamadas = []
+
+    async def invocar(nombre, argumentos, contexto):
+        llamadas.append((nombre, argumentos))
+        return ResultadoHerramienta(exito=True, mensaje="Cita confirmada.")
+
+    resultado, herramientas = await ejecutar_turno(
+        _LLM("No debe decidir la confirmación.") if configurado else ProveedorDemostracion(),
+        texto,
+        {"cita_id": "reserva-del-canal"},
+        dict.fromkeys(
+            ("profesional_id", "servicio_id", "sede_id", "desde", "hasta"), "dato-del-canal"
+        ),
+        None,  # type: ignore[arg-type]
+        clasificador=_Clasificador(
+            DecisionTipada(Intencion.BUSCAR_HORARIOS, confianza, 0, 0, "jev")
+        ),
+        invocar=invocar,
+    )
+    assert herramientas == ["confirm_appointment"]
+    assert llamadas == [("confirm_appointment", {"cita_id": "reserva-del-canal"})]
+    assert resultado.exito
+
+
+async def test_confirmacion_sin_reserva_no_inventa_cita():
+    async def invocar(nombre, argumentos, contexto):
+        pytest.fail("Sin una reserva no se debe invocar una herramienta.")
+
+    resultado, herramientas = await ejecutar_turno(
+        ProveedorDemostracion(),
+        "Confirmar cita",
+        {},
+        {},
+        None,  # type: ignore[arg-type]
+        clasificador=_Clasificador(DecisionTipada(Intencion.BUSCAR_HORARIOS, 0.95, 0, 0, "jev")),
+        invocar=invocar,
+    )
+    assert herramientas == []
+    assert "Primero busque horarios" in resultado.mensaje
+
+
+@pytest.mark.parametrize("clinica, urgencia", [(0.9, 0), (0, 0.9)])
+async def test_confirmacion_no_omite_la_barrera_clinica(clinica, urgencia):
+    async def invocar(nombre, argumentos, contexto):
+        assert nombre == "handoff_to_human"
+        return ResultadoHerramienta(
+            exito=False, mensaje="Atención del personal.", requiere_humano=True
+        )
+
+    resultado, herramientas = await ejecutar_turno(
+        ProveedorDemostracion(),
+        "Confirmar cita",
+        {"cita_id": "reserva"},
+        {},
+        None,  # type: ignore[arg-type]
+        clasificador=_Clasificador(
+            DecisionTipada(Intencion.BUSCAR_HORARIOS, 0.95, clinica, urgencia, "jev")
+        ),
+        invocar=invocar,
+    )
+    assert herramientas == ["handoff_to_human"]
+    assert resultado.requiere_humano
+
+
 async def test_informacion_sin_llm_cita_y_sin_fuente_lo_dice() -> None:
     info = DecisionTipada(Intencion.INFORMACION, 0.95, 0.0, 0.0, "jev")
     citada = await _turno(ProveedorDemostracion(), info, _fuentes)

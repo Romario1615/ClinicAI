@@ -16,7 +16,7 @@ from app.nucleo.autorizacion import PERMISOS_POR_ROL
 from app.nucleo.reloj import RelojFijo
 from pruebas.api.conftest import cabecera_bearer, conceder_permisos
 
-pytestmark = [pytest.mark.api, pytest.mark.asyncio]
+pytestmark = [pytest.mark.api, pytest.mark.asyncio, pytest.mark.usefixtures("catalogos_sistema")]
 
 
 async def _seleccionar_profesional_local(sesion: AsyncSession, usuario: Usuario) -> None:

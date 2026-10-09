@@ -24,7 +24,7 @@ from app.nucleo.autorizacion import CATALOGO_PERMISOS
 from app.nucleo.seguridad import hashear_contrasena, verificar_contrasena
 from pruebas.api.conftest import cabecera_bearer, conceder_permisos
 
-pytestmark = [pytest.mark.api, pytest.mark.asyncio]
+pytestmark = [pytest.mark.api, pytest.mark.asyncio, pytest.mark.usefixtures("catalogos_sistema")]
 
 
 async def _preparar_superadmin(sesion: AsyncSession, usuario: Usuario) -> None:

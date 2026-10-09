@@ -1210,7 +1210,10 @@ async def sesion_demo(cliente, api, acceso, paciente, sede, servicio, profesiona
     return r.json()["sesion_id"]
 
 
-async def test_agente_reserva_confirmacion_y_reintento(cliente, api, acceso, sesion_demo, sesion):
+@pytest.mark.parametrize("confirmacion", ["confirmar", "Confirmar cita"])
+async def test_agente_reserva_confirmacion_y_reintento(
+    cliente, api, acceso, sesion_demo, sesion, confirmacion
+):
     ruta = f"{api}/agente-demo/sesiones/{sesion_demo}/mensajes"
     horarios = await cliente.post(
         ruta, json={"texto": "buscar horarios"}, headers=cabeceras(acceso, "turno-demo-001")
@@ -1229,7 +1232,7 @@ async def test_agente_reserva_confirmacion_y_reintento(cliente, api, acceso, ses
     )
     assert repetido.json() == apartado.json()
     confirmada = await cliente.post(
-        ruta, json={"texto": "confirmar"}, headers=cabeceras(acceso, "turno-demo-003")
+        ruta, json={"texto": confirmacion}, headers=cabeceras(acceso, "turno-demo-003")
     )
     assert confirmada.status_code == 200, confirmada.text
     assert confirmada.json()["herramientas"] == ["confirm_appointment"]

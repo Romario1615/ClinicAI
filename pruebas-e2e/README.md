@@ -4,7 +4,13 @@ Navegador real, frontend real, API real y PostgreSQL real. Los proveedores
 externos funcionan con adaptadores locales durante esta verificación; no se
 envían mensajes ni se realizan llamadas pagadas.
 
-**Última revisión de visibilidad:** **67/67 en 7,7 minutos**. La ficha ofrece
+**Verificación vigente (2026-10-09):** **90/90 en 21,0 minutos**, sin reintentos,
+en 23 archivos con API/BD exclusivas y proveedores locales. Incluye
+registro y consulta por especialidad, agente del paciente, periodontograma,
+analítica, formularios extensos y caja. Resultados, incidencias corregidas y
+entorno en [la verificación de formularios](../docs/verificacion-formularios-2026-10-09.md).
+
+**Revisión histórica de visibilidad (2026-10-07):** **67/67 en 7,7 minutos**. La ficha ofrece
 Faciograma y Documentos y PDF como pestañas directas y conserva la cita al
 cambiarlas. Se prueban versiones/anulación del mapa, axe en la ficha, PDF de
 presupuesto/cotización/receta y solicitudes sandbox. Equipo cubre también editar
@@ -47,10 +53,24 @@ terminar, y en este proyecto el servidor de desarrollo es algo que la persona
 deja corriendo mientras trabaja.
 
 ```powershell
-# 1. API aislada del código actual, sin tocar una API de desarrollo que ya esté abierta
+# 1. API aislada; la base PostgreSQL exclusiva debe existir con sus extensiones.
+# No apunte estas pruebas a datos reales ni a la base compartida de desarrollo.
 cd backend
+$env:ENTORNO='local'
+$env:POSTGRES_BD='clinicai_e2e_sintetica'
+$env:BD_URL=''
+$env:REDIS_BD='14' # índice reservado para esta API de pruebas
+$env:REDIS_URL=''
+$env:ALMACENAMIENTO_ARCHIVOS='local'
+$env:RUTA_ALMACENAMIENTO_LOCAL='../tmp/e2e-archivos-sinteticos'
 $env:LIMITE_LOGIN_POR_MINUTO='200'
+$env:PROVEEDOR_LLM='mock'
 $env:PROVEEDOR_EMBEDDINGS='mock' # CI local: evita depender del extra opcional fastembed
+$env:MODO_WHATSAPP='sandbox'
+$env:MODO_CALENDARIO='sandbox'
+uv run alembic upgrade head
+uv run python -m app.semillas.cargar --embeddings mock
+uv run python -m app.semillas.cargar --habilitar-superadministrador-local
 uv run uvicorn app.main:crear_aplicacion --factory --host 127.0.0.1 --port 8002
 
 # 2. Frontend, en otra terminal
@@ -155,7 +175,7 @@ es el escenario o el sistema, y hay que mirarlo.
 
 ## Sin paralelismo
 
-Los escenarios comparten la base de datos de desarrollo y varios escriben en
+Los escenarios comparten una base sintética exclusiva y varios escriben en
 ella. En paralelo, uno que crea una cita y otro que consulta la agenda del mismo
 profesional se estorban, y el fallo aparece de forma intermitente.
 
@@ -165,7 +185,8 @@ de corridas anteriores ocupando una semana cercana.
 
 ## Estado
 
-La suite contiene **63 pruebas en 16 archivos**. Antes de añadir la regresión
+La suite vigente contiene **90 pruebas en 23 archivos**. La siguiente evidencia
+se conserva como historial de 2026-10-07. Antes de añadir la regresión
 del perfil de pacientes, la ejecución completa del
 2026‑10‑07 aprobó **62/62 en 6,9 minutos**, sin reintentos, con el código
 actual sobre `727c9f5`, Angular en 4200 y una API aislada en 8020. Se creó una
@@ -202,12 +223,24 @@ escribe datos ni evalúa cálculos demográficos del backend.
 | `14-accesibilidad.spec.ts` | Diez recorridos axe: pantallas, ventanas y los seis roles en las 22 rutas del menú |
 | `15-pantallas-trabajo.spec.ts` | Agenda y Pacientes en escritorio/móvil; acciones y paginación visibles, desplazamiento interno y pestañas clínicas con flechas, Inicio y Fin |
 | `16-panel-demografia.spec.ts` | Perfil de pacientes con valores y etiquetas largas; siete anchos, sin recortes ni solapamientos y sin relleno para celdas protegidas |
+| `17-registros-y-documentos.spec.ts` | CRUD administrativo, ficha con cita, versiones del faciograma, presupuesto, PDF y solicitudes de entrega sandbox |
+| `18-periodontograma-analitica-agente.spec.ts` | Periodontograma persistido, fotografías de registro y agente del paciente con consulta y acciones administrativas |
+| `19-ficha-agente-diseno.spec.ts` | Espacios de la ficha con el agente abierto y recorrido de ocupación del panel |
+| `20-acceso-formularios.spec.ts` | Fondo de acceso, formularios y acciones dentro de ventanas con pie fijo |
+| `21-analitica-diseno.spec.ts` | Búsqueda, vistas, metodología, accesibilidad y ocho tamaños de Analítica IA |
+| `22-ficha-compartida-marca.spec.ts` | Seis roles, herramientas vacías, primera atención sin cita, edición por profesional y marca adaptable |
+| `23-formularios-consultas.spec.ts` | Gastos: requeridos, precisión monetaria, guardado exacto, idempotencia, filtros y anulación con historial conservado |
 
 ## Lo que falta
 
-La corrida completa más reciente aprobó **62/62 pruebas** el 2026‑10‑07 con la API actual, Angular y PostgreSQL. Gastos y caja y Ayuda se cubren por axe y navegación; el alta y anulación de gastos se verifican en pruebas API y de componente. La búsqueda de datos clínicos recorre todas las páginas autorizadas; si falta una historia versionada para el profesional local, la semilla incremental documentada arriba la agrega sin recargar pacientes ni citas. Aún faltan flujos que no corresponden a estos escenarios:
+Los resultados completos vigentes están en el informe enlazado al comienzo.
+Gastos y caja incluye alta, validación, consulta y anulación por interfaz y API.
+La búsqueda clínica recorre todas las páginas autorizadas. Las pruebas de
+componente/API complementan estos recorridos; el navegador no agota todas
+las combinaciones de los 66 formularios. Quedan fuera de esta evidencia:
 
-* **Reserva por WhatsApp simulado**, que depende del agente conversacional
-  (E‑23) y del webhook, hoy sin conectar a herramientas.
+* El recorrido completo de una reserva desde el webhook de WhatsApp hasta la
+  bandeja y su entrega real. El simulador sí reserva y confirma; las herramientas,
+  webhook y outbox se prueban también en API/integración con adaptadores locales.
 * **Aceptación clínica integral**, con revisión de odontología, medicación,
   seguimiento y procedimientos por personal clínico de la clínica.

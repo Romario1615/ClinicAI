@@ -59,6 +59,7 @@ from app.nucleo.configuracion import Configuracion
 from app.nucleo.dependencias import obtener_sesion
 from app.nucleo.reloj import RelojFijo
 from app.nucleo.seguridad import hashear_contrasena
+from app.semillas.catalogos import cargar_catalogos
 from pruebas.conftest import INSTANTE_REFERENCIA
 
 CONTRASENA = "ContrasenaDePrueba123"
@@ -291,6 +292,18 @@ async def clinica(sesion: AsyncSession, sufijo: str) -> Clinica:
     sesion.add(registro)
     await sesion.flush()
     return registro
+
+
+@pytest_asyncio.fixture
+async def catalogos_sistema(sesion: AsyncSession) -> None:
+    """Roles base propios de la prueba, sin depender de semillas de desarrollo.
+
+    La carga participa en la transaccion reversible de la prueba; no confirma
+    cambios en la base compartida. Solo la solicitan los modulos que asignan
+    roles de sistema y aprovisionan clinicas.
+    """
+    await cargar_catalogos(sesion)
+    await sesion.flush()
 
 
 @pytest_asyncio.fixture

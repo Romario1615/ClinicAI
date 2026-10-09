@@ -1,5 +1,29 @@
 # Estado de preparación para producción
 
+## Verificación de formularios y consultas (2026-10-09)
+
+Revisión local en `main`: 66 formularios inventariados, guardado protegido
+contra envíos adicionales, validaciones y mensajes específicos, precisión de
+gastos y confirmación de reservas del agente. Consultas y escrituras mantienen
+permisos, ámbito, auditoría y restricciones de PostgreSQL. Las pruebas API de
+aprovisionamiento preparan sus catálogos y se ejecutan también sobre bases
+nuevas; dejan de depender de las semillas de desarrollo.
+
+Backend completo: **2220 aprobadas y tres externas omitidas**, **88,89 %** de
+cobertura. Frontend **817/817** con cobertura; Chromium **90/90** sin reintentos.
+Ruff/formato/mypy/Bandit/lint/build y Gitleaks aprobados; npm y Python base/dev/LLM
+sin vulnerabilidades conocidas en sus auditorías. Paquete inicial 468,69 kB.
+API temporal, seis bases y cuatro objetos de prueba retirados; 4200/8000
+responden 200. [Informe completo, comandos y resultados](verificacion-formularios-2026-10-09.md)
+y [matriz de formularios](matriz-formularios-consultas.md). El respaldo de la
+migración 038 permanece fuera de autogenerate y su reversión se comprobó
+en una base temporal. No se añade una migración ni se amplían permisos.
+
+Esta evidencia corresponde a proveedores locales y datos sintéticos. Las
+integraciones reales, aceptación clínica, cumplimiento legal y demás criterios
+de despliegue que figuran abajo siguen pendientes. No se publicó ni desplegó
+la aplicación durante esta revisión.
+
 > **Revisión de ficha y marca en main (2026-10-09):** consulta N2 de los seis
 > roles base dentro de clínica/ámbito; registro profesional según especialidad;
 > herramientas vacías desde el alta e inicio explícito sin cita. Migración `038`
