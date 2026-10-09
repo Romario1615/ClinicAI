@@ -40,6 +40,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.modulos.agenda.modelos import Cita, EstadoCita, OrigenCita
 from app.modulos.organizacion.modelos import (
     Clinica,
+    ConfiguracionClinica,
     Consultorio,
     Descanso,
     Especialidad,
@@ -312,6 +313,16 @@ async def cargar_datos_sinteticos(  # noqa: PLR0912, PLR0915
     sesion.add(clinica)
     await sesion.flush()
     resumen.clinica_id = clinica.id
+    # La clinica sintetica tiene el agente de WhatsApp encendido para poder
+    # demostrarlo con el adaptador sandbox. En una clinica real esta apagado
+    # hasta que la administracion lo encienda (ADR-0025).
+    sesion.add(
+        ConfiguracionClinica(
+            clinica_id=clinica.id,
+            clave="integracion.agente_whatsapp",
+            valor={"habilitada": True, "ajustes": {}, "secretos_cifrados": {}},
+        )
+    )
 
     sedes: list[Sede] = []
     for nombre_sede, antelacion in (("Sede Norte", 60), ("Sede Centro", 120)):

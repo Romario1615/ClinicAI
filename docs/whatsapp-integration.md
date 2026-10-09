@@ -1,6 +1,6 @@
 # Integración con WhatsApp Business Cloud API
 
-> **Última actualización:** 2026‑10‑07 · Fase 4 y documentos privados.
+> **Última actualización:** 2026‑10‑09 · agente conversacional en el canal (ADR‑0025).
 >
 > **El camino real no está verificado.** Todo lo descrito aquí se ha ejecutado contra el
 > adaptador sandbox y contra PostgreSQL real; **ni un solo mensaje ha salido hacia Meta**,
@@ -301,6 +301,37 @@ nivel `error`: hay pacientes escribiendo a un número que el sistema no sabe a q
 pertenece, y eso exige intervención.
 
 ---
+
+## 4 bis. El agente atiende el canal (ADR‑0025)
+
+Con la integración **`agente_whatsapp`** encendida en la clínica (Configuración ›
+Integraciones; **apagada por defecto**, encendida solo en la clínica sintética), un
+mensaje de un paciente ya identificado ya no va directo a la bandeja: lo atiende el
+agente de [`app/ia/conversacion.py`](../backend/app/ia/conversacion.py).
+
+1. El webhook guarda el mensaje y **confirma** la transacción.
+2. Después, cada mensaje pendiente tiene un turno del agente **en su propia
+   transacción** (`ServicioConversaciones.responder_pendientes`): una colisión en la
+   agenda deshace el turno, no el mensaje recibido.
+3. La respuesta se encola como `RESPUESTA_CONVERSACION`, destino `CONVERSACION`, y
+   sale como **texto libre** (`type: "text"`) al número del hilo. Solo cabe en la
+   ventana de 24 h: fuera de ella el outbox la marca `FALLIDO` sin reintentar.
+
+Qué puede hacer el agente:
+
+| | Requisito |
+|---|---|
+| Consultar horarios, citas, pagos y conocimiento publicado | Paciente resuelto |
+| Apartar, confirmar, cancelar o reprogramar | Número de **un solo** paciente (no elegido de una lista) **y** verificación `TELEFONO` o superior, más la confirmación expresa que ya exige la herramienta |
+
+Sin los requisitos de cambio el principal del agente no lleva esos permisos: la
+herramienta lo rechaza y la conversación pasa a recepción. Una consulta clínica, una
+urgencia o la petición de hablar con una persona derivan siempre (límite clínico antes
+del bucle). Un aviso de tratamiento nunca va al agente.
+
+Pruebas: [`test_agente_whatsapp.py`](../backend/pruebas/integracion/test_agente_whatsapp.py)
+y el caso de punta a punta en
+[`test_webhook_whatsapp_api.py`](../backend/pruebas/api/test_webhook_whatsapp_api.py).
 
 ## 5. Consentimiento
 

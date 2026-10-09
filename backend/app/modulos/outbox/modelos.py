@@ -92,6 +92,9 @@ class TipoMensajeOutbox(StrEnum):
     CALENDARIO_CREAR_EVENTO = "CALENDARIO_CREAR_EVENTO"
     CALENDARIO_ACTUALIZAR_EVENTO = "CALENDARIO_ACTUALIZAR_EVENTO"
     CALENDARIO_ELIMINAR_EVENTO = "CALENDARIO_ELIMINAR_EVENTO"
+    # Respuesta dentro de un hilo que abrio el paciente (ADR-0025): texto
+    # libre, solo dentro de la ventana de 24 horas de WhatsApp.
+    RESPUESTA_CONVERSACION = "RESPUESTA_CONVERSACION"
 
 
 class OutboxMensaje(Base, MezclaIdentificador):
@@ -162,7 +165,7 @@ class OutboxMensaje(Base, MezclaIdentificador):
             name="canal_valido",
         ),
         CheckConstraint(
-            "destino_tipo IN ('PACIENTE', 'PROFESIONAL', 'USUARIO', 'CLINICA')",
+            "destino_tipo IN ('PACIENTE', 'PROFESIONAL', 'USUARIO', 'CLINICA', 'CONVERSACION')",
             name="destino_tipo_valido",
         ),
         CheckConstraint("intentos >= 0", name="intentos_no_negativos"),

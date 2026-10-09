@@ -85,6 +85,9 @@ _CAMPOS_AJUSTES: dict[str, dict[str, str]] = {
         "ollama_url": "url_local",
         "ollama_modelo": "texto",
     },
+    # El agente atiende WhatsApp (ADR-0025). Solo un interruptor: apagado por
+    # defecto; las reglas de que puede hacer viven en el codigo, no aqui.
+    "agente_whatsapp": {},
     "smtp": {
         "host": "texto",
         "puerto": "puerto",
@@ -102,6 +105,7 @@ _CAMPOS_SECRETOS: dict[str, tuple[str, ...]] = {
     "smtp": ("contrasena",),
     "typesafe": ("api_key",),
     "respuestas_ia": (),
+    "agente_whatsapp": (),
 }
 
 _AJUSTES_POR_DEFECTO: dict[str, dict[str, Any]] = {
@@ -114,6 +118,7 @@ _AJUSTES_POR_DEFECTO: dict[str, dict[str, Any]] = {
     "smtp": {"puerto": 587, "tls": True, "correo_remitente": "", "nombre_remitente": ""},
     "typesafe": {"modelo": "jev-latest", "tiempo_limite": 3.0, "umbral_confianza": 0.85},
     "respuestas_ia": {"proveedor": "entorno", "ollama_url": "", "ollama_modelo": ""},
+    "agente_whatsapp": {},
 }
 PROVEEDORES_RESPUESTA = frozenset({"entorno", "anthropic", "ollama"})
 SEGUNDOS_MINIMOS = 0.2

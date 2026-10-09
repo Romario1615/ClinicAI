@@ -29,6 +29,7 @@ from dataclasses import dataclass
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.modulos.conversaciones.modelos import Conversacion
 from app.modulos.outbox.modelos import CanalOutbox
 from app.modulos.pacientes.modelos import Paciente
 from app.modulos.profesionales.modelos import Profesional
@@ -81,7 +82,23 @@ class ResolutorContacto:
             return await self._profesional(destino_id, canal)
         if destino_tipo == "USUARIO":
             return await self._usuario(destino_id, canal)
+        if destino_tipo == "CONVERSACION":
+            return await self._conversacion(destino_id, canal)
         raise DestinatarioNoResoluble(f"Tipo de destinatario no soportado: {destino_tipo}.")
+
+    async def _conversacion(self, destino_id: uuid.UUID, canal: CanalOutbox) -> Contacto:
+        """El numero desde el que escribio el paciente, no el de su ficha.
+
+        Una respuesta va al mismo hilo: si la ficha tiene otro numero, o el
+        numero es de la familia, contestar al de la ficha seria escribir a
+        quien no pregunto.
+        """
+        conversacion = await self._sesion.get(Conversacion, destino_id)
+        if conversacion is None:
+            raise DestinatarioNoResoluble("La conversacion destinataria no existe.")
+        if canal is not CanalOutbox.WHATSAPP or conversacion.canal != "WHATSAPP":
+            raise DestinatarioNoResoluble("Solo se responde por WhatsApp a hilos de WhatsApp.")
+        return Contacto(valor=normalizar_telefono(conversacion.telefono), nombre="")
 
     async def _paciente(self, destino_id: uuid.UUID, canal: CanalOutbox) -> Contacto:
         paciente = (

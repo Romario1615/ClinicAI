@@ -38,6 +38,7 @@ from app.mensajeria.adaptadores import (
 )
 from app.mensajeria.destinatarios import DestinatarioNoResoluble, ResolutorContacto
 from app.modulos.automatizaciones import servicios as automatizaciones
+from app.modulos.conversaciones.modelos import Conversacion
 from app.modulos.documentos.modelos import EntregaDocumento, RegistroPaciente
 from app.modulos.historia.modelos import Receta
 from app.modulos.organizacion.modelos import Clinica
@@ -202,6 +203,11 @@ class ServicioOutbox:
                     or plantilla.tipo.value,
                     "variables": dict(solicitud.variables),
                     "texto": texto,
+                    **(
+                        {"libre": True}
+                        if solicitud.tipo is TipoMensajeOutbox.RESPUESTA_CONVERSACION
+                        else {}
+                    ),
                     **(
                         {"imagen_cabecera": solicitud.imagen_cabecera}
                         if solicitud.imagen_cabecera
@@ -416,6 +422,7 @@ class ServicioOutbox:
             return _con(resumen, sin_adaptador=resumen.sin_adaptador + 1)
 
         try:
+            await self._exigir_ventana(mensaje)
             contacto = await self._resolutor.resolver(
                 destino_tipo=mensaje.destino_tipo,
                 destino_id=mensaje.destino_id,
@@ -447,6 +454,7 @@ class ServicioOutbox:
                 str(carga["imagen_cabecera"]) if carga.get("imagen_cabecera") else None
             ),
             clinica_id=mensaje.clinica_id,
+            libre=bool(carga.get("libre")),
         )
         respuesta = await adaptador.enviar(saliente)
         ahora = self._reloj.ahora()
@@ -485,6 +493,26 @@ class ServicioOutbox:
 
         self._reprogramar(mensaje, detalle)
         return _con(resumen, reintentables=resumen.reintentables + 1)
+
+    async def _exigir_ventana(self, mensaje: OutboxMensaje) -> None:
+        """Una respuesta de texto libre solo cabe en la ventana de 24 horas.
+
+        Fuera de ella WhatsApp solo admite plantillas y reintentar no la
+        reabre: se trata como un destinatario no alcanzable y el mensaje queda
+        FALLIDO a la vista del personal. Los demas destinos no tienen ventana.
+        """
+        if mensaje.destino_tipo != "CONVERSACION":
+            return
+        conversacion = await self._sesion.get(Conversacion, mensaje.destino_id)
+        if (
+            conversacion is None
+            or conversacion.ventana_expira_en is None
+            or conversacion.ventana_expira_en <= self._reloj.ahora()
+        ):
+            raise DestinatarioNoResoluble(
+                "Fuera de la ventana de 24 h de WhatsApp: la respuesta ya no puede "
+                "enviarse como texto libre."
+            )
 
     async def _consentimiento_vigente_para_entrega(self, mensaje: OutboxMensaje) -> bool:
         """Revalida en el worker el consentimiento de cada mensaje proactivo.

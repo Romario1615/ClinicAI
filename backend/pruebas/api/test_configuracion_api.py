@@ -190,7 +190,10 @@ async def test_get_muestra_estado_sin_revelar_valores_de_credenciales(
         "smtp",
         "typesafe",
         "respuestas_ia",
+        "agente_whatsapp",
     }
     assert integraciones["anthropic"]["habilitada"] is False
+    # El agente de WhatsApp esta apagado mientras la clinica no lo encienda.
+    assert integraciones["agente_whatsapp"]["habilitada"] is False
     assert integraciones["anthropic"]["secretos"]["api_key"]["configurado"] is False
     assert "valor" not in respuesta.text

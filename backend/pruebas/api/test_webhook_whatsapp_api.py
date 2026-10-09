@@ -33,6 +33,7 @@ from app.main import crear_aplicacion
 from app.mensajeria.firma import CABECERA_FIRMA, calcular_firma
 from app.mensajeria.rutas import CLAVE_NUMERO
 from app.modulos.auditoria.modelos import Auditoria
+from app.modulos.conversaciones.agente_whatsapp import INTEGRACION
 from app.modulos.conversaciones.modelos import (
     AvisoRevisionTratamiento,
     Conversacion,
@@ -41,6 +42,7 @@ from app.modulos.conversaciones.modelos import (
     MensajeEntrante,
 )
 from app.modulos.organizacion.modelos import Clinica, ConfiguracionClinica
+from app.modulos.outbox.modelos import OutboxMensaje
 from app.modulos.pacientes.modelos import Consentimiento, Paciente, TipoConsentimiento
 from app.nucleo.auditoria import AccionAuditada
 from app.nucleo.configuracion import Configuracion
@@ -986,3 +988,59 @@ async def test_cualquier_formato_guardado_resuelve_el_mismo_numero(
     assert conversacion.paciente_id == paciente_con_consentimiento.id, (
         f"El numero guardado como «{paciente_con_consentimiento.telefono_whatsapp}» no se resolvio."
     )
+
+
+# ---------------------------------------------------------------------------
+#  Agente conversacional (ADR-0025)
+# ---------------------------------------------------------------------------
+async def test_con_el_agente_activo_la_consulta_se_responde_por_el_outbox(
+    cliente_webhook: AsyncClient,
+    api: str,
+    sesion: AsyncSession,
+    clinica: Clinica,
+    numero_de_la_clinica: ConfiguracionClinica,
+    paciente_con_consentimiento: Paciente,
+    telefono: str,
+    id_numero: str,
+) -> None:
+    """De punta a punta: firma, recepcion, turno del agente y respuesta encolada."""
+    sesion.add(
+        ConfiguracionClinica(
+            clinica_id=clinica.id,
+            clave=f"integracion.{INTEGRACION}",
+            valor={"habilitada": True, "ajustes": {}, "secretos_cifrados": {}},
+        )
+    )
+    await sesion.flush()
+
+    respuesta = await _enviar(
+        cliente_webhook,
+        api,
+        _cuerpo_mensaje(
+            "mis citas", external_id="wamid.AGENTE1", telefono=telefono, id_numero=id_numero
+        ),
+    )
+
+    assert respuesta.status_code == 200
+    conversacion = (
+        await sesion.execute(
+            sa.select(Conversacion).where(
+                Conversacion.clinica_id == clinica.id, Conversacion.telefono == telefono
+            )
+        )
+    ).scalar_one()
+    assert conversacion.estado == EstadoConversacion.ABIERTA.value
+    respuestas = (
+        (
+            await sesion.execute(
+                sa.select(OutboxMensaje).where(
+                    OutboxMensaje.destino_tipo == "CONVERSACION",
+                    OutboxMensaje.destino_id == conversacion.id,
+                )
+            )
+        )
+        .scalars()
+        .all()
+    )
+    assert len(respuestas) == 1
+    assert respuestas[0].carga_util.get("libre") is True

@@ -72,7 +72,7 @@ class ProveedorConversacional(ABC):
 class ProveedorDemostracion(ProveedorConversacional):
     """Guion administrativo reproducible: sin red, inferencia ni credenciales."""
 
-    async def decidir(  # noqa: PLR0911 - cada intencion tiene una salida administrativa explicita
+    async def decidir(  # noqa: PLR0911, PLR0912 - cada intencion tiene una salida administrativa explicita
         self,
         *,
         sistema: str,
@@ -98,6 +98,12 @@ class ProveedorDemostracion(ProveedorConversacional):
             "buscar",
             "horarios",
         }:
+            if not all(negocio.get(k) for k in _CLAVES_BUSQUEDA):
+                # Sin sede, servicio ni profesional de referencia (primera
+                # reserva) no se adivina: lo resuelve recepcion.
+                return Decision(
+                    "handoff_to_human", {"motivo": MotivoDerivacion.NO_COMPRENDIDO.value}
+                )
             return Decision(
                 "find_availability",
                 {

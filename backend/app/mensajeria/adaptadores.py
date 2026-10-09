@@ -85,6 +85,9 @@ class MensajeSaliente:
     imagen_cabecera: str | None = None
     # Clínica del mensaje: elige sus credenciales (`canales_clinica.py`).
     clinica_id: uuid.UUID | None = None
+    # Texto libre en lugar de plantilla: solo para responder dentro de la
+    # ventana de 24 horas de un hilo que abrio el paciente (ADR-0025).
+    libre: bool = False
 
 
 # ---------------------------------------------------------------------------
@@ -312,6 +315,16 @@ class AdaptadorWhatsAppCloud:
     def _construir_cuerpo(self, mensaje: MensajeSaliente) -> dict[str, object]:
         # Nombres impuestos por la API externa: no se traducen (CLAUDE.md,
         # seccion 2, excepcion de APIs externas).
+        if mensaje.libre:
+            # Mensaje de sesion: Meta lo rechaza (131047) fuera de la ventana
+            # de 24 horas, que el outbox comprueba antes de llegar aqui.
+            return {
+                "messaging_product": "whatsapp",
+                "recipient_type": "individual",
+                "to": mensaje.destino,
+                "type": "text",
+                "text": {"body": mensaje.texto, "preview_url": False},
+            }
         componentes: list[dict[str, object]] = []
         if mensaje.imagen_cabecera:
             componentes.append(

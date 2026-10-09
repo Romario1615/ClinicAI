@@ -343,6 +343,19 @@ PLANTILLAS[TipoMensajeOutbox.DOCUMENTO_DISPONIBLE] = Plantilla(
     variables_permitidas=frozenset({"nombre", "clinica", "enlace", "dias"}),
 )
 
+# Respuesta dentro de un hilo que abrio el paciente (ADR-0025). No inicia la
+# conversacion, asi que WhatsApp la admite como texto libre solo dentro de la
+# ventana de 24 horas; no necesita plantilla aprobada en Meta. El unico hueco,
+# `mensaje`, lo redacta el agente con los resultados administrativos de sus
+# herramientas o una persona del equipo desde la bandeja.
+PLANTILLAS[TipoMensajeOutbox.RESPUESTA_CONVERSACION] = Plantilla(
+    tipo=TipoMensajeOutbox.RESPUESTA_CONVERSACION,
+    nombre_meta="",
+    texto="{mensaje}",
+    variables_permitidas=frozenset({"mensaje"}),
+    inicia_conversacion=False,
+)
+
 
 def obtener(tipo: TipoMensajeOutbox) -> Plantilla:
     """Plantilla de un tipo de mensaje.

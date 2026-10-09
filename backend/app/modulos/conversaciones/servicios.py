@@ -55,6 +55,7 @@ from __future__ import annotations
 import uuid
 from dataclasses import dataclass, replace
 from datetime import datetime, timedelta
+from typing import TYPE_CHECKING
 
 from sqlalchemy import func, select, update
 from sqlalchemy.dialects.postgresql import insert as insert_pg
@@ -94,6 +95,11 @@ from app.nucleo.autorizacion import NivelSensibilidad, Principal, TipoActor, pri
 from app.nucleo.bd import ejecutar_escritura
 from app.nucleo.registro import obtener_logger
 from app.nucleo.reloj import Reloj
+
+if TYPE_CHECKING:
+    # Solo para anotar: el modulo del agente importa las herramientas, y la
+    # de derivacion importa este servicio.
+    from app.modulos.conversaciones.agente_whatsapp import AgenteWhatsapp
 
 logger = obtener_logger(__name__)
 
@@ -168,6 +174,8 @@ class ResumenEntrada:
     preguntas_identidad: int = 0
     #: Mensajes que resolvieron una identidad eligiendo de esa lista.
     identidades_resueltas: int = 0
+    #: Mensajes que quedaron para un turno del agente (ADR-0025).
+    al_agente: int = 0
     #: Tomas que el paciente confirmó respondiendo al recordatorio.
     tomas_registradas: int = 0
     #: Tomas que el paciente informó no haber podido realizar.
@@ -188,9 +196,16 @@ class ServicioConversaciones:
         *,
         clasificador: ClasificadorIntencion | None = None,
         umbral_clinico: float = 0.35,
+        agente: AgenteWhatsapp | None = None,
     ) -> None:
         self._sesion = sesion
         self._reloj = reloj
+        # Agente conversacional (ADR-0025). Sin el, o con la integracion
+        # apagada en la clinica, todo se deriva como antes.
+        self._agente = agente
+        #: Mensajes guardados que esperan un turno del agente. Se atienden en
+        #: `responder_pendientes`, despues de confirmar la recepcion.
+        self.pendientes_agente: list[tuple[uuid.UUID, uuid.UUID, str]] = []
         # Solo se usa para **etiquetar** la derivacion de un mensaje que ya va
         # a una persona: urgente y clinico primero. Nunca ejecuta una accion;
         # cancelar o dar de baja siguen exigiendo la frase exacta.
@@ -302,6 +317,21 @@ class ServicioConversaciones:
         if intencion is not IntencionEntrante.PROBLEMA_TRATAMIENTO:
             resuelto = self._resolver_seleccion(conversacion, crudo.texto)
             if resuelto:
+                if await self._agente_activo(clinica_id):
+                    # Con el agente activo, elegir deja el hilo abierto para
+                    # consultar. Elegir sigue sin verificar: cambiar citas
+                    # exige numero propio y verificacion (ADR-0025).
+                    conversacion.estado = EstadoConversacion.ABIERTA.value
+                    conversacion.motivo_handoff = None
+                    from app.modulos.conversaciones import agente_whatsapp  # noqa: PLC0415
+
+                    await agente_whatsapp.responder(
+                        self._sesion,
+                        self._reloj,
+                        conversacion,
+                        agente_whatsapp.MENSAJE_BIENVENIDA,
+                        f"agente:{creado}",
+                    )
                 return _con(resumen, identidades_resueltas=resumen.identidades_resueltas + 1)
 
             if conversacion.paciente_id is None and conversacion.seleccion_pendiente is None:
@@ -313,8 +343,57 @@ class ServicioConversaciones:
 
         aplicado = await self._aplicar_sin_persona(
             conversacion, intencion, crudo, clinica_id, resumen
-        )
+        ) or await self._para_el_agente(conversacion, intencion, crudo, creado, clinica_id, resumen)
         return aplicado or await self._derivar(conversacion, intencion, crudo, resumen)
+
+    async def _para_el_agente(
+        self,
+        conversacion: Conversacion,
+        intencion: IntencionEntrante,
+        crudo: MensajeEntranteCrudo,
+        mensaje_id: uuid.UUID,
+        clinica_id: uuid.UUID,
+        resumen: ResumenEntrada,
+    ) -> ResumenEntrada | None:
+        """Deja el mensaje para un turno del agente, si puede atenderlo.
+
+        Un aviso de tratamiento va siempre a una persona: es clinico.
+        """
+        if (
+            intencion is IntencionEntrante.PROBLEMA_TRATAMIENTO
+            or conversacion.paciente_id is None
+            or conversacion.estado != EstadoConversacion.ABIERTA.value
+            or not crudo.texto
+            or not await self._agente_activo(clinica_id)
+        ):
+            return None
+        self.pendientes_agente.append((conversacion.id, mensaje_id, crudo.texto))
+        return _con(resumen, al_agente=resumen.al_agente + 1)
+
+    async def _agente_activo(self, clinica_id: uuid.UUID) -> bool:
+        from app.modulos.conversaciones import agente_whatsapp  # noqa: PLC0415
+
+        return self._agente is not None and await agente_whatsapp.habilitado(
+            self._sesion, clinica_id
+        )
+
+    async def responder_pendientes(self) -> int:
+        """Un turno del agente por mensaje pendiente, cada uno en su transaccion.
+
+        Se llama despues de confirmar la recepcion: si un turno choca en la
+        agenda y deshace su transaccion, el mensaje recibido ya esta a salvo.
+        """
+        if self._agente is None:
+            return 0
+        atendidos = 0
+        pendientes, self.pendientes_agente = self.pendientes_agente, []
+        for conversacion_id, mensaje_id, texto in pendientes:
+            if await self._agente.atender(
+                self._sesion, self._reloj, conversacion_id, texto, mensaje_id
+            ):
+                atendidos += 1
+            await self._sesion.commit()
+        return atendidos
 
     async def _derivar(
         self,

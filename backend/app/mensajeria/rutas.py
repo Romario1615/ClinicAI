@@ -32,16 +32,19 @@ from fastapi.responses import PlainTextResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.ia.proveedores_clinica import decisiones_de_clinica
+from app.ia.proveedores_clinica import DecisionesClinica, decisiones_de_clinica, fabrica_de_clinica
 from app.mensajeria import carga_whatsapp
 from app.mensajeria.adaptadores import RegistroCanales
 from app.mensajeria.firma import verificar_firma, verificar_reto
 from app.mensajeria.servicios import ServicioOutbox
 from app.modulos.auditoria.repositorio import RepositorioAuditoria
+from app.modulos.conversaciones import agente_whatsapp
+from app.modulos.conversaciones.agente_whatsapp import AgenteWhatsapp
 from app.modulos.conversaciones.servicios import ServicioConversaciones
 from app.modulos.organizacion.modelos import ConfiguracionClinica
 from app.nucleo.auditoria import AccionAuditada, EntradaAuditoria, ResultadoAuditoria
 from app.nucleo.autorizacion import TipoActor
+from app.nucleo.configuracion import Configuracion
 from app.nucleo.dependencias import (
     Auditor,
     CifradorActual,
@@ -52,6 +55,7 @@ from app.nucleo.dependencias import (
 )
 from app.nucleo.registro import obtener_logger
 from app.nucleo.reloj import Reloj
+from app.nucleo.seguridad import CifradorDatos
 
 logger = obtener_logger(__name__)
 
@@ -181,6 +185,7 @@ async def recibir_webhook(
 
     # --- Mensajes ----------------------------------------------------------
     resumen = None
+    servicio: ServicioConversaciones | None = None
     if carga.mensajes:
         clinica_id = await _resolver_clinica(sesion, carga.id_numero_telefono)
         if clinica_id is None:
@@ -203,16 +208,51 @@ async def recibir_webhook(
                 reloj,
                 clasificador=decisiones.clasificador,
                 umbral_clinico=decisiones.umbral_clinico,
+                agente=await _agente_de_clinica(
+                    peticion, sesion, cifrador, configuracion, clinica_id, decisiones
+                ),
             )
             resumen = await servicio.procesar(carga, clinica_id=clinica_id)
 
     await sesion.commit()
+    # Los turnos del agente van despues de confirmar la recepcion, cada uno en
+    # su transaccion (ADR-0025): una colision en la agenda no puede borrar el
+    # mensaje recibido. Un fallo aqui no tumba el webhook: el mensaje ya esta
+    # guardado y Meta no debe reintentarlo.
+    if servicio is not None and servicio.pendientes_agente:
+        try:
+            await servicio.responder_pendientes()
+        except Exception:
+            await sesion.rollback()
+            logger.exception("whatsapp.agente_fallo")
     return {
         "recibido": True,
         "mensajes": resumen.recibidos if resumen else 0,
         "duplicados": resumen.duplicados if resumen else 0,
         "estados": len(carga.estados),
     }
+
+
+async def _agente_de_clinica(
+    peticion: Request,
+    sesion: AsyncSession,
+    cifrador: CifradorDatos,
+    configuracion: Configuracion,
+    clinica_id: uuid.UUID,
+    decisiones: DecisionesClinica,
+) -> AgenteWhatsapp | None:
+    """El agente de la clinica, o `None` si la integracion esta apagada."""
+    if not await agente_whatsapp.habilitado(sesion, clinica_id):
+        return None
+    fabrica = await fabrica_de_clinica(
+        sesion, cifrador, configuracion, clinica_id, peticion.app.state.fabrica_conversacional
+    )
+    return AgenteWhatsapp(
+        proveedor=fabrica,
+        clasificador=decisiones.clasificador,
+        umbrales=(decisiones.umbral_clinico, decisiones.umbral_intencion),
+        conocimiento=(peticion.app.state.embeddings, configuracion),
+    )
 
 
 async def _resolver_clinica(sesion: AsyncSession, id_numero: str | None) -> uuid.UUID | None:

@@ -220,6 +220,11 @@ class AccionAuditada(StrEnum):
     MENSAJE_FALLIDO = "mensaje.fallido"
     CONVERSACION_LEIDA = "conversacion.leida"
     CONVERSACION_CONSULTADA = "conversacion.consultada"
+    # Bandeja bidireccional (ADR-0025).
+    CONVERSACION_RESPONDIDA = "conversacion.respondida"
+    CONVERSACION_TOMADA = "conversacion.tomada"
+    CONVERSACION_DEVUELTA_AL_AGENTE = "conversacion.devuelta_al_agente"
+    CONVERSACION_CERRADA = "conversacion.cerrada"
     CALENDARIO_CONECTADO = "calendario.conectado"
     CALENDARIO_DESCONECTADO = "calendario.desconectado"
     CALENDARIO_CONFLICTO = "calendario.conflicto"

@@ -113,6 +113,10 @@ class Conversacion(Base, MezclaIdentificador):
     # Lleva su propia caducidad: una lista ofrecida ayer y respondida hoy con
     # «2» es una respuesta a una pregunta que ya nadie recuerda.
     seleccion_pendiente: Mapped[dict[str, Any] | None] = mapped_column(JSONB, default=None)
+    # Estado del agente que atiende el hilo (ADR-0025): `memoria` (turnos
+    # ofrecidos, cita en curso) y `negocio` (sede, servicio y profesional de
+    # referencia). No guarda el texto de los mensajes.
+    agente: Mapped[dict[str, Any] | None] = mapped_column(JSONB, default=None)
 
     __table_args__ = (
         # Un hilo abierto por numero y canal. Sin esto, dos mensajes casi
