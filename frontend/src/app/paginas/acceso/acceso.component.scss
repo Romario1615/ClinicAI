@@ -27,9 +27,9 @@
   padding: clamp(2rem, 4.5vw, 4.5rem);
   color: var(--marca-texto);
   background:
-    linear-gradient(145deg, rgb(10 19 41 / 91%) 0%, rgb(16 28 56 / 62%) 48%, rgb(10 19 41 / 86%) 100%),
+    linear-gradient(145deg, rgb(8 31 39 / 91%) 0%, rgb(14 41 53 / 62%) 48%, rgb(8 31 39 / 86%) 100%),
     url('/images/acceso-equipo.png') 72% center / cover,
-    #101c38;
+    #0e2935;
 }
 .acceso__marca::before {
   content: '';
@@ -54,7 +54,7 @@
   content: "";
   position: absolute;
   inset: 0;
-  background: linear-gradient(145deg, rgb(10 19 41 / 91%) 0%, rgb(16 28 56 / 62%) 48%, rgb(10 19 41 / 86%) 100%);
+  background: linear-gradient(145deg, rgb(8 31 39 / 91%) 0%, rgb(14 41 53 / 62%) 48%, rgb(8 31 39 / 86%) 100%);
 }
 .acceso__foto {
   position: absolute;
@@ -113,12 +113,12 @@
   letter-spacing: -.055em;
 }
 .acceso__titular > span {
-  color: #9ec9ff;
+  color: #9ee8f4;
 }
 .acceso__descripcion {
   max-width: 32rem;
   margin: 1.25rem 0 0;
-  color: #bbcae3;
+  color: #c1dfe3;
   font-size: clamp(.92rem, 1.1vw, 1.05rem);
   line-height: 1.8;
 }
@@ -154,16 +154,16 @@
   background: linear-gradient(135deg, rgb(154 182 255 / 8%), rgb(154 182 255 / 2%));
 }
 .acceso__puntos li > span {
-  color: #a6c6ff;
+  color: #86e2e1;
   font: .68rem var(--fuente-mono);
 }
 .acceso__puntos strong {
   font-size: .74rem;
   font-weight: 650;
-  color: #eef3ff;
+  color: #eafafb;
 }
 .acceso__puntos small {
-  color: #b1c0dc;
+  color: #b3d8dd;
   font-size: .66rem;
   line-height: 1.5;
 }
@@ -181,7 +181,7 @@
   justify-content: center;
   min-height: 0;
   padding: clamp(1rem, 3vw, 3rem);
-  background: radial-gradient(ellipse at 100% 0%, rgb(158 185 255 / 22%), transparent 58%), linear-gradient(160deg, #f6f8ff, #edf1fa);
+  background: radial-gradient(ellipse at 100% 0%, rgb(134 226 225 / 22%), transparent 58%), linear-gradient(160deg, #f3fafb, #e6f2f5);
 }
 .acceso__aurora {
   position: absolute;
@@ -199,7 +199,7 @@
 .acceso__gota--menta {
   top: -18vmax;
   right: -12vmax;
-  background: radial-gradient(circle, rgb(126 154 255 / 45%), transparent 65%);
+  background: radial-gradient(circle, rgb(105 210 192 / 45%), transparent 65%);
 }
 .acceso__gota--cielo {
   bottom: -20vmax;
@@ -209,7 +209,7 @@
 .acceso__gota--lila {
   bottom: -16vmax;
   left: -18vmax;
-  background: radial-gradient(circle, rgb(170 157 235 / 30%), transparent 65%);
+  background: radial-gradient(circle, rgb(134 226 225 / 30%), transparent 65%);
 }
 .acceso__tarjeta {
   position: relative;
@@ -255,9 +255,9 @@
   width: 100%;
   min-height: 58px;
   padding: .6rem .75rem;
-  border: 1px solid #dce4f3;
+  border: 1px solid #cde2e8;
   border-radius: 15px;
-  background: linear-gradient(135deg, #fff, #f6f8ff);
+  background: linear-gradient(135deg, #fff, #f3fafb);
   text-align: left;
   color: var(--texto);
   box-shadow: 0 3px 10px -6px rgb(32 54 102 / 16%);
@@ -265,7 +265,7 @@
   transition: border-color 180ms ease, box-shadow 180ms ease;
 }
 .acceso__rol:hover:not(:disabled) {
-  border-color: #87a2ee;
+  border-color: #59a8b7;
   box-shadow: 0 4px 20px -8px rgb(62 94 177 / 25%);
 }
 .acceso__rol:focus-visible {
@@ -282,9 +282,9 @@
   width: 36px;
   height: 36px;
   place-items: center;
-  color: #3552a5;
-  background: #eaf0ff;
-  border: 1px solid #dae4fc;
+  color: #086c7f;
+  background: #e5f5f6;
+  border: 1px solid #cde2e8;
   border-radius: 12px;
 }
 .acceso__rol-icono--recepcion {
@@ -334,7 +334,7 @@
   line-height: 1.3;
 }
 .acceso__rol-texto .acceso__rol-especialidad {
-  color: #455b87;
+  color: #456875;
 }
 .acceso__rol-flecha {
   display: none;
@@ -438,6 +438,7 @@ code {
   }
 }
 @media (max-width:900px) {
+  .acceso__logo { --marca-tamano-simbolo: 48px; --marca-tamano-nombre: 2.4rem; }
   /* Una franja de marca arriba y el acceso debajo, ambos dentro del alto. */
   .acceso {
     grid-template-columns: 1fr;
@@ -461,6 +462,7 @@ code {
   }
 }
 @media (max-width:560px) {
+  .acceso__logo { --marca-tamano-simbolo: 44px; --marca-tamano-nombre: 2.1rem; }
   .acceso__marca {
     padding: .9rem 1rem;
     gap: .5rem;
@@ -523,8 +525,8 @@ code {
     -webkit-backdrop-filter: none;
   }
   .acceso__puntos li {
-    background: #17294a;
-    border-color: #9ab5e2;
+    background: #16414d;
+    border-color: #86e2e1;
   }
   .acceso__aurora {
     display: none;

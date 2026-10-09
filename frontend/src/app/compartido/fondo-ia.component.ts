@@ -22,8 +22,8 @@ import { MovimientoService } from '../nucleo/movimiento/movimiento.service';
   `,
   styles: `
     :host { display:block; position:absolute; inset:0; overflow:hidden; pointer-events:none; }
-    .fondo { width:100%; height:100%; color:#4163c4; opacity:.16; }
-    .fondo--oscuro { color:#8bc8ff; opacity:.3; }
+    .fondo { width:100%; height:100%; color:var(--acento); opacity:.16; }
+    .fondo--oscuro { color:var(--marca-brillo); opacity:.3; }
     .fondo__conexiones { fill:none; stroke:currentColor; stroke-width:.65; }
     .fondo__particula { fill:currentColor; animation:particula-ia 18s ease-in-out infinite; }
     @keyframes particula-ia { 0%,100% { opacity:.35; transform:translateY(0); } 50% { opacity:1; transform:translateY(-5px); } }

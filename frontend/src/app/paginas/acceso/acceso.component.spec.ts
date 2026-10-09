@@ -35,4 +35,12 @@ describe('AccesoComponent · especialidades locales', () => {
     const f = montar(); f.componentInstance['entrarComo']('profesional');
     expect(entrar).toHaveBeenCalledWith('profesional');
   });
+  it('destaca el logo y el nombre de ClinicAI en la portada', () => {
+    const f = montar();
+    const marca = f.nativeElement.querySelector('.acceso__logo .marca');
+    expect(marca.classList.contains('marca--destacada')).toBe(true);
+    expect(marca.classList.contains('marca--compacta')).toBe(false);
+    expect(marca.querySelector('img').getAttribute('src')).toBe('/images/clinicai-simbolo.svg');
+    expect(marca.querySelector('.marca__nombre').textContent).toBe('ClinicAI');
+  });
 });

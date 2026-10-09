@@ -98,12 +98,12 @@ const PARTICULAS: readonly { x: number; y: number; r: number }[] = [
       <defs>
         <radialGradient [attr.id]="id('nucleo')" cx="35%" cy="30%" r="75%">
           <stop offset="0%" stop-color="#ffffff" stop-opacity="0.95" />
-          <stop offset="55%" stop-color="#d1e2ff" stop-opacity="0.8" />
-          <stop offset="100%" stop-color="#8fcfff" stop-opacity="0.7" />
+          <stop offset="55%" stop-color="#d0f3f4" stop-opacity="0.8" />
+          <stop offset="100%" stop-color="#86e2e1" stop-opacity="0.7" />
         </radialGradient>
         <radialGradient [attr.id]="id('halo')" cx="50%" cy="50%" r="50%">
-          <stop offset="0%" stop-color="#8fcfff" stop-opacity="0.45" />
-          <stop offset="100%" stop-color="#8fcfff" stop-opacity="0" />
+          <stop offset="0%" stop-color="#86e2e1" stop-opacity="0.45" />
+          <stop offset="100%" stop-color="#86e2e1" stop-opacity="0" />
         </radialGradient>
         <linearGradient [attr.id]="id('nodo')" x1="0" y1="0" x2="0" y2="1">
           <stop offset="0%" stop-color="#ffffff" stop-opacity="0.92" />
@@ -159,19 +159,19 @@ const PARTICULAS: readonly { x: number; y: number; r: number }[] = [
       width: 100%;
       height: auto;
       overflow: visible;
-      --red-trazo: rgb(52 86 196 / 34%);
-      --red-pulso: #3456c4;
-      --red-icono: #3456c4;
-      --red-borde: rgb(52 86 196 / 28%);
-      --red-particula: #8fcfff;
+      --red-trazo: rgb(8 108 127 / 34%);
+      --red-pulso: var(--acento);
+      --red-icono: var(--acento);
+      --red-borde: rgb(8 108 127 / 28%);
+      --red-particula: #86e2e1;
     }
 
     .red--oscura {
-      --red-trazo: rgb(164 205 255 / 34%);
-      --red-pulso: #a6ceff;
-      --red-icono: #27429b;
+      --red-trazo: rgb(134 226 225 / 34%);
+      --red-pulso: #86e2e1;
+      --red-icono: var(--acento-fuerte);
       --red-borde: rgb(255 255 255 / 55%);
-      --red-particula: #a6ceff;
+      --red-particula: #86e2e1;
     }
 
     /* Con pathLength="1", un guion de longitud 1 es el trazo completo. */
@@ -250,7 +250,7 @@ const PARTICULAS: readonly { x: number; y: number; r: number }[] = [
     .red__letras { fill:#203b82; font:800 23px var(--fuente); letter-spacing:-1px; }
 
     .red__marca {
-      stroke: #3456c4;
+      stroke: var(--acento);
       stroke-width: 2.2;
     }
   `,

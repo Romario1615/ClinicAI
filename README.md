@@ -1,5 +1,19 @@
 # ClinicAI — Plataforma de gestión clínica
 
+## Logo y paleta celeste turquesa (2026-10-09)
+
+- **Portada:** logo ClinicAI destacado y nombre más grande; conserva la
+  fotografía original de la clínica y el fondo con conexiones y partículas IA.
+- **Estilo común:** acento azul turquesa `#086c7f`, superficies celestes claras,
+  vidrio oscuro y símbolo con degradado celeste/menta. Los colores de alerta
+  mantienen su significado.
+- **Adaptación:** logo y textos se ajustan en móvil sin ocultar los seis accesos;
+  ventanas y listas mantienen sus espacios y desplazamiento interior.
+
+Recursos y tamaños documentados en [Recursos visuales](docs/recursos-visuales.md).
+Lint y build aprobados; paquete inicial 468,69 kB. La batería completa de esta
+revisión aprobó 777 pruebas de interfaz con cobertura.
+
 ## Diseño de Analítica IA (2026-10-09)
 
 - **Distribución:** cabecera compacta con indicadores autorizados, modelos

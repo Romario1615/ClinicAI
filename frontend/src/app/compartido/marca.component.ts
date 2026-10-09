@@ -8,6 +8,7 @@ import { Component, input, ChangeDetectionStrategy } from '@angular/core';
       class="marca"
       [class.marca--clara]="fondoClaro()"
       [class.marca--compacta]="compacta()"
+      [class.marca--destacada]="destacada()"
     >
       <img class="marca__simbolo" src="/images/clinicai-simbolo.svg" alt="" />
       <span class="marca__texto">
@@ -32,9 +33,14 @@ import { Component, input, ChangeDetectionStrategy } from '@angular/core';
     .marca--clara .marca__descriptor { color: var(--texto-suave); }
     .marca--compacta .marca__simbolo { width: 36px; height: 36px; }
     .marca--compacta .marca__nombre { font-size: 1.05rem; }
+    .marca--destacada { gap: clamp(12px, 1.5vw, 22px); }
+    .marca--destacada .marca__simbolo { width: var(--marca-tamano-simbolo, 80px); height: var(--marca-tamano-simbolo, 80px); }
+    .marca--destacada .marca__nombre { font-size: var(--marca-tamano-nombre, clamp(2.7rem, 4.2vw, 4rem)); }
+    .marca--destacada .marca__descriptor { font-size: .72rem; letter-spacing: .15em; }
   `,
 })
 export class MarcaComponent {
   readonly compacta = input(false);
   readonly fondoClaro = input(false);
+  readonly destacada = input(false);
 }

@@ -1,5 +1,22 @@
 # Recursos visuales
 
+## ClinicAI celeste turquesa (2026-10-09)
+
+El logo SVG existente usa un degradado `#9ee8f4` → `#59c8c2`, con cruz médica
+oscura y nodos IA blancos. `app-marca` incorpora el modo `destacada`: símbolo
+de 80 px y nombre de hasta 64 px en escritorio; en móvil se ajusta sin ocultar
+los seis accesos por rol. Se conserva la fotografía original `acceso-equipo.png`.
+
+La paleta común usa acento `#086c7f`, fondos claros celestes y vidrio oscuro
+`#0e2935`. Las partículas y la red existente toman estos colores. Se mantiene
+el color semántico de errores y alertas, las preferencias de movimiento reducido
+y los controles de contraste. No se generaron nuevos recursos rasterizados;
+se actualizan el vector y la presentación existentes.
+
+La acción principal limita el brillo a 6 %: el blanco sobre el acento aclarado
+conserva una relación calculada de 5,36:1. La portada se revisa con axe y seis
+tamaños, desde 320 × 568 hasta 1440 × 900.
+
 ## Identidad de IA (2026-10-08)
 
 La interfaz comparte azul profundo, cobalto y cian. La portada y el panel usan
