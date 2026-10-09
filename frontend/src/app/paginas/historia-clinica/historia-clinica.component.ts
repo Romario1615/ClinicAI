@@ -29,7 +29,7 @@ import { FotosRegistroComponent } from '../../compartido/fotos-registro.componen
  * pueden sustituir por una versión firmada que conserva el historial y
  * cancela las tomas futuras de la pauta anterior.
  */
-import { Component, DestroyRef, computed, effect, inject, input, OnInit, signal, ChangeDetectionStrategy } from '@angular/core';
+import { Component, DestroyRef, ElementRef, Injector, afterNextRender, computed, effect, inject, input, OnInit, signal, viewChild, ChangeDetectionStrategy } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute } from '@angular/router';
 import { forkJoin, of } from 'rxjs';
@@ -167,6 +167,12 @@ export class HistoriaClinicaComponent implements OnInit {
   readonly sedeContexto = input<string | null>(null);
   readonly embebida = input(false);
   readonly moduloInicial = input<HerramientaHistoria | null>(null);
+  readonly solicitudHerramienta = input(0);
+  private readonly injector = inject(Injector);
+  private readonly panelHerramienta = viewChild<ElementRef<HTMLElement>>('panelHerramienta');
+  private readonly herramientaMenu = signal<HerramientaHistoria | null>(null);
+  private readonly solicitudMenu = signal(0);
+  private ultimaHerramientaAplicada: string | null = null;
   private readonly ruta = inject(ActivatedRoute, { optional: true });
   private readonly destroyRef = inject(DestroyRef);
   private readonly api = inject(ApiService);
@@ -404,8 +410,26 @@ export class HistoriaClinicaComponent implements OnInit {
 
   constructor() {
     effect(() => {
-      const modulo = this.moduloInicial();
-      if (modulo && this.pestanas().some(p => p.clave === modulo)) this.pestana.set(modulo);
+      const menu = this.solicitudMenu();
+      const modulo = menu ? this.herramientaMenu() : this.moduloInicial();
+      const solicitud = menu || this.solicitudHerramienta();
+      const paciente = this.paciente();
+      const cargando = this.cargandoHistoria();
+      const error = this.errorHistoria();
+      const permitidas = this.pestanas();
+      const clave = `${paciente?.id}:${menu ? 'menu' : 'ficha'}:${solicitud}:${modulo}`;
+      if (!modulo || !paciente || cargando || error || clave === this.ultimaHerramientaAplicada ||
+          !permitidas.some(p => p.clave === modulo)) return;
+      this.ultimaHerramientaAplicada = clave;
+      this.pestana.set(modulo);
+      // La carga y el cierre del menú terminan antes de mover el foco. Así la
+      // herramienta queda visible dentro de la ficha, incluso en móvil, y el
+      // cierre del diálogo no devuelve el foco al botón de origen por encima.
+      afterNextRender(() => {
+        const panel = this.panelHerramienta()?.nativeElement;
+        panel?.scrollIntoView?.({ block: 'start', inline: 'nearest', behavior: 'instant' });
+        panel?.focus({ preventScroll: true });
+      }, { injector: this.injector });
     });
     this.destroyRef.onDestroy(() => this.limpiarTemporizadorAccesoEmergencia());
     this.vigilarPantallaFija();
@@ -472,6 +496,9 @@ export class HistoriaClinicaComponent implements OnInit {
 
   protected cerrar(): void {
     this.limpiarTemporizadorAccesoEmergencia();
+    this.herramientaMenu.set(null);
+    this.solicitudMenu.set(0);
+    this.ultimaHerramientaAplicada = null;
     this.pestana.set('evolucion');
     this.editando.set(undefined);
     this.paciente.set(null);
@@ -627,6 +654,12 @@ export class HistoriaClinicaComponent implements OnInit {
   protected elegirPestana(clave: string): void {
     const opcion = this.pestanas().find((o) => o.clave === clave);
     if (opcion) this.pestana.set(opcion.clave);
+  }
+
+  protected abrirHerramienta(herramienta: HerramientaHistoria): void {
+    this.herramientaMenu.set(herramienta);
+    this.solicitudMenu.update(numero => numero + 1);
+    this.cambiarEspecialidad();
   }
 
   protected alternarHistorico(): void {

@@ -1,5 +1,15 @@
 # Limitaciones conocidas y riesgos residuales
 
+## Apertura de herramientas en la ficha (2026-10-09)
+
+El selector lleva el panel elegido al área visible y le entrega el foco al
+terminar su carga. Repetir una opción vuelve a abrirla; recargar datos conserva
+la navegación posterior. Se mantienen los permisos clínicos, el contexto de
+cita y la creación explícita de registros. Frontend completo 825/825; la
+[verificación del menú](verificacion-menu-ficha-2026-10-09.md) detalla navegador,
+incidencias de ejecución y alcance local. No se evalúan integraciones externas
+ni aceptación clínica en este arreglo de navegación.
+
 ## Formularios y consultas (2026-10-09)
 
 Se inventariaron 66 formularios en 45 plantillas y se añadieron regresiones

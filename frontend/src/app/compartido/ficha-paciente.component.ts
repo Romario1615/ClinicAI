@@ -247,7 +247,7 @@ const DETALLE_CLINICO: Partial<Record<Pestana, string>> = {
 
           <div class="ficha__cuerpo" role="tabpanel">
             @switch (pestana()) {
-              @case ('atencion') { <app-atencion-paciente [pacienteId]="pacienteId()" [citaInicial]="citaParaAtencion()" [moduloInicial]="herramientaInicial()" (cambioCita)="citaElegidaId.set($event?.id ?? null)" /> }
+              @case ('atencion') { <app-atencion-paciente [pacienteId]="pacienteId()" [citaInicial]="citaParaAtencion()" [moduloInicial]="herramientaInicial()" [solicitudHerramienta]="solicitudHerramienta()" (cambioCita)="citaElegidaId.set($event?.id ?? null)" /> }
               @case ('faciograma') { <app-atencion-paciente [pacienteId]="pacienteId()" [citaInicial]="citaParaAtencion()" moduloInicial="faciograma" (cambioCita)="citaElegidaId.set($event?.id ?? null)" /> }
               @case ('documentos') { <app-atencion-paciente [pacienteId]="pacienteId()" [citaInicial]="citaParaAtencion()" moduloInicial="documentos" (cambioCita)="citaElegidaId.set($event?.id ?? null)" /> }
               @case ('periodoncia') { <app-periodontograma [pacienteId]="pacienteId()" [citaId]="citaParaAtencion()" /> }
@@ -940,7 +940,10 @@ export class FichaPacienteComponent implements OnInit {
 
   protected readonly pestana = signal<Pestana>('resumen');
   protected readonly herramientaInicial = signal<HerramientaHistoria | null>(null);
+  protected readonly solicitudHerramienta = signal(0);
   protected abrirHerramienta(herramienta: HerramientaHistoria): void {
+    // Cada clic es una solicitud, incluso si vuelve a elegir la misma herramienta.
+    this.solicitudHerramienta.update(numero => numero + 1);
     this.herramientaInicial.set(herramienta);
     this.pestana.set('atencion');
   }

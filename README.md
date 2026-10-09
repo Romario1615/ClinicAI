@@ -1,5 +1,18 @@
 # ClinicAI — Plataforma de gestión clínica
 
+## Menú «Elegir qué registrar» de la ficha (2026-10-09)
+
+La herramienta elegida ahora queda visible y recibe el foco dentro de la
+ficha. Se puede volver a elegir la misma opción después de cambiar de pestaña;
+se conservan paciente, cita, sede y permisos por especialidad. El selector de
+Historia clínica incorpora el mismo comportamiento. Crear un registro sigue
+requiriendo la acción del profesional autorizado.
+
+Frontend **825/825** con cobertura, Chromium **21/21** en la regresión afectada,
+lint/build aprobados. La causa reproducida,
+los recorridos de navegador y los límites están en
+[la verificación del menú de la ficha](docs/verificacion-menu-ficha-2026-10-09.md).
+
 ## Pruebas de formularios, consultas y lógica (2026-10-09)
 
 Inventario de **66 formularios en 45 plantillas**, con suites de componente y

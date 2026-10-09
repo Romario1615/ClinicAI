@@ -7,6 +7,11 @@ Selecciona un módulo y su especialidad sin crear registros. La API expone las
 colecciones vacías desde el alta del paciente. Historia incorpora el
 periodontograma completo, conservando el acceso al índice de placa.
 
+La ficha transmite una solicitud por cada elección de herramienta, incluso
+si repite la anterior. Historia la aplica una vez al terminar la carga y
+dirige desplazamiento y foco al panel autorizado después del renderizado;
+una recarga posterior conserva la navegación del operador.
+
 La capacidad `historia_clinica.consultar_compartida` permite lectura N2
 sin relación asistencial previa, dentro de clínica y ámbito. Los filtros SQL
 de paciente, autores, especialidad y sensibilidad permanecen. Las escrituras

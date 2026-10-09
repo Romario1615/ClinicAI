@@ -4,7 +4,16 @@ Navegador real, frontend real, API real y PostgreSQL real. Los proveedores
 externos funcionan con adaptadores locales durante esta verificación; no se
 envían mensajes ni se realizan llamadas pagadas.
 
-**Verificación vigente (2026-10-09):** **90/90 en 21,0 minutos**, sin reintentos,
+**Menú de la ficha (2026-10-09):** el escenario 24 comprueba apertura visible
+y foco de las diez herramientas, consulta por recepción, reapertura en
+escritorio/móvil, menú de Historia clínica y conservación de la cita.
+Regresión de los escenarios 15/17/18/19/22/24: **21/21 en 5,2 minutos**,
+sin reintentos, con API/BD y almacén de archivos exclusivos.
+[Evidencia y comando de regresión](../docs/verificacion-menu-ficha-2026-10-09.md).
+Ejecute una sola instancia de Playwright cuando comparta `test-results` e
+`informe`; dos procesos pueden borrar mutuamente sus artefactos.
+
+**Verificación integral anterior (2026-10-09):** **90/90 en 21,0 minutos**, sin reintentos,
 en 23 archivos con API/BD exclusivas y proveedores locales. Incluye
 registro y consulta por especialidad, agente del paciente, periodontograma,
 analítica, formularios extensos y caja. Resultados, incidencias corregidas y

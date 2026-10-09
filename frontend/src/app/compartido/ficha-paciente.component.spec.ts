@@ -107,6 +107,16 @@ describe('FichaPacienteComponent', () => {
         fixture.detectChanges();
     }
 
+    it('cada elección del menú solicita abrir la herramienta aunque coincida con la anterior', () => {
+        const ficha = fixture.componentInstance;
+        ficha['abrirHerramienta']('recetas');
+        expect(ficha['pestana']()).toBe('atencion');
+        expect(ficha['herramientaInicial']()).toBe('recetas');
+        expect(ficha['solicitudHerramienta']()).toBe(1);
+        ficha['abrirHerramienta']('recetas');
+        expect(ficha['solicitudHerramienta']()).toBe(2);
+    });
+
     it('carga en ngOnInit y no en el constructor', () => {
         // Leer una entrada obligatoria en el constructor lanza NG0950 y el panel
         // no llega a pintarse. Que esta prueba llegue a `flush` lo demuestra.

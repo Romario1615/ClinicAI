@@ -495,6 +495,87 @@ describe('HistoriaClinicaComponent', () => {
         });
     });
 
+    describe('selección de herramientas de la ficha y la historia', () => {
+        beforeEach(() => conPermisos('historia_clinica.leer', 'receta.leer'));
+
+        it('espera la carga de la historia y lleva el foco a la herramienta solicitada', async () => {
+            listar();
+            fixture.componentRef.setInput('moduloInicial', 'recetas');
+            fixture.componentRef.setInput('solicitudHerramienta', 1);
+            fixture.detectChanges();
+            expect(fixture.nativeElement.querySelector('#historia-panel-recetas')).toBeNull();
+            abrir({ notas: [], recetas: [] });
+            await fixture.whenStable();
+            expect(document.activeElement?.id).toBe('historia-panel-recetas');
+            expect(fixture.nativeElement.querySelector('#historia-panel-recetas')?.tabIndex).toBe(-1);
+        });
+
+        it('vuelve a abrir la misma herramienta después de usar otra pestaña', async () => {
+            listar();
+            fixture.componentRef.setInput('moduloInicial', 'evolucion');
+            fixture.componentRef.setInput('solicitudHerramienta', 1);
+            abrir({ notas: [], recetas: [] });
+            await fixture.whenStable();
+            fixture.componentInstance['elegirPestana']('recetas');
+            fixture.detectChanges();
+            expect(fixture.nativeElement.querySelector('#historia-panel-recetas')).not.toBeNull();
+            fixture.componentRef.setInput('solicitudHerramienta', 2);
+            fixture.detectChanges();
+            await fixture.whenStable();
+            expect(document.activeElement?.id).toBe('historia-panel-evolucion');
+        });
+
+        it('una recarga no vuelve a imponer la herramienta inicial ni roba el foco', async () => {
+            listar();
+            fixture.componentRef.setInput('moduloInicial', 'recetas');
+            fixture.componentRef.setInput('solicitudHerramienta', 1);
+            abrir({ notas: [], recetas: [] });
+            await fixture.whenStable();
+            fixture.componentInstance['elegirPestana']('evolucion');
+            fixture.detectChanges();
+            const boton = fixture.nativeElement.querySelector('app-herramientas-paciente button') as HTMLButtonElement;
+            boton.focus();
+            fixture.componentInstance['alternarHistorico']();
+            http.expectOne(`${BASE}/pacientes/${PACIENTE_ID}/acceso-clinico`).flush({ acceso_clinico: true });
+            http.expectOne(p => p.url.includes('/notas')).flush([]);
+            http.expectOne(p => p.url.includes('/recetas')).flush([]);
+            fixture.detectChanges();
+            await fixture.whenStable();
+            expect(fixture.nativeElement.querySelector('#historia-panel-evolucion')).not.toBeNull();
+            expect(document.activeElement).toBe(boton);
+        });
+
+        it('la selección no habilita una herramienta sin permiso sensible', async () => {
+            listar();
+            fixture.componentRef.setInput('moduloInicial', 'formulario033');
+            fixture.componentRef.setInput('solicitudHerramienta', 1);
+            abrir({ notas: [], recetas: [] });
+            await fixture.whenStable();
+            expect(fixture.nativeElement.querySelector('#historia-panel-formulario033')).toBeNull();
+            expect(fixture.nativeElement.querySelector('#historia-panel-evolucion')).not.toBeNull();
+            http.expectNone(p => p.url.includes('formularios-033'));
+            http.expectNone(p => p.method !== 'GET');
+        });
+
+        it('el menú de la historia también abre y enfoca la herramienta después de la consulta', async () => {
+            listar();
+            abrir({ notas: [], recetas: [] });
+            const raiz = fixture.nativeElement as HTMLElement;
+            raiz.querySelector<HTMLButtonElement>('app-herramientas-paciente .barra button')!.click();
+            fixture.detectChanges();
+            const recetas = Array.from(raiz.querySelectorAll<HTMLButtonElement>('.herramienta')).find(b => b.textContent?.includes('Prescripciones'))!;
+            recetas.click();
+            fixture.detectChanges();
+            http.expectOne(`${BASE}/pacientes/${PACIENTE_ID}/acceso-clinico`).flush({ acceso_clinico: true });
+            http.expectOne(p => p.url.includes('/notas')).flush([]);
+            http.expectOne(p => p.url.includes('/recetas')).flush([]);
+            fixture.detectChanges();
+            await fixture.whenStable();
+            expect(document.activeElement?.id).toBe('historia-panel-recetas');
+            expect(raiz.querySelector('dialog[open]')).toBeNull();
+        });
+    });
+
     it('volver al listado limpia la historia mostrada', () => {
         conPermisos('historia_clinica.leer', 'receta.leer');
         listar();

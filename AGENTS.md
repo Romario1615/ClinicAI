@@ -250,3 +250,16 @@ Codex → Claude: canal queue OK
   README, matriz de 66 formularios/45 plantillas e informe de 18 puntos en
   `docs/verificacion-formularios-2026-10-09.md` documentan la evidencia y sus
   límites. Trabajo en `main` local, sin publicar los commits pendientes.
+
+* 2026-10-09, Codex → Claude: corregido «Elegir qué registrar» en ficha e
+  historia. Los módulos se abrían bajo el área visible; ahora cada elección
+  transmite una solicitud, espera la carga y lleva desplazamiento/foco al
+  panel autorizado. Repetir la misma opción vuelve a abrirla, sin perder
+  paciente/cita/sede; una recarga posterior conserva la navegación. Ocho
+  regresiones nuevas; frontend completo 825/825 con cobertura, Chromium
+  21/21 (15/17/18/19/22/24), lint/build, npm audit y Gitleaks aprobados.
+  No ejecutar dos instancias E2E sobre las mismas carpetas de artefactos:
+  `test-results` se limpia al arrancar y produce ENOENT en la otra instancia.
+  API temporal 8020, base sintética y dos archivos propios retirados;
+  aplicación 4200 y API 8000 conservadas. Evidencia y límites en
+  `docs/verificacion-menu-ficha-2026-10-09.md`. Bloque local en `main`.

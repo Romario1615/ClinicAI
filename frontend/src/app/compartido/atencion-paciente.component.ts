@@ -26,7 +26,7 @@ export interface ContextoAtencion { id: string; inicio: string; estado: string; 
     </section>
     @if (!cargando() && !error() && puedeVerClinico() && especialidadDisponible()) {
       @for (contexto of contextoVista(); track contexto) {
-      <app-historia-clinica class="historia-embebida" [pacienteInicial]="pacienteId()" [citaContexto]="elegida()?.id ?? null" [sedeContexto]="elegida()?.sede_id ?? null" [moduloInicial]="moduloInicial()" [embebida]="true" />
+      <app-historia-clinica class="historia-embebida" [pacienteInicial]="pacienteId()" [citaContexto]="elegida()?.id ?? null" [sedeContexto]="elegida()?.sede_id ?? null" [moduloInicial]="moduloInicial()" [solicitudHerramienta]="solicitudHerramienta()" [embebida]="true" />
       }
     } @else if (!puedeVerClinico()) { <p>Su rol permite gestionar los datos administrativos de esta atención.</p> }
   `,
@@ -40,6 +40,7 @@ export class AtencionPacienteComponent implements OnInit {
   readonly pacienteId = input.required<string>();
   readonly citaInicial = input<string | null>(null);
   readonly moduloInicial = input<HerramientaHistoria | null>(null);
+  readonly solicitudHerramienta = input(0);
   readonly cambioCita = output<ContextoAtencion | null>();
   protected readonly citas = signal<ContextoAtencion[]>([]);
   protected readonly elegida = signal<ContextoAtencion | null>(null);

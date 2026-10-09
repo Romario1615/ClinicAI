@@ -1,5 +1,16 @@
 # Estado de preparación para producción
 
+## Navegación desde el menú de la ficha (2026-10-09)
+
+Cada elección abre la sección autorizada, la hace visible y le entrega el
+foco después de cargarla. Se conserva la cita/sede, funciona la selección
+repetida y se mantiene el modo de consulta por rol/especialidad. No se añaden
+migraciones ni permisos. Frontend **825/825** con cobertura; Chromium **21/21**
+en la regresión afectada; lint/build y
+auditoría npm aprobados. [Evidencia del bloque](verificacion-menu-ficha-2026-10-09.md).
+La aceptación de producción y las integraciones externas mantienen los
+requisitos pendientes documentados abajo.
+
 ## Verificación de formularios y consultas (2026-10-09)
 
 Revisión local en `main`: 66 formularios inventariados, guardado protegido

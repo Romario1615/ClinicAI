@@ -160,7 +160,7 @@
     } @else {
       <app-selector-especialidad class="historia__especialidad pantalla__fijo" (cambio)="cambiarEspecialidad()" />
     }
-    @if (!embebida()) { <app-herramientas-paciente class="historia__herramientas pantalla__fijo" [pacienteId]="paciente()!.id" [citaId]="citaContexto()" (elegida)="cambiarEspecialidad(); elegirPestana($event)" /> }
+    @if (!embebida()) { <app-herramientas-paciente class="historia__herramientas pantalla__fijo" [pacienteId]="paciente()!.id" [citaId]="citaContexto()" (elegida)="abrirHerramienta($event)" /> }
     <app-pestanas
       class="pantalla__fijo"
       grupo="historia"
@@ -175,7 +175,9 @@
          por historia y solo se oculta en las demás pestañas: así no se vuelve
          a pedir (ni a auditar) cada vez que se cambia de pestaña. -->
     <section
+      #panelHerramienta
       role="tabpanel"
+      tabindex="-1"
       class="historia__panel"
       [class.pantalla__columnas]="conResumen()"
       [class.pantalla__resto]="!conResumen()"
