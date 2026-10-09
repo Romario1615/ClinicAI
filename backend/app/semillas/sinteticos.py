@@ -96,11 +96,19 @@ UNO_DE_CADA_VERIFICADOS = 4
 # Consultorios por sede; el ultimo es de procedimientos.
 CONSULTORIOS_POR_SEDE = 3
 
+# Clinica odontologica: todas las especialidades son dentales, mas estetica
+# facial (faciograma). El codigo decide los modulos de historia por omision
+# (`historia/especialidades.py`): «ODO…» activa odontograma, periodoncia y
+# planes; «EST…» activa el faciograma.
 ESPECIALIDADES = (
-    ("Medicina General", "MG"),
-    ("Dermatologia", "DERM"),
-    ("Pediatria", "PED"),
-    ("Odontologia", "ODO"),
+    ("Odontología general", "ODO"),
+    ("Ortodoncia", "ODO-ORT"),
+    ("Endodoncia", "ODO-END"),
+    ("Periodoncia", "ODO-PER"),
+    ("Odontopediatría", "ODO-PED"),
+    ("Cirugía oral e implantología", "ODO-CIR"),
+    ("Rehabilitación oral y prótesis", "ODO-REH"),
+    ("Estética facial", "EST"),
 )
 
 # Catalogo de servicios.  Cada entrada es una tupla con el nombre, la
@@ -111,14 +119,20 @@ ESPECIALIDADES = (
 # encajen con la granularidad de las franjas y no se pierda capacidad por el
 # redondeo (ver `granularidad_incompatible` en el motor de disponibilidad).
 SERVICIOS = (
-    ("Consulta general", "Medicina General", 30, 0, 25.00),
-    ("Control de seguimiento", "Medicina General", 15, 0, 15.00),
-    ("Consulta dermatologica", "Dermatologia", 30, 15, 45.00),
-    ("Crioterapia", "Dermatologia", 45, 15, 80.00),
-    ("Consulta pediatrica", "Pediatria", 30, 0, 35.00),
-    ("Control de nino sano", "Pediatria", 30, 0, 30.00),
-    ("Profilaxis dental", "Odontologia", 45, 15, 40.00),
-    ("Consulta odontologica", "Odontologia", 30, 15, 30.00),
+    ("Consulta odontológica", "Odontología general", 30, 15, 30.00),
+    ("Profilaxis dental", "Odontología general", 45, 15, 40.00),
+    ("Restauración con resina", "Odontología general", 45, 15, 55.00),
+    ("Valoración de ortodoncia", "Ortodoncia", 30, 15, 35.00),
+    ("Control de ortodoncia", "Ortodoncia", 30, 0, 45.00),
+    ("Endodoncia unirradicular", "Endodoncia", 60, 15, 150.00),
+    ("Raspado y alisado radicular", "Periodoncia", 60, 15, 90.00),
+    ("Consulta odontopediátrica", "Odontopediatría", 30, 15, 30.00),
+    ("Sellantes de fosas y fisuras", "Odontopediatría", 30, 15, 25.00),
+    ("Extracción simple", "Cirugía oral e implantología", 45, 15, 50.00),
+    ("Valoración de implante", "Cirugía oral e implantología", 30, 15, 40.00),
+    ("Valoración de prótesis", "Rehabilitación oral y prótesis", 30, 15, 35.00),
+    ("Valoración estética facial", "Estética facial", 30, 15, 40.00),
+    ("Tratamiento facial", "Estética facial", 60, 15, 80.00),
 )
 
 
@@ -692,7 +706,14 @@ async def cargar_datos_sinteticos(  # noqa: PLR0912, PLR0915
 
     while creadas < cantidad_citas and intentos < limite_intentos:
         intentos += 1
-        profesional = aleatorio.choice(profesionales)
+        # Las primeras citas van una por profesional, en turno: con muchas
+        # especialidades y pocas citas el azar dejaba profesionales sin
+        # pacientes, y el caso clinico del acceso local no tenia con quien.
+        profesional = (
+            profesionales[creadas]
+            if creadas < len(profesionales)
+            else aleatorio.choice(profesionales)
+        )
         opciones = servicios_por_especialidad.get(profesional.especialidad_id, [])
         if not opciones:
             continue

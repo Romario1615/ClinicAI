@@ -281,10 +281,36 @@ class TestDatosSinteticos:
     async def test_se_crea_una_clinica_completa(self, cargado) -> None:
         assert cargado.clinica_id is not None
         assert cargado.sedes == 2
-        assert cargado.especialidades == 4
-        assert cargado.servicios == 8
-        assert cargado.profesionales == 8
+        assert cargado.especialidades == 8
+        assert cargado.servicios == 14
+        assert cargado.profesionales == 16
         assert cargado.pacientes == 12
+
+    async def test_las_especialidades_son_odontologicas_mas_estetica_facial(
+        self, cargado, sesion: AsyncSession
+    ) -> None:
+        """Clinica odontologica: solo especialidades dentales y la estetica facial."""
+        from app.modulos.organizacion.modelos import Especialidad  # noqa: PLC0415
+
+        codigos = set(
+            (
+                await sesion.scalars(
+                    sa.select(Especialidad.codigo).where(
+                        Especialidad.clinica_id == cargado.clinica_id
+                    )
+                )
+            ).all()
+        )
+        assert codigos == {
+            "ODO",
+            "ODO-ORT",
+            "ODO-END",
+            "ODO-PER",
+            "ODO-PED",
+            "ODO-CIR",
+            "ODO-REH",
+            "EST",
+        }
 
     async def test_carga_predeterminada_completa_60_pacientes_200_citas_y_contenido(
         self, sesion: AsyncSession
@@ -307,7 +333,7 @@ class TestDatosSinteticos:
         )
 
         assert resumen.clinica_id is not None
-        assert (resumen.sedes, resumen.especialidades, resumen.profesionales) == (2, 4, 8)
+        assert (resumen.sedes, resumen.especialidades, resumen.profesionales) == (2, 8, 16)
         assert resumen.pacientes == 60
         assert resumen.citas == 200
 

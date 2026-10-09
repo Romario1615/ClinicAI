@@ -125,7 +125,7 @@ test('ficha por cita, presupuesto PDF, versiones y entrega privada sandbox', asy
 test('faciograma en la ficha conserva la cita, versiona zonas y descarga PDF en escritorio y móvil', async ({ page, request }) => {
   test.setTimeout(60_000);
   const accesos = await (await request.get(`${API}/autenticacion/accesos-locales`)).json();
-  const estetica = accesos.especialidades_profesionales.find((e: { nombre: string }) => /dermatolog/i.test(e.nombre));
+  const estetica = accesos.especialidades_profesionales.find((e: { nombre: string }) => /est[eé]tica|dermatolog/i.test(e.nombre));
   expect(estetica).toBeTruthy();
   const profesional = await request.post(`${API}/autenticacion/sesion-local`, { data: { codigo_rol: 'profesional', especialidad_id: estetica.id } });
   expect(profesional.ok()).toBeTruthy();
@@ -141,7 +141,7 @@ test('faciograma en la ficha conserva la cita, versiona zonas y descarga PDF en 
     const contextos = await (await request.get(`${API}/pacientes/${persona.id}/contextos-atencion`, { headers: cabeceras })).json();
     if (contextos.some((c: { especialidad_id:string }) => c.especialidad_id===propia.id)) { encontrada=persona;break; }
   }
-  if (!encontrada) throw new Error('Prepare un paciente sintético con una cita de Dermatología.');
+  if (!encontrada) throw new Error('Prepare un paciente sintético con una cita de Estética facial.');
   const paciente = encontrada;
   await page.goto('/acceso');
   await page.getByRole('combobox', { name:'Especialidad del profesional' }).selectOption(estetica.id);
