@@ -71,6 +71,94 @@ describe('PanelComponent · tablero por rol', { timeout: 15_000 }, () => {
     return fixture;
   }
 
+  function resumenSintetico(total: number) {
+    return {
+      total_citas: total, pacientes: total, pacientes_nuevos: null, pacientes_recurrentes: null,
+      citas: {}, tendencia_diaria: [], por_hora: [], por_dia_semana: [],
+      espera: { promedio_minutos: null, personas_en_espera: 0, espera_mayor_15_minutos: 0 },
+      recuperacion_turnos: { turnos_liberados: null, turnos_recuperados: null, promedio_minutos_para_recuperar: null },
+      adherencia: null, pagos: null,
+    };
+  }
+
+  it.each(['respuesta', 'error'] as const)('descarta %s de cifras y comparación de un periodo anterior', (resultado) => {
+    const fixture = montar(indicadores({}), ['dashboard.leer']);
+    const c = fixture.componentInstance as unknown as {
+      cambiarPeriodo(valor: string): void; resumen(): { total_citas: number } | null;
+      anterior(): { total_citas: number } | null; error(): string;
+    };
+    const http = TestBed.inject(HttpTestingController);
+    c.cambiarPeriodo('7'); const antiguos = http.match(r => r.url.endsWith('/dashboard/'));
+    c.cambiarPeriodo('30'); const vigentes = http.match(r => r.url.endsWith('/dashboard/'));
+    vigentes[0].flush(resumenSintetico(30)); vigentes[1].flush(resumenSintetico(12));
+    if (resultado === 'respuesta') {
+      antiguos[0].flush(resumenSintetico(7)); antiguos[1].flush(resumenSintetico(5));
+    } else {
+      antiguos.forEach(r => r.flush({ mensaje: 'Fallo de consulta anterior' }, { status: 500, statusText: 'Error' }));
+    }
+    expect(c.resumen()?.total_citas).toBe(30); expect(c.anterior()?.total_citas).toBe(12);
+    expect(c.error()).toBe(''); http.verify();
+  });
+
+  it('un rango inválido invalida las consultas de cifras que todavía estaban pendientes', () => {
+    const fixture = montar(indicadores({}), ['dashboard.leer']);
+    const c = fixture.componentInstance as unknown as {
+      cambiarPeriodo(valor: string): void; aplicarFiltros(): void;
+      fechaDesde: { set(valor: string): void }; fechaHasta: { set(valor: string): void };
+      resumen(): unknown; anterior(): unknown;
+    };
+    const http = TestBed.inject(HttpTestingController);
+    c.cambiarPeriodo('7'); const anteriores = http.match(r => r.url.endsWith('/dashboard/'));
+    c.fechaDesde.set('2027-01-01'); c.fechaHasta.set('2026-12-31'); c.aplicarFiltros();
+    anteriores.forEach(r => r.flush(resumenSintetico(7)));
+    expect(c.resumen()).toBeNull(); expect(c.anterior()).toBeNull(); http.verify();
+  });
+
+  it('servicios y profesionales no se reemplazan con respuestas de otra especialidad', () => {
+    const fixture = montar(indicadores({}), ['dashboard.leer']);
+    const c = fixture.componentInstance as unknown as {
+      cambiarEspecialidad(id: string): void; servicios(): readonly { id: string }[];
+      profesionales(): readonly { id: string }[];
+    };
+    const http = TestBed.inject(HttpTestingController);
+    c.cambiarEspecialidad('e-1'); const antiguos = http.match(() => true);
+    c.cambiarEspecialidad('e-2'); const vigentes = http.match(() => true);
+    for (const [peticiones, id] of [[vigentes, 'vigente'], [antiguos, 'anterior']] as const) {
+      for (const r of peticiones) {
+        r.flush(r.request.url.endsWith('/dashboard/') ? resumenSintetico(1) : [{ id, nombre: 'Sintético', apellido: 'QA' }]);
+      }
+    }
+    expect(c.servicios().map(s => s.id)).toEqual(['vigente']);
+    expect(c.profesionales().map(p => p.id)).toEqual(['vigente']); http.verify();
+  });
+
+  it('el resumen y análisis pendientes no aparecen bajo filtros nuevos', () => {
+    const fixture = montar(indicadores({}), ['dashboard.leer']);
+    const c = fixture.componentInstance as unknown as {
+      generarResumenLocal(): void; generarAnalisisIA(): void; cambiarPeriodo(valor: string): void;
+      resumenLocal(): readonly string[]; analisisIA(): string; analizandoLocal(): boolean; analizandoIA(): boolean;
+    };
+    const http = TestBed.inject(HttpTestingController);
+    c.generarResumenLocal(); const local = http.expectOne(r => r.url.endsWith('/dashboard/analisis-local'));
+    c.generarAnalisisIA(); const ia = http.expectOne(r => r.url.endsWith('/dashboard/analisis-ia'));
+    c.cambiarPeriodo('7');
+    http.match(r => r.url.endsWith('/dashboard/')).forEach(r => r.flush(resumenSintetico(7)));
+    local.flush({ hallazgos: ['Resultado del filtro anterior'] }); ia.flush({ analisis: 'Análisis anterior' });
+    expect(c.resumenLocal()).toEqual([]); expect(c.analisisIA()).toBe('');
+    expect(c.analizandoLocal()).toBe(false); expect(c.analizandoIA()).toBe(false); http.verify();
+  });
+
+  it('no duplica consultas de resumen o análisis mientras están en curso', () => {
+    const fixture = montar(indicadores({}), ['dashboard.leer']);
+    const c = fixture.componentInstance as unknown as { generarResumenLocal(): void; generarAnalisisIA(): void };
+    const http = TestBed.inject(HttpTestingController);
+    c.generarResumenLocal(); c.generarResumenLocal(); c.generarAnalisisIA(); c.generarAnalisisIA();
+    const locales = http.match(r => r.url.endsWith('/dashboard/analisis-local'));
+    const analisis = http.match(r => r.url.endsWith('/dashboard/analisis-ia'));
+    locales.forEach(r => r.flush({ hallazgos: [] })); analisis.forEach(r => r.flush({ analisis: '' }));
+    expect(locales.length).toBe(1); expect(analisis.length).toBe(1); http.verify();
+  });
+
   it('el profesional ve su día y lo pendiente; no ve gestión', () => {
     const fixture = montar(
       indicadores({

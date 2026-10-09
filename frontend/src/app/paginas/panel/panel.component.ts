@@ -1163,6 +1163,11 @@ const DIAS_POR_PERIODO: Record<string, number> = { hoy: 1, '7': 7, '30': 30 };
   `,
 })
 export class PanelComponent {
+  private secuenciaResumen = 0;
+  private secuenciaServicios = 0;
+  private secuenciaProfesionales = 0;
+  private secuenciaAnalisisLocal = 0;
+  private secuenciaAnalisisIA = 0;
   private readonly operaciones = inject(OperacionesService);
   private readonly api = inject(ApiService);
   private readonly catalogo = inject(CatalogoService);
@@ -1503,9 +1508,7 @@ export class PanelComponent {
     const dias = DIAS_POR_PERIODO[clave] ?? 1;
     this.fechaHasta.set(fin);
     this.fechaDesde.set(sumarDias(fin, -(dias - 1)));
-    this.analisisIA.set('');
-    this.resumenLocal.set([]);
-    this.cargarResumen();
+    this.aplicarFiltros();
   }
 
   protected cambiarSede(id: string): void {
@@ -1547,9 +1550,9 @@ export class PanelComponent {
   }
 
   protected aplicarFiltros(): void {
-    this.analisisIA.set('');
-    this.resumenLocal.set([]);
+    this.reiniciarAnalisis();
     if (this.errorFechas()) {
+      ++this.secuenciaResumen;
       this.resumen.set(null);
       this.anterior.set(null);
       this.cargandoResumen.set(false);
@@ -1584,19 +1587,23 @@ export class PanelComponent {
   }
 
   private cargarServicios(): void {
+    const secuencia = ++this.secuenciaServicios;
+    this.servicios.set([]);
     this.catalogo.servicios(this.especialidadId() || undefined).subscribe({
-      next: (lista) => this.servicios.set(lista),
-      error: () => this.servicios.set([]),
+      next: (lista) => { if (secuencia === this.secuenciaServicios) this.servicios.set(lista); },
+      error: () => { if (secuencia === this.secuenciaServicios) this.servicios.set([]); },
     });
   }
 
   private cargarProfesionales(): void {
+    const secuencia = ++this.secuenciaProfesionales;
+    this.profesionales.set([]);
     this.catalogo.profesionales({
       especialidadId: this.especialidadId() || undefined,
       sedeId: this.sedeId() || undefined,
     }).subscribe({
-      next: (lista) => this.profesionales.set(lista),
-      error: () => this.profesionales.set([]),
+      next: (lista) => { if (secuencia === this.secuenciaProfesionales) this.profesionales.set(lista); },
+      error: () => { if (secuencia === this.secuenciaProfesionales) this.profesionales.set([]); },
     });
   }
 
@@ -1611,13 +1618,16 @@ export class PanelComponent {
   }
 
   protected generarResumenLocal(): void {
+    if (this.analizandoLocal() || this.errorFechas()) return;
+    const secuencia = ++this.secuenciaAnalisisLocal;
     const parametros = this.rangoAnalisis();
     this.analizandoLocal.set(true);
     this.errorIA.set('');
     this.resumenLocal.set([]);
     this.operaciones.analizar<{ hallazgos: string[] }>('/dashboard/analisis-local', parametros).subscribe({
-      next: (resultado) => { this.resumenLocal.set(resultado.hallazgos); this.analizandoLocal.set(false); },
+      next: (resultado) => { if (secuencia !== this.secuenciaAnalisisLocal) return; this.resumenLocal.set(resultado.hallazgos); this.analizandoLocal.set(false); },
       error: (fallo: unknown) => {
+        if (secuencia !== this.secuenciaAnalisisLocal) return;
         this.errorIA.set(fallo instanceof FalloApi ? fallo.message : 'No se pudo preparar el resumen operativo.');
         this.analizandoLocal.set(false);
       },
@@ -1625,14 +1635,26 @@ export class PanelComponent {
   }
 
   protected generarAnalisisIA(): void {
+    if (this.analizandoIA() || this.errorFechas()) return;
+    const secuencia = ++this.secuenciaAnalisisIA;
     const parametros = this.rangoAnalisis();
     this.analizandoIA.set(true);
     this.errorIA.set('');
     this.analisisIA.set('');
     this.operaciones.analizar<{ analisis: string }>('/dashboard/analisis-ia', parametros).subscribe({
-      next: (resultado) => { this.analisisIA.set(resultado.analisis); this.analizandoIA.set(false); },
-      error: (fallo: unknown) => { this.errorIA.set(fallo instanceof FalloApi ? fallo.message : 'No se pudo generar el análisis.'); this.analizandoIA.set(false); },
+      next: (resultado) => { if (secuencia !== this.secuenciaAnalisisIA) return; this.analisisIA.set(resultado.analisis); this.analizandoIA.set(false); },
+      error: (fallo: unknown) => { if (secuencia !== this.secuenciaAnalisisIA) return; this.errorIA.set(fallo instanceof FalloApi ? fallo.message : 'No se pudo generar el análisis.'); this.analizandoIA.set(false); },
     });
+  }
+
+  private reiniciarAnalisis(): void {
+    ++this.secuenciaAnalisisLocal;
+    ++this.secuenciaAnalisisIA;
+    this.analisisIA.set('');
+    this.resumenLocal.set([]);
+    this.errorIA.set('');
+    this.analizandoLocal.set(false);
+    this.analizandoIA.set(false);
   }
 
   private rangoAnalisis(): Record<string, string> {
@@ -1655,6 +1677,9 @@ export class PanelComponent {
   }
 
   private cargarResumen(): void {
+    const secuencia = ++this.secuenciaResumen;
+    this.resumen.set(null);
+    this.anterior.set(null);
     if (!this.sesion.tienePermiso(PERMISOS.metricasLeer)) {
       return;
     }
@@ -1680,10 +1705,12 @@ export class PanelComponent {
       })
       .subscribe({
         next: (datos) => {
+          if (secuencia !== this.secuenciaResumen) return;
           this.resumen.set(datos);
           this.cargandoResumen.set(false);
         },
         error: (fallo: FalloApi) => {
+          if (secuencia !== this.secuenciaResumen) return;
           this.error.set(fallo.message);
           this.resumen.set(null);
           this.anterior.set(null);
@@ -1700,8 +1727,8 @@ export class PanelComponent {
       .subscribe({
         // Sin el periodo anterior la pantalla sigue sirviendo: se muestra la
         // tasa sin variación en lugar de un error.
-        next: (datos) => this.anterior.set(datos),
-        error: () => this.anterior.set(null),
+        next: (datos) => { if (secuencia === this.secuenciaResumen) this.anterior.set(datos); },
+        error: () => { if (secuencia === this.secuenciaResumen) this.anterior.set(null); },
       });
   }
 

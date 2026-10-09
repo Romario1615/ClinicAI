@@ -6,7 +6,9 @@
  * Aqui se prueba el **recorrido completo**: navegador real, frontend real,
  * API real y PostgreSQL real. El escenario visual 16 sustituye solamente el
  * desglose demografico agregado para comprobar extremos de presentacion;
- * no modifica pacientes ni evalua los calculos del backend.
+ * no modifica pacientes ni evalua los calculos del backend. El escenario 29
+ * retrasa y rechaza dos consultas anteriores para comprobar el contexto;
+ * las cifras vigentes proceden sin cambios de la API real.
  *
  * Lo que NO se prueba aqui son las reglas de dominio. Esas ya tienen 1471
  * pruebas del backend que las cubren mucho mejor y mucho mas rapido. Repetirlas
