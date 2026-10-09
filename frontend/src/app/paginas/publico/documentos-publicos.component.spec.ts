@@ -20,6 +20,6 @@ describe('DocumentosPublicosComponent', () => {
     f.componentInstance['usarDocumento'] = true; f.componentInstance['documento'] = '1234'; f.componentInstance['verificar']();
     const peticion = TestBed.inject(HttpTestingController).expectOne(`${BASE}/publico/documentos/token-sintetico-de-prueba/acceso`);
     expect(peticion.request.body).toEqual({ ultimos_digitos_documento: '1234' }); peticion.flush(new Blob([]), { status: 404, statusText: 'Not Found' }); f.detectChanges();
-    expect(f.nativeElement.textContent).toContain('Solicite un enlace nuevo');
+    expect(f.nativeElement.textContent).toContain('Solicite uno nuevo');
   });
 });

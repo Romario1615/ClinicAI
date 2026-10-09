@@ -84,18 +84,19 @@ export interface IndicacionPublica {
             @if (!usarDocumento()) {
               <label class="campo">
                 <span class="campo__etiqueta">Fecha de nacimiento</span>
-                <input class="campo__control" type="date" name="fecha" [(ngModel)]="fecha" required />
+                <input class="campo__control" type="date" name="fecha" [(ngModel)]="fecha" required [attr.aria-describedby]="error() ? 'mensaje-error' : null" />
               </label>
             } @else {
               <label class="campo">
                 <span class="campo__etiqueta">Últimos 4 caracteres de su documento</span>
-                <input class="campo__control" name="documento" [(ngModel)]="documento" maxlength="4" required autocomplete="off" />
+                <input class="campo__control" name="documento" [(ngModel)]="documento" maxlength="4" required autocomplete="off" [attr.aria-describedby]="error() ? 'mensaje-error' : null" />
               </label>
             }
             <button class="enlace" type="button" (click)="usarDocumento.set(!usarDocumento())">
               {{ usarDocumento() ? 'Usar la fecha de nacimiento' : 'La clínica no tiene mi fecha de nacimiento' }}
             </button>
-            @if (error()) { <p class="aviso-error" role="alert">{{ error() }}</p> }
+            @if (error()) { <p id="mensaje-error" class="aviso-error" role="alert">{{ error() }}</p> }
+            @if (ocupado()) { <p class="aviso-carga" role="status">Comprobando sus datos…</p> }
             <button class="boton boton--principal" type="submit" [disabled]="ocupado() || bloqueado()">
               {{ ocupado() ? 'Comprobando…' : 'Ver mis indicaciones' }}
             </button>
@@ -106,11 +107,12 @@ export interface IndicacionPublica {
   `,
   changeDetection: ChangeDetectionStrategy.Eager,
   styles: `
-    .pagina { min-height: 100vh; display: grid; place-items: start center; padding: var(--espacio-5) var(--espacio-4); background: var(--fondo); }
-    .tarjeta-publica { width: 100%; max-width: 620px; display: grid; gap: var(--espacio-4); padding: var(--espacio-5); border: 1px solid var(--borde); border-radius: var(--radio); background: var(--superficie-elevada); box-shadow: var(--sombra-2); }
+    :host { display: block; min-height: 100%; color: var(--texto); }
+    .pagina { box-sizing: border-box; min-height: 100vh; display: grid; place-items: start center; padding: clamp(16px, 4vw, 40px); background: var(--fondo); }
+    .tarjeta-publica { box-sizing: border-box; width: min(100%, 680px); min-width: 0; display: grid; gap: var(--espacio-4); padding: clamp(20px, 4vw, 36px); border: 1px solid var(--borde); border-radius: var(--radio); background: var(--superficie-elevada); box-shadow: var(--sombra-2); overflow-wrap: anywhere; }
     .marca { margin: 0; font-weight: 800; color: var(--acento); }
     .ceja { margin: 0; color: var(--acento); font-size: 0.75rem; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; }
-    h1 { margin: 2px 0; font-size: 1.4rem; }
+    h1 { margin: 2px 0; font-size: clamp(1.35rem, 3vw, 1.8rem); line-height: 1.25; }
     h2 { margin: 0 0 var(--espacio-2); font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--texto-suave); }
     .sub { margin: 0; color: var(--texto-suave); }
     .texto { margin: 0; white-space: pre-line; font-size: 1.02rem; line-height: 1.55; }
@@ -120,8 +122,12 @@ export interface IndicacionPublica {
     .nota { margin: var(--espacio-2) 0 0; color: var(--texto-suave); font-size: 0.88rem; }
     form { display: grid; gap: var(--espacio-3); }
     form .campo { margin: 0; }
-    .enlace { justify-self: start; border: 0; background: transparent; color: var(--acento); text-decoration: underline; cursor: pointer; padding: 0; font: inherit; font-size: 0.88rem; }
+    .enlace { justify-self: start; max-width: 100%; border: 0; background: transparent; color: var(--acento); text-align: left; text-decoration: underline; cursor: pointer; padding: 4px 0; font: inherit; font-size: 0.95rem; }
+    .aviso-error { margin: 0; padding: 12px 14px; border: 1px solid var(--peligro); border-radius: var(--radio); color: var(--peligro); background: var(--superficie); line-height: 1.45; }
+    .aviso-carga { margin: 0; color: var(--texto); }
     .acciones { display: flex; justify-content: flex-end; }
+    :host :is(button, input):focus-visible { outline: 3px solid var(--acento); outline-offset: 3px; }
+    @media (max-width: 480px) { .pagina { padding: 12px; } .tarjeta-publica { gap: 20px; border-radius: 16px; } .acciones, .acciones .boton { width: 100%; } }
     @media print { .acciones, .marca { display: none; } .tarjeta-publica { box-shadow: none; border: 0; } }
   `,
 })
@@ -139,6 +145,7 @@ export class IndicacionesPublicasComponent {
   protected documento = '';
 
   protected verificar(): void {
+    if (this.ocupado() || this.bloqueado()) return;
     const cuerpo = this.usarDocumento()
       ? { ultimos_digitos_documento: this.documento.trim() }
       : { fecha_nacimiento: this.fecha || null };
@@ -158,10 +165,15 @@ export class IndicacionesPublicasComponent {
         error: (fallo: HttpErrorResponse) => {
           this.ocupado.set(false);
           const cuerpoError = fallo.error as { mensaje?: string; codigo?: string; detalles?: { intentos_restantes?: number } } | null;
-          if (cuerpoError?.codigo === 'ENLACE_BLOQUEADO' || fallo.status === 404) this.bloqueado.set(true);
+          const caducado = fallo.status === 404 || fallo.status === 410;
+          if (cuerpoError?.codigo === 'ENLACE_BLOQUEADO' || caducado) this.bloqueado.set(true);
           const restantes = cuerpoError?.detalles?.intentos_restantes;
           this.error.set(
-            (cuerpoError?.mensaje ?? 'No se pudo comprobar. Inténtelo de nuevo.') +
+            (caducado
+              ? 'Este enlace ha caducado. Solicite uno nuevo a su clínica.'
+              : cuerpoError?.codigo === 'ENLACE_BLOQUEADO'
+                ? 'Este enlace se bloqueó tras varios intentos. Solicite uno nuevo a su clínica.'
+                : cuerpoError?.mensaje ?? 'No se pudo comprobar. Inténtelo de nuevo.') +
               (restantes !== undefined ? ` Le quedan ${restantes} intento(s).` : ''),
           );
         },

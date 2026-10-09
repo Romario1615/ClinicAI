@@ -76,9 +76,21 @@ describe('IndicacionesPublicasComponent', () => {
         const peticion = http.expectOne(URL);
         expect(peticion.request.body).toEqual({ ultimos_digitos_documento: '1234' });
         peticion.flush({ codigo: 'ENLACE_BLOQUEADO', mensaje: 'Bloqueado.' }, { status: 409, statusText: 'C' });
+        fixture.detectChanges();
         expect(c.bloqueado()).toBe(true);
         c.verificar();
-        http.expectOne(URL).flush(null, { status: 500, statusText: 'E' });
-        expect(c.error()).toContain('No se pudo comprobar');
+        expect(http.match(URL)).toHaveLength(0);
+        expect((fixture.nativeElement as HTMLElement).textContent).toContain('se bloqueó tras varios intentos');
+    });
+
+    it('explica que el enlace vencido debe renovarse y bloquea nuevos intentos', () => {
+        c.fecha = '1990-04-12';
+        c.verificar();
+        http.expectOne(URL).flush(null, { status: 410, statusText: 'Gone' });
+        fixture.detectChanges();
+        expect(c.bloqueado()).toBe(true);
+        expect((fixture.nativeElement as HTMLElement).textContent).toContain('ha caducado');
+        c.verificar();
+        expect(http.match(URL)).toHaveLength(0);
     });
 });
