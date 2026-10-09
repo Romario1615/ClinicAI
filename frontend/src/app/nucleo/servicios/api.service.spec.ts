@@ -69,8 +69,19 @@ describe('ApiService · acceso, gestión y seguimiento', () => {
     const peticion = comprobar(api.conversacionesPendientes(25, 50), 'GET', '/conversaciones');
     expect(peticion.params.get('limite')).toBe('25');
     expect(peticion.params.get('desplazamiento')).toBe('50');
+    expect(peticion.params.get('estado')).toBe('EN_HANDOFF');
+    const abiertas = comprobar(api.conversacionesPendientes(50, 0, 'ABIERTA'), 'GET', '/conversaciones');
+    expect(abiertas.params.get('estado')).toBe('ABIERTA');
     comprobar(api.cuentaConversacionesPendientes(), 'GET', '/conversaciones/pendientes/cuenta');
     comprobar(api.conversacion('conv-1'), 'GET', '/conversaciones/conv-1');
+  });
+
+  it('responde con la clave de idempotencia y ofrece las acciones del hilo', () => {
+    const peticion = comprobar(api.responderConversacion('conv-1', 'Respuesta sintética', 'clave-uuid-123'), 'POST', '/conversaciones/conv-1/respuestas', { texto: 'Respuesta sintética' });
+    expect(peticion.headers.get('Idempotency-Key')).toBe('clave-uuid-123');
+    comprobar(api.tomarConversacion('conv-1'), 'POST', '/conversaciones/conv-1/toma', null);
+    comprobar(api.devolverConversacion('conv-1'), 'POST', '/conversaciones/conv-1/devolucion', null);
+    comprobar(api.cerrarConversacion('conv-1'), 'POST', '/conversaciones/conv-1/cierre', null);
   });
 
   it('consulta y confirma los avisos de revisión humana del tratamiento', () => {

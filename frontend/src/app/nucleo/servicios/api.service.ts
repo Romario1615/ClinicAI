@@ -794,6 +794,17 @@ export interface ConversacionEntrante {
   readonly ultimo_mensaje: string | null;
 }
 
+export type EstadoConversacion = 'EN_HANDOFF' | 'ABIERTA' | 'CERRADA';
+export interface RespuestaConversacion {
+  readonly id: string;
+  readonly texto: string;
+  readonly autor: 'AGENTE' | 'PERSONAL';
+  readonly estado: string;
+  readonly creado_en: string;
+  readonly entregado_en: string | null;
+  readonly error: string | null;
+}
+
 export interface PaginaConversaciones {
   readonly elementos: readonly ConversacionEntrante[];
   readonly total: number;
@@ -803,6 +814,7 @@ export interface PaginaConversaciones {
 
 export interface DetalleConversacionEntrante extends ConversacionEntrante {
   readonly ventana_expira_en: string | null;
+  readonly asignado_a_usuario_id?: string | null;
   readonly mensajes: readonly {
     readonly id: string;
     readonly tipo: string;
@@ -810,6 +822,7 @@ export interface DetalleConversacionEntrante extends ConversacionEntrante {
     readonly intencion: string;
     readonly recibido_en: string;
   }[];
+  readonly respuestas: readonly RespuestaConversacion[];
 }
 
 export interface AvisoRevisionTratamiento {
@@ -924,8 +937,8 @@ export class ApiService {
     return this.get<Identidad>('/autenticacion/yo');
   }
 
-  conversacionesPendientes(limite = 50, desplazamiento = 0): Observable<PaginaConversaciones> {
-    return this.get<PaginaConversaciones>('/conversaciones', { limite, desplazamiento });
+  conversacionesPendientes(limite = 50, desplazamiento = 0, estado: EstadoConversacion = 'EN_HANDOFF'): Observable<PaginaConversaciones> {
+    return this.get<PaginaConversaciones>('/conversaciones', { limite, desplazamiento, estado });
   }
 
   cuentaConversacionesPendientes(): Observable<{ readonly cantidad: number }> {
@@ -968,6 +981,14 @@ export class ApiService {
   conversacion(id: string): Observable<DetalleConversacionEntrante> {
     return this.get<DetalleConversacionEntrante>(`/conversaciones/${id}`);
   }
+
+  responderConversacion(id: string, texto: string, clave: string): Observable<{ readonly encolado: boolean }> {
+    return this.post(`/conversaciones/${id}/respuestas`, { texto }, clave);
+  }
+
+  tomarConversacion(id: string): Observable<void> { return this.post(`/conversaciones/${id}/toma`, null); }
+  devolverConversacion(id: string): Observable<void> { return this.post(`/conversaciones/${id}/devolucion`, null); }
+  cerrarConversacion(id: string): Observable<void> { return this.post(`/conversaciones/${id}/cierre`, null); }
 
   // --- Agenda ---
   disponibilidad(consulta: ConsultaDisponibilidad): Observable<Disponibilidad> {

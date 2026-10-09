@@ -1,4 +1,4 @@
-import { Component, computed, inject, signal, ChangeDetectionStrategy } from '@angular/core';
+import { Component, computed, inject, signal, ChangeDetectionStrategy, OnDestroy } from '@angular/core';
 import { DatePipe, registerLocaleData } from '@angular/common';
 import localeEs from '@angular/common/locales/es';
 
@@ -7,11 +7,13 @@ import {
   type AvisoRevisionTratamiento,
   type ConversacionEntrante,
   type DetalleConversacionEntrante,
+  type EstadoConversacion,
 } from '../../nucleo/servicios/api.service';
 import { IconoComponent } from '../../compartido/icono.component';
 import { PERMISOS } from '../../nucleo/servicios/configuracion';
 import { SesionService } from '../../nucleo/servicios/sesion.service';
 import { PendientesService } from '../../nucleo/servicios/pendientes.service';
+import { ChatConversacionalComponent } from '../../compartido/chat-conversacional.component';
 
 registerLocaleData(localeEs);
 
@@ -19,14 +21,14 @@ import { ResumenModuloComponent } from '../../compartido/resumen-modulo.componen
 @Component({
   selector: 'app-conversaciones',
   standalone: true,
-  imports: [ResumenModuloComponent, DatePipe, IconoComponent],
+  imports: [ResumenModuloComponent, DatePipe, IconoComponent, ChatConversacionalComponent],
   host: { class: 'pantalla' },
   template: `
     <header class="bandeja__cabecera pantalla__fijo">
       <div>
         <p class="sobrelinea"><app-icono nombre="mensajes-seguros" [tamano]="15" /> COMUNICACIÓN SEGURA</p>
         <h1>Atención de mensajes</h1>
-        <p>Conversaciones derivadas que esperan seguimiento del equipo.</p>
+        <p>Mensajes de WhatsApp y respuestas de la clínica.</p>
       </div>
       <button class="boton boton--secundario" type="button" (click)="cargar()" [disabled]="cargando()">
         <app-icono nombre="reloj" [tamano]="17" /> Actualizar
@@ -61,14 +63,19 @@ import { ResumenModuloComponent } from '../../compartido/resumen-modulo.componen
           </section>
         }
       <section class="bandeja__lista tarjeta" aria-label="Conversaciones pendientes">
-        <div class="lista__cabecera"><h2>Pendientes</h2><span>{{ conversaciones().length }}</span></div>
+        <nav class="filtros" aria-label="Estado de conversaciones">
+          <button type="button" [class.filtro--activo]="estado() === 'EN_HANDOFF'" (click)="cambiarEstado('EN_HANDOFF')">Esperan a una persona</button>
+          <button type="button" [class.filtro--activo]="estado() === 'ABIERTA'" (click)="cambiarEstado('ABIERTA')">Las atiende el agente</button>
+          <button type="button" [class.filtro--activo]="estado() === 'CERRADA'" (click)="cambiarEstado('CERRADA')">Cerradas</button>
+        </nav>
+        <div class="lista__cabecera"><h2>{{ etiquetaEstado() }}</h2><span>{{ conversaciones().length }}</span></div>
         <div class="lista__cuerpo desplazable" tabindex="0" role="region" aria-label="Lista de conversaciones">
         @if (cargando() && !conversaciones().length) { <p class="vacio">Cargando conversaciones…</p> }
         @else if (!conversaciones().length) {
           <div class="vacio vacio--sin-mensajes">
             <img class="vacio__ilustracion" src="/images/bandeja-sin-pendientes.png" alt="" aria-hidden="true" width="144" height="144" />
-            <strong>Todo al día</strong>
-            <span>No hay mensajes pendientes de atención.</span>
+            <strong>No hay conversaciones</strong>
+            <span>Cuando haya mensajes en este estado aparecerán aquí.</span>
           </div>
         }
         @for (conversacion of conversaciones(); track conversacion.id) {
@@ -86,23 +93,32 @@ import { ResumenModuloComponent } from '../../compartido/resumen-modulo.componen
       </section>
       </div>
 
-      <section class="bandeja__detalle tarjeta" aria-label="Detalle de conversación" aria-live="polite">
+      <section class="bandeja__detalle tarjeta" aria-label="Detalle de conversación">
         @if (detalle(); as hilo) {
           <header class="detalle__cabecera">
-            <div><span class="sobrelinea">WHATSAPP · EN ESPERA</span><h2>{{ hilo.telefono }}</h2></div>
-            <span class="estado">Requiere atención</span>
+            <div><span class="sobrelinea">WHATSAPP · {{ etiquetaEstado() }}</span><h2>{{ hilo.telefono }}</h2></div>
+            <div class="acciones-hilo">
+              @if (hilo.estado === 'ABIERTA') { <button class="boton boton--secundario" type="button" (click)="accion('devolver')" [disabled]="ocupado()">Devolver al agente</button> }
+              @if (hilo.estado === 'EN_HANDOFF') { <button class="boton boton--secundario" type="button" (click)="accion('tomar')" [disabled]="ocupado()">Tomar</button> }
+              @if (hilo.estado !== 'CERRADA') { <button class="boton boton--secundario" type="button" (click)="accion('cerrar')" [disabled]="ocupado()">Cerrar</button> }
+              <span class="estado">{{ etiquetaEstado() }}</span>
+            </div>
           </header>
           <p class="detalle__motivo">{{ hilo.motivo_handoff }}</p>
           @if (hilo.paciente_id) { <p class="detalle__paciente">Paciente vinculado: {{ hilo.paciente_id }}</p> }
-          <div class="mensajes desplazable" tabindex="0" role="region" aria-label="Mensajes de la conversación">
-            @for (mensaje of hilo.mensajes; track mensaje.id) {
-              <article class="mensaje">
-                <p>{{ mensaje.texto || 'Mensaje de tipo ' + mensaje.tipo }}</p>
-                <footer><span>{{ mensaje.intencion }}</span><time>{{ mensaje.recibido_en | date:'d MMM yyyy, HH:mm':'':'es' }}</time></footer>
+          <p class="ventana" [class.ventana--vencida]="ventanaVencida()">{{ textoVentana() }}</p>
+          <app-chat-conversacional class="chat-bandeja" etiqueta="Línea de tiempo de WhatsApp" [actualizacion]="hilo.respuestas.length + hilo.mensajes.length" [(texto)]="textoRespuesta" [ocupado]="ocupado()" [deshabilitado]="hilo.estado === 'CERRADA' || ventanaVencida()" [placeholder]="ventanaVencida() ? 'La ventana de 24 h venció' : 'Escribe una respuesta…'" [error]="errorRespuesta()" (enviar)="responder()">
+            @for (evento of lineaTiempo(); track evento.id) {
+              <article chat-mensaje class="mensaje" [class.mensaje--saliente]="evento.tipo !== 'PACIENTE'" [class.mensaje--agente]="evento.tipo === 'AGENTE'">
+                <strong>{{ evento.tipo === 'PACIENTE' ? 'Paciente' : evento.tipo === 'AGENTE' ? 'Agente' : 'Personal' }}</strong>
+                <p>{{ evento.texto }}</p>
+                <footer><time>{{ evento.fecha | date:'d MMM yyyy, HH:mm':'':'es' }}</time>
+                  @if (evento.estado) { <span>Entrega: {{ evento.estado }}@if (evento.entregado_en) { · {{ evento.entregado_en | date:'HH:mm':'':'es' }}}</span> }
+                </footer>
+                @if (evento.error) { <p class="error-entrega">Error: {{ evento.error }}</p> }
               </article>
             }
-          </div>
-          <p class="solo-lectura">La lectura queda registrada en la auditoría clínica. La respuesta por WhatsApp se habilitará cuando se configure el proveedor.</p>
+          </app-chat-conversacional>
         } @else {
           <div class="vacio"><app-icono nombre="agente" [tamano]="24" /><strong>Selecciona una conversación</strong><span>El detalle se carga de forma protegida y cada consulta queda auditada.</span></div>
         }
@@ -125,10 +141,9 @@ import { ResumenModuloComponent } from '../../compartido/resumen-modulo.componen
     .cargar-mas{width:100%;padding:14px;border:0;background:transparent;color:var(--acento-fuerte);font:inherit;font-weight:700;cursor:pointer}.cargar-mas:disabled{opacity:.55;cursor:wait}
     .conversacion__telefono{font-weight:750}.conversacion__motivo{font-size:.82rem;color:var(--aviso)}.conversacion__resumen{font-size:.88rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--texto-suave)}
     .conversacion time,.mensaje time{font-size:.76rem;color:var(--texto-tenue)}
-    .detalle__cabecera{align-items:center}.detalle__cabecera h2{font-size:1.3rem;margin-top:5px}.estado{padding:6px 10px;border-radius:20px;background:var(--superficie-hundida);font-size:.8rem;font-weight:700}
-    .detalle__motivo,.detalle__paciente{margin:16px 22px 0;color:var(--texto-suave)}.mensajes{display:grid;align-content:start;gap:12px;padding:22px;min-height:260px}
-    .mensaje{max-width:90%;padding:14px 16px;border-radius:14px 14px 14px 4px;background:var(--superficie-hundida)}.mensaje p{margin:0 0 10px;white-space:pre-wrap;overflow-wrap:anywhere}.mensaje footer{display:flex;justify-content:space-between;gap:14px}.mensaje footer span{font-size:.75rem;color:var(--texto-suave)}
-    .solo-lectura{margin:0 22px 20px;padding:12px 14px;border-left:3px solid var(--acento);background:var(--superficie-hundida);font-size:.84rem;color:var(--texto-suave)}
+    .detalle__cabecera{align-items:center}.detalle__cabecera h2{font-size:1.3rem;margin-top:5px}.estado{padding:6px 10px;border-radius:20px;background:var(--superficie-hundida);font-size:.8rem;font-weight:700}.acciones-hilo{display:flex;align-items:center;gap:6px;flex-wrap:wrap;justify-content:flex-end}
+    .detalle__motivo,.detalle__paciente{margin:12px 22px 0;color:var(--texto-suave)}
+    .mensaje{justify-self:start;max-width:90%;padding:12px 15px;border-radius:14px 14px 14px 4px;background:var(--superficie-hundida)}.mensaje--saliente{justify-self:end;background:color-mix(in srgb,var(--acento) 13%,var(--superficie-elevada));border-radius:14px 14px 4px 14px}.mensaje--agente{border:1px solid color-mix(in srgb,var(--acento) 30%,var(--borde))}.mensaje strong{font-size:.78rem;color:var(--acento-fuerte)}.mensaje p{margin:6px 0;white-space:pre-wrap;overflow-wrap:anywhere}.mensaje footer{display:flex;justify-content:space-between;gap:14px;flex-wrap:wrap}.mensaje footer span,.mensaje time{font-size:.75rem;color:var(--texto-suave)}.error-entrega{color:var(--peligro);font-size:.82rem}.ventana{margin:10px 18px;padding:8px 12px;background:var(--superficie-hundida);font-size:.85rem}.ventana--vencida{color:var(--peligro)}.chat-bandeja{padding:10px 16px 14px}.filtros{display:grid;gap:2px;padding:8px}.filtros button{text-align:left;border:0;border-radius:8px;background:transparent;color:inherit;padding:9px 10px;font:inherit;cursor:pointer}.filtros button:hover,.filtros .filtro--activo{background:var(--superficie-hundida);font-weight:700}
     .vacio{display:flex;min-height:180px;flex-direction:column;align-items:center;justify-content:center;gap:10px;padding:24px;text-align:center;color:var(--texto-suave)}.vacio strong{color:var(--texto)}
     .vacio--sin-mensajes{min-height:340px;gap:8px}.vacio__ilustracion{display:block;width:144px;height:144px;object-fit:contain;animation:ilustracion-bandeja-flotar 8s ease-in-out infinite;filter:drop-shadow(0 12px 20px rgb(16 42 46 / 9%))}.vacio--sin-mensajes strong{font-size:1.05rem}.vacio--sin-mensajes span{max-width:220px}
     @keyframes ilustracion-bandeja-flotar{0%,100%{transform:translateY(0)}50%{transform:translateY(-5px)}}
@@ -153,13 +168,36 @@ import { ResumenModuloComponent } from '../../compartido/resumen-modulo.componen
     }
   `],
 })
-export class ConversacionesComponent {
+export class ConversacionesComponent implements OnDestroy {
   private readonly api = inject(ApiService);
   private readonly sesion = inject(SesionService);
   private readonly pendientes = inject(PendientesService);
   protected readonly conversaciones = signal<readonly ConversacionEntrante[]>([]);
   protected readonly avisosTratamiento = signal<readonly AvisoRevisionTratamiento[]>([]);
   protected readonly total = signal(0);
+  protected readonly estado = signal<EstadoConversacion>('EN_HANDOFF');
+  protected readonly ocupado = signal(false);
+  protected readonly errorRespuesta = signal('');
+  protected readonly textoRespuesta = signal('');
+  private readonly ahora = signal(Date.now());
+  private readonly relojIntervalo = window.setInterval(() => this.ahora.set(Date.now()), 30_000);
+  protected readonly etiquetaEstado = computed(() => ({ EN_HANDOFF: 'Esperan a una persona', ABIERTA: 'Las atiende el agente', CERRADA: 'Cerradas' })[this.estado()]);
+  protected readonly ventanaVencida = computed(() => { const vence = this.detalle()?.ventana_expira_en; return !vence || new Date(vence).getTime() <= this.ahora(); });
+  protected readonly textoVentana = computed(() => {
+    const vence = this.detalle()?.ventana_expira_en;
+    if (!vence) return 'No hay una ventana de respuesta abierta. WhatsApp solo admite plantillas.';
+    const ms = new Date(vence).getTime() - this.ahora();
+    if (ms <= 0) return 'La ventana de 24 h venció. WhatsApp solo admite plantillas aprobadas.';
+    const horas = Math.floor(ms / 3_600_000); const minutos = Math.floor((ms % 3_600_000) / 60_000);
+    return `Quedan ${horas} h ${minutos} min de la ventana de 24 h.`;
+  });
+  protected readonly lineaTiempo = computed(() => {
+    const hilo = this.detalle(); if (!hilo) return [];
+    return [
+      ...hilo.mensajes.map((m) => ({ id: `in-${m.id}`, tipo: 'PACIENTE', texto: m.texto || `Mensaje de tipo ${m.tipo}`, fecha: m.recibido_en, estado: '', entregado_en: null as string | null, error: null as string | null })),
+      ...(hilo.respuestas ?? []).map((r) => ({ id: `out-${r.id}`, tipo: r.autor, texto: r.texto, fecha: r.creado_en, estado: r.estado, entregado_en: r.entregado_en, error: r.estado === 'FALLIDO' ? r.error || 'No se pudo entregar el mensaje.' : null })),
+    ].sort((a,b) => a.fecha.localeCompare(b.fecha));
+  });
   protected readonly seleccionada = signal<ConversacionEntrante | null>(null);
   protected readonly detalle = signal<DetalleConversacionEntrante | null>(null);
   protected readonly cargando = signal(false);
@@ -173,11 +211,15 @@ export class ConversacionesComponent {
 
   constructor() { this.cargar(); }
 
+  ngOnDestroy(): void { window.clearInterval(this.relojIntervalo); }
+
+  protected cambiarEstado(estado: EstadoConversacion): void { if (estado === this.estado()) return; this.estado.set(estado); this.seleccionada.set(null); this.detalle.set(null); this.cargar(); }
+
   protected cargar(): void {
     this.cargando.set(true);
     this.error.set('');
     this.cargarAvisos();
-    this.api.conversacionesPendientes().subscribe({
+    this.api.conversacionesPendientes(50, 0, this.estado()).subscribe({
       next: (pagina) => {
         const filas = pagina.elementos;
         this.conversaciones.set(filas);
@@ -240,7 +282,7 @@ export class ConversacionesComponent {
     if (this.cargando()) return;
     this.cargando.set(true);
     const actual = this.conversaciones();
-    this.api.conversacionesPendientes(50, actual.length).subscribe({
+    this.api.conversacionesPendientes(50, actual.length, this.estado()).subscribe({
       next: (pagina) => {
         this.conversaciones.update((filas) => [...filas, ...pagina.elementos]);
         this.total.set(pagina.total);
@@ -257,5 +299,23 @@ export class ConversacionesComponent {
       next: (detalle) => this.detalle.set(detalle),
       error: (fallo: Error) => this.error.set(fallo.message),
     });
+  }
+
+  protected responder(): void {
+    const hilo = this.detalle(); const texto = this.textoRespuesta().trim();
+    if (!hilo || !texto || this.ocupado() || this.ventanaVencida()) return;
+    this.ocupado.set(true); this.errorRespuesta.set('');
+    this.api.responderConversacion(hilo.id, texto, crypto.randomUUID()).subscribe({
+      next: () => { this.textoRespuesta.set(''); this.ocupado.set(false); this.abrir(this.seleccionada()!); this.cargar(); },
+      error: (e: Error) => { this.errorRespuesta.set(e.message.includes('409') || e.message.toLowerCase().includes('24 h') ? 'La ventana de 24 h venció. WhatsApp solo admite plantillas aprobadas.' : e.message); this.ocupado.set(false); this.abrir(this.seleccionada()!); },
+    });
+  }
+
+  protected accion(accion: 'tomar' | 'devolver' | 'cerrar'): void {
+    const hilo = this.detalle(); if (!hilo || this.ocupado()) return;
+    if (accion === 'cerrar' && !window.confirm('¿Cerrar esta conversación? No se podrá responder después.')) return;
+    this.ocupado.set(true); this.error.set('');
+    const llamada = accion === 'tomar' ? this.api.tomarConversacion(hilo.id) : accion === 'devolver' ? this.api.devolverConversacion(hilo.id) : this.api.cerrarConversacion(hilo.id);
+    llamada.subscribe({ next: () => { this.ocupado.set(false); this.cambiarEstado(accion === 'devolver' ? 'ABIERTA' : accion === 'cerrar' ? 'CERRADA' : 'EN_HANDOFF'); }, error: (e: Error) => { this.error.set(e.message); this.ocupado.set(false); } });
   }
 }
