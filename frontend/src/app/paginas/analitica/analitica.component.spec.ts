@@ -8,6 +8,18 @@ import { BASE,PROVEEDORES_PRUEBA } from '../../nucleo/pruebas/sesion-sintetica';
 const kpi:KpiAnalitico={clave:'citas',nombre:'Citas',unidad:'citas',definicion:'Turnos del ámbito',total:6,agregacion:'suma',historia:[{fecha:'2026-04-13',valor:2,muestras:2},{fecha:'2026-04-14',valor:null,muestras:0}],prediccion:[{fecha:'2026-04-15',valor:3,inferior:2,superior:4}],evidencia:{estado:'validado_localmente',motivo:'Evaluado con fechas posteriores',algoritmo:'Patrón semanal aprendido',observaciones:100,dias_historia:100,dias_seleccion:7,dias_evaluacion:7,mae:0,mae_base:1,mejora_porcentaje:100,entrenado_hasta:'2026-04-14',evaluacion_desde:'2026-04-08',evaluacion_hasta:'2026-04-14',banda:'Error empírico, sin probabilidad calibrada'}};
 const datos:AnaliticaDashboard={generado_en:'2026-04-15T12:00:00Z',zona_horaria:'America/Guayaquil',desde:'2026-01-01',hasta:'2026-04-14',horizonte:14,kpis:[kpi],recomendaciones:[{titulo:'Revisar reservas',motivo:'Hay turnos pendientes',accion:'Contactar tras revisión',ruta:'/agenda',prioridad:'media',kpis:['citas'],requiere_revision:true}],limites:['Sin decisiones clínicas automáticas']};
 describe('Rutas SVG de series',()=>{
+  it('representa la misma escala, fechas y amplitud para histórico y pronóstico',()=>{
+    TestBed.configureTestingModule({imports:[GraficoKpiComponent]});
+    const f=TestBed.createComponent(GraficoKpiComponent);
+    f.componentRef.setInput('kpi',{...kpi,historia:[{fecha:'2026-04-12',valor:0,muestras:1},{fecha:'2026-04-13',valor:5,muestras:5},{fecha:'2026-04-14',valor:10,muestras:10}],prediccion:[{fecha:'2026-04-15',valor:5,inferior:0,superior:10}]});
+    f.componentRef.setInput('predictivo',true);f.detectChanges();
+    // Unidades 0..10: eje Y 180..32; cuatro fechas equidistantes en X 32..568.
+    const c=f.componentInstance as unknown as {historico():string;futuro():string;banda():string;primeraFecha():string;ultimaFecha():string};
+    expect(c.historico()).toBe('M32.0,180.0 L210.7,106.0 L389.3,32.0');
+    expect(c.futuro()).toBe('M389.3,32.0 L568.0,106.0');
+    expect(c.banda()).toContain('568.0,32.0');expect(c.banda()).toContain('568.0,180.0');
+    expect(c.primeraFecha()).toBe('2026-04-12');expect(c.ultimaFecha()).toBe('2026-04-15');
+  });
   it('no une tramos desconocidos ni divide por cero',()=>{expect(rutaSerie([0,null,4],4)).toBe('M32.0,180.0  M568.0,32.0');expect(rutaSerie([1],0)).not.toContain('NaN');expect(rutaSerie([],1)).toBe('');});
   it('el gráfico alterna histórico, pronóstico y banda de error',()=>{
     TestBed.configureTestingModule({imports:[GraficoKpiComponent]});const f=TestBed.createComponent(GraficoKpiComponent);f.componentRef.setInput('kpi',kpi);f.detectChanges();

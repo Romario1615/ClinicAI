@@ -69,6 +69,31 @@ describe('BloqueosAgendaComponent', () => {
         expect(control.nombreTipo('VACACIONES')).toBe('Vacaciones');
     });
 
+    it('ignora la lista que llega tarde después de seleccionar otra sede', () => {
+        const antigua = http.expectOne(r => r.url.endsWith('/agenda/bloqueos'));
+        const c = fixture.componentInstance as unknown as { sedeId: string; cargar(): void; bloqueos(): unknown[] };
+        c.sedeId = 's-2'; c.cargar();
+        http.expectOne(r => r.url.endsWith('/agenda/bloqueos')).flush([]);
+        antigua.flush([{ id: 'viejo', sede_id: 's-1' }]);
+        expect(c.bloqueos()).toEqual([]);
+    });
+
+    it('envía una sola vez y conserva la ventana durante el guardado', async () => {
+        cargarLista();
+        const c = fixture.componentInstance as unknown as {
+            abrirNuevo(): void; guardar(): Promise<void>; nuevo(): void; ventanaFormulario(): boolean;
+            formInicio: string; formFin: string;
+        };
+        c.abrirNuevo(); c.formInicio = '2026-11-15T09:30'; c.formFin = '2026-11-15T10:30';
+        const primera = c.guardar(); const repetida = c.guardar(); c.nuevo();
+        const peticiones = http.match(r => r.method === 'POST' && r.url.endsWith('/agenda/bloqueos'));
+        // Vaciar incluso una petición indebida permite reproducir el fallo sin dejar HTTP pendiente.
+        for (const peticion of peticiones) peticion.flush({ codigo: 'VALIDACION', mensaje: 'Rechazo sintético' }, { status: 422, statusText: 'Unprocessable Entity' });
+        await Promise.all([primera, repetida]);
+        expect(peticiones).toHaveLength(1);
+        expect(c.ventanaFormulario()).toBe(true);
+    });
+
     it('pide confirmación sin mostrar datos de pacientes y guarda las citas afectadas', async () => {
         cargarLista();
         const componente = fixture.componentInstance as unknown as {

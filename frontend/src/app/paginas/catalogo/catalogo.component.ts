@@ -52,7 +52,7 @@ const TIPOS: readonly { readonly valor: TipoConsultorio; readonly etiqueta: stri
             <div class="rejilla desplazable" tabindex="0" role="region" aria-labelledby="titulo-consultorios">@for (sala of consultorios(); track sala.id) { <article class="tarjeta"><span class="etiqueta">{{ etiquetaTipo(sala.tipo) }}</span><h3>{{ sala.nombre }}</h3><p>Capacidad: {{ sala.capacidad }}</p></article> } @empty { <p>No hay consultorios disponibles.</p> }</div>
           } @else if (sedeSeleccionada()) {
             <div class="tabla-envoltorio desplazable" tabindex="0" role="region" aria-labelledby="titulo-consultorios"><table class="tabla"><thead><tr><th>Consultorio</th><th>Tipo</th><th>Capacidad</th><th>Estado</th><th>Acciones</th></tr></thead><tbody>
-              @for (sala of consultorios(); track sala.id) { <tr><td>{{ sala.nombre }}</td><td>{{ etiquetaTipo(sala.tipo) }}</td><td>{{ sala.capacidad }}</td><td><span class="estado" [class.inactivo]="!sala.activo">{{ sala.activo ? 'Activo' : 'Inactivo' }}</span></td><td class="acciones-fila"><app-fotos-registro tipo="consultorio" [registroId]="sala.id" [puedeEditar]="true" /><button class="boton compacto" type="button" (click)="editar(sala)">Editar</button><button class="boton compacto" type="button" (click)="cambiarEstado(sala)">{{ sala.activo ? 'Desactivar' : 'Activar' }}</button></td></tr> }
+              @for (sala of consultorios(); track sala.id) { <tr><td>{{ sala.nombre }}</td><td>{{ etiquetaTipo(sala.tipo) }}</td><td>{{ sala.capacidad }}</td><td><span class="estado" [class.inactivo]="!sala.activo">{{ sala.activo ? 'Activo' : 'Inactivo' }}</span></td><td class="acciones-fila"><app-fotos-registro tipo="consultorio" [registroId]="sala.id" [puedeEditar]="true" /><button class="boton compacto" type="button" (click)="editar(sala)">Editar</button><button class="boton compacto" type="button" (click)="cambiarEstado(sala)" [disabled]="guardando()">{{ sala.activo ? 'Desactivar' : 'Activar' }}</button></td></tr> }
               @empty { <tr><td colspan="5">No hay consultorios registrados en esta sede.</td></tr> }
             </tbody></table></div>
           } @else { <p class="ayuda">Seleccione una sede para consultar y administrar sus consultorios.</p> }
@@ -63,7 +63,7 @@ const TIPOS: readonly { readonly valor: TipoConsultorio; readonly etiqueta: stri
         <section class="gestion catalogo-admin panel-catalogo" role="tabpanel" id="catalogo-panel-especialidades" aria-labelledby="catalogo-pestana-especialidades" [hidden]="vistaActiva() !== 'especialidades'">
           <div class="seccion-cabecera"><div><p class="ceja">ORGANIZACIÓN CLÍNICA</p><h2 id="titulo-especialidades">Especialidades</h2><p>Organice las áreas de atención y mantenga actualizado su catálogo.</p></div><button class="boton boton--principal" type="button" (click)="abrirNuevaEspecialidad()">Nueva especialidad</button></div>
           <div class="tabla-envoltorio desplazable" tabindex="0" role="region" aria-labelledby="titulo-especialidades"><table class="tabla"><thead><tr><th>Especialidad</th><th>Código</th><th>Estado</th><th>Acciones</th></tr></thead><tbody>
-            @for (esp of especialidadesGestion(); track esp.id) { <tr><td>{{ esp.nombre }}<small class="descripcion">{{ esp.descripcion }}</small></td><td>{{ esp.codigo || '—' }}</td><td><span class="estado" [class.inactivo]="!esp.activa">{{ esp.activa ? 'Activa' : 'Inactiva' }}</span></td><td class="acciones-fila"><app-fotos-registro tipo="especialidad" [registroId]="esp.id" [puedeEditar]="true" /><button class="boton compacto" type="button" (click)="editarEspecialidad(esp)">Editar</button><button class="boton compacto" type="button" (click)="cambiarEstadoEspecialidad(esp)">{{ esp.activa ? 'Desactivar' : 'Activar' }}</button></td></tr> } @empty { <tr><td colspan="4">Aún no hay especialidades registradas.</td></tr> }
+            @for (esp of especialidadesGestion(); track esp.id) { <tr><td>{{ esp.nombre }}<small class="descripcion">{{ esp.descripcion }}</small></td><td>{{ esp.codigo || '—' }}</td><td><span class="estado" [class.inactivo]="!esp.activa">{{ esp.activa ? 'Activa' : 'Inactiva' }}</span></td><td class="acciones-fila"><app-fotos-registro tipo="especialidad" [registroId]="esp.id" [puedeEditar]="true" /><button class="boton compacto" type="button" (click)="editarEspecialidad(esp)">Editar</button><button class="boton compacto" type="button" (click)="cambiarEstadoEspecialidad(esp)" [disabled]="guardando()">{{ esp.activa ? 'Desactivar' : 'Activar' }}</button></td></tr> } @empty { <tr><td colspan="4">Aún no hay especialidades registradas.</td></tr> }
           </tbody></table></div>
         </section>
         <div class="panel-catalogo desplazable" role="tabpanel" tabindex="0" id="catalogo-panel-modulos" aria-labelledby="catalogo-pestana-modulos" [hidden]="vistaActiva() !== 'modulos'">
@@ -75,7 +75,7 @@ const TIPOS: readonly { readonly valor: TipoConsultorio; readonly etiqueta: stri
         <section class="gestion catalogo-admin panel-catalogo" role="tabpanel" id="catalogo-panel-servicios" aria-labelledby="catalogo-pestana-servicios" [hidden]="vistaActiva() !== 'servicios'">
           <div class="seccion-cabecera"><div><p class="ceja">OFERTA CLÍNICA</p><h2 id="titulo-servicios">Servicios</h2><p>Configure duración, preparación, precio y requisitos de agenda.</p></div><button class="boton boton--principal" type="button" (click)="abrirNuevoServicio()">Nuevo servicio</button></div>
           <div class="tabla-envoltorio desplazable" tabindex="0" role="region" aria-labelledby="titulo-servicios"><table class="tabla"><thead><tr><th>Servicio</th><th>Especialidad</th><th>Duración</th><th>Precio</th><th>Estado</th><th>Acciones</th></tr></thead><tbody>
-            @for (s of serviciosGestion(); track s.id) { <tr><td>{{ s.nombre }}</td><td>{{ nombreEspecialidad(s.especialidad_id) }}</td><td>{{ s.duracion_minutos }} min</td><td>{{ s.precio === null ? 'Consultar' : s.moneda + ' ' + s.precio }}</td><td><span class="estado" [class.inactivo]="!s.activo">{{ s.activo ? 'Activo' : 'Inactivo' }}</span></td><td class="acciones-fila"><app-fotos-registro tipo="servicio" [registroId]="s.id" [puedeEditar]="true" /><button class="boton compacto" type="button" (click)="editarServicio(s)">Editar</button><button class="boton compacto" type="button" (click)="cambiarEstadoServicio(s)">{{ s.activo ? 'Desactivar' : 'Activar' }}</button></td></tr> } @empty { <tr><td colspan="6">Aún no hay servicios registrados.</td></tr> }
+            @for (s of serviciosGestion(); track s.id) { <tr><td>{{ s.nombre }}</td><td>{{ nombreEspecialidad(s.especialidad_id) }}</td><td>{{ s.duracion_minutos }} min</td><td>{{ s.precio === null ? 'Consultar' : s.moneda + ' ' + s.precio }}</td><td><span class="estado" [class.inactivo]="!s.activo">{{ s.activo ? 'Activo' : 'Inactivo' }}</span></td><td class="acciones-fila"><app-fotos-registro tipo="servicio" [registroId]="s.id" [puedeEditar]="true" /><button class="boton compacto" type="button" (click)="editarServicio(s)">Editar</button><button class="boton compacto" type="button" (click)="cambiarEstadoServicio(s)" [disabled]="guardando()">{{ s.activo ? 'Desactivar' : 'Activar' }}</button></td></tr> } @empty { <tr><td colspan="6">Aún no hay servicios registrados.</td></tr> }
           </tbody></table></div>
         </section>
       } @else {
@@ -159,6 +159,7 @@ const TIPOS: readonly { readonly valor: TipoConsultorio; readonly etiqueta: stri
   `,
 })
 export class CatalogoComponent {
+  private secuenciaSede = 0;
   protected readonly operacionFotos = inject(FotosRegistroService).operacion<{id:string}>();
   protected fotos: readonly FotoSeleccionada[] = [];
   private readonly catalogo = inject(CatalogoService);
@@ -226,8 +227,9 @@ export class CatalogoComponent {
   }
 
   protected seleccionarSede(id: string): void {
+    const secuencia = ++this.secuenciaSede;
     this.sedeSeleccionada.set(id); this.consultorios.set([]); this.nuevo(); this.error.set(''); this.mensaje.set('');
-    if (id) this.catalogo.consultoriosGestion(id).subscribe({ next: (items) => this.consultorios.set(items), error: () => this.error.set('No se pudieron cargar los consultorios de esta sede.') });
+    if (id) this.catalogo.consultoriosGestion(id).subscribe({ next: (items) => { if (secuencia === this.secuenciaSede) this.consultorios.set(items); }, error: () => { if (secuencia === this.secuenciaSede) this.error.set('No se pudieron cargar los consultorios de esta sede.'); } });
   }
 
   protected abrirNuevoConsultorio(): void { this.nuevo(); this.error.set(''); this.mensaje.set(''); this.operacionFotos.reiniciar(); this.fotos=[]; this.ventanaFormulario.set('consultorio'); }
@@ -267,13 +269,16 @@ export class CatalogoComponent {
   protected nuevo(): void { this.editando.set(''); this.form = { nombre: '', tipo: 'CONSULTA', capacidad: 1 }; this.ventanaFormulario.set(null); }
 
   protected cambiarEstado(sala: Consultorio): void {
+    if (this.guardando()) return;
+    this.guardando.set(true);
     this.error.set(''); this.mensaje.set('');
     this.catalogo.cambiarEstadoConsultorio(sala.id, !sala.activo).subscribe({
       next: () => {
+        this.guardando.set(false);
         const confirmacion = sala.activo ? 'Consultorio desactivado.' : 'Consultorio activado.';
         this.seleccionarSede(this.sedeSeleccionada()); this.mensaje.set(confirmacion);
       },
-      error: () => this.error.set('No se pudo cambiar el estado del consultorio.'),
+      error: () => { this.guardando.set(false); this.error.set('No se pudo cambiar el estado del consultorio.'); },
     });
   }
 
@@ -323,14 +328,18 @@ export class CatalogoComponent {
   }
 
   protected cambiarEstadoEspecialidad(item: Especialidad): void {
+    if (this.guardando()) return;
+    this.guardando.set(true);
     this.error.set(''); this.mensaje.set('');
     this.catalogo.cambiarEstadoEspecialidad(item.id, !item.activa).subscribe({
       next: () => {
+        this.guardando.set(false);
         this.cargarInventarios();
         this.catalogo.especialidades().subscribe({ next: (items) => this.especialidades.set(items) });
         this.mensaje.set(item.activa ? 'Especialidad desactivada.' : 'Especialidad activada.');
       },
       error: (e: { error?: { mensaje?: string; detail?: string } }) => {
+        this.guardando.set(false);
         this.error.set(e.error?.mensaje ?? e.error?.detail ?? 'No se pudo cambiar la especialidad. Desactive antes sus servicios activos.');
       },
     });
@@ -381,14 +390,18 @@ export class CatalogoComponent {
   }
 
   protected cambiarEstadoServicio(item: ServicioGestion): void {
+    if (this.guardando()) return;
+    this.guardando.set(true);
     this.error.set(''); this.mensaje.set('');
     this.catalogo.cambiarEstadoServicio(item.id, !item.activo).subscribe({
       next: () => {
+        this.guardando.set(false);
         this.cargarInventarios();
         this.catalogo.servicios().subscribe({ next: (items) => this.servicios.set(items) });
         this.mensaje.set(item.activo ? 'Servicio desactivado.' : 'Servicio activado.');
       },
       error: (e: { error?: { mensaje?: string; detail?: string } }) => {
+        this.guardando.set(false);
         this.error.set(e.error?.mensaje ?? e.error?.detail ?? 'No se pudo cambiar el estado del servicio.');
       },
     });

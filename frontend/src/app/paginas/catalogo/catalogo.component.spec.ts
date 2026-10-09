@@ -3,7 +3,7 @@ import { provideHttpClient, withXhr } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { CONFIGURACION, CONFIGURACION_POR_DEFECTO } from '../../nucleo/servicios/configuracion';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { NEVER, of, throwError } from 'rxjs';
+import { NEVER, of, Subject, throwError } from 'rxjs';
 import { FalloApi } from '../../nucleo/servicios/api.service';
 
 import { CatalogoComponent } from './catalogo.component';
@@ -60,6 +60,28 @@ describe('CatalogoComponent', () => {
         c.cerrarVentana();
         const llamada = tipo === 'consultorio' ? catalogo.crearConsultorio : tipo === 'especialidad' ? catalogo.crearEspecialidad : catalogo.crearServicio;
         expect(llamada).toHaveBeenCalledTimes(1);
+    });
+
+    it.each(['consultorio', 'especialidad', 'servicio'] as const)('impide duplicar el cambio de estado pendiente de %s', tipo => {
+        const c = fixture.componentInstance as unknown as {
+            cambiarEstado(item: Consultorio): void; cambiarEstadoEspecialidad(item: Especialidad): void;
+            cambiarEstadoServicio(item: typeof SERVICIO): void;
+        };
+        catalogo.cambiarEstadoConsultorio.mockReturnValue(NEVER);
+        catalogo.cambiarEstadoEspecialidad.mockReturnValue(NEVER);
+        catalogo.cambiarEstadoServicio.mockReturnValue(NEVER);
+        const enviar = () => tipo === 'consultorio' ? c.cambiarEstado(CONSULTORIO) : tipo === 'especialidad' ? c.cambiarEstadoEspecialidad(ESPECIALIDAD) : c.cambiarEstadoServicio(SERVICIO);
+        enviar(); enviar();
+        const llamada = tipo === 'consultorio' ? catalogo.cambiarEstadoConsultorio : tipo === 'especialidad' ? catalogo.cambiarEstadoEspecialidad : catalogo.cambiarEstadoServicio;
+        expect(llamada).toHaveBeenCalledTimes(1);
+    });
+
+    it('mantiene los consultorios de la última sede seleccionada', () => {
+        const anterior = new Subject<readonly Consultorio[]>();
+        catalogo.consultoriosGestion.mockReturnValueOnce(anterior).mockReturnValue(of([]));
+        const c = fixture.componentInstance as unknown as { seleccionarSede(id: string): void; consultorios(): readonly Consultorio[] };
+        c.seleccionarSede('sede-1'); c.seleccionarSede('sede-2'); anterior.next([CONSULTORIO]);
+        expect(c.consultorios()).toEqual([]);
     });
 
     beforeEach(() => {

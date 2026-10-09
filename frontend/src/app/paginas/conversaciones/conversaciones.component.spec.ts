@@ -1,6 +1,6 @@
 import type { MockedObject } from "vitest";
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { of, throwError } from 'rxjs';
+import { of, Subject, throwError } from 'rxjs';
 
 import { ApiService } from '../../nucleo/servicios/api.service';
 import type { DetalleConversacionEntrante } from '../../nucleo/servicios/api.service';
@@ -66,7 +66,7 @@ describe('ConversacionesComponent: avisos clínicos', () => {
         sesion = {
             tienePermiso: vi.fn().mockName("SesionService.tienePermiso")
         } as unknown as MockedObject<SesionService>;
-        sesion.tienePermiso.mockImplementation((permiso: string) => permiso === PERMISOS.alertaAdherenciaAtender);
+        sesion.tienePermiso.mockImplementation((permiso: string) => [PERMISOS.alertaAdherenciaAtender, PERMISOS.conversacionResponder, PERMISOS.conversacionTomar].some(codigo => codigo === permiso));
         pendientes = {
             cargar: vi.fn().mockName("PendientesService.cargar")
         };
@@ -151,7 +151,63 @@ describe('ConversacionesComponent: avisos clínicos', () => {
         expect(fixture.nativeElement.textContent).toContain('La ventana de 24 h venció');
     });
 
+    it('mantiene respuesta y gestión deshabilitadas con un rol de consulta', async () => {
+        sesion.tienePermiso.mockReturnValue(false);
+        fixture.destroy();
+        fixture = TestBed.createComponent(ConversacionesComponent);
+        fixture.componentInstance['abrir'](detalle);
+        fixture.componentInstance['textoRespuesta'].set('Respuesta no autorizada');
+        fixture.detectChanges();
+        // ngModel aplica disabled en una microtarea; el reloj periódico del chat
+        // mantiene tareas pendientes, por lo que whenStable no es apropiado aquí.
+        await Promise.resolve(); fixture.detectChanges();
+        expect(fixture.nativeElement.querySelector('textarea').disabled).toBe(true);
+        const tomar = Array.from(fixture.nativeElement.querySelectorAll('button') as NodeListOf<HTMLButtonElement>)
+            .find(b => b.textContent?.trim() === 'Tomar');
+        expect(tomar?.disabled).toBe(true);
+        fixture.componentInstance['responder'](); fixture.componentInstance['accion']('tomar');
+        expect(api.responderConversacion).not.toHaveBeenCalled(); expect(api.tomarConversacion).not.toHaveBeenCalled();
+    });
+
+    it('ofrece devolver al agente la conversación que atiende una persona', () => {
+        fixture.componentInstance['abrir'](detalle); fixture.detectChanges();
+        const boton = Array.from(fixture.nativeElement.querySelectorAll('button') as NodeListOf<HTMLButtonElement>)
+            .find(b => b.textContent?.trim() === 'Devolver al agente');
+        expect(boton).toBeDefined();
+        api.conversacion.mockReturnValue(of({ ...detalle, estado: 'ABIERTA' }));
+        fixture.componentInstance['abrir'](detalle); fixture.detectChanges();
+        expect(Array.from(fixture.nativeElement.querySelectorAll('button') as NodeListOf<HTMLButtonElement>)
+            .some(b => b.textContent?.trim() === 'Devolver al agente')).toBe(false);
+    });
+
+    it('al tomar un hilo actualiza la asignación aunque el filtro no cambie', () => {
+        fixture.componentInstance['abrir'](detalle);
+        const llamadas = api.conversacionesPendientes.mock.calls.length;
+        fixture.componentInstance['accion']('tomar');
+        expect(api.conversacionesPendientes.mock.calls.length).toBe(llamadas + 1);
+    });
+
+    it('no sustituye el hilo seleccionado por el detalle tardío de otro paciente', () => {
+        const antiguo = new Subject<DetalleConversacionEntrante>();
+        api.conversacion.mockReturnValueOnce(antiguo).mockReturnValue(of({ ...detalle, id: 'hilo-2' }));
+        fixture.componentInstance['abrir'](detalle);
+        fixture.componentInstance['abrir']({ ...detalle, id: 'hilo-2' });
+        antiguo.next(detalle);
+        expect(fixture.componentInstance['detalle']()?.id).toBe('hilo-2');
+    });
+
+    it('descarta la lista tardía del filtro anterior', () => {
+        const anterior = new Subject<{ elementos: typeof detalle[]; total: number; limite: number; desplazamiento: number }>();
+        api.conversacionesPendientes.mockReturnValueOnce(anterior);
+        fixture.componentInstance['cargar']();
+        fixture.componentInstance['cambiarEstado']('ABIERTA');
+        anterior.next({ elementos: [detalle], total: 1, limite: 50, desplazamiento: 0 });
+        expect(fixture.componentInstance['conversaciones']()).toEqual([]);
+        expect(fixture.componentInstance['detalle']()).toBeNull();
+    });
+
     it('ejecuta tomar, devolver y cerrar previa confirmación', () => {
+        api.conversacionesPendientes.mockReturnValue(of({ elementos: [detalle], total: 1, limite: 50, desplazamiento: 0 }));
         fixture.componentInstance['abrir']({ id: 'hilo-1', telefono: '593999000123', paciente_id: 'paciente-1', estado: 'EN_HANDOFF', motivo_handoff: null, ultima_actividad_en: '', ultimo_mensaje: '' });
         fixture.componentInstance['accion']('tomar');
         fixture.componentInstance['accion']('devolver');

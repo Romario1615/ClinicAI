@@ -30,7 +30,7 @@ interface ConfirmacionCitas {
   selector: 'app-bloqueos-agenda', standalone: true, imports: [FormsModule, VentanaFlotanteComponent],
   template: `
     <section class="intro tarjeta"><div><p class="ceja">EXCEPCIONES DE DISPONIBILIDAD</p><h2>Bloqueos y ausencias</h2><p>Registra vacaciones, ausencias, capacitaciones y cierres de consultorio. Las citas coincidentes requieren confirmación antes de guardar.</p></div>
-      <label class="campo"><span class="campo__etiqueta">Sede</span><select class="campo__control" name="bloqueo-sede" [(ngModel)]="sedeId" (ngModelChange)="cargar()"><option value="">Seleccione una sede</option>@for (s of sedes(); track s.id) { <option [value]="s.id">{{ s.nombre }}</option> }</select></label>
+      <label class="campo"><span class="campo__etiqueta">Sede</span><select class="campo__control" name="bloqueo-sede" [disabled]="guardando()" [(ngModel)]="sedeId" (ngModelChange)="cargar()"><option value="">Seleccione una sede</option>@for (s of sedes(); track s.id) { <option [value]="s.id">{{ s.nombre }}</option> }</select></label>
     </section>
     @if (mensaje()) { <p class="mensaje" [class.error]="esError()" role="status">{{ mensaje() }}</p> }
     @if (sedeId) {
@@ -41,7 +41,7 @@ interface ConfirmacionCitas {
       </section>
     }
     @if (ventanaFormulario()) {
-      <app-ventana-flotante ceja="Excepciones de disponibilidad" [titulo]="editando ? 'Editar bloqueo' : 'Nuevo bloqueo'" forma="centrada" [anchoMaximo]="680" [cierraAlPulsarFuera]="false" (cerrar)="nuevo()">
+      <app-ventana-flotante ceja="Excepciones de disponibilidad" [titulo]="editando ? 'Editar bloqueo' : 'Nuevo bloqueo'" forma="centrada" [anchoMaximo]="680" [cierraAlPulsarFuera]="false" [ocupada]="guardando()" (cerrar)="nuevo()">
         <p class="campo__ayuda">Las horas se interpretan en la zona local de {{ nombreSede() }}.</p>
         @if (esError()) { <p class="mensaje error" role="alert">{{ mensaje() }}</p> }
         <form id="form-bloqueo" class="formulario" (ngSubmit)="guardar()">
@@ -53,7 +53,7 @@ interface ConfirmacionCitas {
           <label class="campo"><span class="campo__etiqueta">Fin</span><input class="campo__control" type="datetime-local" name="fin" [(ngModel)]="formFin" required /></label>
           <label class="campo campo--completo"><span class="campo__etiqueta">Motivo (opcional)</span><input class="campo__control" name="motivo" maxlength="300" [(ngModel)]="form.motivo" placeholder="Vacaciones, mantenimiento…" /></label>
         </form>
-        <div pie class="acciones"><button class="boton" type="button" (click)="nuevo()">Cancelar</button><button class="boton boton--principal" type="submit" form="form-bloqueo" [disabled]="guardando()">{{ guardando() ? 'Guardando…' : editando ? 'Guardar cambios' : 'Crear bloqueo' }}</button></div>
+        <div pie class="acciones"><button class="boton" type="button" (click)="nuevo()" [disabled]="guardando()">Cancelar</button><button class="boton boton--principal" type="submit" form="form-bloqueo" [disabled]="guardando()">{{ guardando() ? 'Guardando…' : editando ? 'Guardar cambios' : 'Crear bloqueo' }}</button></div>
       </app-ventana-flotante>
     }
     @if (confirmacionCitas(); as conflicto) {
@@ -74,6 +74,7 @@ interface ConfirmacionCitas {
   styles: [`:host{display:block}.intro{display:grid;grid-template-columns:1fr minmax(220px,320px);gap:24px;align-items:center;padding:22px;margin-bottom:16px}.intro h2,.panel h3{margin:0}.intro p:last-child{color:var(--texto-suave);margin-bottom:0}.panel{padding:22px;min-width:0}.cabecera{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:18px}.cabecera h3{font-size:1.08rem}.formulario{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.campo{margin:0}.campo--completo{grid-column:1/-1}.acciones{display:flex;gap:8px;flex-wrap:wrap}.fila{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:12px 0;border-top:1px solid var(--borde)}.fila>div:first-child{display:grid;gap:4px;min-width:0}.fila small,.vacio{color:var(--texto-suave)}.boton--pequeno{min-height:34px;padding:4px 10px;font-size:.82rem}.peligro{color:var(--peligro)}.mensaje{padding:12px 16px;background:var(--exito-fondo);color:var(--exito);border-radius:var(--radio)}.mensaje.error,.afectadas{color:var(--peligro)}@media(max-width:600px){.intro{grid-template-columns:1fr}.formulario{grid-template-columns:1fr}.campo--completo{grid-column:auto}.fila{align-items:flex-start;flex-direction:column}.cabecera{align-items:flex-start;flex-direction:column}}`],
 })
 export class BloqueosAgendaComponent implements OnInit {
+  private secuenciaCarga = 0;
   private readonly http = inject(HttpClient);
   private readonly config = inject(CONFIGURACION);
   private readonly catalogo = inject(CatalogoService);
@@ -93,26 +94,28 @@ export class BloqueosAgendaComponent implements OnInit {
   protected readonly tipos = [{id:'VACACIONES',nombre:'Vacaciones'},{id:'AUSENCIA',nombre:'Ausencia'},{id:'CAPACITACION',nombre:'Capacitación'},{id:'MANTENIMIENTO',nombre:'Mantenimiento'},{id:'OTRO',nombre:'Otro'}] as const;
   ngOnInit(): void { this.catalogo.sedes().subscribe({next: s => { this.sedes.set(s); this.sedeId=s[0]?.id??''; this.cargar(); }, error: () => this.fallar('No se pudieron cargar las sedes.')}); }
   protected cargar(): void {
-    if (!this.sedeId) { this.bloqueos.set([]); return; }
+    const secuencia = ++this.secuenciaCarga;
+    this.bloqueos.set([]); this.profesionales.set([]); this.consultorios.set([]);
+    if (!this.sedeId) { this.cargando.set(false); return; }
     this.form.sede_id=this.sedeId; this.cargando.set(true);
-    this.catalogo.profesionales({sedeId:this.sedeId}).subscribe({next:x=>{ const identidad=this.sesion.identidad(); const permitidos=identidad?.ambito.profesionales??[]; const lista=identidad?.ambito.todos_los_profesionales?x:x.filter(p=>permitidos.includes(p.id)); this.profesionales.set(lista); if(!identidad?.ambito.todos_los_profesionales){this.destino='profesional';this.form.profesional_id=identidad?.profesional_id&&lista.some(p=>p.id===identidad.profesional_id)?identidad.profesional_id:lista[0]?.id??null;} },error:()=>this.profesionales.set([])});
-    this.catalogo.consultorios(this.sedeId).subscribe({next:x=>this.consultorios.set(x),error:()=>this.consultorios.set([])});
+    this.catalogo.profesionales({sedeId:this.sedeId}).subscribe({next:x=>{ if (secuencia !== this.secuenciaCarga) return; const identidad=this.sesion.identidad(); const permitidos=identidad?.ambito.profesionales??[]; const lista=identidad?.ambito.todos_los_profesionales?x:x.filter(p=>permitidos.includes(p.id)); this.profesionales.set(lista); if(!identidad?.ambito.todos_los_profesionales){this.destino='profesional';this.form.profesional_id=identidad?.profesional_id&&lista.some(p=>p.id===identidad.profesional_id)?identidad.profesional_id:lista[0]?.id??null;} },error:()=>{ if (secuencia === this.secuenciaCarga) this.profesionales.set([]); }});
+    this.catalogo.consultorios(this.sedeId).subscribe({next:x=>{ if (secuencia === this.secuenciaCarga) this.consultorios.set(x); },error:()=>{ if (secuencia === this.secuenciaCarga) this.consultorios.set([]); }});
     const ahora=new Date(), desde=new Date(Date.UTC(ahora.getUTCFullYear(),ahora.getUTCMonth(),ahora.getUTCDate())).toISOString(), hasta=new Date(Date.now()+365*86400000).toISOString();
-    this.http.get<Bloqueo[]>(`${this.config.urlApi}/agenda/bloqueos`,{params:{sede_id:this.sedeId,desde,hasta}}).subscribe({next:x=>{this.bloqueos.set(x);this.cargando.set(false)},error:()=>{this.fallar('No se pudieron cargar los bloqueos.');this.cargando.set(false)}});
+    this.http.get<Bloqueo[]>(`${this.config.urlApi}/agenda/bloqueos`,{params:{sede_id:this.sedeId,desde,hasta}}).subscribe({next:x=>{if (secuencia !== this.secuenciaCarga) return; this.bloqueos.set(x);this.cargando.set(false)},error:()=>{if (secuencia !== this.secuenciaCarga) return; this.fallar('No se pudieron cargar los bloqueos.');this.cargando.set(false)}});
   }
   protected cambiarDestino(): void { this.form.profesional_id=null; this.form.consultorio_id=null; }
   protected ambitoCompleto(): boolean { return this.sesion.identidad()?.ambito.todos_los_profesionales ?? false; }
   protected nombreSede(): string { return this.sedes().find((s)=>s.id===this.sedeId)?.nombre??'la sede seleccionada'; }
   protected abrirNuevo(): void { this.nuevo(); this.mensaje.set(''); this.esError.set(false); this.ventanaFormulario.set(true); }
   protected async guardar(): Promise<void> {
-    if (!this.sedeId || !this.formInicio || !this.formFin) return;
+    if (this.guardando() || !this.sedeId || !this.formInicio || !this.formFin) return;
     this.guardando.set(true); this.form.sede_id=this.sedeId; this.form.profesional_id=this.destino==='profesional'?this.form.profesional_id:null; this.form.consultorio_id=this.destino==='consultorio'?this.form.consultorio_id:null;
     const payload={...this.form,inicio:this.aIso(this.formInicio),fin:this.aIso(this.formFin),aceptar_citas_afectadas:false};
     const metodo: 'POST' | 'PUT' = this.editando ? 'PUT' : 'POST';
     const url=`${this.config.urlApi}/agenda/bloqueos${this.editando?'/'+this.editando:''}`;
     try {
       await firstValueFrom(this.http.request(metodo,url,{body:payload}));
-      this.mensaje.set('Bloqueo guardado.'); this.esError.set(false); this.nuevo(); this.cargar();
+      this.mensaje.set('Bloqueo guardado.'); this.esError.set(false); this.guardando.set(false); this.nuevo(); this.cargar();
     } catch (e) {
       const error=e as HttpErrorResponse, detalles=error.error?.detalles as {citas_afectadas?:unknown[]} | undefined;
       if (error.status===409 && detalles?.citas_afectadas?.length) {
@@ -131,6 +134,7 @@ export class BloqueosAgendaComponent implements OnInit {
       this.confirmacionCitas.set(null);
       this.mensaje.set('Bloqueo guardado tras confirmar las citas coincidentes.');
       this.esError.set(false);
+      this.guardando.set(false);
       this.nuevo();
       this.cargar();
     } catch {
@@ -143,7 +147,7 @@ export class BloqueosAgendaComponent implements OnInit {
   }
   protected cancelarConfirmacionCitas(): void { if (!this.guardando()) { this.confirmacionCitas.set(null); this.ventanaFormulario.set(true); } }
   protected editar(b: Bloqueo): void { this.editando=b.id; this.form={sede_id:b.sede_id,profesional_id:b.profesional_id,consultorio_id:b.consultorio_id,tipo:b.tipo,inicio:b.inicio,fin:b.fin,motivo:b.motivo??'',aceptar_citas_afectadas:false}; this.destino=b.profesional_id?'profesional':b.consultorio_id?'consultorio':'sede'; this.formInicio=this.deIso(b.inicio); this.formFin=this.deIso(b.fin); this.ventanaFormulario.set(true); }
-  protected nuevo(): void { this.editando='';this.form=this.vacio();this.form.sede_id=this.sedeId;this.destino=this.ambitoCompleto()?'sede':'profesional'; const identidad=this.sesion.identidad(); if(this.destino==='profesional') this.form.profesional_id=identidad?.profesional_id&&this.profesionales().some(p=>p.id===identidad.profesional_id)?identidad.profesional_id:this.profesionales()[0]?.id??null; this.formInicio='';this.formFin='';this.ventanaFormulario.set(false); }
+  protected nuevo(): void { if (this.guardando()) return; this.editando='';this.form=this.vacio();this.form.sede_id=this.sedeId;this.destino=this.ambitoCompleto()?'sede':'profesional'; const identidad=this.sesion.identidad(); if(this.destino==='profesional') this.form.profesional_id=identidad?.profesional_id&&this.profesionales().some(p=>p.id===identidad.profesional_id)?identidad.profesional_id:this.profesionales()[0]?.id??null; this.formInicio='';this.formFin='';this.ventanaFormulario.set(false); }
   protected eliminar(b: Bloqueo): void { this.bloqueoAEliminar.set(b); }
   protected cancelarEliminacion(): void { if (!this.guardando()) this.bloqueoAEliminar.set(null); }
   protected confirmarEliminacion(): void {

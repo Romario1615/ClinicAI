@@ -136,3 +136,69 @@ async def test_sin_permisos_y_rangos(
         assert (
             await cliente.get(f"{api}/dashboard/analitica?{consulta}", headers=h)
         ).status_code == 422
+
+
+async def test_totales_ponderados_personas_unicas_y_huecos_de_medicion(
+    cliente: AsyncClient,
+    sesion: AsyncSession,
+    api: str,
+    usuario: Usuario,
+    clinica: Clinica,
+    sede: Sede,
+    servicio: Servicio,
+    profesional: Profesional,
+    paciente: Paciente,
+) -> None:
+    """Los KPI representan los registros; promediar promedios alteraría las cifras."""
+    await conceder_permisos(
+        sesion, usuario, clinica, "dashboard.leer", "agenda.leer", sedes=(sede.id,)
+    )
+    h = await cabecera_bearer(cliente, usuario, clinica)
+    dias = [INSTANTE_REFERENCIA - timedelta(days=3), INSTANTE_REFERENCIA - timedelta(days=1)]
+    for dia, realizadas, espera in [(dias[0], 1, 60), (dias[1], 5, 10)]:
+        estados = ["COMPLETED"] * realizadas + ["NO_SHOW", "CANCELLED"]
+        for i, estado in enumerate(estados):
+            inicio = dia + timedelta(minutes=30 * i)
+            sesion.add(
+                Cita(
+                    clinica_id=clinica.id,
+                    sede_id=sede.id,
+                    paciente_id=paciente.id,
+                    profesional_id=profesional.id,
+                    servicio_id=servicio.id,
+                    inicio=inicio,
+                    duracion_minutos=20,
+                    estado=estado,
+                    motivo_cancelacion="Cancelación sintética de QA"
+                    if estado == "CANCELLED"
+                    else None,
+                    origen="PANEL",
+                    creado_en=inicio - timedelta(days=2),
+                    llegada_en=inicio - timedelta(minutes=espera)
+                    if estado == "COMPLETED"
+                    else None,
+                    atencion_iniciada_en=inicio if estado == "COMPLETED" else None,
+                )
+            )
+    await sesion.flush()
+    r = await cliente.get(f"{api}/dashboard/analitica?dias=30", headers=h)
+    assert r.status_code == 200, r.text
+    k = {x["clave"]: x for x in r.json()["kpis"]}
+    assert k["citas"]["total"] == 10
+    assert k["atenciones"]["total"] == 6
+    assert k["minutos_atendidos"]["total"] == 120
+    assert k["pacientes_dia"]["total"] == 2  # La misma persona, estados distintos, dos días.
+    assert k["tasa_asistencia"]["total"] == 75
+    assert k["tasa_inasistencia"]["total"] == 25
+    assert k["tasa_cancelacion"]["total"] == 20
+    assert k["espera"]["total"] == pytest.approx(
+        110 / 6, abs=0.005
+    )  # La API redondea a centésimas.
+    historia = {x["fecha"]: x for x in k["espera"]["historia"]}
+    assert historia[dias[0].date().isoformat()]["muestras"] == 1
+    assert historia[dias[1].date().isoformat()]["muestras"] == 5
+    hueco = (INSTANTE_REFERENCIA - timedelta(days=2)).date().isoformat()
+    assert historia[hueco]["valor"] is None and historia[hueco]["muestras"] == 0
+    citas = {x["fecha"]: x for x in k["citas"]["historia"]}
+    assert citas[hueco]["valor"] == 0  # Conteo cero sí observado después del primer registro.
+    assert not k["espera"]["prediccion"]  # Dos días no justifican un modelo aprendido.

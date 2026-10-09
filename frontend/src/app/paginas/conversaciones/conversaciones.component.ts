@@ -98,16 +98,17 @@ import { ResumenModuloComponent } from '../../compartido/resumen-modulo.componen
           <header class="detalle__cabecera">
             <div><span class="sobrelinea">WHATSAPP · {{ etiquetaEstado() }}</span><h2>{{ hilo.telefono }}</h2></div>
             <div class="acciones-hilo">
-              @if (hilo.estado === 'ABIERTA') { <button class="boton boton--secundario" type="button" (click)="accion('devolver')" [disabled]="ocupado()">Devolver al agente</button> }
-              @if (hilo.estado === 'EN_HANDOFF') { <button class="boton boton--secundario" type="button" (click)="accion('tomar')" [disabled]="ocupado()">Tomar</button> }
-              @if (hilo.estado !== 'CERRADA') { <button class="boton boton--secundario" type="button" (click)="accion('cerrar')" [disabled]="ocupado()">Cerrar</button> }
+              @if (hilo.estado === 'EN_HANDOFF') { <button class="boton boton--secundario" type="button" (click)="accion('devolver')" [disabled]="ocupado() || !puedeGestionar()">Devolver al agente</button> }
+              @if (hilo.estado === 'EN_HANDOFF') { <button class="boton boton--secundario" type="button" (click)="accion('tomar')" [disabled]="ocupado() || !puedeGestionar()">Tomar</button> }
+              @if (hilo.estado !== 'CERRADA') { <button class="boton boton--secundario" type="button" (click)="accion('cerrar')" [disabled]="ocupado() || !puedeGestionar()">Cerrar</button> }
               <span class="estado">{{ etiquetaEstado() }}</span>
             </div>
           </header>
           <p class="detalle__motivo">{{ hilo.motivo_handoff }}</p>
           @if (hilo.paciente_id) { <p class="detalle__paciente">Paciente vinculado: {{ hilo.paciente_id }}</p> }
           <p class="ventana" [class.ventana--vencida]="ventanaVencida()">{{ textoVentana() }}</p>
-          <app-chat-conversacional class="chat-bandeja" etiqueta="Línea de tiempo de WhatsApp" [actualizacion]="hilo.respuestas.length + hilo.mensajes.length" [(texto)]="textoRespuesta" [ocupado]="ocupado()" [deshabilitado]="hilo.estado === 'CERRADA' || ventanaVencida()" [placeholder]="ventanaVencida() ? 'La ventana de 24 h venció' : 'Escribe una respuesta…'" [error]="errorRespuesta()" (enviar)="responder()">
+          @if (!puedeResponder()) { <p class="ventana">Acceso de consulta. Tu rol no permite enviar respuestas.</p> }
+          <app-chat-conversacional class="chat-bandeja" etiqueta="Línea de tiempo de WhatsApp" [actualizacion]="hilo.respuestas.length + hilo.mensajes.length" [(texto)]="textoRespuesta" [ocupado]="ocupado()" [deshabilitado]="!puedeResponder() || hilo.estado === 'CERRADA' || ventanaVencida()" [placeholder]="ventanaVencida() ? 'La ventana de 24 h venció' : 'Escribe una respuesta…'" [error]="errorRespuesta()" (enviar)="responder()">
             @for (evento of lineaTiempo(); track evento.id) {
               <article chat-mensaje class="mensaje" [class.mensaje--saliente]="evento.tipo !== 'PACIENTE'" [class.mensaje--agente]="evento.tipo === 'AGENTE'">
                 <strong>{{ evento.tipo === 'PACIENTE' ? 'Paciente' : evento.tipo === 'AGENTE' ? 'Agente' : 'Personal' }}</strong>
@@ -169,6 +170,10 @@ import { ResumenModuloComponent } from '../../compartido/resumen-modulo.componen
   `],
 })
 export class ConversacionesComponent implements OnDestroy {
+  private secuenciaLista = 0;
+  private secuenciaDetalle = 0;
+  protected readonly puedeResponder = computed(() => this.sesion.tienePermiso(PERMISOS.conversacionResponder));
+  protected readonly puedeGestionar = computed(() => this.sesion.tienePermiso(PERMISOS.conversacionTomar));
   private readonly api = inject(ApiService);
   private readonly sesion = inject(SesionService);
   private readonly pendientes = inject(PendientesService);
@@ -213,14 +218,17 @@ export class ConversacionesComponent implements OnDestroy {
 
   ngOnDestroy(): void { window.clearInterval(this.relojIntervalo); }
 
-  protected cambiarEstado(estado: EstadoConversacion): void { if (estado === this.estado()) return; this.estado.set(estado); this.seleccionada.set(null); this.detalle.set(null); this.cargar(); }
+  protected cambiarEstado(estado: EstadoConversacion): void { if (estado === this.estado()) { this.cargar(); return; } this.estado.set(estado); this.seleccionada.set(null); this.detalle.set(null); this.cargar(); }
 
   protected cargar(): void {
+    const secuencia = ++this.secuenciaLista;
+    ++this.secuenciaDetalle;
     this.cargando.set(true);
     this.error.set('');
     this.cargarAvisos();
     this.api.conversacionesPendientes(50, 0, this.estado()).subscribe({
       next: (pagina) => {
+        if (secuencia !== this.secuenciaLista) return;
         const filas = pagina.elementos;
         this.conversaciones.set(filas);
         this.total.set(pagina.total);
@@ -230,7 +238,7 @@ export class ConversacionesComponent implements OnDestroy {
         if (siguiente) this.abrir(siguiente);
         else { this.seleccionada.set(null); this.detalle.set(null); }
       },
-      error: (fallo: Error) => { this.error.set(fallo.message); this.cargando.set(false); },
+      error: (fallo: Error) => { if (secuencia !== this.secuenciaLista) return; this.error.set(fallo.message); this.cargando.set(false); },
     });
   }
 
@@ -244,8 +252,11 @@ export class ConversacionesComponent implements OnDestroy {
   }
 
   protected abrirAviso(aviso: AvisoRevisionTratamiento): void {
+    const secuencia = ++this.secuenciaDetalle;
+    this.detalle.set(null);
     this.api.conversacion(aviso.conversacion_id).subscribe({
       next: (detalle) => {
+        if (secuencia !== this.secuenciaDetalle) return;
         const hilo: ConversacionEntrante = {
           id: detalle.id,
           telefono: detalle.telefono,
@@ -258,7 +269,7 @@ export class ConversacionesComponent implements OnDestroy {
         this.seleccionada.set(hilo);
         this.detalle.set(detalle);
       },
-      error: (fallo: Error) => this.error.set(fallo.message),
+      error: (fallo: Error) => { if (secuencia === this.secuenciaDetalle) this.error.set(fallo.message); },
     });
   }
 
@@ -280,39 +291,43 @@ export class ConversacionesComponent implements OnDestroy {
 
   protected cargarMas(): void {
     if (this.cargando()) return;
+    const secuencia = this.secuenciaLista;
     this.cargando.set(true);
     const actual = this.conversaciones();
     this.api.conversacionesPendientes(50, actual.length, this.estado()).subscribe({
       next: (pagina) => {
+        if (secuencia !== this.secuenciaLista) return;
         this.conversaciones.update((filas) => [...filas, ...pagina.elementos]);
         this.total.set(pagina.total);
         this.cargando.set(false);
       },
-      error: (fallo: Error) => { this.error.set(fallo.message); this.cargando.set(false); },
+      error: (fallo: Error) => { if (secuencia !== this.secuenciaLista) return; this.error.set(fallo.message); this.cargando.set(false); },
     });
   }
 
   protected abrir(hilo: ConversacionEntrante): void {
+    if (this.ocupado()) return;
+    const secuencia = ++this.secuenciaDetalle;
     this.seleccionada.set(hilo);
     this.detalle.set(null);
     this.api.conversacion(hilo.id).subscribe({
-      next: (detalle) => this.detalle.set(detalle),
-      error: (fallo: Error) => this.error.set(fallo.message),
+      next: (detalle) => { if (secuencia === this.secuenciaDetalle) this.detalle.set(detalle); },
+      error: (fallo: Error) => { if (secuencia === this.secuenciaDetalle) this.error.set(fallo.message); },
     });
   }
 
   protected responder(): void {
     const hilo = this.detalle(); const texto = this.textoRespuesta().trim();
-    if (!hilo || !texto || this.ocupado() || this.ventanaVencida()) return;
+    if (!hilo || !texto || !this.puedeResponder() || this.ocupado() || this.ventanaVencida()) return;
     this.ocupado.set(true); this.errorRespuesta.set('');
     this.api.responderConversacion(hilo.id, texto, crypto.randomUUID()).subscribe({
-      next: () => { this.textoRespuesta.set(''); this.ocupado.set(false); this.abrir(this.seleccionada()!); this.cargar(); },
+      next: () => { this.textoRespuesta.set(''); this.ocupado.set(false); this.cargar(); },
       error: (e: Error) => { this.errorRespuesta.set(e.message.includes('409') || e.message.toLowerCase().includes('24 h') ? 'La ventana de 24 h venció. WhatsApp solo admite plantillas aprobadas.' : e.message); this.ocupado.set(false); this.abrir(this.seleccionada()!); },
     });
   }
 
   protected accion(accion: 'tomar' | 'devolver' | 'cerrar'): void {
-    const hilo = this.detalle(); if (!hilo || this.ocupado()) return;
+    const hilo = this.detalle(); if (!hilo || !this.puedeGestionar() || this.ocupado()) return;
     if (accion === 'cerrar' && !window.confirm('¿Cerrar esta conversación? No se podrá responder después.')) return;
     this.ocupado.set(true); this.error.set('');
     const llamada = accion === 'tomar' ? this.api.tomarConversacion(hilo.id) : accion === 'devolver' ? this.api.devolverConversacion(hilo.id) : this.api.cerrarConversacion(hilo.id);

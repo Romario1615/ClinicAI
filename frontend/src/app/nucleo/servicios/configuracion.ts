@@ -100,6 +100,7 @@ export const PERMISOS = {
   metricasLeer: 'dashboard.leer',
   reporteExportar: 'reporte.exportar',
   conversacionResponder: 'conversacion.responder',
+  conversacionTomar: 'conversacion.tomar',
   conversacionLeer: 'conversacion.leer',
   usuarioLeer: 'usuario.leer',
   usuarioCrear: 'usuario.crear',

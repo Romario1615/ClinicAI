@@ -1,6 +1,7 @@
 import type { MockedObject } from "vitest";
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { of } from 'rxjs';
+import { NEVER, of, Subject, throwError } from 'rxjs';
+import { FalloApi } from '../../nucleo/servicios/api.service';
 
 import { CatalogoService } from '../../nucleo/servicios/catalogo.service';
 import { SesionService } from '../../nucleo/servicios/sesion.service';
@@ -128,6 +129,52 @@ describe('AgendaConfiguracionComponent', () => {
         fixture.detectChanges();
         expect(api.eliminarHorario).not.toHaveBeenCalled();
         expect(fixture.nativeElement.querySelector('dialog[open]')).toBeNull();
+    });
+
+    it('conserva la sede vigente cuando llega tarde la respuesta de otra sede', () => {
+        const antiguos = new Subject<HorarioSede[]>();
+        const cierresAntiguos = new Subject<FeriadoAgenda[]>();
+        api.horarios.mockReturnValueOnce(antiguos).mockReturnValue(of([]));
+        api.feriados.mockReturnValueOnce(cierresAntiguos).mockReturnValue(of([]));
+        const c = fixture.componentInstance as unknown as { sedeId: string; cargar(): void; horarios(): HorarioSede[]; feriados(): FeriadoAgenda[] };
+        c.cargar();
+        c.sedeId = 's-2'; c.cargar();
+        antiguos.next([horario]); antiguos.complete(); cierresAntiguos.next([feriado]); cierresAntiguos.complete();
+        expect(c.horarios()).toEqual([]);
+        expect(c.feriados()).toEqual([]);
+    });
+
+    it('muestra el rechazo del horario dentro de la ventana y conserva los datos', () => {
+        boton('Nuevo horario').click(); fixture.detectChanges();
+        api.guardarHorario.mockReturnValue(throwError(() => new FalloApi('VALIDACION', 'La hora final debe ser posterior a la inicial.', 422)));
+        boton('Agregar horario').click(); fixture.detectChanges();
+        expect(fixture.nativeElement.querySelector('dialog[open] [role="alert"]')?.textContent).toContain('posterior');
+        expect(fixture.nativeElement.querySelector('dialog[open] input[name="inicio"]')?.value).toBe('08:00');
+    });
+
+    it('envía solo campos editables y convierte una vigencia vacía en null', () => {
+        const c = fixture.componentInstance as unknown as {
+            editarHorario(item: HorarioSede): void; guardarHorario(): void;
+            horario: { vigente_desde: string | null; vigente_hasta: string | null };
+        };
+        c.editarHorario(horario);
+        c.horario.vigente_desde = ''; c.horario.vigente_hasta = '';
+        c.guardarHorario();
+        expect(api.guardarHorario).toHaveBeenCalledWith('s-1', {
+            dia_semana: 1, hora_inicio: '08:00', hora_fin: '17:00', granularidad_minutos: 15,
+            vigente_desde: null, vigente_hasta: null,
+            descansos: [{ hora_inicio: '12:00', hora_fin: '13:00', motivo: 'Almuerzo' }],
+        }, 'h-1');
+    });
+
+    it('impide cerrar o cambiar la sede mientras se guarda un horario', async () => {
+        boton('Nuevo horario').click(); fixture.detectChanges();
+        api.guardarHorario.mockReturnValue(NEVER);
+        const c = fixture.componentInstance as unknown as { guardarHorario(): void; cerrarHorario(): void; ventanaHorario(): boolean };
+        c.guardarHorario(); c.cerrarHorario(); fixture.detectChanges();
+        await fixture.whenStable(); fixture.detectChanges();
+        expect(c.ventanaHorario()).toBe(true);
+        expect(fixture.nativeElement.querySelector('select[name="agenda-sede"]').disabled).toBe(true);
     });
 
     it('guarda un feriado anual después de capturar el nombre', () => {

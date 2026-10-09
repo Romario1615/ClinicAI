@@ -1,5 +1,6 @@
 import { Component, OnInit, inject, signal, ChangeDetectionStrategy } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { forkJoin } from 'rxjs';
 
 import { VentanaFlotanteComponent } from '../../compartido/ventana-flotante.component';
 import { FalloApi } from '../../nucleo/servicios/api.service';
@@ -14,9 +15,9 @@ import { IntegracionesService, type DatosFeriadoAgenda, type DatosHorarioSede, t
   imports: [FormsModule, VentanaFlotanteComponent],
   template: `
     <section class="intro tarjeta"><div><p class="ceja">OPERACIÓN DE LA SEDE</p><h2>Horarios y feriados</h2><p>Define cuándo se ofrecen citas, las pausas diarias y los días de cierre. La agenda utiliza estos datos al calcular disponibilidad.</p></div>
-      <label class="campo"><span class="campo__etiqueta">Sede</span><select class="campo__control" name="agenda-sede" [(ngModel)]="sedeId" (ngModelChange)="cargar()"><option value="">Seleccione una sede</option>@for (sede of sedes(); track sede.id) { <option [value]="sede.id">{{ sede.nombre }}</option> }</select></label>
+      <label class="campo"><span class="campo__etiqueta">Sede</span><select class="campo__control" name="agenda-sede" [disabled]="guardando()" [(ngModel)]="sedeId" (ngModelChange)="cargar()"><option value="">Seleccione una sede</option>@for (sede of sedes(); track sede.id) { <option [value]="sede.id">{{ sede.nombre }}</option> }</select></label>
     </section>
-    @if (mensaje()) { <p class="mensaje" [class.error]="esError()" role="status">{{ mensaje() }}</p> }
+    @if (mensaje() && !ventanaHorario() && !ventanaFeriado()) { <p class="mensaje" [class.error]="esError()" role="status">{{ mensaje() }}</p> }
     @if (cargando()) { <p class="tarjeta" role="status">Cargando horarios y cierres…</p> }
     @if (sedeId) {
       <div class="columnas">
@@ -37,8 +38,9 @@ import { IntegracionesService, type DatosFeriadoAgenda, type DatosHorarioSede, t
       </div>
 
       @if (ventanaHorario()) {
-        <app-ventana-flotante ceja="Disponibilidad recurrente" [titulo]="horarioEditando ? 'Editar franja horaria' : 'Agregar horario'" forma="centrada" [anchoMaximo]="680" [cierraAlPulsarFuera]="false" (cerrar)="cerrarHorario()">
+        <app-ventana-flotante ceja="Disponibilidad recurrente" [titulo]="horarioEditando ? 'Editar franja horaria' : 'Agregar horario'" forma="centrada" [anchoMaximo]="680" [cierraAlPulsarFuera]="false" [ocupada]="guardando()" (cerrar)="cerrarHorario()">
           <p class="campo__ayuda">Define las horas de atención, pausas y vigencia de esta franja.</p>
+          @if (esError() && mensaje()) { <p class="mensaje error" role="alert">{{ mensaje() }}</p> }
           <form id="form-horario" class="formulario" (ngSubmit)="guardarHorario()">
             <label class="campo"><span class="campo__etiqueta">Día</span><select class="campo__control" name="dia" [(ngModel)]="horario.dia_semana">@for (dia of dias; track dia.id) { <option [ngValue]="dia.id">{{ dia.nombre }}</option> }</select></label>
             <label class="campo"><span class="campo__etiqueta">Desde</span><input class="campo__control" type="time" name="inicio" [(ngModel)]="horario.hora_inicio" required /></label>
@@ -56,12 +58,13 @@ import { IntegracionesService, type DatosFeriadoAgenda, type DatosHorarioSede, t
             <label class="campo"><span class="campo__etiqueta">Válido desde</span><input class="campo__control" type="date" name="vigente-desde" [(ngModel)]="horario.vigente_desde" /></label>
             <label class="campo"><span class="campo__etiqueta">Válido hasta</span><input class="campo__control" type="date" name="vigente-hasta" [(ngModel)]="horario.vigente_hasta" /></label>
           </form>
-          <div pie class="acciones"><button class="boton" type="button" (click)="cerrarHorario()">Cancelar</button><button class="boton boton--principal" type="submit" form="form-horario" [disabled]="guardando()">{{ guardando() ? 'Guardando…' : horarioEditando ? 'Guardar cambios' : 'Agregar horario' }}</button></div>
+          <div pie class="acciones"><button class="boton" type="button" (click)="cerrarHorario()" [disabled]="guardando()">Cancelar</button><button class="boton boton--principal" type="submit" form="form-horario" [disabled]="guardando()">{{ guardando() ? 'Guardando…' : horarioEditando ? 'Guardar cambios' : 'Agregar horario' }}</button></div>
         </app-ventana-flotante>
       }
       @if (ventanaFeriado()) {
-        <app-ventana-flotante ceja="Cierres de agenda" [titulo]="feriadoEditando ? 'Editar cierre' : 'Agregar cierre'" forma="centrada" [anchoMaximo]="560" [cierraAlPulsarFuera]="false" (cerrar)="cerrarFeriado()">
+        <app-ventana-flotante ceja="Cierres de agenda" [titulo]="feriadoEditando ? 'Editar cierre' : 'Agregar cierre'" forma="centrada" [anchoMaximo]="560" [cierraAlPulsarFuera]="false" [ocupada]="guardando()" (cerrar)="cerrarFeriado()">
           <p class="campo__ayuda">Cierra un día completo o un tramo horario. También puedes repetirlo cada año.</p>
+          @if (esError() && mensaje()) { <p class="mensaje error" role="alert">{{ mensaje() }}</p> }
           <form id="form-feriado" class="formulario" (ngSubmit)="guardarFeriado()">
             <label class="campo campo--completo"><span class="campo__etiqueta">Nombre</span><input class="campo__control" name="feriado-nombre" [(ngModel)]="feriado.nombre" maxlength="150" required placeholder="Feriado nacional" /></label>
             <label class="campo campo--completo"><span class="campo__etiqueta">Fecha</span><input class="campo__control" type="date" name="feriado-fecha" [(ngModel)]="feriado.fecha" required /></label>
@@ -71,7 +74,7 @@ import { IntegracionesService, type DatosFeriadoAgenda, type DatosHorarioSede, t
             <label class="campo"><span class="campo__etiqueta">Desde</span><input class="campo__control" type="time" name="feriado-inicio" [(ngModel)]="feriado.hora_inicio" /></label>
             <label class="campo"><span class="campo__etiqueta">Hasta</span><input class="campo__control" type="time" name="feriado-fin" [(ngModel)]="feriado.hora_fin" /></label>
           </form>
-          <div pie class="acciones"><button class="boton" type="button" (click)="cerrarFeriado()">Cancelar</button><button class="boton boton--principal" type="submit" form="form-feriado" [disabled]="guardando()">{{ guardando() ? 'Guardando…' : feriadoEditando ? 'Guardar cambios' : 'Agregar cierre' }}</button></div>
+          <div pie class="acciones"><button class="boton" type="button" (click)="cerrarFeriado()" [disabled]="guardando()">Cancelar</button><button class="boton boton--principal" type="submit" form="form-feriado" [disabled]="guardando()">{{ guardando() ? 'Guardando…' : feriadoEditando ? 'Guardar cambios' : 'Agregar cierre' }}</button></div>
         </app-ventana-flotante>
       }
       @if (confirmacionEliminar(); as confirmacion) {
@@ -89,6 +92,7 @@ import { IntegracionesService, type DatosFeriadoAgenda, type DatosHorarioSede, t
   `,
 })
 export class AgendaConfiguracionComponent implements OnInit {
+  private secuenciaCarga = 0;
   private readonly api = inject(IntegracionesService);
   private readonly catalogo = inject(CatalogoService);
   private readonly sesion = inject(SesionService);
@@ -115,17 +119,27 @@ export class AgendaConfiguracionComponent implements OnInit {
     this.catalogo.sedes().subscribe({ next: (items) => { this.sedes.set(items); this.sedeId = items[0]?.id ?? ''; this.cargar(); }, error: (e: unknown) => this.fallar(e, 'No se pudieron cargar las sedes.') });
   }
   protected cargar(): void {
-    if (!this.sedeId) { this.horarios.set([]); this.feriados.set([]); return; }
+    const secuencia = ++this.secuenciaCarga;
+    this.horarios.set([]); this.feriados.set([]);
+    if (!this.sedeId) { this.cargando.set(false); return; }
     this.cargando.set(true);
     const desde = new Date().toISOString().slice(0,10);
     const hasta = `${desde.slice(0,4)}-12-31`;
-    this.api.horarios(this.sedeId).subscribe({ next: (items) => { this.horarios.set(items); this.cargando.set(false); }, error: (e: unknown) => { this.fallar(e, 'No se pudieron cargar los horarios.'); this.cargando.set(false); } });
-    this.api.feriados(this.sedeId, desde, hasta).subscribe({ next: (items) => this.feriados.set(items), error: (e: unknown) => this.fallar(e, 'No se pudieron cargar los feriados.') });
+    forkJoin({ horarios: this.api.horarios(this.sedeId), feriados: this.api.feriados(this.sedeId, desde, hasta) }).subscribe({
+      next: (items) => {
+        if (secuencia !== this.secuenciaCarga) return;
+        this.horarios.set(items.horarios); this.feriados.set(items.feriados); this.cargando.set(false);
+      },
+      error: (e: unknown) => {
+        if (secuencia !== this.secuenciaCarga) return;
+        this.fallar(e, 'No se pudieron cargar los horarios y cierres.'); this.cargando.set(false);
+      },
+    });
   }
   protected nombreDia(dia: number): string { return this.dias.find((item) => item.id === dia)?.nombre ?? 'Día'; }
   protected horaVisible(valor: string): string { return valor.slice(0, 5); }
-  protected abrirHorario(): void { this.nuevoHorario(); this.ventanaHorario.set(true); }
-  protected cerrarHorario(): void { this.ventanaHorario.set(false); this.nuevoHorario(); }
+  protected abrirHorario(): void { if (this.guardando()) return; this.nuevoHorario(); this.mensaje.set(''); this.esError.set(false); this.ventanaHorario.set(true); }
+  protected cerrarHorario(): void { if (this.guardando()) return; this.ventanaHorario.set(false); this.nuevoHorario(); }
   protected nuevoHorario(): void { this.horarioEditando=''; this.horario=this.horarioVacio(); this.pausas=[]; }
   protected agregarPausa(): void { if (this.pausas.length < 8) this.pausas.push({ hora_inicio: '', hora_fin: '', motivo: '' }); }
   protected quitarPausa(indice: number): void { this.pausas.splice(indice, 1); }
@@ -133,12 +147,21 @@ export class AgendaConfiguracionComponent implements OnInit {
   protected guardarHorario(): void {
     if (this.guardando()) return;
     const descansos = this.pausas.filter((pausa)=>pausa.hora_inicio || pausa.hora_fin).map((pausa)=>({...pausa,motivo:pausa.motivo||null}));
-    const datos: DatosHorarioSede = {...this.horario, descansos}; this.guardando.set(true); this.mensaje.set('');
+    const datos: DatosHorarioSede = {
+      dia_semana: this.horario.dia_semana,
+      hora_inicio: this.horario.hora_inicio,
+      hora_fin: this.horario.hora_fin,
+      granularidad_minutos: this.horario.granularidad_minutos,
+      vigente_desde: this.horario.vigente_desde || null,
+      vigente_hasta: this.horario.vigente_hasta || null,
+      descansos,
+    };
+    this.guardando.set(true); this.mensaje.set('');
     this.api.guardarHorario(this.sedeId, datos, this.horarioEditando || undefined).subscribe({next:()=>{this.guardando.set(false);this.cerrarHorario();this.mostrar('Horario guardado.');this.cargar();},error:(e:unknown)=>{this.guardando.set(false);this.fallar(e,'No se pudo guardar el horario.')}});
   }
   protected solicitarEliminarHorario(item: HorarioSede): void { this.confirmacionEliminar.set({ tipo: 'horario', id: item.id, descripcion: `el horario del ${this.nombreDia(item.dia_semana)}` }); }
-  protected abrirFeriado(): void { this.nuevoFeriado(); this.ventanaFeriado.set(true); }
-  protected cerrarFeriado(): void { this.ventanaFeriado.set(false); this.nuevoFeriado(); }
+  protected abrirFeriado(): void { if (this.guardando()) return; this.nuevoFeriado(); this.mensaje.set(''); this.esError.set(false); this.ventanaFeriado.set(true); }
+  protected cerrarFeriado(): void { if (this.guardando()) return; this.ventanaFeriado.set(false); this.nuevoFeriado(); }
   protected nuevoFeriado(): void { this.feriadoEditando=''; this.alcanceFeriado='sede'; this.feriado=this.feriadoVacio(); }
   protected editarFeriado(item:FeriadoAgenda):void {this.feriadoEditando=item.id;this.alcanceFeriado=item.sede_id?'sede':'clinica';this.feriado={sede_id:item.sede_id,fecha:item.fecha,nombre:item.nombre,recurrente_anual:item.recurrente_anual,hora_inicio:this.horaCorta(item.hora_inicio),hora_fin:this.horaCorta(item.hora_fin)};this.ventanaFeriado.set(true);}
   protected guardarFeriado():void {if(this.guardando())return;const datos:DatosFeriadoAgenda={...this.feriado,sede_id:this.alcanceFeriado==='sede'?this.sedeId||null:null,hora_inicio:this.feriado.hora_inicio||null,hora_fin:this.feriado.hora_fin||null};this.guardando.set(true);this.api.guardarFeriado(datos,this.feriadoEditando||undefined).subscribe({next:()=>{this.guardando.set(false);this.cerrarFeriado();this.mostrar('Feriado guardado.');this.cargar();},error:(e:unknown)=>{this.guardando.set(false);this.fallar(e,'No se pudo guardar el feriado.')}});}

@@ -1,7 +1,7 @@
 import type { MockedObject } from "vitest";
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { HttpErrorResponse } from '@angular/common/http';
-import { of, throwError } from 'rxjs';
+import { NEVER, of, Subject, throwError } from 'rxjs';
 
 import { CatalogoService } from '../../nucleo/servicios/catalogo.service';
 import { AgendaProfesionalesComponent } from './agenda-profesionales.component';
@@ -71,6 +71,8 @@ describe('AgendaProfesionalesComponent', () => {
         esError(): boolean;
         ventanaFormulario(): boolean;
         confirmacionEliminar(): FranjaProfesional | null;
+        franjas(): readonly FranjaProfesional[];
+        profesionales(): readonly { id: string }[];
     }
     const controles = (): Controles => fixture.componentInstance as unknown as Controles;
 
@@ -89,6 +91,30 @@ describe('AgendaProfesionalesComponent', () => {
         expect(controles().mensaje()).toBe('Disponibilidad guardada.');
         expect(controles().esError()).toBe(false);
         expect(agenda.listar).toHaveBeenCalledTimes(2);
+    });
+
+    it('conserva el formulario mientras se guarda y evita un segundo envío', () => {
+        agenda.crear.mockReturnValue(NEVER);
+        const c = controles();
+        fixture.componentInstance['abrirNueva'](); c.guardar(); c.guardar(); c.nueva();
+        expect(c.ventanaFormulario()).toBe(true);
+        expect(agenda.crear).toHaveBeenCalledOnce();
+    });
+
+    it('descarta profesionales de una sede que dejó de estar seleccionada', () => {
+        const anterior = new Subject<readonly { id: string; nombre: string; apellido: string; especialidad_id: string; numero_registro_profesional: string }[]>();
+        catalogo.profesionales.mockReturnValueOnce(anterior).mockReturnValue(of([]));
+        const c = controles(); c.cargarProfesionales(); c.sedeId = 's-2'; c.cargarProfesionales();
+        anterior.next([{ id: 'p-viejo', nombre: 'Anterior', apellido: 'QA', especialidad_id: 'e-1', numero_registro_profesional: 'R-1' }]);
+        expect(c.profesionales()).toEqual([]); expect(c.profesionalId).toBe('');
+    });
+
+    it('descarta las franjas del profesional anterior', () => {
+        const anterior = new Subject<readonly FranjaProfesional[]>();
+        agenda.listar.mockReturnValueOnce(anterior).mockReturnValue(of([]));
+        const c = controles(); c.cargarFranjas(); c.profesionalId = 'p-2'; c.cargarFranjas();
+        anterior.next([franja]);
+        expect(c.franjas()).toEqual([]);
     });
 
     it('edita una franja sin duplicarla', () => {
