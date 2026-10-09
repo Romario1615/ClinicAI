@@ -44,11 +44,10 @@ interface Turno {
   imports: [FormsModule, RouterLink, SelectorPacienteComponent, IconoComponent],
   host: { class: 'pantalla' },
   template: `
-    <header class="modulo-cabecera pantalla__fijo">
+    <header class="cabecera-pagina pantalla__fijo">
       <div class="modulo-cabecera__texto">
         <p class="ceja"><app-icono nombre="asistente-clinico" [tamano]="17" /> ASISTENTE DEL EQUIPO</p>
         <h1>Asistente</h1>
-        <p>Pregunte por su agenda, el siguiente paciente o lo que dicen los documentos aprobados. También redacta borradores de conocimiento y de promociones.</p>
       </div>
     </header>
 
@@ -109,48 +108,13 @@ interface Turno {
   `,
   changeDetection: ChangeDetectionStrategy.Eager,
   styles: `
-    .modulo-cabecera {
-      position: relative;
-      isolation: isolate;
-      min-height: 170px;
-      overflow: hidden;
-      border-color: #165453;
-      background-image:
-        linear-gradient(90deg, rgb(5 35 39 / 94%) 0%, rgb(5 35 39 / 84%) 39%, rgb(5 35 39 / 25%) 100%),
-        url('/images/asistente-clinico-banner.jpg');
-      background-position: center, 50% 52%;
-      background-size: cover;
-      color: #fff;
-      animation: asistente-fondo 30s ease-in-out infinite alternate;
-    }
-    .modulo-cabecera::after {
-      position: absolute;
-      z-index: 0;
-      inset: -60% 8% -60% 48%;
-      background: radial-gradient(ellipse, rgb(95 209 196 / 20%), transparent 67%);
-      content: '';
-      pointer-events: none;
-      animation: asistente-halo 17s ease-in-out infinite alternate;
-    }
-    .modulo-cabecera__texto { position: relative; z-index: 1; max-width: 670px; }
-    .modulo-cabecera .ceja { display: flex; align-items: center; gap: var(--espacio-2); color: #aaf4e9; }
-    .modulo-cabecera h1 { color: #fff; }
-    .modulo-cabecera p:last-child { color: #e0f0ef; }
-    @keyframes asistente-fondo {
-      from { background-position: center, 48% 52%; }
-      to { background-position: center, 54% 52%; }
-    }
-    @keyframes asistente-halo {
-      from { transform: translate3d(-2%, 0, 0) scale(.97); opacity: .55; }
-      to { transform: translate3d(2%, 1%, 0) scale(1.04); opacity: .9; }
-    }
     .asistente { --pantalla-columnas: minmax(220px, 300px) minmax(0, 1fr); gap: var(--espacio-4); align-items: start; }
     .asistente__contexto, .asistente__chat { padding: var(--espacio-4); border: 1px solid var(--borde);
       border-radius: var(--radio); background: var(--superficie); }
     .asistente__contexto h2 { margin: 0 0 var(--espacio-2); font-size: 1rem; }
     .elegido { display: flex; align-items: center; justify-content: space-between; gap: var(--espacio-2); }
     .aviso { margin: var(--espacio-3) 0 0; color: var(--texto-suave); font-size: 0.85rem; }
-    .mensajes { display: grid; gap: var(--espacio-3); max-height: min(60vh, 560px); overflow-y: auto;
+    .mensajes { display: grid; flex: 1 1 0; min-height: 0; gap: var(--espacio-3); max-height: min(60vh, 560px); overflow-y: auto;
       padding-bottom: var(--espacio-2); }
     .mensaje { justify-self: start; max-width: 85%; padding: var(--espacio-3); border-radius: var(--radio);
       background: var(--acento-suave); }
@@ -166,12 +130,13 @@ interface Turno {
     .compositor { display: grid; grid-template-columns: 1fr auto; gap: var(--espacio-2); align-items: end; }
     .compositor .campo { margin: 0; }
     @media (max-width: 820px) {
-      .modulo-cabecera { min-height: 160px; padding: var(--espacio-4); background-position: center, 61% center; }
-      .asistente { grid-template-columns: 1fr; }
+      .asistente { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); min-height: 0; gap: var(--espacio-2); }
+      .asistente__contexto { padding: var(--espacio-2) var(--espacio-3); }
+      .asistente__contexto h2, .asistente__contexto .campo__ayuda, .asistente__contexto .aviso { display: none; }
+      .asistente__contexto app-selector-paciente { display: block; }
+      .asistente__chat { padding: var(--espacio-3); }
+      .mensajes { max-height: none; }
       .compositor { grid-template-columns: 1fr; }
-    }
-    @media (prefers-reduced-motion: reduce) {
-      .modulo-cabecera, .modulo-cabecera::after { animation: none; }
     }
     /* Pantalla de trabajo: el historial llena el alto y desplaza; las
        sugerencias y el campo de escribir quedan siempre a la vista. */
@@ -179,9 +144,6 @@ interface Turno {
     .asistente__chat > :not(.mensajes) { flex: none; }
     @media (min-width: 821px) and (min-height: 600px) {
       .asistente { align-items: stretch; }
-      .modulo-cabecera { min-height: 0; padding: var(--espacio-3) var(--espacio-5); }
-      .modulo-cabecera h1 { margin: 0 0 2px; font-size: 1.45rem; }
-      .modulo-cabecera p:last-child { font-size: .88rem; }
       .asistente__contexto { min-height: 0; overflow: auto; }
       .mensajes { max-height: none; align-content: start; }
     }

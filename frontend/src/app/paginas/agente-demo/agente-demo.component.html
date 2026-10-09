@@ -1,9 +1,8 @@
 <header class="cabecera-pagina pantalla__fijo">
   <div><p class="ceja">DEMOSTRACIÓN LOCAL</p><h1>Agente demo</h1></div>
-  <img class="modulo-cabecera__imagen" src="/images/conversacion-asistente.png" alt="" aria-hidden="true" loading="lazy" />
   <span class="modo">{{ modo === 'simulado' ? 'Modo simulado' : 'Modelo configurado' }}</span>
 </header>
-<p class="introduccion pantalla__fijo">Pruebe una conversación administrativa con datos sintéticos. Las reservas se guardan en la agenda local. Esta pantalla no envía mensajes de WhatsApp.</p>
+<p class="introduccion pantalla__fijo">Prueba administrativa con datos sintéticos. Las reservas se guardan en la agenda local; no se envían mensajes de WhatsApp.</p>
 
 @if (cargando()) {
   <app-cargando class="pantalla__fijo" mensaje="Preparando la demostración…" />
@@ -92,8 +91,8 @@
           <button class="boton" type="button" [disabled]="ocupado()" (click)="enviar('hablar con una persona')">Hablar con una persona</button>
         </div>
         <form class="compositor" (ngSubmit)="enviar()">
-          <label class="campo"><span class="campo__etiqueta">Mensaje</span><textarea class="campo__control" name="mensaje" [(ngModel)]="texto" maxlength="1000" [disabled]="ocupado()" placeholder="Escriba buscar horarios, mis citas o humano"></textarea></label>
-          <button class="boton boton--principal" type="submit" [disabled]="ocupado() || !texto.trim()">Enviar mensaje</button>
+          <label class="campo"><span class="campo__etiqueta">Mensaje</span><textarea class="campo__control" name="mensaje" [(ngModel)]="texto" maxlength="1000" [disabled]="ocupado()" (keydown.enter)="alEnter($event)" placeholder="Escriba buscar horarios, mis citas o humano"></textarea></label>
+          <button class="boton boton--principal" type="submit" [disabled]="ocupado() || !texto.trim()">Enviar</button>
         </form>
       }
     </section>

@@ -130,6 +130,14 @@ export class AgenteDemoComponent {
 
   protected elegir(indice: number): void { this.enviar(String(indice + 1)); }
 
+  protected alEnter(evento: Event): void {
+    const teclado = evento as KeyboardEvent;
+    if (!teclado.shiftKey) {
+      teclado.preventDefault();
+      this.enviar();
+    }
+  }
+
   protected nueva(): void {
     if (this.ocupado()) return;
     this.sesionId.set(''); this.mensajes.set([]); this.respuestaActual.set(null);
