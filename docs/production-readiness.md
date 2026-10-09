@@ -1,5 +1,15 @@
 # Estado de preparación para producción
 
+## Identidad ClinicAI (2026-10-09)
+
+Marca propia integrada en acceso, navegación, cabecera móvil y recursos de
+instalación. SVG de exportación con tipografía en trazos; PNG transparentes e
+ICO multiresolución comprobados en Chromium. Frontend **840/840** y regresión
+final **21/21**; navegador de marca **4/4**, lint/build aprobados. El fondo
+original permanece y se corrigió un solapamiento a 320 px.
+[Evidencia del bloque](verificacion-logo-2026-10-09.md).
+No se publica ni se configura una instalación real de PWA en esta revisión.
+
 ## Odontograma y accesos de la ficha (2026-10-09)
 
 Mapa legible por ancho, selector compacto y guardado con motivo/fotos en

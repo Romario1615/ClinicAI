@@ -9,34 +9,42 @@ import { Component, input, ChangeDetectionStrategy } from '@angular/core';
       [class.marca--clara]="fondoClaro()"
       [class.marca--compacta]="compacta()"
       [class.marca--destacada]="destacada()"
+      role="img"
+      aria-label="ClinicAI · Gestión clínica con inteligencia artificial"
     >
-      <img class="marca__simbolo" src="/images/clinicai-simbolo.svg" alt="" />
-      <span class="marca__texto">
+      <img class="marca__simbolo" src="/images/clinicai-simbolo.svg" alt="" width="96" height="96" decoding="async" />
+      <span class="marca__texto" aria-hidden="true">
         <span class="marca__nombre">Clinic<span class="marca__ai">AI</span></span>
         @if (!compacta()) {
-          <span class="marca__descriptor">Gestión clínica</span>
+          <span class="marca__descriptor">Gestión clínica con IA</span>
         }
       </span>
     </span>
   `,
   changeDetection: ChangeDetectionStrategy.Eager,
   styles: `
-    :host { display: inline-flex; min-width: 0; }
-    .marca { display: inline-flex; align-items: center; gap: 11px; color: #fff; }
+    :host { display: inline-flex; min-width: 0; flex-shrink: 0; }
+    .marca { display: inline-flex; align-items: center; gap: 12px; color: #f0fcfd; }
     .marca--clara { color: var(--texto); }
     .marca__simbolo { display: block; width: 44px; height: 44px; flex: 0 0 auto; }
-    .marca__texto { display: flex; flex-direction: column; line-height: 1.08; }
-    .marca__nombre { font-size: 1.26rem; font-weight: 800; letter-spacing: -0.045em; white-space: nowrap; }
+    .marca__texto { display: flex; flex-direction: column; min-width: 0; line-height: 1.08; }
+    .marca__nombre { font-size: 1.48rem; font-weight: 750; letter-spacing: -0.045em; white-space: nowrap; }
     .marca__ai { color: var(--marca-brillo); }
     .marca--clara .marca__ai { color: var(--acento); }
-    .marca__descriptor { margin-top: 4px; color: var(--marca-tenue); font-size: 0.68rem; font-weight: 650; letter-spacing: 0.12em; text-transform: uppercase; }
+    .marca__descriptor { margin-top: 5px; color: var(--marca-tenue); font-size: 0.6rem; font-weight: 650; letter-spacing: 0.075em; text-transform: uppercase; white-space: nowrap; }
     .marca--clara .marca__descriptor { color: var(--texto-suave); }
     .marca--compacta .marca__simbolo { width: 36px; height: 36px; }
-    .marca--compacta .marca__nombre { font-size: 1.05rem; }
+    .marca--compacta { gap: 9px; }
+    .marca--compacta .marca__nombre { font-size: 1.12rem; }
     .marca--destacada { gap: clamp(12px, 1.5vw, 22px); }
     .marca--destacada .marca__simbolo { width: var(--marca-tamano-simbolo, 80px); height: var(--marca-tamano-simbolo, 80px); }
-    .marca--destacada .marca__nombre { font-size: var(--marca-tamano-nombre, clamp(2.7rem, 4.2vw, 4rem)); }
-    .marca--destacada .marca__descriptor { font-size: .72rem; letter-spacing: .15em; }
+    .marca--destacada .marca__nombre { font-size: var(--marca-tamano-nombre, clamp(2.7rem, 4.2vw, 4.25rem)); }
+    .marca--destacada .marca__descriptor { margin-top: 8px; font-size: .68rem; letter-spacing: .12em; }
+    @media (max-width: 360px) {
+      .marca--compacta { gap: 6px; }
+      .marca--compacta .marca__simbolo { width: 32px; height: 32px; }
+      .marca--compacta .marca__nombre { font-size: 1.05rem; }
+    }
   `,
 })
 export class MarcaComponent {

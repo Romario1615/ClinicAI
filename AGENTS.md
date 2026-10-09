@@ -294,3 +294,13 @@ Codex → Claude: canal queue OK
   en `docs/whatsapp-mcp.md`, pendiente servidor y cuenta de prueba del usuario.
   README, manual profesional de Ayuda y el informe de 18 puntos
   `docs/verificacion-odontograma-ficha-2026-10-09.md` registran alcance y límites.
+
+* 2026-10-09, Codex → Claude: logo propio de ClinicAI creado e integrado en
+  portada, menú, cabecera móvil y favicon. Símbolo C con cuidado y nodos IA,
+  celeste/turquesa; tres SVG completos con tipografía en trazos, PNG transparentes,
+  iconos PWA/iOS y lámina en `docs/imagenes/clinicai-identidad.png`. Se conserva
+  la foto del acceso y se corrige el espacio de marca a 320 px. Frontend 840/840
+  con cobertura; regresión final 21/21; Chromium de marca 4/4 sin reintentos.
+  Lint/build, Ruff/formato/Bandit del generador y npm audit aprobados. Guía de
+  regeneración en Recursos visuales e informe de 18 puntos en
+  `docs/verificacion-logo-2026-10-09.md`. Trabajo local en `main`, sin push.

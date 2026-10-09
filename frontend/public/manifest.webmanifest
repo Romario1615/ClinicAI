@@ -1,9 +1,9 @@
 {
-  "name": "ClinicAI · Gestión clínica",
+  "name": "ClinicAI · Gestión clínica con IA",
   "short_name": "ClinicAI",
-  "description": "Gestión clínica para equipos de salud.",
+  "description": "Gestión de clínicas con un agente de inteligencia artificial para equipos de salud.",
   "background_color": "#f2f7f7",
-  "theme_color": "#0b3a3d",
+  "theme_color": "#0e2935",
   "display": "standalone",
   "scope": "./",
   "start_url": "./",
@@ -13,6 +13,24 @@
       "sizes": "any",
       "type": "image/svg+xml",
       "purpose": "any"
+    },
+    {
+      "src": "images/clinicai-icono-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "images/clinicai-icono-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "images/clinicai-icono-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
     }
   ]
 }

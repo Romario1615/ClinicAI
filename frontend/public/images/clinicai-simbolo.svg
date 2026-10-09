@@ -1,13 +1,23 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" fill="none">
+<svg xmlns="http://www.w3.org/2000/svg" width="96" height="96" viewBox="0 0 96 96" fill="none" role="img" aria-labelledby="titulo descripcion">
+  <title id="titulo">ClinicAI</title>
+  <desc id="descripcion">Una C abierta con una cruz de cuidado y tres nodos conectados, en celeste y turquesa.</desc>
   <defs>
-    <linearGradient id="clinicai" x1="5" y1="4" x2="43" y2="44" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#9ee8f4" />
-      <stop offset="1" stop-color="#59c8c2" />
+    <linearGradient id="superficie" x1="12" y1="8" x2="82" y2="92" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#B9EFF8" />
+      <stop offset=".48" stop-color="#80DEDF" />
+      <stop offset="1" stop-color="#51C7B7" />
+    </linearGradient>
+    <linearGradient id="cuidado" x1="24" y1="18" x2="61" y2="80" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#133F52" />
+      <stop offset="1" stop-color="#0A686C" />
     </linearGradient>
   </defs>
-  <rect x="2" y="2" width="44" height="44" rx="14" fill="url(#clinicai)" />
-  <path d="M20 10h8v10h10v8H28v10h-8V28H10v-8h10V10Z" fill="#123f4b" />
-  <path d="m32.5 10 4-3m-2 8h5" stroke="#fff" stroke-width="2" stroke-linecap="round" />
-  <circle cx="38" cy="6" r="2" fill="#fff" />
-  <circle cx="40" cy="15" r="2" fill="#fff" />
+  <rect x="2" y="2" width="92" height="92" rx="27" fill="url(#superficie)" />
+  <rect x="2.5" y="2.5" width="91" height="91" rx="26.5" stroke="#FFFFFF" stroke-opacity=".35" />
+  <path d="M64 24a30 30 0 1 0 0 48" stroke="url(#cuidado)" stroke-width="11" stroke-linecap="round" />
+  <path d="m64 24 16 24-16 24M53 48h27" stroke="#0A686C" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" />
+  <path d="M43 39v18m-9-9h18" stroke="#133F52" stroke-width="6" stroke-linecap="round" />
+  <circle cx="64" cy="24" r="5" fill="#F0FCFD" stroke="#133F52" stroke-width="3" />
+  <circle cx="80" cy="48" r="5.5" fill="#0A686C" />
+  <circle cx="64" cy="72" r="5" fill="#F0FCFD" stroke="#0A686C" stroke-width="3" />
 </svg>

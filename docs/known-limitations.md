@@ -1,5 +1,14 @@
 # Limitaciones conocidas y riesgos residuales
 
+## Identidad ClinicAI (2026-10-09)
+
+El logo está disponible como SVG, PNG transparente, favicon e iconos de
+instalación. Se comprobó el renderizado y la declaración de esos recursos en
+Chromium; no se realizó una instalación física en iOS/Android ni una prueba
+de impresión profesional. Las variantes claras y oscuras deben elegirse según
+el fondo. Los generadores requieren las dependencias locales de exportación;
+la aplicación sirve los recursos ya generados.
+
 ## Odontograma legible y accesos de ficha (2026-10-09)
 
 Las piezas conservan un mínimo legible y el mapa se organiza por hemiarcadas

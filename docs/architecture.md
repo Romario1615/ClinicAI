@@ -1,5 +1,16 @@
 # Arquitectura
 
+## Identidad ClinicAI (2026-10-09)
+
+`MarcaComponent` comparte el símbolo SVG entre acceso, navegación y cabecera.
+Su nombre accesible describe ClinicAI una vez; el texto visible conserva el
+nombre completo en cada tamaño. Favicon y manifiesto reutilizan la identidad.
+Los PNG y SVG completos con letras en trazos son recursos de exportación,
+sin fuentes remotas ni dependencias de producción añadidas. Los generadores
+viven en `infra/scripts/generar-logos.py` y `exportar-logos.mjs`; el lector
+de SVG rechaza DTD y entidades. [Diseño y regeneración](recursos-visuales.md).
+No cambia datos, API, permisos ni herramientas del agente.
+
 ## Odontograma y accesos de la ficha (2026-10-09)
 
 El mapa conserva un tamaño mínimo de pieza independiente del alto disponible.

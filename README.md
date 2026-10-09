@@ -1,5 +1,28 @@
 # ClinicAI — Plataforma de gestión clínica
 
+## Logo propio de ClinicAI (2026-10-09)
+
+Nueva marca en **celeste y turquesa**: una C con cruz de cuidado y tres nodos
+conectados. Está integrada en la portada, el menú, la cabecera móvil, los
+presupuestos que reutilizan el símbolo, el favicon y los iconos de instalación.
+Se conserva la fotografía de fondo del acceso.
+
+![Identidad visual de ClinicAI](docs/imagenes/clinicai-identidad.png)
+
+- SVG portables, con tipografía en trazos: [fondo claro](frontend/public/images/clinicai-logo-claro.svg),
+  [fondo oscuro](frontend/public/images/clinicai-logo-oscuro.svg) y
+  [una tinta](frontend/public/images/clinicai-logo-monocromo.svg).
+- PNG transparentes de **1436 × 512** en la misma carpeta, además de iconos
+  de 192/512 px, variante recortable, Apple Touch de 180 px y favicon ICO.
+- `app-marca` presenta un nombre accesible único y adapta el tamaño a cada
+  ubicación; a 320 px deja espacio a notificaciones y controles de sesión.
+- Generadores locales reproducibles y guía en [recursos visuales](docs/recursos-visuales.md).
+
+Frontend **840/840** con cobertura de líneas **88,10 %**; regresión final de
+marca/acceso/armazón **21/21** y Chromium **4/4**, incluidos seis tamaños de
+portada, siete de la aplicación, transparencia e iconos. Lint/build aprobados.
+[Informe y límites del bloque](docs/verificacion-logo-2026-10-09.md).
+
 ## Odontograma legible y accesos del paciente (2026-10-09)
 
 El odontograma conserva piezas grandes en Historia y ficha, distribuye las

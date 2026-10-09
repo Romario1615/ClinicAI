@@ -1,17 +1,66 @@
 # Recursos visuales
 
-## ClinicAI celeste turquesa (2026-10-09)
+## Logo propio de ClinicAI (2026-10-09)
 
-El logo SVG existente usa un degradado `#9ee8f4` → `#59c8c2`, con cruz médica
-oscura y nodos IA blancos. `app-marca` incorpora el modo `destacada`: símbolo
-de 80 px y nombre de hasta 64 px en escritorio; en móvil se ajusta sin ocultar
-los seis accesos por rol. Se conserva la fotografía original `acceso-equipo.png`.
+La C representa ClinicAI; la cruz central representa cuidado y los tres nodos
+su coordinación mediante IA. El símbolo está dibujado como vector original y
+usa celeste `#B9EFF8`, turquesa `#51C7B7` y azul profundo `#133F52`. El nombre
+usa Plus Jakarta Sans, peso 750, con AI resaltado. Se conserva la fotografía
+original `acceso-equipo.png`.
+
+![Lámina de identidad](imagenes/clinicai-identidad.png)
+
+| Recurso en `frontend/public/images/` | Uso |
+| --- | --- |
+| `clinicai-simbolo.svg` | Símbolo común de portada, menú, cabecera, presupuesto y pestaña |
+| `clinicai-logo-claro.svg` | Logo completo sobre fondos claros, con tipografía en trazos |
+| `clinicai-logo-oscuro.svg` | Logo completo sobre fondos oscuros |
+| `clinicai-logo-monocromo.svg` | Logo completo de una tinta, con huecos transparentes |
+| `clinicai-logo-{claro,oscuro,monocromo}.png` | Exportaciones transparentes de 1436 × 512 px |
+| `clinicai-icono-192.png`, `clinicai-icono-512.png` | Iconos de instalación de la aplicación |
+| `clinicai-icono-maskable-512.png` | Fondo opaco y símbolo centrado con margen de recorte |
+| `clinicai-apple-touch.png` | Icono de 180 × 180 px para Apple |
+
+`frontend/public/favicon.ico` contiene cuatro resoluciones: 16, 32, 48 y 64 px.
+La lámina de presentación está en `docs/imagenes/clinicai-identidad.png`.
+Los SVG completos no necesitan descargar ni instalar fuentes: las letras son
+trazos. La tipografía de la interfaz permanece en la dependencia local existente
+`@fontsource-variable/plus-jakarta-sans`, con licencia SIL OFL 1.1.
+
+### Presentación en la aplicación
+
+`app-marca` comparte símbolo y nombre accesible. El texto visible se oculta al
+lector de pantalla para evitar repetir su lectura. El modo `destacada` usa
+símbolo de 80 px y nombre de hasta 68 px; el menú usa 44 px y la cabecera móvil
+36 px. A anchos de hasta 360 px, el modo compacto baja el símbolo a 32 px y
+reduce el hueco; se conserva el nombre completo y el espacio de los controles.
+La portada mantiene los seis accesos por rol dentro de la pantalla.
+
+### Regeneración local
+
+Instale las dependencias ya declaradas del frontend y de `pruebas-e2e`. Desde
+la raíz, estos comandos regeneran únicamente los recursos de marca:
+
+```powershell
+uv run --no-project --with fonttools==4.61.0 --with brotli==1.2.0 --with defusedxml==0.7.1 python infra/scripts/generar-logos.py
+$env:PLAYWRIGHT_BROWSERS_PATH='D:/playwright-browsers'
+node infra/scripts/exportar-logos.mjs
+```
+
+El primer comando toma el símbolo SVG y la fuente local para construir las
+variantes con tipografía en trazos; rechaza DTD y entidades XML. Las dependencias
+de exportación son temporales, sin cambios en el backend ni en el paquete de
+la aplicación. El segundo usa Chromium de Playwright para rasterizar los vectores,
+empaquetar el ICO y capturar la lámina. Puede omitirse la variable de navegadores
+si Playwright está instalado en su ubicación predeterminada.
+
+### Paleta de la interfaz
 
 La paleta común usa acento `#086c7f`, fondos claros celestes y vidrio oscuro
 `#0e2935`. Las partículas y la red existente toman estos colores. Se mantiene
 el color semántico de errores y alertas, las preferencias de movimiento reducido
-y los controles de contraste. No se generaron nuevos recursos rasterizados;
-se actualizan el vector y la presentación existentes.
+y los controles de contraste. Los nuevos PNG se reservan a exportación e iconos;
+la marca que se pinta en la interfaz continúa usando el símbolo SVG ligero.
 
 La acción principal limita el brillo a 6 %: el blanco sobre el acento aclarado
 conserva una relación calculada de 5,36:1. La portada se revisa con axe y seis
@@ -33,8 +82,8 @@ partículas y la red de IA en SVG/CSS. El panel conserva su composición nativa;
   movimiento con la preferencia del usuario y desaparece al aumentar contraste.
 - `grafico-red.component.ts`: núcleo **IA**, seis módulos conectados y pulsos de
   luz con el motor de movimiento existente; pausa sus bucles fuera de pantalla.
-- `clinicai-simbolo.svg`: conserva el símbolo original y adapta su paleta al
-  azul/cian. Se reutiliza como logo y favicon.
+- `clinicai-simbolo.svg`: símbolo común de aplicación y favicon, renovado el
+  2026-10-09 con la C, cuidado y nodos descritos arriba.
 
 ### Fondo anatómico del faciograma
 
