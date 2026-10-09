@@ -3,7 +3,8 @@
 .introduccion { max-width: 80ch; color: var(--texto-suave); margin-bottom: 24px; }
 .modo { background: var(--aviso-fondo); color: var(--aviso); border: 1px solid currentColor; border-radius: 24px; padding: 6px 14px; font-size: .9rem; }
 fieldset { border: 0; padding: 0; margin: 0; min-width: 0; }
-.mensajes { display: flex; flex: 1 1 0; flex-direction: column; gap: 16px; min-height: 0; max-height: 55vh; overflow-y: auto; padding: 4px; margin-bottom: 0; }
+.demo__chat { min-height: 0; }
+.demo__chat [chat-mensaje] { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
 .mensaje { background: var(--superficie); padding: 16px; border: 1px solid var(--borde); border-radius: 12px; max-width: 90%; align-self: flex-start; overflow-wrap: anywhere; }
 .mensaje strong { font-size: .8rem; color: var(--texto-suave); }
 .mensaje p { margin: 6px 0 0; white-space: pre-wrap; }
@@ -13,8 +14,6 @@ fieldset { border: 0; padding: 0; margin: 0; min-width: 0; }
 .horarios { display: flex; flex-wrap: wrap; gap: 8px; }
 .derivacion { background: var(--aviso-fondo); padding: 16px; border-radius: var(--radio); }
 .derivacion p { margin: 8px 0 0; }
-.compositor { margin-top: 8px; padding-top: 10px; border-top: 1px solid var(--borde); }
-.compositor textarea { min-height: 56px; }
 @media (max-width: 540px) { .tarjeta { padding: 16px; } .mensaje { max-width: 100%; } .horarios .boton { width: 100%; } }
 
 /* Pantalla de trabajo: los mensajes llenan el alto y desplazan; acciones y
@@ -24,7 +23,7 @@ fieldset { border: 0; padding: 0; margin: 0; min-width: 0; }
   .introduccion { margin-bottom: 0; }
   .editor-demo { flex: 0 1 auto; min-height: 0; }
   .conversacion { flex: 1 1 0; }
-  .mensajes { max-height: none; }
+  .demo__chat { flex: 1 1 0; }
   .compositor { margin-top: var(--espacio-3); padding-top: var(--espacio-3); }
   .compositor textarea { min-height: 56px; }
   /* Quién a un lado, cuándo al otro: el botón de iniciar queda a la vista. */

@@ -273,7 +273,7 @@ test('el simulador reserva, confirma y muestra la cita real', async ({ page, req
     await expect(page.locator('.cita-demo').first()).toBeVisible();
     await page.screenshot({ path: info.outputPath('agente-demo.png'), fullPage: true });
     await page.setViewportSize({ width: 390, height: 844 });
-    await expect(page.getByRole('button', { name: 'Enviar mensaje' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Enviar', exact: true })).toBeVisible();
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1)).toBeTruthy();
     await page.getByRole('button', { name: 'Hablar con una persona' }).click();
     await expect(page.getByText('Atención del personal requerida')).toBeVisible();

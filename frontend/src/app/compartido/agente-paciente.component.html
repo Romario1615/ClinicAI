@@ -2,7 +2,11 @@
   <header><div><span class="ceja">CLINICAI · EXPEDIENTE ACTIVO</span><h3>Agente del paciente</h3><p>{{nombre()}}</p></div><button type="button" class="boton" aria-label="Cerrar agente del paciente" (click)="cerrar.emit()">Cerrar</button></header>
   <p class="agente__alcance">Esta conversación gestiona solo esta ficha. Las acciones se ejecutan tras su confirmación y con sus permisos.</p>
   @if(respuesta();as r){<p class="agente__modo">{{r.modo==='local'?'Funciones locales · IA externa pendiente de configuración':'IA configurada por la clínica'}}@if(r.datos['cita_activa_inicio'];as inicio){<br />Cita seleccionada: {{fecha(inicio)}}}</p>}
-  <div class="agente__mensajes desplazable" role="log" aria-live="polite" tabindex="0">@for(m of mensajes();track $index){<article [class.agente__usted]="m.autor==='usted'"><small>{{m.autor==='usted'?'Usted':'ClinicAI'}}</small><p>{{m.texto}}</p></article>}
+  <app-chat-conversacional class="agente__chat" etiqueta="Conversación del paciente" [actualizacion]="mensajes().length" [sugerencias]="sugerencias()"
+    [(texto)]="texto" [ocupado]="ocupado()" [deshabilitado]="!respuesta() || !!respuesta()?.propuesta"
+    [error]="error()" placeholder="Consulte citas o información aprobada…" (enviar)="enviar()" (sugerencia)="enviar($event)">
+  <div chat-mensaje>
+    @for(m of mensajes();track $index){<article [class.agente__usted]="m.autor==='usted'"><small>{{m.autor==='usted'?'Usted':'ClinicAI'}}</small><p>{{m.texto}}</p></article>}
     @for(e of elementos();track $index){<article><strong>{{e.titulo}}</strong><p>{{e.detalle}}</p></article>}
     @for(c of citas();track c.cita_id){<article><strong>{{fecha(c.inicio)}}</strong><p>{{estado(c.estado)}}</p><button type="button" class="boton" [disabled]="ocupado() || !!respuesta()?.propuesta" (click)="elegir(c.cita_id)">Usar esta cita</button></article>}
     @if(turnos().length && puedeReprogramar()){<label>Motivo de reprogramación<input [(ngModel)]="motivoReprogramacion" maxlength="280" /></label>}
@@ -10,12 +14,14 @@
     @for(p of pagos();track $index){<article><strong>{{p.importe}} {{p.moneda}}</strong><p>{{estado(p.estado)}} · {{fecha(p.cita)}}</p></article>}
     @if(ocupado()){<p role="status">Procesando la gestión de esta ficha…</p>}
   </div>
+  <div chat-acciones>
   @if(respuesta()?.propuesta;as p){<div class="agente__propuesta"><strong>{{p.titulo}}</strong><p>Paciente: {{nombre()}}. Caduca {{fecha(p.expira_en)}}.</p>@if(p.argumentos['inicio'] || p.argumentos['nuevo_inicio'];as inicio){<p>Horario: {{fecha(inicio)}}</p>}@if(p.argumentos['motivo'];as motivo){<p>Motivo: {{motivo}}</p>}<div class="agente__acciones"><button type="button" class="boton boton--principal" [disabled]="ocupado()" (click)="confirmar(true)">Confirmar acción</button><button type="button" class="boton" [disabled]="ocupado()" (click)="confirmar(false)">Descartar</button></div></div>}
-  @if(error()){<p class="aviso-error" role="alert">{{error()}}</p><div class="agente__acciones"><button type="button" class="boton" [disabled]="ocupado()" (click)="reintentar()">Reintentar gestión</button><button type="button" class="boton" [disabled]="ocupado()" (click)="abrir()">Nueva conversación</button></div>}
+  @if(error()){<div class="agente__acciones"><button type="button" class="boton" [disabled]="ocupado()" (click)="reintentar()">Reintentar gestión</button><button type="button" class="boton" [disabled]="ocupado()" (click)="abrir()">Nueva conversación</button></div>}
   @if(!respuesta() && !ocupado()){<button type="button" class="boton" (click)="abrir()">Reintentar conexión</button>}
-  <div class="agente__acciones">@for(s of sugerencias();track s){<button type="button" class="boton boton--pequeno" [disabled]="ocupado() || !respuesta() || !!respuesta()?.propuesta" (click)="enviar(s)">{{s}}</button>}</div>
   @if(puedeAgenda()){<details><summary>Más gestiones</summary><div class="agente__acciones">@if(puedeCrear()){<button type="button" class="boton" [disabled]="ocupado() || !!respuesta()?.propuesta" (click)="enviar('confirmar')">Confirmar cita apartada</button>}<button type="button" class="boton" (click)="configurar()" [disabled]="ocupado() || !!respuesta()?.propuesta">Configurar búsqueda</button></div>@if(puedeCancelar()){<label>Motivo para cancelar la cita seleccionada<input [(ngModel)]="motivo" maxlength="280" /></label><button type="button" class="boton" [disabled]="!motivo.trim() || ocupado() || !!respuesta()?.propuesta" (click)="cancelarCita()">Preparar cancelación</button>}</details>}
+  </div>
   @if(configurando()){
+    <div chat-acciones>
     <app-ventana-flotante titulo="Configurar búsqueda de citas" ceja="Agente del paciente" forma="centrada" [anchoMaximo]="680" [ocupada]="ocupado()" [error]="error()" [cierraAlPulsarFuera]="false" (cerrar)="cerrarContexto()">
       <p>Seleccione dónde y cuándo buscar para {{nombre()}}. El intervalo puede abarcar hasta 14 días.</p>
       <form id="formulario-contexto-agente" class="agente__contexto" #contexto="ngForm" (ngSubmit)="guardarContexto()">
@@ -31,6 +37,7 @@
         <button type="submit" form="formulario-contexto-agente" class="boton boton--principal" [disabled]="ocupado() || contexto.invalid">{{ocupado() ? 'Aplicando…' : 'Aplicar búsqueda'}}</button>
       </div>
     </app-ventana-flotante>
+    </div>
   }
-  <form class="agente__compositor" (ngSubmit)="enviar()"><label>Mensaje sobre esta ficha<textarea name="texto" [(ngModel)]="texto" maxlength="1000" rows="2" [disabled]="ocupado() || !!respuesta()?.propuesta" placeholder="Consulte su historial, citas o información aprobada…"></textarea></label><button type="submit" class="boton boton--principal" [disabled]="ocupado() || !texto.trim() || !respuesta() || !!respuesta()?.propuesta">Enviar</button></form>
+  </app-chat-conversacional>
 </section>

@@ -7,15 +7,15 @@
  * decisiones clínicas. Todo con los permisos de quien escribe, comprobados y
  * auditados en el servidor.
  */
-import { Component, ElementRef, OnInit, inject, signal, viewChild, ChangeDetectionStrategy } from '@angular/core';
+import { Component, OnInit, inject, signal, ChangeDetectionStrategy } from '@angular/core';
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
-import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 
 import { CONFIGURACION } from '../../nucleo/servicios/configuracion';
 import type { Paciente } from '../../nucleo/modelos/dominio';
 import { SelectorPacienteComponent } from '../../compartido/selector-paciente.component';
 import { IconoComponent } from '../../compartido/icono.component';
+import { ChatConversacionalComponent } from '../../compartido/chat-conversacional.component';
 
 export interface ElementoAsistente {
   readonly titulo: string;
@@ -41,7 +41,7 @@ interface Turno {
 @Component({
   selector: 'app-asistente',
   standalone: true,
-  imports: [FormsModule, RouterLink, SelectorPacienteComponent, IconoComponent],
+  imports: [RouterLink, SelectorPacienteComponent, IconoComponent, ChatConversacionalComponent],
   host: { class: 'pantalla' },
   template: `
     <header class="cabecera-pagina pantalla__fijo">
@@ -65,8 +65,10 @@ interface Turno {
         <p class="aviso">No toma decisiones clínicas: muestra lo registrado y lo aprobado.</p>
       </aside>
 
-      <section class="asistente__chat" aria-label="Conversación con el asistente">
-        <div class="mensajes desplazable" role="log" aria-live="polite" tabindex="0" #registro>
+      <app-chat-conversacional class="asistente__chat" etiqueta="Conversación con el asistente"
+        [actualizacion]="turnos().length" [sugerencias]="sugerencias()" [(texto)]="texto" [ocupado]="pensando()" [error]="error()"
+        placeholder="Ej.: ¿Quién sigue? · Agrega al conocimiento: …" (enviar)="enviar()" (sugerencia)="usarSugerencia($event)">
+        <div chat-mensaje>
           @for (turno of turnos(); track $index) {
             <article class="mensaje" [class.mensaje--usted]="turno.autor === 'usted'">
               <p>{{ turno.texto }}</p>
@@ -87,23 +89,7 @@ interface Turno {
           }
           @if (pensando()) { <p class="pensando" role="status">Buscando…</p> }
         </div>
-
-        <div class="sugerencias">
-          @for (s of sugerencias(); track s) {
-            <button type="button" class="boton boton--pequeno" [disabled]="pensando()" (click)="usarSugerencia(s)">{{ s }}</button>
-          }
-        </div>
-
-        <form class="compositor" (ngSubmit)="enviar()">
-          <label class="campo">
-            <span class="campo__etiqueta">Mensaje</span>
-            <textarea class="campo__control" name="texto" rows="2" maxlength="1000" [(ngModel)]="texto"
-              (keydown.enter)="alEnter($event)" placeholder="Ej.: ¿Quién sigue? · Agrega al conocimiento: …"></textarea>
-          </label>
-          <button class="boton boton--principal" type="submit" [disabled]="pensando() || !texto.trim()">Enviar</button>
-        </form>
-        @if (error()) { <p class="campo__error" role="alert">{{ error() }}</p> }
-      </section>
+      </app-chat-conversacional>
     </div>
   `,
   changeDetection: ChangeDetectionStrategy.Eager,
@@ -114,8 +100,7 @@ interface Turno {
     .asistente__contexto h2 { margin: 0 0 var(--espacio-2); font-size: 1rem; }
     .elegido { display: flex; align-items: center; justify-content: space-between; gap: var(--espacio-2); }
     .aviso { margin: var(--espacio-3) 0 0; color: var(--texto-suave); font-size: 0.85rem; }
-    .mensajes { display: grid; flex: 1 1 0; min-height: 0; gap: var(--espacio-3); max-height: min(60vh, 560px); overflow-y: auto;
-      padding-bottom: var(--espacio-2); }
+    .mensajes { display: grid; gap: var(--espacio-3); align-content: start; }
     .mensaje { justify-self: start; max-width: 85%; padding: var(--espacio-3); border-radius: var(--radio);
       background: var(--acento-suave); }
     .mensaje--usted { justify-self: end; background: var(--superficie-elevada, #fff); border: 1px solid var(--borde); }
@@ -126,9 +111,6 @@ interface Turno {
     .elementos span { color: var(--texto-suave); font-size: 0.9rem; }
     .enlace { display: inline-block; margin-top: var(--espacio-2); font-weight: 600; }
     .vacio, .pensando { color: var(--texto-suave); }
-    .sugerencias { display: flex; flex-wrap: wrap; gap: 6px; margin: var(--espacio-3) 0; }
-    .compositor { display: grid; grid-template-columns: 1fr auto; gap: var(--espacio-2); align-items: end; }
-    .compositor .campo { margin: 0; }
     @media (max-width: 820px) {
       .asistente { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); min-height: 0; gap: var(--espacio-2); }
       .asistente__contexto { padding: var(--espacio-2) var(--espacio-3); }
@@ -136,23 +118,19 @@ interface Turno {
       .asistente__contexto app-selector-paciente { display: block; }
       .asistente__chat { padding: var(--espacio-3); }
       .mensajes { max-height: none; }
-      .compositor { grid-template-columns: 1fr; }
     }
     /* Pantalla de trabajo: el historial llena el alto y desplaza; las
        sugerencias y el campo de escribir quedan siempre a la vista. */
-    .asistente__chat { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
-    .asistente__chat > :not(.mensajes) { flex: none; }
+    .asistente__chat { min-width: 0; min-height: 0; }
     @media (min-width: 821px) and (min-height: 600px) {
       .asistente { align-items: stretch; }
       .asistente__contexto { min-height: 0; overflow: auto; }
-      .mensajes { max-height: none; align-content: start; }
     }
   `,
 })
 export class AsistenteComponent implements OnInit {
   private readonly http = inject(HttpClient);
   private readonly base = inject(CONFIGURACION).urlApi + '/asistente';
-  private readonly registro = viewChild<ElementRef<HTMLElement>>('registro');
 
   protected readonly turnos = signal<readonly Turno[]>([]);
   protected readonly sugerencias = signal<readonly string[]>([]);
@@ -178,6 +156,7 @@ export class AsistenteComponent implements OnInit {
     this.enviar();
   }
 
+  /** Conserva la llamada usada por integraciones de teclado existentes. */
   protected alEnter(evento: Event): void {
     const teclado = evento as KeyboardEvent;
     if (!teclado.shiftKey) {
@@ -203,7 +182,6 @@ export class AsistenteComponent implements OnInit {
             { autor: 'asistente', texto: respuesta.texto, elementos: respuesta.elementos, enlace: respuesta.enlace },
           ]);
           if (respuesta.sugerencias.length) this.sugerencias.set(respuesta.sugerencias);
-          this.alFinal();
         },
         error: (fallo: HttpErrorResponse) => {
           this.pensando.set(false);
@@ -221,10 +199,4 @@ export class AsistenteComponent implements OnInit {
     return Object.fromEntries(new URLSearchParams(query ?? ''));
   }
 
-  private alFinal(): void {
-    queueMicrotask(() => {
-      const caja = this.registro()?.nativeElement;
-      if (caja) caja.scrollTop = caja.scrollHeight;
-    });
-  }
 }

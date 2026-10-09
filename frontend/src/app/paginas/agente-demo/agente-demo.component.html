@@ -57,7 +57,10 @@
         <div><h2 id="conversacion-demo">{{ paciente()?.nombre }} {{ paciente()?.apellido }}</h2><small>Horarios en {{ zona() }}</small></div>
         <button class="boton" type="button" (click)="nueva()" [disabled]="ocupado()">Nueva simulación</button>
       </div>
-      <div class="mensajes desplazable" role="log" aria-label="Conversación simulada" aria-live="polite" tabindex="0">
+      <app-chat-conversacional class="demo__chat" etiqueta="Conversación simulada" [actualizacion]="mensajes().length" [sugerencias]="sugerencias()"
+        [(texto)]="texto" [ocupado]="ocupado()" [deshabilitado]="requiereHumano()"
+        placeholder="Escriba buscar horarios, mis citas o humano" (enviar)="enviar()" (sugerencia)="enviar($event)">
+      <div chat-mensaje>
         @for (mensaje of mensajes(); track $index) {
           <article class="mensaje" [class.mensaje--propio]="mensaje.autor === 'Usted'">
             <strong>{{ mensaje.autor }}</strong><p>{{ mensaje.texto }}</p>
@@ -69,32 +72,22 @@
           </article>
         }
       </div>
-      @if (ocupado()) { <p role="status">Procesando…</p> }
+      @if (ocupado()) { <p chat-acciones role="status">Procesando…</p> }
       @if (requiereHumano()) {
-        <div class="derivacion" role="status"><strong>Atención del personal requerida</strong><p>La conversación quedó derivada. Inicie otra simulación para probar un nuevo recorrido.</p></div>
+        <div chat-acciones class="derivacion" role="status"><strong>Atención del personal requerida</strong><p>La conversación quedó derivada. Inicie otra simulación para probar un nuevo recorrido.</p></div>
       } @else if (pendiente() && !ocupado()) {
-        <p>No se recibió una respuesta. Reintente el mismo envío para comprobar su resultado.</p>
-        <button class="boton boton--principal" type="button" (click)="enviar(pendiente()!.texto)">Reintentar envío</button>
+        <div chat-acciones><p>No se recibió una respuesta. Reintente el mismo envío para comprobar su resultado.</p>
+        <button class="boton boton--principal" type="button" (click)="enviar(pendiente()!.texto)">Reintentar envío</button></div>
       } @else {
         @if (turnos().length) {
-          <div class="horarios" aria-label="Horarios disponibles">
+          <div chat-acciones class="horarios" aria-label="Horarios disponibles">
             @for (turno of turnos(); track turno.inicio; let i = $index) {
               <button class="boton" type="button" [disabled]="ocupado()" (click)="elegir(i)">Elegir {{ i + 1 }} · {{ fechaHora(turno.inicio) }}</button>
             }
           </div>
         }
-        <div class="acciones-demo">
-          <button class="boton" type="button" [disabled]="ocupado()" (click)="enviar('buscar horarios')">Buscar horarios</button>
-          @if (puedeConfirmar()) { <button class="boton boton--principal" type="button" [disabled]="ocupado()" (click)="enviar('confirmar')">Confirmar cita</button> }
-          <button class="boton" type="button" [disabled]="ocupado()" (click)="enviar('mis citas')">Mis citas</button>
-          <button class="boton" type="button" [disabled]="ocupado()" (click)="enviar('mis pagos')">Mis pagos</button>
-          <button class="boton" type="button" [disabled]="ocupado()" (click)="enviar('hablar con una persona')">Hablar con una persona</button>
-        </div>
-        <form class="compositor" (ngSubmit)="enviar()">
-          <label class="campo"><span class="campo__etiqueta">Mensaje</span><textarea class="campo__control" name="mensaje" [(ngModel)]="texto" maxlength="1000" [disabled]="ocupado()" (keydown.enter)="alEnter($event)" placeholder="Escriba buscar horarios, mis citas o humano"></textarea></label>
-          <button class="boton boton--principal" type="submit" [disabled]="ocupado() || !texto.trim()">Enviar</button>
-        </form>
       }
+      </app-chat-conversacional>
     </section>
   }
 }

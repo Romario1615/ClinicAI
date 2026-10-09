@@ -25,7 +25,7 @@ describe('AgentePacienteComponent',()=>{
     const aplicar=dialogo?.querySelector<HTMLButtonElement>('.ventana__pie button[type="submit"]');
     expect(aplicar?.form?.id).toBe('formulario-contexto-agente');expect(aplicar?.disabled).toBe(true);
     expect(dialogo?.querySelector('form button[type="submit"]')).toBeNull();
-    boton('Cancelar');expect(raiz.querySelector('dialog')).toBeNull();expect(raiz.querySelector('.agente__compositor')).not.toBeNull();
+    boton('Cancelar');expect(raiz.querySelector('dialog')).toBeNull();expect(raiz.querySelector('.chat__compositor')).not.toBeNull();
   });
   it('impide cerrar durante la aplicación y muestra el fallo dentro del diálogo',()=>{
     configurar();const c=f.componentInstance;

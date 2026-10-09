@@ -6,6 +6,7 @@ import { SelectorPacienteComponent } from '../../compartido/selector-paciente.co
 import { InsigniaEstadoComponent } from '../../compartido/insignia-estado.component';
 import { CargandoComponent } from '../../compartido/estados.component';
 import { VentanaFlotanteComponent } from '../../compartido/ventana-flotante.component';
+import { ChatConversacionalComponent } from '../../compartido/chat-conversacional.component';
 import { CatalogoService } from '../../nucleo/servicios/catalogo.service';
 import { OperacionesService } from '../../nucleo/servicios/operaciones.service';
 import { FalloApi } from '../../nucleo/servicios/api.service';
@@ -25,7 +26,7 @@ interface Mensaje { autor: 'Usted' | 'Asistente'; texto: string; respuesta?: Res
 
 @Component({
   selector: 'app-agente-demo', standalone: true,
-  imports: [FormsModule, SelectorPacienteComponent, InsigniaEstadoComponent, CargandoComponent, VentanaFlotanteComponent],
+  imports: [FormsModule, SelectorPacienteComponent, InsigniaEstadoComponent, CargandoComponent, VentanaFlotanteComponent, ChatConversacionalComponent],
   host: { class: 'pantalla' },
   templateUrl: './agente-demo.component.html', changeDetection: ChangeDetectionStrategy.Eager,
  styleUrl: './agente-demo.component.scss',
@@ -55,6 +56,9 @@ export class AgenteDemoComponent {
   protected readonly pendiente = signal<{ texto: string; clave: string } | null>(null);
   protected readonly zona = computed(() => this.sedes().find(s => s.id === this.sedeId())?.zona_horaria ?? 'America/Guayaquil');
   protected readonly turnos = computed(() => this.respuestaActual()?.datos.turnos?.slice(0, 5) ?? []);
+  protected readonly sugerencias = computed(() => [
+    'Buscar horarios', ...(this.puedeConfirmar() ? ['Confirmar cita'] : []), 'Mis citas', 'Mis pagos', 'Hablar con una persona',
+  ]);
   protected readonly puedeConfirmar = computed(() => !!this.respuestaActual()?.datos.expira_en);
   private apertura = { cuerpo: '', clave: '' };
   private consultaProfesionales = 0;
@@ -129,14 +133,6 @@ export class AgenteDemoComponent {
   }
 
   protected elegir(indice: number): void { this.enviar(String(indice + 1)); }
-
-  protected alEnter(evento: Event): void {
-    const teclado = evento as KeyboardEvent;
-    if (!teclado.shiftKey) {
-      teclado.preventDefault();
-      this.enviar();
-    }
-  }
 
   protected nueva(): void {
     if (this.ocupado()) return;

@@ -10,6 +10,7 @@ import { CatalogoService } from '../nucleo/servicios/catalogo.service';
 import { type Especialidad, type Profesional, type Sede, type Servicio } from '../nucleo/modelos/dominio';
 import { formatearFechaHora, instanteLocal } from '../nucleo/utilidades/fechas';
 import { VentanaFlotanteComponent } from './ventana-flotante.component';
+import { ChatConversacionalComponent } from './chat-conversacional.component';
 
 interface PropuestaAgente {id:string;titulo:string;nombre:string;argumentos:Record<string,unknown>;expira_en:string}
 interface RespuestaAgente {sesion_id:string;paciente_id:string;expira_en:string;texto:string;datos:Record<string,unknown>;requiere_humano:boolean;modo:'local'|'configurado';propuesta:PropuestaAgente|null}
@@ -19,7 +20,7 @@ interface TurnoAgente {inicio:string;fin?:string}
 interface PagoAgente {importe:string;moneda:string;estado:string;cita:string}
 interface ElementoAgente {titulo:string;detalle:string|null}
 
-@Component({selector:'app-agente-paciente',standalone:true,imports:[FormsModule, VentanaFlotanteComponent],templateUrl:'./agente-paciente.component.html',styleUrl:'./agente-paciente.component.scss'})
+@Component({selector:'app-agente-paciente',standalone:true,imports:[FormsModule, VentanaFlotanteComponent, ChatConversacionalComponent],templateUrl:'./agente-paciente.component.html',styleUrl:'./agente-paciente.component.scss'})
 export class AgentePacienteComponent {
   readonly pacienteId=input.required<string>();
   readonly nombre=input('Paciente');
