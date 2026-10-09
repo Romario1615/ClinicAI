@@ -9,8 +9,12 @@ antes del bucle y siempre deriva).
 
 La politica (decision del usuario, 2026-10-09):
 
-* consultar (horarios, citas, pagos, conocimiento) basta con tener paciente
+* consultar horarios libres e informacion aprobada basta con tener paciente
   resuelto;
+* consultar **datos propios** («mis citas», «mis pagos») exige que el paciente
+  tenga verificacion `TELEFONO` o superior: elegir un nombre de una lista no
+  verifica, y un telefono compartido o reasignado no debe ver las fechas ni los
+  importes de otra persona (revision de seguridad, 2026-10-09);
 * cambiar una cita exige que el numero sea de **un solo** paciente (no
   elegido de una lista: elegir no verifica, ADR-0020) **y** verificacion
   `TELEFONO` o superior. Sin eso el principal no lleva los permisos de
@@ -38,20 +42,24 @@ from sqlalchemy import inspect, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.ia.conocimiento_paciente import buscador_publicado
-from app.ia.conversacion import ProveedorConversacional, ejecutar_turno
+from app.ia.conversacion import InvocadorHerramienta, ProveedorConversacional, ejecutar_turno
 from app.ia.decisiones import ClasificadorIntencion
 from app.ia.embeddings import ProveedorEmbeddings
-from app.ia.herramientas.contrato import ContextoHerramienta
+from app.ia.herramientas.contrato import ContextoHerramienta, ResultadoHerramienta
+from app.ia.herramientas.registro import despachar
 from app.ia.proveedores_clinica import leer_integracion
 from app.mensajeria.adaptadores import RegistroCanales
 from app.mensajeria.servicios import ServicioOutbox, SolicitudEnvio
 from app.modulos.agenda.modelos import Cita
 from app.modulos.conversaciones.identificacion import identificar
 from app.modulos.conversaciones.modelos import Conversacion, EstadoConversacion
+from app.modulos.conversaciones.redaccion_whatsapp import redactar
+from app.modulos.organizacion.modelos import Clinica
 from app.modulos.outbox.modelos import CanalOutbox, TipoMensajeOutbox
 from app.modulos.pacientes.modelos import Paciente
 from app.nucleo.autorizacion import Ambito, NivelSensibilidad, Principal, TipoActor
 from app.nucleo.configuracion import Configuracion
+from app.nucleo.metricas import MetricasAplicacion
 from app.nucleo.registro import obtener_logger
 from app.nucleo.reloj import Reloj
 
@@ -60,15 +68,23 @@ logger = obtener_logger(__name__)
 #: Codigo de la integracion por clinica (Configuracion > Integraciones).
 INTEGRACION = "agente_whatsapp"
 
-_PERMISOS_CONSULTA = frozenset(
-    {"agenda.leer", "pago.leer", "conocimiento.leer", "conversacion.responder"}
-)
+_PERMISOS_CONSULTA = frozenset({"agenda.leer", "conocimiento.leer", "conversacion.responder"})
+#: Datos propios: solo con paciente verificado. `get_patient_appointments`
+#: comparte el permiso `agenda.leer` con la disponibilidad, asi que ademas del
+#: permiso de pagos se filtra en el invocador.
+_PERMISOS_DATOS_PROPIOS = frozenset({"pago.leer"})
+_HERRAMIENTAS_DATOS_PROPIOS = frozenset({"get_patient_appointments", "get_patient_payments"})
 _PERMISOS_CAMBIO = frozenset({"cita.crear", "cita.cancelar", "cita.reprogramar"})
 _VERIFICADO = frozenset({"TELEFONO", "DOCUMENTO", "PRESENCIAL"})
 #: Ventana de busqueda de horarios que el agente ofrece por defecto.
 DIAS_BUSQUEDA = 7
 #: Campos del resultado de una herramienta que el agente recuerda en el hilo.
 _CAMPOS_MEMORIA = ("turnos", "cita_id", "inicio", "citas", "expira_en", "zona_horaria")
+
+MENSAJE_SIN_VERIFICAR = (
+    "Por seguridad, sus citas y pagos se los confirma el equipo de recepción. "
+    "Le escribirán por aquí en breve."
+)
 
 MENSAJE_BIENVENIDA = (
     "Gracias. ¿En qué le puedo ayudar? Puede escribir «buscar horarios», «mis citas», "
@@ -124,6 +140,7 @@ class AgenteWhatsapp:
     clasificador: ClasificadorIntencion | None = None
     umbrales: tuple[float, float] = (0.35, 0.85)
     conocimiento: tuple[ProveedorEmbeddings, Configuracion] | None = None
+    metricas: MetricasAplicacion | None = None
 
     async def atender(
         self,
@@ -149,7 +166,8 @@ class AgenteWhatsapp:
         if paciente is None:
             return False
 
-        actor = await self._principal(sesion, reloj, conversacion, paciente)
+        verificado = paciente.nivel_verificacion in _VERIFICADO
+        actor = await self._principal(sesion, reloj, conversacion, paciente, verificado)
         estado = dict(conversacion.agente or {})
         memoria: dict[str, Any] = dict(estado.get("memoria") or {})
         negocio = await self._negocio(sesion, reloj, paciente)
@@ -168,6 +186,7 @@ class AgenteWhatsapp:
                 if self.conocimiento is not None
                 else None
             ),
+            invocar=_invocador(verificado=verificado),
         )
         # Una colision de agenda deshace la transaccion del turno (no la del
         # mensaje, ya confirmada). Se recupera el hilo y se contesta igual con
@@ -188,8 +207,13 @@ class AgenteWhatsapp:
         # Asignar un dict nuevo: mutar el JSONB en sitio no lo marca sucio.
         conversacion.agente = {"memoria": memoria, "negocio": negocio}
         conversacion.ultima_actividad_en = reloj.ahora()
-        if resultado.mensaje:
-            await responder(sesion, reloj, conversacion, resultado.mensaje, f"agente:{mensaje_id}")
+        texto_respuesta = redactar(resultado, await _zona_clinica(sesion, conversacion))
+        if texto_respuesta:
+            await responder(sesion, reloj, conversacion, texto_respuesta, f"agente:{mensaje_id}")
+        if self.metricas is not None:
+            self.metricas.registrar_turno_agente(
+                herramientas, requiere_humano=resultado.requiere_humano
+            )
         logger.info(
             "whatsapp.agente_turno",
             conversacion_id=str(conversacion.id),
@@ -204,9 +228,12 @@ class AgenteWhatsapp:
         reloj: Reloj,
         conversacion: Conversacion,
         paciente: Paciente,
+        verificado: bool,
     ) -> Principal:
         """El agente actua por un paciente, con ambito de ese paciente solo."""
         permisos = _PERMISOS_CONSULTA
+        if verificado:
+            permisos = permisos | _PERMISOS_DATOS_PROPIOS
         if await puede_cambiar(sesion, reloj, conversacion, paciente):
             permisos = permisos | _PERMISOS_CAMBIO
         return Principal(
@@ -256,6 +283,29 @@ class AgenteWhatsapp:
                 profesional_id=str(ultima.profesional_id),
             )
         return negocio
+
+
+def _invocador(*, verificado: bool) -> InvocadorHerramienta:
+    """Despachador con la barrera de datos propios (no es una instruccion al modelo)."""
+
+    async def invocar(
+        nombre: str, argumentos: dict[str, Any], contexto: ContextoHerramienta
+    ) -> ResultadoHerramienta:
+        if nombre in _HERRAMIENTAS_DATOS_PROPIOS and not verificado:
+            return ResultadoHerramienta(
+                exito=False,
+                mensaje=MENSAJE_SIN_VERIFICAR,
+                requiere_humano=True,
+                codigo="VERIFICACION_REQUERIDA",
+            )
+        return await despachar(nombre, argumentos, contexto)
+
+    return invocar
+
+
+async def _zona_clinica(sesion: AsyncSession, conversacion: Conversacion) -> str:
+    clinica = await sesion.get(Clinica, conversacion.clinica_id)
+    return clinica.zona_horaria if clinica is not None else "UTC"
 
 
 async def puede_cambiar(

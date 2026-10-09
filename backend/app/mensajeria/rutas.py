@@ -252,6 +252,7 @@ async def _agente_de_clinica(
         clasificador=decisiones.clasificador,
         umbrales=(decisiones.umbral_clinico, decisiones.umbral_intencion),
         conocimiento=(peticion.app.state.embeddings, configuracion),
+        metricas=getattr(peticion.app.state, "metricas", None),
     )
 
 

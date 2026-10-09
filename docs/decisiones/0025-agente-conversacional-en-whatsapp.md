@@ -38,8 +38,16 @@ Si no, todo sigue como hoy: se deriva a una persona.
 
 | Acción | Herramientas | Requisito |
 |---|---|---|
-| Consultar | `find_availability`, `get_patient_appointments`, `get_patient_payments`, conocimiento publicado | Paciente resuelto |
+| Consultar horarios e información | `find_availability`, conocimiento publicado | Paciente resuelto |
+| Consultar datos propios | `get_patient_appointments`, `get_patient_payments` | Paciente con `nivel_verificacion` ≥ `TELEFONO` (si no, el agente lo explica y pasa a recepción) |
 | Cambiar | `hold_slot`, `confirm_appointment`, `cancel_appointment`, `reschedule_appointment` | **Número de un solo paciente** (no elegido de una lista) **y** `nivel_verificacion` ≥ `TELEFONO`, y además la confirmación expresa del paciente que ya exige la herramienta |
+
+**Revisión de seguridad (2026‑10‑09).** La primera versión dejaba «mis citas» y
+«mis pagos» a cualquier paciente resuelto. Elegir de una lista no verifica
+(ADR‑0020): quien tuviera un teléfono compartido o reasignado podía elegir a un
+familiar y leer sus fechas e importes. Decisión del usuario: los datos propios
+exigen verificación. La barrera está en el invocador de herramientas y en el
+permiso `pago.leer`, no en el modelo.
 
 Sin los requisitos de cambio, el principal del agente **no lleva** los permisos
 de escritura: la herramienta lo rechaza, el bucle deriva a recepción
@@ -70,7 +78,10 @@ conversación que él empezó. Aun así:
   administrativos; el agente no diagnostica ni interpreta (ADR‑0019);
 * la plantilla `RESPUESTA_CONVERSACION` declara un único hueco, `mensaje`, que
   no está en `VARIABLES_PROHIBIDAS`;
-* no se adjunta ningún dato que el agente no pueda leer con su ámbito.
+* no se adjunta ningún dato que el agente no pueda leer con su ámbito;
+* el texto que sale (`redaccion_whatsapp.py`) añade al titular de la
+  herramienta solo fechas, horas, estados e importes: las herramientas no
+  devuelven servicio, especialidad, profesional ni notas.
 
 ### 5. Memoria
 

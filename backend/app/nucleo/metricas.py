@@ -10,12 +10,27 @@ from prometheus_client import CollectorRegistry, Counter, Gauge, Histogram, gene
 from sqlalchemy import func, select
 from starlette.routing import compile_path
 
+from app.modulos.conversaciones.modelos import Conversacion, EstadoConversacion
 from app.modulos.outbox.modelos import EstadoOutbox, OutboxMensaje
 from app.nucleo.bd import GestorBaseDatos
 from app.nucleo.registro import obtener_logger
 from app.nucleo.reloj import Reloj
 
 LIMITE_LONGITUD_RUTA = 200
+#: Herramientas del agente (nombres fijados por la especificacion). Solo estas
+#: se publican como etiqueta: un valor libre haria crecer las series sin limite.
+HERRAMIENTAS_AGENTE = frozenset(
+    {
+        "find_availability",
+        "hold_slot",
+        "confirm_appointment",
+        "cancel_appointment",
+        "reschedule_appointment",
+        "get_patient_appointments",
+        "get_patient_payments",
+        "handoff_to_human",
+    }
+)
 _logger = obtener_logger(__name__)
 
 
@@ -53,6 +68,25 @@ class MetricasAplicacion:
             "Vale 1 si no se pudo consultar el estado del outbox.",
             registry=self.registro,
         )
+        # Agente de WhatsApp (ADR-0025): sin contenido, sin clinica, sin paciente.
+        self.turnos_agente = Counter(
+            "clinicai_agente_turnos_total",
+            "Turnos del agente de WhatsApp: respondido o derivado a una persona.",
+            ("resultado",),
+            registry=self.registro,
+        )
+        self.herramientas_agente = Counter(
+            "clinicai_agente_herramientas_total",
+            "Herramientas invocadas por el agente de WhatsApp.",
+            ("herramienta",),
+            registry=self.registro,
+        )
+        self.conversaciones = Gauge(
+            "clinicai_conversaciones",
+            "Conversaciones de WhatsApp por estado (ABIERTA la atiende el agente).",
+            ("estado",),
+            registry=self.registro,
+        )
         self._rutas: list[tuple[Pattern[str], str]] = []
 
     def configurar_rutas(self, rutas: list[str]) -> None:
@@ -75,6 +109,12 @@ class MetricasAplicacion:
         ruta_segura = self.normalizar_ruta(ruta)
         self.solicitudes.labels(metodo_seguro, ruta_segura, str(estado)).inc()
         self.duracion.labels(metodo_seguro, ruta_segura).observe(max(0, duracion_segundos))
+
+    def registrar_turno_agente(self, herramientas: list[str], *, requiere_humano: bool) -> None:
+        self.turnos_agente.labels("derivado" if requiere_humano else "respondido").inc()
+        for herramienta in herramientas:
+            if herramienta in HERRAMIENTAS_AGENTE:
+                self.herramientas_agente.labels(herramienta).inc()
 
     def exportar(self) -> bytes:
         return generate_latest(self.registro)
@@ -102,6 +142,16 @@ async def actualizar_metricas_outbox(
             )
             segundos = (reloj.ahora() - mas_antiguo).total_seconds() if mas_antiguo else 0
             metricas.pendiente_mas_antiguo.set(max(0, segundos))
+            hilos = await sesion.execute(
+                select(Conversacion.estado, func.count())
+                .where(Conversacion.canal == "WHATSAPP")
+                .group_by(Conversacion.estado)
+            )
+            por_estado_hilo = {str(e): int(c) for e, c in hilos.all()}
+            for estado_hilo in EstadoConversacion:
+                metricas.conversaciones.labels(estado_hilo.value).set(
+                    por_estado_hilo.get(estado_hilo.value, 0)
+                )
             metricas.error_lectura_outbox.set(0)
             return
     except Exception:

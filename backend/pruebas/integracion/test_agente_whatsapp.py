@@ -3,7 +3,8 @@
 Lo que estas pruebas sostienen
 ------------------------------
 * Con la integracion `agente_whatsapp` apagada nada cambia: se deriva.
-* Consultar basta con tener paciente resuelto.
+* Consultar horarios basta con tener paciente resuelto; «mis citas» y «mis
+  pagos» (datos propios) exigen verificacion TELEFONO o superior.
 * Cambiar una cita exige numero de un solo paciente **y** verificacion
   `TELEFONO` o superior. Sin eso la herramienta se rechaza por permisos y la
   conversacion pasa a recepcion; no se crea ninguna cita.
@@ -26,7 +27,11 @@ from app.mensajeria.adaptadores import AdaptadorSandbox, RegistroCanales
 from app.mensajeria.carga_whatsapp import CargaWebhook, MensajeEntranteCrudo
 from app.mensajeria.servicios import ServicioOutbox
 from app.modulos.agenda.modelos import Cita
-from app.modulos.conversaciones.agente_whatsapp import INTEGRACION, AgenteWhatsapp
+from app.modulos.conversaciones.agente_whatsapp import (
+    INTEGRACION,
+    MENSAJE_SIN_VERIFICAR,
+    AgenteWhatsapp,
+)
 from app.modulos.conversaciones.modelos import Conversacion, EstadoConversacion
 from app.modulos.conversaciones.servicios import ServicioConversaciones
 from app.modulos.organizacion.modelos import ConfiguracionClinica
@@ -210,7 +215,7 @@ class TestConsulta:
         self, sesion, reloj_fijo, clinica, sede, profesional, servicio
     ) -> None:
         await _habilitar(sesion, clinica)
-        paciente = await _paciente(sesion, clinica, "0003", verificacion="NO_VERIFICADO")
+        paciente = await _paciente(sesion, clinica, "0003", verificacion="TELEFONO")
         await _cita_previa(sesion, clinica, sede, profesional, servicio, paciente)
 
         await _turno(_servicio(sesion, reloj_fijo), "mis citas", clinica)
@@ -231,6 +236,39 @@ class TestConsulta:
             )
         ).scalar_one()
         assert actor == "AGENTE_IA"
+
+    async def test_sin_verificar_los_datos_propios_van_a_recepcion(
+        self, sesion, reloj_fijo, clinica, sede, profesional, servicio
+    ) -> None:
+        """Elegir de una lista o un numero sin verificar no ven fechas ni importes."""
+        await _habilitar(sesion, clinica)
+        paciente = await _paciente(sesion, clinica, "0013", verificacion="NO_VERIFICADO")
+        await _cita_previa(sesion, clinica, sede, profesional, servicio, paciente)
+
+        await _turno(_servicio(sesion, reloj_fijo), "mis pagos", clinica)
+
+        conversacion = await _conversacion(sesion, clinica)
+        assert conversacion.estado == EstadoConversacion.EN_HANDOFF.value
+        respuestas = await _respuestas(sesion, conversacion)
+        assert respuestas[0].carga_util["texto"] == MENSAJE_SIN_VERIFICAR
+        assert "•" not in respuestas[0].carga_util["texto"]
+
+    async def test_los_horarios_llegan_numerados_por_whatsapp(
+        self, sesion, reloj_fijo, clinica, sede, profesional, servicio
+    ) -> None:
+        await _habilitar(sesion, clinica)
+        await _horario_de_la_sede(sesion, sede.id)
+        paciente = await _paciente(sesion, clinica, "0014", verificacion="NO_VERIFICADO")
+        await _cita_previa(sesion, clinica, sede, profesional, servicio, paciente)
+
+        await _turno(_servicio(sesion, reloj_fijo), "buscar horarios", clinica)
+
+        texto = (await _respuestas(sesion, await _conversacion(sesion, clinica)))[0].carga_util[
+            "texto"
+        ]
+        assert "1) " in texto.splitlines()[1]
+        assert "Responda con el número" in texto
+        assert servicio.nombre not in texto, "El servicio puede revelar la especialidad."
 
     async def test_sin_cita_previa_buscar_horarios_deriva_sin_error(
         self, sesion, reloj_fijo, clinica
@@ -377,3 +415,26 @@ def _resumen():
     from app.mensajeria.servicios import ResumenProceso  # noqa: PLC0415
 
     return ResumenProceso()
+
+
+class TestMetricas:
+    async def test_cada_turno_queda_contado_sin_datos_del_paciente(
+        self, sesion, reloj_fijo, clinica, sede, profesional, servicio
+    ) -> None:
+        from app.nucleo.metricas import MetricasAplicacion  # noqa: PLC0415
+
+        await _habilitar(sesion, clinica)
+        paciente = await _paciente(sesion, clinica, "0012")
+        await _cita_previa(sesion, clinica, sede, profesional, servicio, paciente)
+        metricas = MetricasAplicacion()
+        servicio_conv = ServicioConversaciones(
+            sesion,
+            reloj_fijo,
+            agente=AgenteWhatsapp(proveedor=ProveedorDemostracion, metricas=metricas),
+        )
+
+        await _turno(servicio_conv, "mis citas", clinica)
+
+        exportado = metricas.exportar().decode()
+        assert 'clinicai_agente_turnos_total{resultado="respondido"} 1.0' in exportado
+        assert str(paciente.id) not in exportado

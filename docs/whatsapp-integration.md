@@ -321,7 +321,8 @@ Qué puede hacer el agente:
 
 | | Requisito |
 |---|---|
-| Consultar horarios, citas, pagos y conocimiento publicado | Paciente resuelto |
+| Consultar horarios libres y conocimiento publicado | Paciente resuelto |
+| Consultar «mis citas» y «mis pagos» | Paciente con verificación `TELEFONO` o superior (elegir de una lista no verifica) |
 | Apartar, confirmar, cancelar o reprogramar | Número de **un solo** paciente (no elegido de una lista) **y** verificación `TELEFONO` o superior, más la confirmación expresa que ya exige la herramienta |
 
 Sin los requisitos de cambio el principal del agente no lleva esos permisos: la
