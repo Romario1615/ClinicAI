@@ -586,3 +586,14 @@ cd ../pruebas-e2e
 # Definir URL_API para la API de la base temporal antes de ejecutar.
 npx.cmd playwright test escenarios/20-acceso-formularios.spec.ts
 ```
+
+## Regresión visual de Analítica IA (2026-10-09)
+
+El escenario `21-analitica-diseno.spec.ts` mide ocho tamaños y las tres vistas:
+separación entre secciones y objetos de tarjetas, ancho de la página, ausencia
+de desplazamiento exterior en escritorio y espacio útil de la lista. Recorre
+búsqueda, filtro de área, metodología por teclado, Escape y foco devuelto,
+límites, filtros flotantes y reintento ante fallo. Usa la API local real para
+el recorrido y respuestas agregadas sintéticas para nombres largos, cifras
+extensas, series vacías y error. Axe revisa detalle, vista predictiva y móvil.
+La evidencia se registra en `docs/verificacion-2026-10-09.md`.

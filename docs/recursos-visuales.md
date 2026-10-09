@@ -267,3 +267,16 @@ El flujo de carga, revisión, aprobación y respuesta ahora combina número e
 icono SVG. La biblioteca compartida suma `revision-documental` y
 `respuesta-documentada`; ambos conservan el trazo y el color adaptable de
 ClinicAI.
+
+## Analítica IA (2026-10-09)
+
+Cabecera compacta con el icono existente `analisis-ia` y `app-fondo-ia`, sin
+nuevos recursos raster ni descargas de terceros. Las tarjetas usan los tokens
+de vidrio del sistema y cinco pictogramas por área. Gráficos SVG con líneas
+diferenciadas, leyendas, fechas en español, puntos aislados y vacío explicado.
+La serie visible se limita a 60 días; la tabla del detalle conserva toda la
+respuesta autorizada. Filtros hasta 1100 px, metodología y límites usan
+`app-ventana-flotante`, con pie fijo y retorno de foco. Las superficies se
+vuelven opacas al pedir más contraste o menos transparencia; el fondo de
+partículas respeta movimiento reducido. Evidencia en
+[verificacion-2026-10-09.md](verificacion-2026-10-09.md).

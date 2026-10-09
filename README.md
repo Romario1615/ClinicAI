@@ -1,5 +1,32 @@
 # ClinicAI — Plataforma de gestión clínica
 
+## Diseño de Analítica IA (2026-10-09)
+
+- **Distribución:** cabecera compacta con indicadores autorizados, modelos
+  validados localmente y propuestas por revisar. Tarjetas de vidrio con
+  separación entre nombre, valor, gráfico, definición y acción.
+- **Exploración:** búsqueda sin distinguir tildes y filtro por Agenda y
+  atención, Pacientes, Finanzas, Seguimiento u Operación; aparecen solo las
+  áreas con indicadores que la API autoriza a la sesión.
+- **Tres vistas:** actividad descriptiva, previsiones con estado del modelo y
+  propuestas administrativas con prioridad y acceso al módulo correspondiente.
+- **Datos y metodología:** ventana con serie diaria completa, observaciones,
+  evaluación, error frente a referencia y tablas del pronóstico. El gráfico
+  muestra hasta los últimos 60 días y conserva los huecos; una serie desconocida
+  se distingue de una medición cero y los puntos aislados quedan visibles.
+- **Pantallas estrechas:** **Ajustar análisis** abre historial, horizonte y sede
+  en una ventana con acciones fijas. En escritorio se desplaza la lista de
+  tarjetas dentro de su marco; en móvil, las tarjetas van en una columna.
+- **Ayuda:** instrucciones específicas actualizadas para los roles con acceso
+  a analítica. **Alcance del análisis** reúne las limitaciones en una ventana.
+
+Los algoritmos locales y permisos existentes se conservan; esta revisión no
+requiere migraciones ni conectar proveedores. [Cambios y verificación](docs/verificacion-2026-10-09.md).
+
+**Verificación:** frontend 770/770 con cobertura, manuales 26/26 y Chromium 8/8
+(incluye todas las secciones de administración y plataforma). Analítica revisada
+en ocho tamaños; lint y build aprobados.
+
 ## Fondo de acceso y formularios flotantes (2026-10-08)
 
 - **Inicio de sesión:** conserva la imagen original `acceso-equipo.png`, con

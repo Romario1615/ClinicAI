@@ -159,3 +159,13 @@ Para revertir aplicación, preservar las tablas clínicas y las fotos. El
 `downgrade` de estas migraciones elimina las tablas incorporadas: usarlo solo
 en un entorno descartable o con recuperación planificada; la reversión se
 comprueba en bases temporales. La sesión del agente no sustituye el historial.
+
+## Revisión de Analítica IA (2026-10-09)
+
+Mejoras de distribución, filtros por área, gráficos, detalles flotantes y
+manuales específicos. No requiere migraciones ni cambios de configuración.
+La evidencia de pruebas y sus límites se registra en
+[verificacion-2026-10-09.md](verificacion-2026-10-09.md). Esta entrega de interfaz
+no altera el estado de preparación para producción ni acredita proveedores
+externos. Para revertir, restaurar el commit anterior y reconstruir el frontend;
+no cambian tablas ni permisos.

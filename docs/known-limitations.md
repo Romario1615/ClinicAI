@@ -166,3 +166,13 @@ No son defectos. Se listan para que no se «arreglen» por error.
   permanentes y sus colores describen rangos de medición, no diagnósticos.
 - Estas pruebas locales no cierran la preparación de producción: carga, DAST,
   restauración operativa y revisión manual de accesibilidad siguen pendientes.
+
+## Alcance del rediseño de Analítica IA (2026-10-09)
+
+La revisión de interfaz y accesibilidad no amplía las garantías estadísticas de
+los modelos locales. El gráfico muestra hasta 60 días del historial; la ventana
+de Datos y metodología conserva la serie completa. Las áreas son agrupaciones
+visuales de los indicadores autorizados y el contador de modelos validados
+sigue exclusivamente el estado `validado_localmente` del backend. La nueva
+verificación usa Chromium y datos sintéticos, sin conectar APIs externas ni
+validar equipos físicos. [Informe](verificacion-2026-10-09.md).

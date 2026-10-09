@@ -164,6 +164,7 @@ _RECEPCION = ManualSistema(
             "Examinar demanda y ausencias de los turnos que recepción puede gestionar.",
             (
                 "Entre en Analítica IA y elija historial, horizonte y sede permitida.",
+                "Busque citas o inasistencias y filtre Agenda y atención para preparar la jornada; en pantallas estrechas abra Ajustar análisis para cambiar los filtros.",
                 "Consulte Descriptivo para los volúmenes registrados y Predictivo para las estimaciones de futuras fechas.",
                 "En Prescriptivo revise propuestas de contacto y confirme cualquier acción en Agenda con la persona responsable.",
             ),
@@ -453,7 +454,7 @@ _PROFESIONAL = ManualSistema(
             "Separar observaciones, estimaciones y propuestas administrativas de su ámbito profesional.",
             (
                 "Desde Analítica IA, examine los gráficos de atención y espera de sus turnos autorizados.",
-                "En la vista predictiva abra Datos y metodología para comprobar las fechas de evaluación y el error frente a la referencia.",
+                "En la vista predictiva pulse Datos y metodología: la ventana del indicador presenta fechas de evaluación, observaciones y error frente a la referencia; ciérrela para volver a su consulta.",
                 "Use las sugerencias administrativas como preparación de una revisión propia; ningún gráfico cambia un tratamiento ni indica una dosis.",
             ),
             (
@@ -954,8 +955,9 @@ _ADMINISTRADOR = ManualSistema(
             "Dirigir revisiones operativas con series calculadas de registros autorizados.",
             (
                 "Seleccione un rango de 90, 180 o 365 días y un horizonte de 7, 14 o 30 días en Analítica IA.",
+                "Use el buscador y el filtro de área para separar atención, pacientes, finanzas, seguimiento y operación. En tableta o móvil, los filtros de periodo y sede se abren con Ajustar análisis.",
                 "Descriptivo muestra datos observados; Predictivo informa modelo, observaciones y error; Prescriptivo presenta acciones administrativas para revisión humana.",
-                "Compare el error del modelo con la referencia y trate En evaluación como un resultado experimental.",
+                "Abra Datos y metodología en la tarjeta para comparar el error con la referencia; trate En evaluación como un resultado experimental. El contador Modelos validados incluye solo evaluaciones locales satisfactorias.",
                 "Actualice regularmente el análisis para capturar pagos pendientes, alertas y otros estados; los días sin captura permanecen desconocidos y un cambio de ámbito inicia una serie distinta.",
             ),
             (
@@ -1295,7 +1297,7 @@ _AUDITOR = ManualSistema(
             "Inspeccionar series agregadas y evidencia temporal sin acceder al contenido clínico.",
             (
                 "Abra Analítica IA dentro de su sede y compruebe las definiciones de cada indicador visible.",
-                "Expanda Datos y metodología y contraste los valores observados con las tablas de evaluación y pronóstico.",
+                "Pulse Datos y metodología para abrir las tablas de observaciones y pronóstico en una ventana independiente. Consulte Alcance del análisis antes de documentar sus conclusiones.",
                 "Registre si el modelo fue evaluado localmente, es experimental o carece de historial; las recomendaciones quedan sujetas a una persona autorizada.",
             ),
             (
@@ -1488,6 +1490,7 @@ _SUPERADMINISTRADOR = ManualSistema(
             "Controlar la disponibilidad del análisis de la clínica activa sin mezclar organizaciones.",
             (
                 "Entre en Analítica IA usando la organización autorizada de la sesión y verifique el corte y la zona horaria del resultado.",
+                "Compruebe que el selector de áreas contiene solo indicadores autorizados y que cambiar la sede actualiza el ámbito. Los detalles y los límites se consultan en ventanas sin perder la lista.",
                 "Compruebe que cada gráfico declara su definición y que los indicadores aún sin historia muestran un estado de datos insuficientes.",
                 "Configure los permisos administrativos del cliente desde Plataforma si necesita conceder o retirar acceso a estos módulos.",
             ),
@@ -1615,6 +1618,7 @@ CAPACIDADES: Final[tuple[Seccion, ...]] = (
         "Estudiar indicadores autorizados con modelos locales y evaluación cronológica.",
         (
             "Defina historial y horizonte antes de alternar entre los tres tipos de análisis.",
+            "Localice un indicador con Buscar indicador o por su área; abra su ventana de Datos y metodología para consultar la serie completa, aunque el gráfico muestre solo los últimos 60 días.",
             "Compruebe muestras, cortes temporales y error antes de usar cualquier estimación.",
             "Revise las propuestas en el módulo original; cada sugerencia requiere intervención humana.",
         ),
