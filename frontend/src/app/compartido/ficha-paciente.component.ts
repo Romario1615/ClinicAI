@@ -223,7 +223,7 @@ const DETALLE_CLINICO: Partial<Record<Pestana, string>> = {
         } @else if (error()) {
           <p class="ficha__error" role="alert">{{ error()!.message }}</p>
         } @else {
-          <app-selector-especialidad class="ficha__especialidad" (cambio)="cambiarEspecialidad()" />
+          <app-selector-especialidad class="ficha__especialidad" [compacto]="true" (cambio)="cambiarEspecialidad()" />
           @if (accesosClinicos().length && !sinAccesoClinico()) {
             <app-herramientas-paciente class="ficha__herramientas" [pacienteId]="pacienteId()" [citaId]="citaParaAtencion()" [abrirInicialmente]="elegirRegistroInicial()" (elegida)="abrirHerramienta($event)" />
           }

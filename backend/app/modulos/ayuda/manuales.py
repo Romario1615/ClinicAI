@@ -617,9 +617,12 @@ _PROFESIONAL = ManualSistema(
                 "Abra el odontograma y elija la pieza; con el teclado, recorra sus caras con las flechas.",
                 "Registre el hallazgo con Enter o desde el formulario alternativo.",
                 "Consulte el historial de la pieza para ver los cambios y procedimientos anteriores.",
+                "Pulse Crear odontograma o Guardar nueva versión. La ventana permite añadir fotos; para una versión posterior escriba un motivo de al menos ocho caracteres y confirme Guardar odontograma.",
+                "Seguir editando vuelve al mapa conservando los hallazgos. Las versiones anteriores se consultan con el selector de versión y no se modifican.",
             ),
             (
                 "Si otra persona guardó antes, el sistema avisa del conflicto en vez de sobrescribir.",
+                "Si falla la subida de fotos, la versión clínica ya guardada se conserva: reintente las fotos o cierre la revisión y añádalas desde Fotos y adjuntos.",
             ),
             requiere=("odontograma.leer", "odontograma.escribir"),
         ),

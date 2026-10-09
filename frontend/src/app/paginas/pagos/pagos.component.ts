@@ -79,6 +79,9 @@ function sumarDias(fecha: string, dias: number): string {
     <header class="modulo-cabecera pantalla__fijo"><div class="modulo-cabecera__texto"><p class="ceja">ADMINISTRACIÓN</p><h1><app-icono nombre="balance-clinico" [tamano]="28" /> Pagos</h1><p>Registro de efectivo y transferencias en USD. La confirmación la realiza el personal autorizado.</p></div><img class="modulo-cabecera__imagen" src="/images/pagos-administrativos.png" alt="" aria-hidden="true" loading="lazy" /></header>
 
     <app-resumen-modulo class="pantalla__fijo" modulo="pagos" />
+    @if (pacienteContextoId) {
+      <p class="pantalla__fijo campo__ayuda" role="status">Pagos y cargos de {{ pacienteContexto() ? pacienteContexto()!.nombre + ' ' + pacienteContexto()!.apellido : 'este paciente' }}. Se conserva el paciente de la ficha y su ámbito autorizado.</p>
+    }
     <div class="barra-pagos pantalla__fijo">
       @if (vistas().length > 1) {
         <app-pestanas grupo="pagos" etiqueta="Vistas de pagos" [opciones]="vistas()" [activa]="vistaActiva()" (activaChange)="vista.set($event)" />
@@ -118,7 +121,11 @@ function sumarDias(fecha: string, dias: number): string {
     }
     @if (formularioAbonoAbierto() && sesion.tienePermiso('pago.registrar')) {
       <app-ventana-flotante ceja="Gestión financiera" titulo="Registrar un abono" forma="centrada" [anchoMaximo]="720" [cierraAlPulsarFuera]="false" (cerrar)="cerrarRegistro()">
-        <app-selector-paciente (seleccion)="seleccionar($event)" />
+        @if (pacienteContextoId) {
+          <p class="campo__ayuda">Paciente: {{ pacienteContexto() ? pacienteContexto()!.nombre + ' ' + pacienteContexto()!.apellido : 'cargando…' }}</p>
+        } @else {
+          <app-selector-paciente (seleccion)="seleccionar($event)" />
+        }
         <form id="formulario-abono" class="formulario-abono" #formulario="ngForm" (ngSubmit)="registrar()">
           <div class="formulario-demo">
             <label>Cita<select name="cita" [(ngModel)]="citaId" (ngModelChange)="seleccionarCita($event)" required><option value="">Seleccione una cita</option>
@@ -445,6 +452,8 @@ export class PagosComponent {
   private cuerpoAnterior = '';
   private consultaCargo = 0;
   protected readonly citaContexto = inject(ActivatedRoute, { optional: true })?.snapshot.queryParamMap.get('cita') ?? null;
+  protected readonly pacienteContextoId = inject(ActivatedRoute, { optional: true })?.snapshot.queryParamMap.get('paciente') ?? null;
+  protected readonly pacienteContexto = signal<Paciente | null>(null);
 
   protected abrirRegistro(): void {
     if (!this.puedeRegistrarPago()) return;
@@ -456,6 +465,7 @@ export class PagosComponent {
       next: cita => { this.citas.set([cita]); this.citaId = cita.id; this.seleccionarCita(cita.id); },
       error: fallo => this.error.set(fallo.message),
     });
+    else if (this.pacienteContexto()) this.seleccionar(this.pacienteContexto());
   }
 
   protected cerrarRegistro(): void {
@@ -501,6 +511,13 @@ export class PagosComponent {
   }
 
   constructor() {
+    if (this.pacienteContextoId) this.agenda.paciente(this.pacienteContextoId).subscribe({
+      next: paciente => {
+        this.pacienteContexto.set(paciente);
+        if (this.formularioAbonoAbierto() && !this.citaContexto) this.seleccionar(paciente);
+      },
+      error: fallo => this.error.set(fallo.message),
+    });
     this.cargar();
     if (this.puedeLeerPagos() && this.puedeExportar()) {
       this.catalogo.sedes().subscribe({ next: (sedes) => this.sedesReporte.set(sedes) });
@@ -513,6 +530,7 @@ export class PagosComponent {
     this.error.set('');
     const parametros: Record<string, string | number> = { limite: 25, desplazamiento: this.pagina() * 25 };
     if (this.citaContexto) parametros['cita_id'] = this.citaContexto;
+    if (this.pacienteContextoId) parametros['paciente_id'] = this.pacienteContextoId;
     if (this.estadoFiltro()) parametros['estado'] = this.estadoFiltro();
     this.api.leer<Pagina<PagoListado>>('/pagos/', parametros).subscribe({
       next: (p) => {
@@ -564,6 +582,7 @@ export class PagosComponent {
       desplazamiento: this.paginaCargos() * 25,
       vencidos: this.soloVencidos(),
       ...(this.citaContexto ? { cita_id: this.citaContexto } : {}),
+      ...(this.pacienteContextoId ? { paciente_id: this.pacienteContextoId } : {}),
     }).subscribe({
       next: (pagina) => {
         this.cargos.set(pagina.elementos);

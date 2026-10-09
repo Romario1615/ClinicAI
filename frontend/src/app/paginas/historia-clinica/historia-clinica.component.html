@@ -158,7 +158,7 @@
     @if (embebida() && citaContexto()) {
       <p class="pantalla__fijo">Revisando historia de {{ especialidades.elegida()?.nombre }} · cita de referencia conservada</p>
     } @else {
-      <app-selector-especialidad class="historia__especialidad pantalla__fijo" (cambio)="cambiarEspecialidad()" />
+      <app-selector-especialidad class="historia__especialidad pantalla__fijo" [compacto]="true" (cambio)="cambiarEspecialidad()" />
     }
     @if (!embebida()) { <app-herramientas-paciente class="historia__herramientas pantalla__fijo" [pacienteId]="paciente()!.id" [citaId]="citaContexto()" (elegida)="abrirHerramienta($event)" /> }
     <app-pestanas

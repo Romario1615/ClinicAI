@@ -52,4 +52,26 @@ describe('SelectorEspecialidadComponent', () => {
         fixture.detectChanges();
         expect(el.textContent?.trim()).toBe('');
     });
+
+    it('el selector compacto conserva especialidades, acceso y aviso de cambio', () => {
+        servicio.disponibles.set([
+            ODONTOLOGIA_SINTETICA,
+            { id: 'esp-derm', nombre: 'Dermatología', modulos: ['imagenes'], propia: false },
+        ]);
+        fixture.componentRef.setInput('compacto', true);
+        const avisos: string[] = [];
+        fixture.componentInstance.cambio.subscribe(id => avisos.push(id));
+        fixture.detectChanges();
+        const selector = el.querySelector<HTMLSelectElement>('select')!;
+        expect(selector.getAttribute('aria-label')).toBe('Especialidad de la historia');
+        expect(selector.options.length).toBe(2);
+        expect(selector.options[1].textContent).toContain('solo consulta');
+        selector.value = 'esp-derm';
+        selector.dispatchEvent(new Event('change'));
+        fixture.detectChanges();
+        expect(servicio.elegida()?.id).toBe('esp-derm');
+        expect(avisos).toEqual(['esp-derm']);
+        selector.dispatchEvent(new Event('change'));
+        expect(avisos).toEqual(['esp-derm']);
+    });
 });

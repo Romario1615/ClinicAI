@@ -137,6 +137,7 @@ class RepositorioPagos:
         desplazamiento: int,
         estado: str | None = None,
         cita_id: uuid.UUID | None = None,
+        paciente_id: uuid.UUID | None = None,
     ) -> tuple[list[tuple[Pago, str, datetime, Decimal | None, Decimal, Decimal]], int]:
         """Pagos con el nombre del paciente y la fecha de la cita, dentro del ámbito."""
         consulta = self.consulta(principal)
@@ -144,6 +145,10 @@ class RepositorioPagos:
             consulta = consulta.where(Pago.estado == estado)
         if cita_id is not None:
             consulta = consulta.where(Pago.cita_id == cita_id)
+        if paciente_id is not None:
+            consulta = consulta.where(
+                Pago.cita_id.in_(select(Cita.id).where(Cita.paciente_id == paciente_id))
+            )
         total = int(
             (
                 await self.sesion.execute(select(func.count()).select_from(consulta.subquery()))
@@ -197,6 +202,7 @@ class RepositorioPagos:
         desplazamiento: int,
         cita_id: uuid.UUID | None = None,
         vencidos: bool = False,
+        paciente_id: uuid.UUID | None = None,
     ) -> tuple[list[tuple[CargoPago, str, datetime, Decimal, Decimal, bool]], int]:
         citas = RepositorioAgenda(self.sesion).consulta_autorizada(principal).subquery()
         ids_en_ambito = select(CargoPago.id).where(
@@ -205,6 +211,10 @@ class RepositorioPagos:
         )
         if cita_id is not None:
             ids_en_ambito = ids_en_ambito.where(CargoPago.cita_id == cita_id)
+        if paciente_id is not None:
+            ids_en_ambito = ids_en_ambito.where(
+                CargoPago.cita_id.in_(select(Cita.id).where(Cita.paciente_id == paciente_id))
+            )
         pagos = (
             select(
                 Pago.cargo_id.label("cargo_id"),

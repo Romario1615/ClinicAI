@@ -44,6 +44,7 @@
           <label class="odontograma__historial">
             <span>Ver versión</span>
             <select
+              aria-label="Versión del odontograma"
               [value]="actual()?.version ?? ''"
               (change)="seleccionarVersion($any($event.target).value)"
             >
@@ -295,6 +296,16 @@
 
     @if (puedeEditar() && (!actual() || actual()?.vigente)) {
       <div class="odontograma__guardar">
+        <p>@if (cambiadas().size) { <strong>{{ cambiadas().size }} pieza(s) con cambios sin guardar</strong> } @else { {{ actual() ? 'La versión vigente se conserva al guardar una nueva.' : 'Pinte los hallazgos y cree la primera versión.' }} }</p>
+        <button class="boton boton--principal" type="button" [disabled]="guardando()" (click)="abrirGuardado()">{{ actual() ? 'Guardar nueva versión' : 'Crear odontograma' }}</button>
+      </div>
+    } @else if (!puedeEditar()) {
+      <p class="odontograma__lectura">Su rol puede consultar el odontograma, pero no modificarlo.</p>
+    }
+
+    @if (guardadoAbierto()) {
+      <app-ventana-flotante #ventanaGuardado titulo="Guardar odontograma" ceja="Revisar versión" forma="centrada" [anchoMaximo]="680" [ocupada]="guardando()" [cambiosSinGuardar]="fotos.length > 0" [cierraAlPulsarFuera]="false" [error]="error() ? errorTexto() : null" (cerrar)="cerrarGuardado()">
+        <p>Se guardará {{ actual() ? 'una versión nueva' : 'el primer odontograma' }} con {{ cambiadas().size }} pieza(s) modificada(s). Los hallazgos anteriores se conservan en el historial.</p>
         @if (actual()) {
           <label class="editor__campo editor__campo--motivo">
             <span>
@@ -311,16 +322,15 @@
             />
           </label>
         } @else {
-          <p>Aún no hay un odontograma. Pinte los hallazgos y cree la primera versión.</p>
+          <p class="campo__ayuda">La primera versión no necesita motivo de modificación.</p>
         }
         @if(puedeCargarFotos){<app-captura-fotos titulo="Fotografías del examen odontológico" [ocupada]="guardando()" (cambiadas)="fotos=$event" />}
         @if(operacionFotos.guardado){<p role="status">La versión ya está guardada. Reintente para completar sus fotografías.</p>}
-        <button class="boton boton--principal" type="button" [disabled]="guardando()" (click)="guardar()">
-          {{ guardando() ? 'Guardando…' : actual() ? 'Guardar nueva versión' : 'Crear odontograma' }}
-        </button>
-      </div>
-    } @else if (!puedeEditar()) {
-      <p class="odontograma__lectura">Su rol puede consultar el odontograma, pero no modificarlo.</p>
+        <div pie class="ficha-pieza__pie">
+          <button class="boton" type="button" [disabled]="guardando()" (click)="ventanaGuardado.solicitarCierre()">{{ operacionFotos.guardado ? 'Cerrar y conservar versión' : 'Seguir editando' }}</button>
+          <button class="boton boton--principal" type="button" [disabled]="guardando()" (click)="guardar()">{{ guardando() ? 'Guardando…' : 'Guardar odontograma' }}</button>
+        </div>
+      </app-ventana-flotante>
     }
 
     @if (error()) {

@@ -4,6 +4,7 @@
  */
 import { TestBed, type ComponentFixture } from '@angular/core/testing';
 import { HttpTestingController } from '@angular/common/http/testing';
+import { ActivatedRoute, convertToParamMap } from '@angular/router';
 
 import { PagosComponent, type PagoListado } from './pagos.component';
 import { BASE, PROVEEDORES_PRUEBA, iniciarSesionCon } from '../../nucleo/pruebas/sesion-sintetica';
@@ -62,7 +63,9 @@ describe('PagosComponent', () => {
     }
 
     beforeEach(() => {
-        TestBed.configureTestingModule({ imports: [PagosComponent], providers: PROVEEDORES_PRUEBA });
+        TestBed.configureTestingModule({ imports: [PagosComponent], providers: [...PROVEEDORES_PRUEBA,
+            { provide: ActivatedRoute, useValue: { snapshot: { queryParamMap: convertToParamMap({}) } } },
+        ] });
         http = TestBed.inject(HttpTestingController);
     });
 
@@ -84,6 +87,26 @@ describe('PagosComponent', () => {
         peticion.flush({ elementos: [], total: 0 });
         fixture.detectChanges();
         expect((fixture.nativeElement as HTMLElement).textContent).toContain('No hay pagos con este filtro');
+    });
+
+    it('el acceso desde una ficha filtra pagos y cargos y conserva el paciente al registrar', () => {
+        Object.assign(TestBed.inject(ActivatedRoute).snapshot, { queryParamMap: convertToParamMap({ paciente: 'pac-ficha' }) });
+        montar(['pago.leer', 'pago.registrar']);
+        http.expectOne(`${BASE}/pacientes/pac-ficha`).flush({ id: 'pac-ficha', nombre: 'Ana', apellido: 'Sintética' });
+        c.cargar();
+        const pagos = http.expectOne(r => r.url === `${BASE}/pagos/`);
+        const cargos = http.expectOne(r => r.url === `${BASE}/pagos/cargos/`);
+        expect(pagos.request.params.get('paciente_id')).toBe('pac-ficha');
+        expect(cargos.request.params.get('paciente_id')).toBe('pac-ficha');
+        pagos.flush({ elementos: [], total: 0 });
+        cargos.flush({ elementos: [], total: 0 });
+        c.abrirRegistro();
+        const citas = http.expectOne(r => r.url === `${BASE}/agenda/citas`);
+        expect(citas.request.params.get('paciente_id')).toBe('pac-ficha');
+        citas.flush({ elementos: [], total: 0 });
+        fixture.detectChanges();
+        expect(fixture.nativeElement.textContent).toContain('Ana Sintética');
+        expect(fixture.nativeElement.querySelector('app-selector-paciente')).toBeNull();
     });
 
     it('muestra totales y saldos de los cargos registrados', () => {

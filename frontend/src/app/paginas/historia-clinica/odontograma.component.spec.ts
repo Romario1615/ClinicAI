@@ -133,6 +133,72 @@ describe('OdontogramaComponent', () => {
         http.expectOne(VERSIONES).flush({ codigo: 'X', mensaje: 'Sin relacion' }, { status: 403, statusText: 'F' });
         expect(c.errorTexto()).toContain('Sin relacion');
     });
+
+    it('revisa el guardado en una ventana y volver conserva las piezas y el motivo', () => {
+        montar(['odontograma.leer', 'odontograma.escribir'], [version(1, true)]);
+        c.elegirHerramienta('CARIES');
+        c.clicRegion(16, 'centro');
+        c.motivo.set('Consulta de control');
+        c.abrirGuardado();
+        fixture.detectChanges();
+        expect(fixture.nativeElement.querySelector('dialog')?.textContent).toContain('Guardar odontograma');
+        http.expectNone({ method: 'POST', url: VERSIONES });
+        c.cerrarGuardado();
+        expect(c.guardadoAbierto()).toBe(false);
+        expect(c.borrador()['16'].caras.O).toBe('CARIES');
+        expect(c.motivo()).toBe('Consulta de control');
+    });
+
+    it('un envío en curso bloquea el cierre y un segundo guardado', () => {
+        montar(['odontograma.leer', 'odontograma.escribir'], []);
+        c.abrirGuardado();
+        c.guardar();
+        c.cerrarGuardado();
+        c.guardar();
+        expect(c.guardadoAbierto()).toBe(true);
+        const alta = http.expectOne({ method: 'POST', url: `${BASE}/odontologia/pacientes/pac-1/odontograma` });
+        alta.flush(version(1, true));
+        http.expectOne({ method: 'GET', url: VERSIONES }).flush([version(1, true)]);
+        expect(c.guardadoAbierto()).toBe(false);
+    });
+
+    it('un fallo del servidor conserva la ventana y permite reintentar', () => {
+        montar(['odontograma.leer', 'odontograma.escribir'], []);
+        c.abrirGuardado();
+        c.guardar();
+        http.expectOne(`${BASE}/odontologia/pacientes/pac-1/odontograma`).flush(
+            { codigo: 'SIN_RELACION', mensaje: 'Inicie la atención' }, { status: 403, statusText: 'F' },
+        );
+        fixture.detectChanges();
+        expect(c.guardadoAbierto()).toBe(true);
+        expect(c.guardando()).toBe(false);
+        expect(fixture.nativeElement.querySelector('dialog')?.textContent).toContain('Inicie la atención');
+    });
+
+    it('cerrar después de un fallo de fotografías conserva y recarga la versión creada', () => {
+        montar(['odontograma.leer', 'odontograma.escribir'], []);
+        c.abrirGuardado();
+        c.fotos = [{ id: 'foto-1', archivo: new File(['foto'], 'foto.png', { type: 'image/png' }), url: '', descripcion: '' }];
+        c.guardar();
+        http.expectOne(`${BASE}/odontologia/pacientes/pac-1/odontograma`).flush(version(1, true));
+        http.expectOne(`${BASE}/fotos-registro/odontograma/odo-1`).flush(
+            { codigo: 'X', mensaje: 'Foto pendiente' }, { status: 503, statusText: 'F' },
+        );
+        expect(c.operacionFotos.guardado).toBe(true);
+        c.cerrarGuardado();
+        http.expectOne({ method: 'GET', url: VERSIONES }).flush([version(1, true)]);
+        expect(c.actual().version).toBe(1);
+        expect(c.operacionFotos.guardado).toBe(false);
+        expect(c.aviso()).toContain('versión se conserva');
+    });
+
+    it('la revisión de guardado no se abre en consulta ni en una versión histórica', () => {
+        montar(['odontograma.leer'], [version(1, true)]);
+        c.abrirGuardado();
+        expect(c.guardadoAbierto()).toBe(false);
+        c.guardar();
+        http.expectNone({ method: 'POST', url: VERSIONES });
+    });
 });
 
 describe('OdontogramaComponent interactivo', () => {

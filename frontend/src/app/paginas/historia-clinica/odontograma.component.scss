@@ -177,13 +177,13 @@
 /* ---------- Modo «llena»: pestaña de la historia en escritorio ----------
  * La pantalla no se desplaza: cabecera, paleta, leyenda y guardado conservan
  * su alto y el dibujo se queda con el resto. El tamaño de cada pieza se
- * calcula con el ancho y el alto del marco (unidades de contenedor), de modo
- * que las cuatro hemiarcadas caben enteras sin barra de desplazamiento. */
+ * calcula por ancho, conservando un mínimo legible. Si el marco es bajo,
+ * se desplaza el interior de la tarjeta y nunca se contraen las piezas. */
 @media (min-width: 821px) and (min-height: 600px) {
   :host(.llena) { display: flex; flex-direction: column; min-height: 0; }
   :host(.llena) .odontograma {
     display: flex; flex: 1 1 0; flex-direction: column; gap: var(--espacio-2);
-    min-height: 0; padding: var(--espacio-3) var(--espacio-4);
+    min-height: 0; padding: var(--espacio-3) var(--espacio-4); overflow: auto;
   }
   :host(.llena) .odontograma > * { flex: none; margin: 0; }
   :host(.llena) .ceja { display: none; }
@@ -193,12 +193,11 @@
   :host(.llena) .paleta { gap: .25rem; padding: .3rem var(--espacio-2); }
   :host(.llena) .paleta__boton { min-height: 1.9rem; padding: .15rem .5rem; font-size: .76rem; }
   :host(.llena) .odontograma > .lienzo {
-    container-type: size;
-    flex: 1 1 0; min-height: 0;
+    container-type: inline-size;
+    flex: 1 0 16rem; min-height: 16rem;
     align-content: center; justify-content: center;
-    gap: 0; overflow: hidden; padding: 0;
-    /* Una pieza: número (~1rem) + dibujo + rótulo de la arcada (~1rem). */
-    --diente: clamp(1.6rem, min((100cqw - 2.5rem) / 16 - .35rem, (100cqh - 4.6rem) / 2), 4.4rem);
+    gap: var(--espacio-3); overflow: auto; padding: var(--espacio-3) var(--espacio-1);
+    --diente: clamp(2.75rem, calc((100cqw - 3rem) / 16 - .35rem), 4.4rem);
   }
   :host(.llena) .lienzo__fila { grid-template-columns: repeat(2, max-content); justify-content: center; }
   :host(.llena) .lienzo__fila--inferior { padding-top: .2rem; }
@@ -209,10 +208,25 @@
   :host(.llena) .diente__svg { width: var(--diente); height: var(--diente); }
   :host(.llena) .diente__numero { line-height: 1rem; }
   :host(.llena) .leyenda { gap: var(--espacio-1) var(--espacio-3); }
-  :host(.llena) .odontograma__guardar { gap: var(--espacio-3); }
+  :host(.llena) .odontograma__guardar {
+    position: sticky; bottom: -.75rem; z-index: 1;
+    gap: var(--espacio-3); padding: var(--espacio-2) 0;
+    background: var(--superficie); border-top: 1px solid var(--borde);
+  }
   :host(.llena) .editor__campo--motivo { display: flex; align-items: center; gap: var(--espacio-2); }
   :host(.llena) .editor__campo--motivo > span { flex: 0 1 auto; }
   :host(.llena) .editor__campo--motivo input { flex: 1 1 14rem; min-height: 2.5rem; }
   :host(.llena) .odontograma__error,
   :host(.llena) .odontograma__aviso { padding: var(--espacio-2) var(--espacio-3); }
+}
+
+/* La distribución sigue al ancho del odontograma, también dentro de la ficha. */
+@container (max-width: 840px) {
+  .lienzo__fila { grid-template-columns: max-content; justify-content: center; gap: var(--espacio-3); }
+  .arcada + .arcada { border-left: 0; padding-top: 0; }
+  .diente { width: 3.25rem; }
+  .diente__svg { width: 3rem; height: 3rem; }
+  :host(.llena) .lienzo__fila { grid-template-columns: max-content; }
+  :host(.llena) .lienzo { flex-basis: 24rem; min-height: 24rem; --diente: clamp(3rem, calc((100cqw - 2rem) / 8 - .5rem), 4.4rem); }
+  :host(.llena) .arcada + .arcada { border-left: 0; }
 }

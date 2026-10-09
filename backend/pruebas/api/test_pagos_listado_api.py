@@ -103,6 +103,89 @@ async def test_listado_con_paciente_fecha_y_filtro(
     assert invalido.status_code == 422
 
 
+@pytest.mark.parametrize("ruta", ["/pagos/", "/pagos/cargos/"])
+async def test_filtro_de_paciente_acota_filas_y_total_sin_ampliar_sedes(
+    cliente: AsyncClient,
+    api: str,
+    sesion: AsyncSession,
+    usuario: Usuario,
+    clinica: Clinica,
+    sede: Sede,
+    otra_sede: Sede,
+    servicio: Servicio,
+    profesional: Profesional,
+    paciente: Paciente,
+    ruta: str,
+) -> None:
+    otro = Paciente(
+        clinica_id=clinica.id,
+        tipo_documento="PASAPORTE",
+        numero_documento=uuid.uuid4().hex,
+        nombre="Otro",
+        apellido="Sintético",
+    )
+    sesion.add(otro)
+    await sesion.flush()
+    filas = []
+    for indice, (paciente_id, sede_id) in enumerate(
+        [(paciente.id, sede.id), (otro.id, sede.id), (paciente.id, otra_sede.id)]
+    ):
+        cita = Cita(
+            clinica_id=clinica.id,
+            sede_id=sede_id,
+            paciente_id=paciente_id,
+            profesional_id=profesional.id,
+            servicio_id=servicio.id,
+            inicio=INSTANTE_REFERENCIA + timedelta(days=2, hours=indice),
+            duracion_minutos=30,
+            minutos_preparacion=0,
+            estado="CONFIRMED",
+            origen="PANEL",
+            confirmada_en=INSTANTE_REFERENCIA,
+        )
+        sesion.add(cita)
+        await sesion.flush()
+        cargo = CargoPago(
+            clinica_id=clinica.id, cita_id=cita.id, total_acordado="50.00", origen="PACTADO"
+        )
+        sesion.add(cargo)
+        await sesion.flush()
+        pago = Pago(
+            clinica_id=clinica.id,
+            cita_id=cita.id,
+            cargo_id=cargo.id,
+            importe="10.00",
+            moneda="USD",
+            metodo="EFECTIVO",
+            estado="PENDING",
+        )
+        sesion.add(pago)
+        await sesion.flush()
+        filas.append(cargo.id if ruta.endswith("cargos/") else pago.id)
+    await conceder_permisos(sesion, usuario, clinica, "pago.leer", sedes=(sede.id,))
+    cabeceras = await cabecera_bearer(cliente, usuario, clinica)
+    respuesta = await cliente.get(
+        f"{api}{ruta}",
+        params={"paciente_id": str(paciente.id), "limite": 1},
+        headers=cabeceras,
+    )
+    assert respuesta.status_code == 200, respuesta.text
+    assert respuesta.json()["total"] == 1
+    assert [fila["id"] for fila in respuesta.json()["elementos"]] == [str(filas[0])]
+    vacio = await cliente.get(
+        f"{api}{ruta}",
+        params={"paciente_id": str(uuid.uuid4())},
+        headers=cabeceras,
+    )
+    assert vacio.json() == {"elementos": [], "total": 0}
+    invalido = await cliente.get(
+        f"{api}{ruta}",
+        params={"paciente_id": "no-es-un-uuid"},
+        headers=cabeceras,
+    )
+    assert invalido.status_code == 422
+
+
 async def test_exportar_resumen_financiero_local_agrega_y_respeta_ambito(
     cliente: AsyncClient,
     api: str,

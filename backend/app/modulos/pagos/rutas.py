@@ -111,9 +111,10 @@ async def listar(
     desplazamiento: Annotated[int, Query(ge=0)] = 0,
     estado: Annotated[EstadoPago | None, Query()] = None,
     cita_id: Annotated[uuid.UUID | None, Query()] = None,
+    paciente_id: Annotated[uuid.UUID | None, Query()] = None,
 ) -> PaginaPagos:
     filas, total = await RepositorioPagos(sesion).listar_detallado(
-        principal, limite, desplazamiento, estado, cita_id
+        principal, limite, desplazamiento, estado, cita_id, paciente_id
     )
     return PaginaPagos(
         elementos=[
@@ -145,9 +146,10 @@ async def listar_cargos(
     desplazamiento: Annotated[int, Query(ge=0)] = 0,
     cita_id: Annotated[uuid.UUID | None, Query()] = None,
     vencidos: Annotated[bool, Query()] = False,
+    paciente_id: Annotated[uuid.UUID | None, Query()] = None,
 ) -> PaginaCargosPago:
     filas, total = await RepositorioPagos(sesion).listar_cargos(
-        principal, limite, desplazamiento, cita_id, vencidos
+        principal, limite, desplazamiento, cita_id, vencidos, paciente_id
     )
     return PaginaCargosPago(elementos=[_salida_cargo(fila) for fila in filas], total=total)
 

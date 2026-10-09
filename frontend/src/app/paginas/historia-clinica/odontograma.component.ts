@@ -107,7 +107,9 @@ export class OdontogramaComponent {
   protected readonly fichaPieza = signal(false);
   protected readonly herramienta = signal<Herramienta>('SELECCIONAR');
   protected readonly cargando = signal(true);
+  private readonly falloCarga = signal(false);
   protected readonly guardando = signal(false);
+  protected readonly guardadoAbierto = signal(false);
   protected readonly motivo = signal('');
   protected readonly nivelSensibilidad = signal<'N2' | 'N3'>('N2');
   protected readonly error = signal<FalloApi | string | null>(null);
@@ -115,7 +117,7 @@ export class OdontogramaComponent {
   protected readonly borrador = signal<Record<string, EstadoPiezaOdontograma>>({});
   /** Hay algo que dibujar: terminó la carga y no falló sin datos previos. */
   protected readonly listo = computed(
-    () => !this.cargando() && !(this.error() !== null && !this.actual() && this.versiones().length === 0),
+    () => !this.cargando() && !this.falloCarga(),
   );
   protected readonly errorTexto = computed(() => {
     const error = this.error();
@@ -159,6 +161,7 @@ export class OdontogramaComponent {
 
   protected cargar(pacienteId = this.pacienteId()): void {
     this.cargando.set(true);
+    this.falloCarga.set(false);
     this.error.set(null);
     this.aviso.set('');
     this.api.versionesOdontograma(pacienteId).subscribe({
@@ -172,6 +175,7 @@ export class OdontogramaComponent {
         this.cargando.set(false);
       },
       error: (fallo: FalloApi) => {
+        this.falloCarga.set(true);
         this.error.set(falloClinicoLegible(fallo));
         this.cargando.set(false);
       },
@@ -338,8 +342,30 @@ export class OdontogramaComponent {
     });
   }
 
+  protected abrirGuardado(): void {
+    if (!this.puedeGuardar() || this.guardando()) return;
+    this.error.set(null);
+    this.guardadoAbierto.set(true);
+  }
+
+  protected cerrarGuardado(): void {
+    if (this.guardando()) return;
+    const versionGuardada = this.operacionFotos.guardado;
+    // Cancelar la revisión conserva el borrador de piezas y el motivo.
+    // Las fotos seleccionadas pertenecen a esta ventana: se liberan al cerrar.
+    this.fotos = [];
+    this.capturaFotos()?.limpiar();
+    this.guardadoAbierto.set(false);
+    if (versionGuardada) {
+      this.operacionFotos.reiniciar();
+      this.motivo.set('');
+      this.cargar();
+      this.aviso.set('La versión se conserva. Puede añadir las fotografías desde su galería.');
+    }
+  }
+
   protected guardar(): void {
-    if (!this.puedeGuardar()) return;
+    if (!this.puedeGuardar() || this.guardando()) return;
     const contenido: ContenidoOdontograma = {
       denticion: this.denticion(),
       piezas: this.limpiarVacias(this.borrador()),
@@ -368,6 +394,7 @@ export class OdontogramaComponent {
         this.capturaFotos()?.limpiar();
         this.operacionFotos.reiniciar();
         this.guardando.set(false);
+        this.guardadoAbierto.set(false);
         this.motivo.set('');
         // `cargar()` limpia el aviso al empezar: el aviso va después o no se ve.
         this.cargar();
