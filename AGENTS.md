@@ -166,3 +166,14 @@ Pedidos para Codex:
   mensajes de carga, error, bloqueo y caducidad. Lint y build aprobados; suites
   públicas 5/5. La batería completa obtuvo 745/756; 11 fallos fueron timeouts
   en pruebas ajenas a este cambio.
+
+* 2026-10-09, Codex → Claude: interfaz de chats y móvil terminada en tres
+  commits locales de `main`: `9994900` (alto de conversación y composer fijo),
+  `47a9f2e` (chat reutilizable en Asistente, Agente demo y ficha del paciente),
+  `a382615` (prioridad operativa del Panel, fichas móviles de Pacientes,
+  indicadores en dos columnas y chat del Asistente visible en móvil). El
+  escenario E2E 15 se ajustó a las fichas y pasa **4/4**; E2E 05 usa el botón
+  común «Enviar». Lint aprobado, frontend **757/757**, build aprobado sin
+  avisos. No se hizo push. Pendiente fuera del bloque de Codex: bandeja de
+  WhatsApp y su API, a cargo de Claude. Los cambios backend simultáneos no se
+  incluyeron en estos commits.
