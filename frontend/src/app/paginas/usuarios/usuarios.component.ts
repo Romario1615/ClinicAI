@@ -519,8 +519,11 @@ const CATEGORIAS: Record<string, string> = {
     .tabla { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
     .tabla th { text-align: left; padding: var(--espacio-2) var(--espacio-3); color: var(--texto-suave); font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; border-bottom: 1px solid var(--borde); }
     .tabla td { padding: var(--espacio-3); border-bottom: 1px solid var(--superficie-hundida); vertical-align: middle; }
-    .tabla td.acciones { display: table-cell; text-align: right; white-space: nowrap; }
-    .tabla td.acciones .boton + .boton { margin-left: var(--espacio-2); }
+    /* Las acciones se reparten en dos líneas si no caben: con tres botones en
+       una sola fila la tabla pasaba del ancho y «Gestionar accesos» quedaba
+       fuera de la vista a 1366 px. Cada botón conserva su texto completo. */
+    .tabla td.acciones { display: table-cell; text-align: right; min-width: 11rem; white-space: normal; }
+    .tabla td.acciones .boton { margin: 2px 0 2px var(--espacio-2); white-space: nowrap; }
     .fila--inactiva { opacity: 0.65; }
     .persona { display: flex; align-items: center; gap: var(--espacio-3); }
     .persona span:last-child { display: grid; }
@@ -567,11 +570,15 @@ const CATEGORIAS: Record<string, string> = {
 
     @media (max-width: 700px) {
       .encabezado { min-height: 175px; padding: var(--espacio-4); background-position: center, 70% center; }
+    }
+    /* Por debajo de 1366 px las seis columnas no caben sin esconder acciones:
+       cada cuenta pasa a ser una ficha con todos sus datos y sus botones. */
+    @media (max-width: 1365px) {
       .tabla thead { display: none; }
-      .tabla tr { display: grid; gap: 6px; padding: var(--espacio-3) 0; border-bottom: 1px solid var(--borde); }
+      .tabla tr { display: grid; gap: 6px; padding: var(--espacio-3); border-bottom: 1px solid var(--borde); }
       .tabla td { padding: 0; border: 0; }
-      .tabla td.acciones { display: flex; gap: var(--espacio-2); text-align: left; flex-wrap: wrap; }
-      .tabla td.acciones .boton + .boton { margin-left: 0; }
+      .tabla td.acciones { display: flex; gap: var(--espacio-2); text-align: left; flex-wrap: wrap; min-width: 0; }
+      .tabla td.acciones .boton { margin: 0; }
     }
     @media (prefers-reduced-motion: reduce) {
       .encabezado, .encabezado::after { animation: none; }
