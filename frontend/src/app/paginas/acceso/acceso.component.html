@@ -1,20 +1,22 @@
 <div class="acceso">
   <aside class="acceso__marca" aria-label="ClinicAI, gestión de clínicas con inteligencia artificial">
+    <!-- Secuencia de fotos de clínica que se funden entre sí. Decorativa. -->
+    <div class="acceso__fotos" aria-hidden="true">
+      @for (foto of fotos; track foto; let i = $index) {
+        <span class="acceso__foto" [style.background-image]="'url(' + foto + ')'" [style.animation-delay]="retrasoFoto(i)"></span>
+      }
+    </div>
     <app-fondo-ia [oscuro]="true" />
     <app-marca class="acceso__logo" [compacta]="true" />
 
     <div class="acceso__mensaje">
       <p class="acceso__ceja"><span aria-hidden="true">✦</span> GESTIÓN CLÍNICA + AGENTE IA</p>
-      <p class="acceso__titular">Tu clínica,<br />conectada con <span>inteligencia.</span></p>
+      <p class="acceso__titular">Tu clínica, <br />conectada con <span>inteligencia.</span></p>
       <p class="acceso__descripcion">Un agente para coordinar citas, atender mensajes y consultar el conocimiento aprobado de tu clínica.</p>
     </div>
 
     <div class="acceso__ecosistema" aria-hidden="true">
-      <span class="acceso__etiqueta-red">UN AGENTE. TODO TU EQUIPO.</span>
       <app-grafico-red class="acceso__grafico" tono="oscuro" />
-      <span class="acceso__conexion acceso__conexion--agenda">Agenda</span>
-      <span class="acceso__conexion acceso__conexion--pacientes">Pacientes</span>
-      <span class="acceso__conexion acceso__conexion--mensajes">Mensajes</span>
     </div>
 
     <div class="acceso__pie-marca">

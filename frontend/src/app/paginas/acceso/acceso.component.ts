@@ -36,6 +36,17 @@ import { MarcaComponent } from '../../compartido/marca.component';
 import type { RolAccesoLocal } from '../../nucleo/modelos/dominio';
 import { especialidadDelRol } from '../../nucleo/utilidades/especialidad-rol';
 
+/** Fotos de la portada: se funden una tras otra, cada una `SEGUNDOS_POR_FOTO`. */
+const FOTOS_PORTADA = [
+  '/images/acceso-equipo.png',
+  '/images/panel-seguimiento-clinicai.jpg',
+  '/images/acceso-clinica-recepcion.jpg',
+  '/images/panel-clinicai-dental-network-v1.jpg',
+] as const;
+const SEGUNDOS_POR_FOTO = 7;
+/** Adelanto del fundido: la primera foto ya se ve completa al cargar. */
+const SEGUNDOS_FUNDIDO = 1.4;
+
 @Component({
   selector: 'app-acceso',
   standalone: true,
@@ -45,6 +56,7 @@ import { especialidadDelRol } from '../../nucleo/utilidades/especialidad-rol';
   styleUrl: './acceso.component.scss',
 })
 export class AccesoComponent implements OnInit {
+  protected readonly fotos = FOTOS_PORTADA;
   private readonly modoLocal = inject(ModoLocalService);
   private readonly autenticacion = inject(AutenticacionService);
   private readonly router = inject(Router);
@@ -173,5 +185,10 @@ export class AccesoComponent implements OnInit {
     return rol.codigo === 'profesional' && this.especialidadLocal
       ? this.especialidadesLocales().find(e => e.id === this.especialidadLocal)?.nombre
       : rol.especialidad;
+  }
+
+  /** Cada foto entra cuando sale la anterior; todas comparten el mismo ciclo. */
+  protected retrasoFoto(indice: number): string {
+    return `${indice * SEGUNDOS_POR_FOTO - SEGUNDOS_FUNDIDO}s`;
   }
 }
