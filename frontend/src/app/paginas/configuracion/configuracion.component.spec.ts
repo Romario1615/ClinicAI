@@ -44,6 +44,7 @@ function integraciones(): EstadoIntegracion[] {
             },
             version: 0,
         },
+        { codigo: 'agente_whatsapp', habilitada: false, ajustes: {}, secretos: {}, version: 0 },
         {
             codigo: 'google_calendar',
             habilitada: false,
@@ -139,6 +140,18 @@ describe('ConfiguracionComponent', () => {
         expect(entrada.type).toBe('password');
         expect(entrada.value).toBe('');
         expect(fixture.nativeElement.textContent).toContain('Hay una credencial cifrada guardada.');
+    });
+
+    it('explica la política y guarda el interruptor del agente sin ajustes', () => {
+        abrirIntegraciones();
+        expect(fixture.nativeElement.textContent).toContain('Consulta libre');
+        expect(fixture.nativeElement.textContent).toContain('número propio de un solo paciente verificado por teléfono');
+        expect(fixture.nativeElement.textContent).toContain('Apagado por defecto');
+        const toggle = fixture.nativeElement.querySelector('input[aria-label="Habilitar Agente de WhatsApp"]') as HTMLInputElement;
+        expect(toggle.checked).toBe(false);
+        toggle.click(); fixture.detectChanges();
+        expect(servicio.guardar).toHaveBeenCalledWith('agente_whatsapp', { habilitada: true, ajustes: {}, secretos: {}, eliminar_secretos: [] });
+        expect((fixture.nativeElement.querySelector('input[aria-label="Habilitar Agente de WhatsApp"]') as HTMLInputElement).checked).toBe(true);
     });
 
     it('no vuelve a enviar una clave vacía y conserva el estado guardado', () => {

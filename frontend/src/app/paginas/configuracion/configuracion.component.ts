@@ -165,6 +165,16 @@ import { AnamnesisConfiguracionComponent } from './anamnesis-configuracion.compo
         <button class="boton" type="button" (click)="abrirEditorIntegracion('whatsapp')">Configurar WhatsApp</button>
       </section>
 
+      <section class="tarjeta integracion" aria-labelledby="agente-whatsapp-titulo">
+        <header class="integracion__cabecera">
+          <span class="integracion__simbolo integracion__simbolo--whatsapp"><app-icono nombre="mensajes-seguros" [tamano]="22" /></span>
+          <div><p class="ceja">ATENCIÓN CON IA</p><h2 id="agente-whatsapp-titulo">Agente de WhatsApp</h2>
+            <p>Consulta libre. Los cambios requieren número propio de un solo paciente verificado por teléfono y confirmación expresa.</p></div>
+        </header>
+        <p class="integracion__estado"><span class="integracion__punto" [class.integracion__punto--activa]="agenteWhatsAppHabilitado()" aria-hidden="true"></span>{{ agenteWhatsAppHabilitado() ? 'Agente habilitado' : 'Apagado por defecto' }}</p>
+        <label class="interruptor"><input type="checkbox" aria-label="Habilitar Agente de WhatsApp" [checked]="agenteWhatsAppHabilitado()" [disabled]="guardandoAgenteWhatsApp() || !cargada()" (change)="cambiarAgenteWhatsApp($any($event.target).checked)" /><span><strong>Habilitar Agente de WhatsApp</strong><small>El equipo puede devolver cada conversación a la atención humana.</small></span></label>
+      </section>
+
       <section class="tarjeta integracion">
         <header class="integracion__cabecera">
           <span class="integracion__simbolo integracion__simbolo--calendario"><app-icono nombre="agenda" [tamano]="22" /></span>
@@ -390,6 +400,8 @@ export class ConfiguracionComponent implements OnInit {
   protected readonly editorClinicaAbierto = signal(false);
   protected readonly editorIntegracion = signal<'anthropic' | 'whatsapp' | 'google_calendar' | 'smtp' | null>(null);
   private readonly estados = signal(new Map<string, EstadoIntegracion>());
+  protected readonly agenteWhatsAppHabilitado = signal(false);
+  protected readonly guardandoAgenteWhatsApp = signal(false);
 
   protected readonly camposWhatsApp = [
     { clave: 'token_acceso', etiqueta: 'Token de acceso', placeholder: 'Token permanente de Meta' },
@@ -462,6 +474,7 @@ export class ConfiguracionComponent implements OnInit {
       next: (integraciones) => {
         const estados = new Map(integraciones.map((integracion) => [integracion.codigo, integracion]));
         this.estados.set(estados);
+        this.agenteWhatsAppHabilitado.set(estados.get('agente_whatsapp')?.habilitada ?? false);
         this.hidratar('anthropic', this.anthropic);
         this.hidratar('whatsapp', this.whatsapp);
         this.hidratar('google_calendar', this.google);
@@ -536,6 +549,15 @@ export class ConfiguracionComponent implements OnInit {
   protected guardarEditorIntegracion(): void {
     const codigo = this.editorIntegracion();
     if (codigo) this.guardar(codigo);
+  }
+
+  protected cambiarAgenteWhatsApp(habilitada: boolean): void {
+    this.guardandoAgenteWhatsApp.set(true);
+    this.error.set('');
+    this.servicio.guardar('agente_whatsapp', { habilitada, ajustes: {}, secretos: {}, eliminar_secretos: [] }).subscribe({
+      next: (estado) => { this.estados.update((actuales) => new Map(actuales).set('agente_whatsapp', estado)); this.agenteWhatsAppHabilitado.set(estado.habilitada); this.guardandoAgenteWhatsApp.set(false); },
+      error: (fallo: unknown) => { this.error.set(fallo instanceof FalloApi ? fallo.message : 'No se pudo actualizar el Agente de WhatsApp.'); this.guardandoAgenteWhatsApp.set(false); },
+    });
   }
 
   protected tituloIntegracion(codigo: 'anthropic' | 'whatsapp' | 'google_calendar' | 'smtp'): string {
