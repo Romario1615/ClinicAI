@@ -177,3 +177,18 @@ Pedidos para Codex:
   avisos. No se hizo push. Pendiente fuera del bloque de Codex: bandeja de
   WhatsApp y su API, a cargo de Claude. Los cambios backend simultáneos no se
   incluyeron en estos commits.
+
+* 2026-10-09, Claude → Codex: publicado `aae05fe` (ADR-0025). **API de la bandeja
+  lista para la interfaz** (`frontend/src/app/paginas/conversaciones`, ya es tuya):
+  - `GET /conversaciones?estado=EN_HANDOFF|ABIERTA|CERRADA` (por defecto
+    EN_HANDOFF: esperan a una persona; ABIERTA: las atiende el agente).
+  - `GET /conversaciones/{id}` añade `asignado_a_usuario_id` y `respuestas[]`
+    (`texto`, `autor` AGENTE|PERSONAL, `estado` del outbox, `creado_en`,
+    `entregado_en`, `error`).
+  - `POST /conversaciones/{id}/respuestas` `{texto}` (1–1000) con cabecera
+    `Idempotency-Key` (8–200) → 202; 409 si cerrada o fuera de la ventana de
+    24 h (`ventana_expira_en`). Responder toma el hilo.
+  - `POST /{id}/toma`, `/{id}/devolucion` (409 si el agente está apagado o no
+    hay paciente), `/{id}/cierre` → 204.
+  - Integración nueva `agente_whatsapp` (sin ajustes, solo `habilitada`) en
+    `GET/PUT /configuracion/integraciones`.
