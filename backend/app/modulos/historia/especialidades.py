@@ -3,9 +3,9 @@
 Para qué sirve
 --------------
 Una clínica atiende varias especialidades y cada una usa partes distintas de
-la historia: el odontólogo trabaja con odontograma, periodoncia y planes; la
-dermatóloga no. Cuando el odontólogo abre la historia no debe activarse lo de
-dermatología ni ver sus notas.
+la historia: el odontólogo registra odontograma, periodoncia y planes; la
+dermatóloga registra su módulo facial. La consulta compartida permite observar
+las herramientas de otras áreas autorizadas, sin acreditarse para editarlas.
 
 Qué se comparte y qué no
 ------------------------
@@ -21,7 +21,10 @@ Qué se comparte y qué no
 
 Desde qué especialidades revisa cada persona
 --------------------------------------------
-* Un profesional, desde la suya y desde las que se le asignaron
+* Con ``historia_clinica.consultar_compartida``, todo el personal consulta las
+  áreas de su ámbito, incluido el comodín; solo el profesional registra desde
+  su propia especialidad. Sin esa capacidad, se mantiene la política anterior:
+  un profesional revisa desde la suya y desde las que se le asignaron
   **explícitamente** en su ámbito. El comodín «todas las especialidades» no
   le abre las ajenas: es la forma habitual de crear roles y concedería, sin
   querer, ver la historia de cualquier área.
@@ -150,15 +153,20 @@ async def especialidades_permitidas(
     resultado = []
     for especialidad, modulos in await modulos_de_clinica(sesion, principal.clinica_id):
         es_propia = especialidad.id == propia
+        compartida = principal.tiene_permiso("historia_clinica.consultar_compartida")
         if principal.profesional_id is not None:
-            permitida = es_propia or especialidad.id in ambito.especialidades
+            permitida = es_propia or (
+                ambito.cubre_especialidad(especialidad.id)
+                if compartida
+                else especialidad.id in ambito.especialidades
+            )
         else:
             permitida = ambito.cubre_especialidad(especialidad.id)
         if permitida and (es_propia or especialidad.activa):
             # Consultar otra área no acredita para usar sus herramientas.
             habilitados = (
                 tuple(m for m in modulos if m == "imagenes")
-                if principal.profesional_id is not None and not es_propia
+                if principal.profesional_id is not None and not es_propia and not compartida
                 else modulos
             )
             resultado.append((especialidad, habilitados, es_propia))
@@ -172,7 +180,7 @@ async def especialidades_de_notas(
     """Especialidades cuyas notas se devuelven al revisar una historia.
 
     Sin indicar una, un profesional revisa desde la suya y el resto del
-    personal, desde todas las que puede. Pedir una ajena se rechaza.
+    personal, desde todas las que puede. Pedir un área fuera del ámbito se rechaza.
     """
     permitidas = await especialidades_permitidas(sesion, principal)
     if especialidad_id is not None:
@@ -200,7 +208,10 @@ def exige_modulo(
         principal: Principal = Depends(base),  # noqa: B008
     ) -> Principal:
         permitidas = await especialidades_permitidas(sesion, principal)
-        if not any(modulo in modulos for _, modulos, _ in permitidas):
+        escritura = any(not p.endswith((".leer", ".leer_sensible")) for p in permisos)
+        if not any(
+            modulo in modulos and (not escritura or propia) for _, modulos, propia in permitidas
+        ):
             raise PermisoDenegado(f"«{MODULOS[modulo][0]}» no está activo en su especialidad.")
         return principal
 

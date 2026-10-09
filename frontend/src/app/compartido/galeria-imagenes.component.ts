@@ -1,3 +1,4 @@
+import { EspecialidadHistoriaService } from '../nucleo/servicios/especialidad-historia.service';
 import {
   Component,
   DestroyRef,
@@ -40,13 +41,14 @@ const TIPOS = [
 export class GaleriaImagenesComponent {
   private readonly api = inject(ApiService);
   private readonly sesion = inject(SesionService);
+  private readonly especialidades = inject(EspecialidadHistoriaService);
   private readonly destruir = inject(DestroyRef);
   private solicitud = 0;
 
   readonly pacienteId = input.required<string>();
   protected readonly tipos = TIPOS;
   protected readonly puedeCargar = computed(() =>
-    this.sesion.tienePermiso(PERMISOS.imagenClinicaCargar),
+    this.sesion.tienePermiso(PERMISOS.imagenClinicaCargar) && this.especialidades.puedeRegistrar('imagenes'),
   );
   protected readonly puedeLeerSensible = computed(() =>
     this.sesion.tienePermiso('historia_clinica.leer_sensible'),

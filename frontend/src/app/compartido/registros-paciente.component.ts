@@ -48,7 +48,7 @@ export class RegistrosPacienteComponent {
   protected readonly enviarRegistro = signal<RegistroPaciente | null>(null);
   protected readonly detalleZona = signal<string | null>(null);
   protected readonly listado = computed(() => this.registros().filter(r => (r.tipo === 'FACIOGRAMA') === this.facial()));
-  protected readonly puedeEscribir = computed(() => this.sesion.tienePermiso('historia_clinica.escribir') && !!this.sesion.identidad()?.profesional_id);
+  protected readonly puedeEscribir = computed(() => this.sesion.tienePermiso('historia_clinica.escribir') && this.especialidades.puedeRegistrar(this.facial() ? 'faciograma' : undefined));
   protected titulo = '';
   protected tipo: RegistroPaciente['tipo'] = 'PRESUPUESTO';
   protected motivo = '';

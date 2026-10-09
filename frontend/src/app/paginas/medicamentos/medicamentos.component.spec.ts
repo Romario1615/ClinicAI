@@ -58,7 +58,7 @@ function toma(extra: Partial<Toma> = {}): Toma {
     };
 }
 
-import { INDICADORES_VACIOS } from '../../nucleo/pruebas/sesion-sintetica';
+import { INDICADORES_VACIOS, identidadCon } from '../../nucleo/pruebas/sesion-sintetica';
 describe('MedicamentosComponent', () => {
     let fixture: ComponentFixture<MedicamentosComponent>;
     let http: HttpTestingController;
@@ -80,6 +80,7 @@ describe('MedicamentosComponent', () => {
         fixture = TestBed.createComponent(MedicamentosComponent);
         http = TestBed.inject(HttpTestingController);
         sesion = TestBed.inject(SesionService);
+        sesion.establecerIdentidad(identidadCon(['historia_clinica.escribir', 'adherencia.leer', 'receta.leer']));
         vi.spyOn(sesion, 'tienePermiso').mockReturnValue(true);
     });
 
@@ -115,7 +116,14 @@ describe('MedicamentosComponent', () => {
         if ((sesion.tienePermiso as Mock)('adherencia.leer')) {
             http.expectOne(`${BASE}/historia/adherencia/alertas`).flush([]);
         }
+        if ((sesion.tienePermiso as Mock)('receta.leer')) responderRecetas();
         fixture.detectChanges();
+    }
+
+    function responderRecetas(profesionalId = 'prof-1'): void {
+        http.expectOne(`${BASE}/historia/pacientes/${PACIENTE_ID}/recetas`).flush([
+            { id: 'rec-1', profesional_id: profesionalId, medicamentos: [{ id: 'med-1', nombre: 'Medicamento de ejemplo A' }] },
+        ]);
     }
 
     function texto(): string {
@@ -147,6 +155,13 @@ describe('MedicamentosComponent', () => {
         expect(texto()).toContain('Receta: Medicamento de ejemplo A');
     });
 
+    it('asistencia consulta tomas pero no ofrece registrar ni omitir', () => {
+        sesion.establecerIdentidad({ ...identidadCon(['receta.leer', 'adherencia.leer']), profesional_id: null, roles: ['asistente'] });
+        (sesion.tienePermiso as Mock).mockImplementation((permiso: string) => permiso !== 'historia_clinica.escribir');
+        listar(); abrir([toma()]);
+        expect(botones()).not.toContain('Tomada'); expect(botones()).not.toContain('Omitida');
+    });
+
     it('pide la ventana de tomas alrededor de hoy', () => {
         listar();
         fixture.componentInstance['abrir'](paciente());
@@ -161,6 +176,7 @@ describe('MedicamentosComponent', () => {
         expect(peticion.request.params.get('dias')).toBe('7');
         peticion.flush([]);
         http.expectOne(`${BASE}/historia/adherencia/alertas`).flush([]);
+        responderRecetas();
     });
 
     describe('una toma futura', () => {
@@ -209,6 +225,7 @@ describe('MedicamentosComponent', () => {
                 .expectOne((p) => p.url.includes('/tomas'))
                 .flush([{ ...vencida, estado: 'TOMADA', registrada_en: '2026-04-15T14:00:00Z' }]);
             http.expectOne(`${BASE}/historia/adherencia/alertas`).flush([]);
+            responderRecetas();
             fixture.detectChanges();
 
             expect(texto()).toContain('Tomada');
@@ -223,6 +240,15 @@ describe('MedicamentosComponent', () => {
 
         expect(texto()).toContain('sin permiso');
         expect(botones()).toEqual([]);
+    });
+
+    it('el profesional observa las tomas de otro responsable sin registrarlas', () => {
+        listar(); abrir([toma()]);
+        fixture.componentInstance['recetas'].set([{ profesional_id: 'otro-profesional', medicamentos: [{ id: 'med-1' }] } as never]);
+        fixture.detectChanges();
+        expect(botones()).toEqual([]);
+        fixture.componentInstance['registrar'](toma(), true);
+        http.expectNone(`${BASE}/historia/tomas/toma-1/registro`);
     });
 
     it('sin tomas explica que solo una receta confirmada las genera', () => {

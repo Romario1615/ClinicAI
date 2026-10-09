@@ -1,5 +1,24 @@
 # Arquitectura
 
+## Consulta y primera atención (2026-10-09)
+
+`HerramientasPacienteComponent` comparte el selector entre ficha e historia.
+Selecciona un módulo y su especialidad sin crear registros. La API expone las
+colecciones vacías desde el alta del paciente. Historia incorpora el
+periodontograma completo, conservando el acceso al índice de placa.
+
+La capacidad `historia_clinica.consultar_compartida` permite lectura N2
+sin relación asistencial previa, dentro de clínica y ámbito. Los filtros SQL
+de paciente, autores, especialidad y sensibilidad permanecen. Las escrituras
+exigen profesional vigente, especialidad propia, permiso y relación asistencial;
+las operaciones de autor conservan ese requisito.
+
+`POST /pacientes/{id}/atencion-profesional` crea únicamente la asignación
+asistencial del operador tras una acción explícita. Usa motivo, idempotencia
+y auditoría transaccional. No crea una atención ficticia ni contenido clínico.
+La migración `20261009_038` encadena detrás de `037` y respalda los permisos
+previos. [Decisión completa](decisiones/0026-historial-compartido-y-registro-por-especialidad.md).
+
 > Fase 0. Documento de diseño. Lo que está implementado se declara en
 > [`production-readiness.md`](production-readiness.md).
 

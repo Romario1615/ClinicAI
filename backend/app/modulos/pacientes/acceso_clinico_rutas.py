@@ -49,7 +49,7 @@ async def consultar_acceso_clinico(
     if principal.es_agente:
         return AccesoClinico(acceso_clinico=False)
     try:
-        await guardia.exigir_relacion(principal, paciente_id, reloj.ahora())
+        await guardia.exigir_relacion(principal, paciente_id, reloj.ahora(), consulta=True)
     # La guardia ha señalado la falta de relación con 403 o con 404 indistinguible.
     except (RecursoNoEncontrado, RelacionAsistencialRequerida):
         return AccesoClinico(acceso_clinico=False)

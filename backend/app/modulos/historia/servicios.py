@@ -47,9 +47,10 @@ from app.modulos.historia.modelos import (
     Toma,
 )
 from app.modulos.historia.repositorio import RepositorioHistoria
+from app.modulos.pacientes.acceso_clinico import GuardiaClinica
 from app.modulos.profesionales.ambito_clinico import firmantes_delegados
 from app.nucleo.auditoria import AccionAuditada, EntradaAuditoria, construir_entrada
-from app.nucleo.autorizacion import NivelSensibilidad, Principal
+from app.nucleo.autorizacion import NivelSensibilidad, Principal, TipoActor
 from app.nucleo.errores import (
     ConflictoEstado,
     MotivoModificacionRequerido,
@@ -302,7 +303,10 @@ class ServicioHistoria:
         caso mas frecuente en una clinica -- no deja otro rastro.
         """
         self._exigir(principal, "historia_clinica.leer")
-        await self._exigir_relacion(principal, paciente_id)
+        if principal.tiene_permiso("historia_clinica.consultar_compartida"):
+            await GuardiaClinica(self._sesion).paciente(principal, paciente_id)
+        else:
+            await self._exigir_relacion(principal, paciente_id)
 
         ahora = self._reloj.ahora()
         notas = await self._repo.listar_notas(
@@ -727,11 +731,14 @@ class ServicioHistoria:
     ) -> ResultadoClinico:
         """Registra que una toma se hizo o no.
 
-        Lo puede hacer el propio paciente por WhatsApp o el personal. **No se
+        Lo puede hacer el propio paciente o el profesional responsable. **No se
         permite registrar una toma futura**: marcar como tomada una dosis que
         todavia no toca produce un registro de adherencia falso, y ese
         registro es lo que un profesional mira para decidir.
         """
+        if principal.actor_tipo is not TipoActor.PACIENTE:
+            self._exigir(principal, "historia_clinica.escribir")
+            self._autor(principal, None)
         ahora = self._reloj.ahora()
         toma = await self._sesion.get(Toma, toma_id, with_for_update=True)
         if toma is None:
@@ -739,6 +746,23 @@ class ServicioHistoria:
 
         if not principal.ambito.cubre_paciente(toma.paciente_id):
             raise RecursoNoEncontrado("La toma solicitada no existe.")
+        await GuardiaClinica(self._sesion).paciente(principal, toma.paciente_id)
+
+        if principal.actor_tipo is TipoActor.PACIENTE:
+            if principal.actor_id != toma.paciente_id:
+                raise RecursoNoEncontrado("La toma solicitada no existe.")
+        else:
+            medicamento = await self._sesion.get(RecetaMedicamento, toma.receta_medicamento_id)
+            if medicamento is None:
+                raise RecursoNoEncontrado("La toma solicitada no existe.")
+            receta = await self._repo.obtener_receta(
+                medicamento.receta_id, principal=principal, ahora=ahora
+            )
+            if receta is None:
+                raise RecursoNoEncontrado("La toma solicitada no existe.")
+            if receta.profesional_id != principal.profesional_id:
+                raise PermisoDenegado("Solo el profesional responsable registra estas tomas.")
+            await self._exigir_relacion(principal, toma.paciente_id)
 
         if toma.estado != EstadoToma.PENDIENTE.value:
             raise ConflictoEstado(f"Esta toma ya se registro como {toma.estado}.")
@@ -834,6 +858,8 @@ class ServicioHistoria:
     async def atender_alerta_adherencia(
         self, alerta_id: uuid.UUID, *, principal: Principal, nota: str | None = None
     ) -> ResultadoClinico:
+        self._exigir(principal, "historia_clinica.escribir")
+        self._autor(principal, None)
         if "alerta_adherencia.atender" not in principal.permisos:
             raise PermisoDenegado("No tiene permiso para atender alertas de adherencia.")
         ahora = self._reloj.ahora()
@@ -842,6 +868,9 @@ class ServicioHistoria:
         )
         if alerta is None:
             raise RecursoNoEncontrado("La alerta solicitada no existe.")
+        if alerta.profesional_id != principal.profesional_id:
+            raise PermisoDenegado("Solo el profesional responsable atiende esta alerta.")
+        await self._exigir_relacion(principal, alerta.paciente_id)
         if alerta.atendida_en is not None:
             raise ConflictoEstado("Esta alerta ya fue atendida.")
         alerta.atendida_en = ahora

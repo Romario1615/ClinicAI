@@ -1,3 +1,4 @@
+import { HerramientasPacienteComponent, type HerramientaHistoria } from './herramientas-paciente.component';
 /**
  * Ficha del paciente: todo lo que el rol puede ver, en una sola ventana.
  *
@@ -66,7 +67,6 @@ import { OperacionesService } from '../nucleo/servicios/operaciones.service';
 import { AtencionPacienteComponent } from './atencion-paciente.component';
 import { EditorPacienteComponent } from '../paginas/pacientes/editor-paciente.component';
 import { PeriodontogramaComponent } from '../paginas/historia-clinica/periodontograma.component';
-import { VentanaFlotanteComponent } from './ventana-flotante.component';
 import { AgentePacienteComponent } from './agente-paciente.component';
 
 /** Traducción del nivel de verificación, con lo que implica para quien atiende. */
@@ -132,8 +132,8 @@ const DETALLE_CLINICO: Partial<Record<Pestana, string>> = {
   standalone: true,
   imports: [
     AgentePacienteComponent,
+    HerramientasPacienteComponent,
     PeriodontogramaComponent,
-    VentanaFlotanteComponent,
     AtencionPacienteComponent,
     EditorPacienteComponent,
     InsigniaEstadoComponent,
@@ -225,7 +225,7 @@ const DETALLE_CLINICO: Partial<Record<Pestana, string>> = {
         } @else {
           <app-selector-especialidad class="ficha__especialidad" (cambio)="cambiarEspecialidad()" />
           @if (accesosClinicos().length && !sinAccesoClinico()) {
-            <div class="ficha__registrar"><span>{{ especialidades.elegida()?.nombre }}</span><button class="boton boton--principal" type="button" (click)="selectorRegistro.set(true)">Elegir qué registrar</button></div>
+            <app-herramientas-paciente class="ficha__herramientas" [pacienteId]="pacienteId()" [citaId]="citaParaAtencion()" (elegida)="abrirHerramienta($event)" />
           }
           <div class="ficha__pestanas" role="tablist" aria-label="Secciones de la ficha">
             @for (tab of pestanas(); track tab.clave) {
@@ -247,7 +247,7 @@ const DETALLE_CLINICO: Partial<Record<Pestana, string>> = {
 
           <div class="ficha__cuerpo" role="tabpanel">
             @switch (pestana()) {
-              @case ('atencion') { <app-atencion-paciente [pacienteId]="pacienteId()" [citaInicial]="citaParaAtencion()" (cambioCita)="citaElegidaId.set($event?.id ?? null)" /> }
+              @case ('atencion') { <app-atencion-paciente [pacienteId]="pacienteId()" [citaInicial]="citaParaAtencion()" [moduloInicial]="herramientaInicial()" (cambioCita)="citaElegidaId.set($event?.id ?? null)" /> }
               @case ('faciograma') { <app-atencion-paciente [pacienteId]="pacienteId()" [citaInicial]="citaParaAtencion()" moduloInicial="faciograma" (cambioCita)="citaElegidaId.set($event?.id ?? null)" /> }
               @case ('documentos') { <app-atencion-paciente [pacienteId]="pacienteId()" [citaInicial]="citaParaAtencion()" moduloInicial="documentos" (cambioCita)="citaElegidaId.set($event?.id ?? null)" /> }
               @case ('periodoncia') { <app-periodontograma [pacienteId]="pacienteId()" [citaId]="citaParaAtencion()" /> }
@@ -445,14 +445,7 @@ const DETALLE_CLINICO: Partial<Record<Pestana, string>> = {
     @if (editandoDatos() && paciente(); as p) {
       <app-editor-paciente [paciente]="p" (cerrar)="editandoDatos.set(false)" (guardado)="editandoDatos.set(false); recargarDatos()" />
     }
-    @if (selectorRegistro()) {
-      <app-ventana-flotante ceja="Ficha del paciente" titulo="¿Qué desea registrar?" forma="centrada" [anchoMaximo]="680" (cerrar)="selectorRegistro.set(false)">
-        <p>{{ especialidades.elegida()?.nombre }} · {{ nombre() }}</p>
-        <div class="ficha__atajos">@for (atajo of accesosClinicos(); track atajo.clave) {
-          <button class="ficha__atajo" type="button" (click)="selectorRegistro.set(false); elegir(atajo.clave)"><strong>{{ atajo.etiqueta }}</strong><span>{{ atajo.detalle }}</span></button>
-        }</div>
-      </app-ventana-flotante>
-    }
+
   `,
   changeDetection: ChangeDetectionStrategy.Eager,
   styles: `
@@ -467,6 +460,7 @@ const DETALLE_CLINICO: Partial<Record<Pestana, string>> = {
       .ficha.ficha--con-agente { grid-template-columns:minmax(0,1fr); height:auto; overflow:visible; }
       .ficha__agente { min-height:580px; border-left:0; border-top:1px solid var(--borde); }
     }
+    .ficha__herramientas { display:block; margin:10px 16px; }
     .ficha__registrar { display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 20px;flex-wrap:wrap; }
     .ficha {
       position: relative;
@@ -896,7 +890,7 @@ export class FichaPacienteComponent implements OnInit {
     this.sesion.tienePermiso(PERMISOS.recetaLeer),
   );
   protected readonly puedeEditarPlanes = computed(() =>
-    this.sesion.tienePermiso(PERMISOS.planTratamientoEscribir),
+    this.sesion.tienePermiso(PERMISOS.planTratamientoEscribir) && this.especialidades.puedeRegistrar('planes'),
   );
 
   /** Cada pestaña clínica aparece solo si el rol tiene el permiso que el backend exige. */
@@ -945,7 +939,11 @@ export class FichaPacienteComponent implements OnInit {
   );
 
   protected readonly pestana = signal<Pestana>('resumen');
-  protected readonly selectorRegistro = signal(false);
+  protected readonly herramientaInicial = signal<HerramientaHistoria | null>(null);
+  protected abrirHerramienta(herramienta: HerramientaHistoria): void {
+    this.herramientaInicial.set(herramienta);
+    this.pestana.set('atencion');
+  }
   protected readonly paciente = signal<PacienteDetalle | null>(null);
   protected readonly citas = signal<readonly Cita[]>([]);
   protected readonly cargando = signal(true);

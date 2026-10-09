@@ -4,6 +4,7 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 
 import { CONFIGURACION, CONFIGURACION_POR_DEFECTO } from '../../nucleo/servicios/configuracion';
 import { SesionService } from '../../nucleo/servicios/sesion.service';
+import { ESPECIALIDAD_SINTETICA } from '../../nucleo/pruebas/sesion-sintetica';
 import { AnamnesisCapturaComponent } from './anamnesis-captura.component';
 
 const BASE = CONFIGURACION_POR_DEFECTO.urlApi;
@@ -31,6 +32,7 @@ describe('AnamnesisCapturaComponent', () => {
             providers: [
                 provideHttpClient(withXhr()),
                 provideHttpClientTesting(),
+                ESPECIALIDAD_SINTETICA,
                 { provide: CONFIGURACION, useValue: CONFIGURACION_POR_DEFECTO },
                 {
                     provide: SesionService,

@@ -9,18 +9,20 @@
 
 ## Acceso entre especialistas
 
-El rol concede operaciones; el perfil profesional determina la especialidad.
-En una sesión clínica, el comodín de especialidades se reduce a la propia y a
-los identificadores concedidos expresamente. Las cuentas administrativas sin
-capacidades clínicas conservan su ámbito operativo. Un perfil inactivo, anulado
-o vinculado a otra clínica pierde las capacidades clínicas y de adherencia.
-Perder el perfil nunca convierte al especialista en asistencia con alcance general.
+Desde el 2026-10-09, por decisión del propietario, todos los roles base consultan
+el historial clínico N2 y las herramientas de los pacientes de su clínica y ámbito.
+`historia_clinica.consultar_compartida` habilita la consulta aunque todavía no exista
+una relación asistencial o un registro. No habilita escritura, exportación masiva
+ni información N3. Los pacientes ajenos o fuera del ámbito continúan respondiendo 404.
+Cada lectura clínica conserva auditoría. Las cuentas sin roles y el agente de IA
+no reciben esta capacidad. Un profesional con perfil inactivo la pierde.
 
-Los módulos especializados deben ser compatibles con el perfil: odontograma,
-Periodoncia y planes pertenecen a Odontología; faciograma pertenece a Estética,
-Dermatología y Cirugía plástica. El administrador puede restringir las opciones
-compatibles. Una concesión de lectura de otra especialidad no concede sus
-herramientas especializadas. El catálogo de zonas faciales también valida el módulo.
+El profesional consulta herramientas de las otras especialidades autorizadas en
+modo lectura. Solo registra con su perfil vigente, relación asistencial y módulo
+compatible con su propia especialidad. Odontograma, periodontograma e índice de
+placa corresponden a Odontología; faciograma a Estética, Dermatología o Cirugía
+plástica. Recepción, asistentes, administración y auditoría consultan; no registran
+ni cargan fotos clínicas. La ficha administrativa mantiene sus permisos independientes.
 
 En acceso local, `especialidad_id` solo selecciona una cuenta sintética activa
 con rol profesional, perfil vigente y especialidad activa de la misma clínica.
@@ -32,8 +34,8 @@ La lectura de notas, imágenes clínicas, planes, odontogramas, periodoncia,
 anamnesis capturada y Formulario 033 filtra autores en SQL dentro de la clínica
 y de las especialidades autorizadas. El resumen clínico conserva ese filtro;
 medicación/adherencia mantienen la reserva N3 y las fechas de citas respetan
-el ámbito de agenda. Paciente, relación asistencial, permisos y módulos siguen
-siendo requisitos independientes. Los identificadores directos y referencias
+el ámbito de agenda. Paciente, permisos y módulos siguen siendo requisitos
+independientes; la escritura exige también relación asistencial. Los identificadores directos y referencias
 entre registros están sujetos a los mismos controles.
 
 | Operación clínica | Responsabilidad exigida |
@@ -60,8 +62,10 @@ contactos, sedes y estado siguen siendo editables.
 
 ## Documentos y faciograma
 
-La ampliación del 2026-10-07 reutiliza permisos existentes; no concede lectura
-clínica a recepción ni administración. [ADR-0022](decisiones/0022-crud-faciograma-y-documentos-privados.md).
+La ampliación del 2026-10-07 reutilizó permisos existentes. Desde el 2026-10-09
+la consulta N2 de recepción y administración está habilitada por decisión
+expresa del propietario. [ADR-0026](decisiones/0026-historial-compartido-y-registro-por-especialidad.md)
+actualiza la política de lectura de [ADR-0022](decisiones/0022-crud-faciograma-y-documentos-privados.md).
 
 | Operación API (prefijo `/api/v1`) | Control y ámbito |
 |---|---|
@@ -71,7 +75,7 @@ clínica a recepción ni administración. [ADR-0022](decisiones/0022-crud-faciog
 | `PUT /usuarios/{id}/datos` | Edición de usuario; SQL limitado a su clínica; revoca sesiones sin alterar roles/vínculo |
 | `GET /pacientes/{id}/contextos-atencion` | Lectura de agenda y ámbito del paciente/citas |
 | `GET /historia/faciograma/zonas` | Lectura de historia y módulo facial compatible; catálogo sin datos de pacientes |
-| `GET /historia/pacientes/{id}/registros` y `/{registro}/pdf` | Lectura clínica, relación asistencial, clínica, sede, especialidad, módulos y sensibilidad; lectura auditada |
+| `GET /historia/pacientes/{id}/registros` y `/{registro}/pdf` | Lectura clínica, clínica, sede, especialidad, módulos y sensibilidad; consulta compartida sin vínculo previo y lectura auditada |
 | `POST /historia/pacientes/{id}/registros`, `/{registro}/anulacion` | Escritura clínica; mismo ámbito; versión sucesora/anulación solo por el autor, con motivo |
 | `POST /historia/planes/{id}/presupuesto-documento` | Escritura clínica, lectura autorizada del plan y módulo activo; cita/sede validadas |
 | `POST /historia/pacientes/{id}/registros/{registro}/whatsapp` | Lectura/escritura clínica, versión vigente N2 no facial, destinatario confirmado y consentimiento específico |
@@ -149,17 +153,18 @@ asistencial · **—** denegado.
 | `paciente.leer_administrativo` | ✓ | ○ | ○ | ○ | ○ | ✓ |
 | `paciente.crear` / `paciente.editar` | ✓ | ○ | ○ | ○ | ○ | — |
 | `consentimiento.gestionar` | ✓ | ○ | ○ | — | — | — |
-| **`historia_clinica.leer`** | — | — | **—** | **○** | — | — |
-| `historia_clinica.leer_metadatos` | — | ○ | — | ○ | ○ | ○ |
+| `historia_clinica.consultar_compartida` (consulta N2 dentro del ámbito) | ○ | ○ | ○ | ○ | ○ | ○ |
+| **`historia_clinica.leer`** | ○ | ○ | ○ | ○ | ○ | ○ |
+| `historia_clinica.leer_metadatos` | ○ | ○ | ○ | ○ | ○ | ○ |
 | **`historia_clinica.escribir`** | — | — | — | **○** | — | — |
 | **`historia_clinica.leer_sensible`** (N3) | — | — | — | ○ | — | — |
 | `diagnostico.registrar` | — | — | — | ○ | — | — |
 | **`receta.crear` / `receta.confirmar`** | — | — | — | **○** | — | — |
-| `receta.leer` | — | — | — | ○ | ○ | — |
-| **`imagen_clinica.leer` / `imagen_clinica.cargar`** (N2; N3 requiere `historia_clinica.leer_sensible`) | — | — | — | ○ | ○ | — |
-| **`odontograma.leer`** | — | — | — | ○ | ○ | — |
+| `receta.leer` | ○ | ○ | ○ | ○ | ○ | ○ |
+| **`imagen_clinica.leer` / `imagen_clinica.cargar`** (N2; N3 requiere permiso sensible) | ○ / — | ○ / — | ○ / — | ○ / ○ | ○ / — | ○ / — |
+| **`odontograma.leer`** | ○ | ○ | ○ | ○ | ○ | ○ |
 | **`odontograma.escribir`** | — | — | — | **○** | — | — |
-| **`plan_tratamiento.leer`** | — | — | — | ○ | ○ | — |
+| **`plan_tratamiento.leer`** | ○ | ○ | ○ | ○ | ○ | ○ |
 | **`plan_tratamiento.escribir`** | — | — | — | **○** | — | — |
 | `adherencia.leer` | — | ○ | — | ○ | ○ | ○ |
 | `alerta_adherencia.atender` | — | ○ | — | ○ | ○ | — |
@@ -187,23 +192,21 @@ asistencial · **—** denegado.
 
 Observaciones que importan:
 
-* **El superadministrador no accede a la historia clínica.** Es un rol de operación de la
-  plataforma, no asistencial. Separar la administración técnica del acceso clínico evita
-  que una cuenta técnica comprometida exponga datos de pacientes.
-* **El auditor no lee contenido clínico**, solo metadatos y la pista de auditoría: quién
-  accedió a qué y cuándo. Puede verificar sin ver.
-* **El administrador de clínica tampoco lee historia clínica.** Gestiona la organización.
+* **Todos los roles base consultan el historial N2** en la clínica activa y su ámbito.
+  Plataforma, administración y auditoría reciben lectura; no escritura clínica ni N3.
+  No existe un historial global que combine pacientes de distintas clínicas.
 * **Asistencia clínica puede cerrar una cita** tras terminar el trabajo operativo; no recibe
   por ello acceso para escribir la historia ni el odontograma.
 * Recepción puede exportar únicamente el resumen diario de agenda por estado; no contiene
   nombres, identificadores ni filas de pacientes. El servidor vuelve a comprobar el ámbito.
-* El acceso del profesional a N2 y N3 exige **relación asistencial** registrada (cita
-  pasada o futura, asignación explícita o derivación), no solo pertenecer a la clínica.
+* La **escritura profesional** exige relación asistencial registrada (cita,
+  asignación explícita o derivación). La consulta compartida no exige vínculo previo.
+  N3 mantiene su permiso adicional y filtros de sensibilidad.
 * Un permiso sin ámbito asignado equivale a alcance nulo, no a alcance total.
 * **La auditoría es append‑only en PostgreSQL:** disparadores rechazan `UPDATE`, `DELETE` y `TRUNCATE` con SQLSTATE `42501`, incluso cuando la cuenta local es dueña del esquema. En producción, el proceso debe usar una cuenta distinta del dueño para que no pueda desactivar ni quitar estos disparadores; la separación de roles sigue pendiente en el despliegue.
 * **La foto de perfil del paciente es N1**, no N2: se ve con `paciente.leer_administrativo` y
   se cambia con `paciente.editar`. Radiografías y fotos clínicas son N2 y exigen
-  `imagen_clinica.*`, relación asistencial (si el principal es profesional) y auditoría de
+  `imagen_clinica.*`, relación asistencial para la carga profesional y auditoría de
   cada descarga.
 * **La historia se revisa desde una especialidad.** Odontograma, placa, planes e imágenes clínicas
   exigen, además del permiso, una especialidad permitida al principal que tenga ese módulo activo
@@ -212,8 +215,10 @@ Observaciones que importan:
 * **La foto de una persona del equipo es N1.** La ve el personal de la misma clínica (nunca el
   agente) y la cambia la propia persona o quien tiene `usuario.editar`. Mismo saneado y cifrado
   que la foto del paciente; cambiarla deja la anterior como no vigente.
-* **Solo el profesional escribe odontograma y plan.** El asistente los consulta para
-  preparar el sillón y sube radiografías y fotos, pero no registra hallazgos.
+* **Solo el profesional escribe en los módulos de su especialidad.** Asistencia
+  consulta imágenes, odontograma y planes; no carga fotos ni registra hallazgos.
+  Registrar tomas o atender una alerta clínica requiere al profesional responsable,
+  permiso de escritura clínica y relación asistencial. La lectura no habilita mutaciones.
 * **Promociones: quien redacta no tiene por qué aprobar.** `promocion.aprobar` es el único
   que envía. Ningún rol asistencial tiene permisos de promoción.
 * **La interfaz oculta lo que el rol no puede hacer, el backend lo impide.** Menú, rutas,
@@ -311,9 +316,10 @@ IDOR.
 | `POST /api/v1/conversaciones/{id}/respuestas` | `conversacion.leer` + `conversacion.responder` + alcance N2 | Texto libre (1–1000) por el outbox, solo dentro de la ventana de 24 h (fuera → 409). `Idempotency-Key` obligatoria; quien responde toma el hilo y el agente deja de contestar. Auditada `conversacion.respondida` (ADR‑0025) |
 | `POST /api/v1/conversaciones/{id}/toma` · `/devolucion` | `conversacion.leer` + `conversacion.tomar` | Tomar pasa el hilo a una persona; devolver lo reabre para el agente solo si la clínica lo tiene encendido y hay paciente identificado (si no → 409). Ambas auditadas |
 | `POST /api/v1/conversaciones/{id}/cierre` | `conversacion.leer` + `conversacion.responder` | Cierra el hilo; ya no admite respuestas. Auditada `conversacion.cerrada`. Ajena o fuera de ámbito → 404 |
-| `GET /api/v1/pacientes/{id}/acceso-clinico` | `paciente.leer_administrativo` | Solo sí/no, sin contenido clínico: si quien pregunta puede pedir los datos clínicos (relación asistencial vigente para profesionales; el agente, nunca). Paciente fuera de ámbito → 404 como el resto. Evita que la ficha encadene 404 en notas, odontograma, planes e imágenes. No se audita como lectura clínica |
-| `GET /api/v1/historia/pacientes/{id}/notas` | `historia_clinica.leer` | **Exige además relación asistencial vigente.** Filtra versiones N3 en SQL si falta `historia_clinica.leer_sensible`; se audita antes de responder y el evento sube a N3 si devolvió una nota sensible. Paciente inexistente, fuera de ámbito o sin relación → 404 indistinguible. Solo devuelve notas de autores de la especialidad desde la que se revisa (`especialidad_id`; sin él, la propia del profesional). Pedir una especialidad no permitida → 403; la auditoría registra `especialidades_revisadas` |
-| `GET /api/v1/historia/especialidades` | `historia_clinica.leer`, `odontograma.leer`, `plan_tratamiento.leer` o `imagen_clinica.leer` | Especialidades desde las que revisa el principal: un profesional, la suya y las asignadas explícitamente (el comodín no abre las ajenas); el resto del personal, las de su ámbito. Nunca el agente |
+| `GET /api/v1/pacientes/{id}/acceso-clinico` | `paciente.leer_administrativo` | Solo sí/no, sin contenido clínico. Consulta compartida sin relación previa; los perfiles sin esa capacidad conservan su comprobación de vínculo. Agente excluido y paciente fuera de ámbito → 404. No se audita como lectura clínica |
+| `POST /api/v1/pacientes/{id}/atencion-profesional` | `historia_clinica.escribir` + perfil profesional activo | Acción explícita sin cita; motivo 5–500 caracteres e `Idempotency-Key` 8–200. Crea solo una asignación asistencial propia; clínica y paciente comprobados, auditoría `paciente.atencion_abierta`. Repetir no crea duplicados; no fabrica registros clínicos |
+| `GET /api/v1/historia/pacientes/{id}/notas` | `historia_clinica.leer` | Consulta compartida dentro de clínica y ámbito, sin vínculo previo. Filtra N3 en SQL sin permiso sensible; audita antes de responder y conserva el nivel del contenido. `especialidad_id` selecciona un área autorizada; por omisión, la propia del profesional o las autorizadas del resto. Fuera de ámbito → 404; área no permitida → 403 |
+| `GET /api/v1/historia/especialidades` | `historia_clinica.leer`, `odontograma.leer`, `plan_tratamiento.leer` o `imagen_clinica.leer` | Con consulta compartida, devuelve las áreas autorizadas y sus herramientas, incluidas las del comodín; `propia` identifica dónde registra el profesional. Sin esa capacidad se conserva la restricción previa. Nunca el agente |
 | `GET /api/v1/catalogo/especialidades/modulos-historia` · `PUT /api/v1/catalogo/especialidades/{id}/modulos-historia` | `especialidad.gestionar` | Módulos de historia por especialidad (odontograma, periodoncia, planes, imágenes). Solo la clínica del principal (otra → 404); cambiar exige motivo, versiona `configuracion_clinica.modulos_historia` y audita `especialidad.modulos_cambiados` |
 | `GET /api/v1/agenda/pacientes/{id}/recorrido` | `agenda.leer` (nunca el agente) | Todo lo que pasó con el paciente en la clínica, desde `cita_historial` (append-only), filtrado por el ámbito de agenda. Sin datos clínicos: el motivo de una derivación no se guarda aquí. Auditado `paciente.recorrido_consultado` |
 | `POST /api/v1/agenda/citas/{id}/consultorio` · `/salida` | `cita.registrar_llegada` | Exige llegada registrada; el consultorio debe ser de la sede y la exclusión por consultorio sigue en la base de datos. Auditados |
@@ -325,25 +331,25 @@ IDOR.
 | `POST /api/v1/configuracion/integraciones/typesafe/prueba` | `configuracion.escribir` | Envía a JEV un mensaje **sintético** fijo, sin datos de pacientes; informa si respondió o si se usó el respaldo por reglas. Auditado `integracion.probada` |
 | `POST /api/v1/historia/notas` | `historia_clinica.escribir` | Exige relación asistencial. N3 requiere además `historia_clinica.leer_sensible`; la creación se audita con su nivel. Los diagnósticos requieren además `diagnostico.registrar` |
 | `POST /api/v1/historia/notas/{raiz}/correccion` | `historia_clinica.escribir` | Crea una versión nueva; **no reescribe nada**. Motivo obligatorio, mínimo 5 caracteres. No permite rebajar una raíz N3; la versión nueva hereda N3 y la auditoría también |
-| `GET /api/v1/historia/pacientes/{id}/recetas` | `receta.leer` | Exige relación asistencial para profesionales; N3 se filtra en SQL si falta `historia_clinica.leer_sensible`. Cada receta devuelta queda auditada con su sensibilidad, sin datos de medicamento |
+| `GET /api/v1/historia/pacientes/{id}/recetas` | `receta.leer` | Consulta compartida dentro del ámbito; N3 se filtra en SQL si falta `historia_clinica.leer_sensible`. Cada receta devuelta queda auditada con su sensibilidad, sin datos de medicamento |
 | `POST /api/v1/historia/recetas` | `receta.crear` | Nace en **BORRADOR**, nunca confirmada; crear N3 requiere `historia_clinica.leer_sensible` y se audita con ese nivel |
 | `POST /api/v1/historia/recetas/{id}/versiones` | `receta.crear` + `receta.confirmar` | Hereda la sensibilidad de la versión anterior; el acceso N3 se filtra antes de modificarla y la auditoría conserva ese nivel |
 | `POST /api/v1/historia/recetas/{id}/confirmacion` | `receta.confirmar` | Único camino que genera tomas; un disparador lo respalda. `tomas_generadas = 0` es correcto para un PRN. La auditoría registra la sensibilidad de la receta |
 | `POST /api/v1/historia/recetas/{id}/suspension` | `receta.confirmar` | Cancela las tomas **futuras**; las pasadas quedan intactas. N3 conserva auditoría reforzada |
-| `POST /api/v1/historia/tomas/{id}/registro` | `adherencia.leer` o `receta.leer` | No acepta una toma futura |
+| `POST /api/v1/historia/tomas/{id}/registro` | `historia_clinica.escribir` + `receta.leer` | Profesional responsable y relación asistencial; paciente y receta dentro del ámbito y sensibilidad. No acepta tomas futuras ni registrar dos veces. La consulta del resto del personal no habilita este registro |
 | `POST /api/v1/historia/recetas/{id}/adherencia` | `adherencia.leer` | Cuenta omisiones y crea una alerta si se cumple el umbral; registra auditoría y **no interpreta clínicamente** |
 | `GET /api/v1/historia/adherencia/alertas` | `adherencia.leer` | Solo alertas abiertas dentro de clínica, ámbito y relación asistencial; cada paciente se audita |
-| `POST /api/v1/historia/adherencia/alertas/{id}/atencion` | `alerta_adherencia.atender` | Cierra una alerta dentro del ámbito; la acción se audita, y no agrega datos clínicos a la auditoría |
+| `POST /api/v1/historia/adherencia/alertas/{id}/atencion` | `alerta_adherencia.atender` + `historia_clinica.escribir` | Profesional responsable, relación asistencial y ámbito; la acción se audita sin copiar contenido clínico a metadatos |
 | `POST /api/v1/agenda/citas` con `consultorio_id` | `cita.crear` | El consultorio debe existir, estar activo y ser **de la sede de la cita**; de otra sede o inexistente → 404, inactivo → 422. El choque de sala lo resuelve la restricción `gist` → 409 |
 | `GET /api/v1/automatizaciones`, `PUT /api/v1/automatizaciones/{codigo}` | Ver: `configuracion.escribir` o `auditoria.leer`; cambiar: `configuracion.escribir` | Estado por clínica versionado en `configuracion_clinica`; el principal de sesión determina la clínica, sin aceptar un identificador del cliente. `test_el_estado_de_automatizaciones_no_se_cruza_entre_clinicas` verifica que un cambio no altera el estado visible de otra clínica. Cambio con motivo y auditoría `automatizacion.cambiada`. Los flujos obligatorios (aviso de cambio de cita, derivación a persona, comprobantes) no se apagan. Un flujo apagado no encola mensajes |
-| `GET /api/v1/historia/pacientes/{id}/resumen-clinico` | `historia_clinica.leer` + relación asistencial | Resumen estructurado sin IA; antecedentes y notas N3 solo con `historia_clinica.leer_sensible`, con filtro SQL. Si incluye N3, la lectura se audita como N3. El acceso sin permiso, fuera de ámbito, sin paciente o sin relación asistencial responde 404 indistinguible; la falta de permiso queda registrada por la dependencia de autorización. La interfaz permite solicitar acceso temporal de emergencia con motivo sin afirmar por qué el dato no está disponible. |
+| `GET /api/v1/historia/pacientes/{id}/resumen-clinico` | `historia_clinica.leer` | Consulta compartida dentro del ámbito, sin vínculo previo. Resumen estructurado sin IA; N3 solo con permiso sensible y filtro SQL. Auditoría con la sensibilidad de lo devuelto. Fuera de ámbito o sin paciente → 404; los perfiles sin consulta compartida conservan su control de relación |
 | `POST /api/v1/historia/pacientes/{id}/anamnesis/alergias` · `/antecedentes` | `historia_clinica.escribir` + identidad profesional y relación asistencial; N3 exige además `historia_clinica.leer_sensible` | Clínica y ámbito de paciente se validan en servidor. Alergia activa duplicada → 409. Antecedentes se agregan sin reescribir los anteriores. Nivel sensible registrado en auditoría sin copiar texto clínico a metadatos. |
 | `POST /api/v1/historia/pacientes/{id}/anamnesis/alergias/{alergia_id}/desactivacion` | `historia_clinica.escribir` + identidad profesional y relación asistencial | Solo desactiva alergia activa del paciente indicado; requiere motivo y conserva la fila. Audita la referencia y paciente sin copiar sustancia o motivo |
 | `POST /api/v1/historia/pacientes/{id}/resumen-clinico/redaccion` | Ídem | Solo IA **local** (Ollama en la máquina o red privada; se rechaza otra URL). Sin identificadores, antecedentes ni notas N3 en el prompt, incluso si quien lo pide puede leerlos; instrucciones sin diagnósticos ni recomendaciones, el texto no se guarda. Auditado `historia_clinica.resumen_redactado`. Desactivado por defecto |
-| `POST /api/v1/historia/pacientes/{id}/indicaciones`, `GET` ídem, `PATCH /api/v1/historia/indicaciones/{id}/anulacion` | Escribir: `historia_clinica.escribir`; leer: `historia_clinica.leer`; ambos con relación asistencial | Se guarda el hash del token. El WhatsApp es genérico (regla 10). Append-only: anular exige motivo |
+| `POST /api/v1/historia/pacientes/{id}/indicaciones`, `GET` ídem, `PATCH /api/v1/historia/indicaciones/{id}/anulacion` | Escribir: `historia_clinica.escribir` y relación asistencial; leer: `historia_clinica.leer` y consulta compartida dentro del ámbito | Se guarda el hash del token. El WhatsApp es genérico (regla 10). Append-only: anular exige motivo |
 | `POST /api/v1/publico/indicaciones/{token}/acceso` | **Sin sesión** | Verifica fecha de nacimiento (o 4 últimos del documento); límite 10/min por IP; bloqueo al 5.º fallo; misma respuesta para enlace inexistente, caducado o anulado. Lecturas y fallos auditados con el paciente como actor |
 | `GET /api/v1/dashboard/indicadores` | Sesión de personal (el agente IA se rechaza) | Cada bloque se calcula **solo** con el permiso de lectura de su módulo (`agenda.leer`, `paciente.leer_administrativo`, `pago.leer`, `usuario.leer`, etc.); sin permiso el bloque es `null`. Aplica el ámbito con las consultas autorizadas de cada módulo. Devuelve solo conteos e importes agregados: ningún nombre, documento ni dato clínico |
-| `GET/POST /api/v1/pacientes/{id}/imagenes` | `imagen_clinica.leer` / `imagen_clinica.cargar` | Relación asistencial. N3 requiere además `historia_clinica.leer_sensible`; las filas N3 se filtran en SQL al listar y el nivel se audita. Tipo real por contenido (JPEG, PNG, WebP), metadatos EXIF/GPS eliminados, cifrado AES‑GCM ligado al id antes del almacén. `procedimiento_id` opcional: solo un procedimiento de un plan del mismo paciente y clínica (si no, 404) |
+| `GET/POST /api/v1/pacientes/{id}/imagenes` | `imagen_clinica.leer` / `imagen_clinica.cargar` | Consulta compartida dentro del ámbito; la carga exige profesional, especialidad propia y relación. N3 requiere permiso sensible; filtro SQL y auditoría conservan el nivel. Tipo real JPEG/PNG/WebP, EXIF/GPS eliminado y cifrado AES‑GCM. `procedimiento_id` solo del plan del mismo paciente y clínica; si no, 404 |
 | `GET /api/v1/imagenes/{id}/contenido` | `imagen_clinica.leer` (clínica) o `paciente.leer_administrativo` (perfil) | El alcance se comprueba con el paciente **real** de la imagen (cierra el IDOR); N3 devuelve 404 sin permiso sensible. **Cada descarga clínica se audita con su nivel**. Sin URL firmada: todo pasa por el API |
 | `GET/POST /api/v1/pacientes/{id}/foto-perfil` | `paciente.leer_administrativo` / `paciente.editar` | N1. Mismo saneado y cifrado que una imagen clínica |
 | `/api/v1/odontologia/pacientes/{id}/odontograma*` | `odontograma.leer` / `odontograma.escribir` | Versiones append‑only; un disparador rechaza `UPDATE`/`DELETE` salvo apagar `vigente`. Control optimista por versión |
@@ -442,9 +448,10 @@ ningún dato personal ni clínico aparece en la salida de los logs.
 1. **Mínimo privilegio.** Un rol nuevo parte de cero permisos.
 2. **Ámbito explícito.** Toda asignación de rol declara su ámbito; sin ámbito, no hay
    acceso.
-3. **Separación de funciones.** Quien administra la plataforma no lee datos clínicos;
-   quien audita no modifica datos.
-4. **Relación asistencial.** El acceso clínico requiere vínculo con el paciente.
+3. **Separación de funciones.** Todos los roles base consultan N2; únicamente el
+   profesional autorizado registra contenido clínico. Auditoría no modifica datos.
+4. **Relación asistencial.** La escritura clínica requiere vínculo con el paciente;
+   la consulta compartida mantiene el ámbito sin exigir atención previa.
 5. **Revisión periódica.** Trimestral de cuentas activas, roles y ámbitos; el auditor
    dispone del informe.
 6. **Baja inmediata.** Al desactivar un usuario se revocan todas sus sesiones en el acto.
@@ -566,8 +573,8 @@ un profesional jurídico junto con la clínica, antes de operar con pacientes re
 | `/asistente/pacientes/{id}/sesiones` | Personal autenticado con `paciente.leer_administrativo`; paciente accesible en clínica/ámbito; sesión exclusiva del operador. |
 | Sesión: `/contexto`, `/cita`, `/mensajes` | Revalidación de paciente, operador, vencimiento y huella de permisos. Agenda/cita dentro de los filtros del operador. No se acepta otra persona desde el mensaje. |
 | Sesión: `/confirmar` | Propuesta vigente y coincidente; permiso de la herramienta y validación del servicio. Las escrituras operativas requieren confirmación humana; claves de idempotencia. |
-| Resumen clínico del agente | Permiso clínico, relación asistencial, especialidad/autor y sensibilidad mediante el asistente local. Auditoría. Contenido excluido del contexto LLM y caché persistida. |
-| Periodontogramas y PDF | `odontograma.leer` / `odontograma.escribir`, módulo Periodoncia compatible, relación asistencial y filtros de autor/especialidad. Corrección solo del autor autorizado. N3 exige lectura sensible. |
+| Resumen clínico del agente | Consulta compartida dentro de clínica/ámbito, especialidad/autor y sensibilidad mediante el asistente local. Auditoría. Contenido excluido del contexto LLM y caché persistida. |
+| Periodontogramas y PDF | Consulta `odontograma.leer` dentro del ámbito y módulo Periodoncia. Escritura `odontograma.escribir` exige especialidad propia y relación; corrección solo del autor autorizado. N3 exige lectura sensible. |
 | Analítica | `dashboard.leer`, consultas por ámbito y permisos de cada módulo. Las capturas se separan por clínica, actor y huella completa de autorización. Sin acceso clínico individual adicional. |
 | Fotos del registro | Permiso de lectura/escritura del padre. En clínica: permiso de imágenes, relación asistencial, módulo y autor para cargar; N3 exige permiso sensible. En Conocimiento: sensibilidad del ámbito RAG y ACL del documento. |
 

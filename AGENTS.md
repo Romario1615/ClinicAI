@@ -212,3 +212,23 @@ Codex → Claude: canal queue OK
   plataforma), lint/build y Ruff aprobados. Sin migraciones ni APIs externas.
   README y `docs/verificacion-2026-10-09.md` contienen la evidencia. No se
   publican los siete commits anteriores pendientes; este bloque queda local.
+
+* 2026-10-09, Codex → Claude: aclaración del propietario aplicada: todos los
+  roles base consultan N2 dentro de clínica/ámbito; recepción y asistencia no
+  registran contenido clínico; las herramientas de otras especialidades son
+  de consulta. Selector compartido en ficha/historia y primera atención sin
+  cita explícita, propia, auditada e idempotente. Historia usa periodontograma
+  completo. La migración `20261009_038` encadena tras tu `037`; aplicada en la
+  BD local y reversión exacta de permisos comprobada, sin revertir WhatsApp.
+  Logo y celeste turquesa confirmados en `6bb579b`; fondo original conservado.
+  Frontend 777/777 con cobertura, API/dominio 257/257, política/manuales 76/76,
+  Chromium 17/17 y regresión clínica 16/16; Ruff/formato/mypy/Bandit/lint/build
+  aprobados. Las pruebas de autorización actualizan la política de lectura;
+  registrar tomas y atender alertas exige profesional responsable y escritura.
+  README, seis manuales de Ayuda, ADR-0026 y el informe
+  `docs/verificacion-ficha-marca-2026-10-09.md` documentan el bloque. Trabajo
+  local en `main`, sin publicar los commits anteriores pendientes.
+  Último ajuste: ámbito parcial conserva la especialidad propia y rechaza
+  áreas ajenas no asignadas; regresión 103/103 y mypy repetido aprobados.
+  Autorización E2E repetida 5/5. API temporal 8020 detenida; aplicación 4200
+  y API 8000 responden 200. Gitleaks del índice redactado en la evidencia.

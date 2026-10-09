@@ -23,6 +23,7 @@ import pytest
 
 from app.nucleo.autorizacion import (
     CATALOGO_PERMISOS,
+    PERMISOS_CONSULTA_CLINICA,
     PERMISOS_POR_CODIGO,
     PERMISOS_POR_ROL,
     PERMISOS_SOLO_ASISTENCIALES,
@@ -152,16 +153,16 @@ class TestMatrizDePermisos:
             f"permisos no documentados/concedidos de más {sobran_en_el_rol}"
         )
 
-    def test_recepcion_no_accede_a_informacion_clinica(self) -> None:
+    def test_recepcion_consulta_sin_escribir_informacion_clinica(self) -> None:
         """Recepcion ve que hay una cita, no por que.
 
         Es una regla de negocio, no una preferencia de interfaz.
         """
         recepcion = PERMISOS_POR_ROL["recepcion"]
-        assert "historia_clinica.leer" not in recepcion
+        assert "historia_clinica.leer" in recepcion
         assert "historia_clinica.escribir" not in recepcion
         assert "historia_clinica.leer_sensible" not in recepcion
-        assert "receta.leer" not in recepcion
+        assert "receta.leer" in recepcion
         assert "diagnostico.registrar" not in recepcion
         # Pero si puede operar la agenda
         assert "cita.crear" in recepcion
@@ -169,28 +170,28 @@ class TestMatrizDePermisos:
         # Puede exportar conteos operativos agregados sin nombres ni datos de pacientes.
         assert "reporte.exportar" in recepcion
 
-    def test_superadministrador_no_accede_a_historia_clinica(self) -> None:
+    def test_superadministrador_consulta_sin_escritura_clinica(self) -> None:
         """Separa la administracion tecnica del acceso clinico.
 
         Una cuenta tecnica comprometida no debe exponer datos de pacientes.
         """
         superadmin = PERMISOS_POR_ROL["superadministrador"]
-        assert not (superadmin & PERMISOS_SOLO_ASISTENCIALES)
+        assert not ((superadmin & PERMISOS_SOLO_ASISTENCIALES) - PERMISOS_CONSULTA_CLINICA)
         assert "rol.asignar" in superadmin
 
-    def test_administrador_clinica_no_accede_a_contenido_clinico(self) -> None:
+    def test_administrador_clinica_consulta_sin_prescribir(self) -> None:
         admin = PERMISOS_POR_ROL["administrador_clinica"]
-        assert "historia_clinica.leer" not in admin
+        assert "historia_clinica.leer" in admin
         assert "receta.crear" not in admin
         # Ve metadatos para poder auditar la operacion
         assert "historia_clinica.leer_metadatos" in admin
 
-    def test_auditor_verifica_sin_ver(self) -> None:
+    def test_auditor_consulta_sin_escribir(self) -> None:
         """El auditor comprueba quien accedio a que, sin leer el contenido."""
         auditor = PERMISOS_POR_ROL["auditor"]
         assert "auditoria.leer" in auditor
         assert "historia_clinica.leer_metadatos" in auditor
-        assert not (auditor & PERMISOS_SOLO_ASISTENCIALES)
+        assert not ((auditor & PERMISOS_SOLO_ASISTENCIALES) - PERMISOS_CONSULTA_CLINICA)
 
     def test_auditor_no_modifica_nada(self) -> None:
         """Separacion de funciones: quien audita no altera datos."""
@@ -229,10 +230,11 @@ class TestMatrizDePermisos:
                 f"'{codigo}' solo debe tenerlo el profesional, pero lo tienen: {con_permiso}"
             )
 
-    def test_asistente_no_lee_historia_pero_si_recetas(self) -> None:
+    def test_asistente_consulta_historia_y_recetas_sin_cargar_imagenes(self) -> None:
         """El asistente ayuda con la medicacion sin leer la evolucion clinica."""
         asistente = PERMISOS_POR_ROL["asistente"]
-        assert "historia_clinica.leer" not in asistente
+        assert "historia_clinica.leer" in asistente
+        assert "imagen_clinica.cargar" not in asistente
         assert "receta.leer" in asistente
         assert "alerta_adherencia.atender" in asistente
 

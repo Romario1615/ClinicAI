@@ -24,17 +24,18 @@ from __future__ import annotations
 import uuid
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Header, Path, Query, Request
+from fastapi import APIRouter, Depends, Header, Path, Query, Request, Response
 
 from app.modulos.pacientes.esquemas import (
     DatosPaciente,
+    InicioAtencionProfesional,
     PaginaPacientes,
     RespuestaPaciente,
     RespuestaPacienteDetalle,
 )
 from app.modulos.pacientes.modelos import Paciente
 from app.modulos.pacientes.repositorio import LIMITE_MAXIMO, LONGITUD_MINIMA_BUSQUEDA
-from app.modulos.pacientes.servicios import guardar_paciente
+from app.modulos.pacientes.servicios import guardar_paciente, iniciar_atencion_profesional
 from app.nucleo.auditoria import AccionAuditada, construir_entrada
 from app.nucleo.autorizacion import NivelSensibilidad, Principal
 from app.nucleo.dependencias import (
@@ -52,6 +53,20 @@ PuedeLeerPacientes = Annotated[Principal, Depends(exige_permiso("paciente.leer_a
 PuedeCrearPacientes = Annotated[Principal, Depends(exige_permiso("paciente.crear"))]
 PuedeEditarPacientes = Annotated[Principal, Depends(exige_permiso("paciente.editar"))]
 ClaveEscritura = Annotated[str, Header(alias="Idempotency-Key", min_length=8, max_length=200)]
+
+
+@enrutador.post("/{paciente_id}/atencion-profesional", status_code=204)
+async def abrir_atencion_profesional(
+    paciente_id: uuid.UUID,
+    datos: InicioAtencionProfesional,
+    principal: Annotated[Principal, Depends(exige_permiso("historia_clinica.escribir"))],
+    sesion: Sesion,
+    reloj: RelojActual,
+    clave: ClaveEscritura,
+) -> Response:
+    await iniciar_atencion_profesional(sesion, principal, reloj, paciente_id, datos.motivo, clave)
+    await sesion.commit()
+    return Response(status_code=204)
 
 
 @enrutador.post("/", response_model=RespuestaPaciente, status_code=201)

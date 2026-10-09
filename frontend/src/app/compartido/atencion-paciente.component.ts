@@ -1,4 +1,5 @@
 import { ChangeDetectionStrategy, Component, computed, effect, inject, input, OnInit, output, signal } from '@angular/core';
+import { type HerramientaHistoria } from './herramientas-paciente.component';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { HistoriaClinicaComponent } from '../paginas/historia-clinica/historia-clinica.component';
@@ -38,18 +39,18 @@ export class AtencionPacienteComponent implements OnInit {
   private readonly especialidades = inject(EspecialidadHistoriaService);
   readonly pacienteId = input.required<string>();
   readonly citaInicial = input<string | null>(null);
-  readonly moduloInicial = input<'faciograma' | 'documentos' | null>(null);
+  readonly moduloInicial = input<HerramientaHistoria | null>(null);
   readonly cambioCita = output<ContextoAtencion | null>();
   protected readonly citas = signal<ContextoAtencion[]>([]);
   protected readonly elegida = signal<ContextoAtencion | null>(null);
   protected readonly error = signal('');
   protected readonly cargando = signal(false);
-  protected readonly contextoVista = computed(() => [this.elegida()?.id ?? 'sin-cita']);
+  protected readonly contextoVista = computed(() => [(this.elegida()?.id ?? 'sin-cita') + ':' + (this.moduloInicial() ?? '') + ':' + (this.especialidades.elegida()?.id ?? '')]);
   constructor() {
     this.especialidades.cargar();
     effect(() => {
       const cita = this.elegida();
-      if (cita && this.especialidades.disponibles().some(e => e.id === cita.especialidad_id)) {
+      if (cita && !this.moduloInicial() && this.especialidades.disponibles().some(e => e.id === cita.especialidad_id)) {
         this.especialidades.elegir(cita.especialidad_id);
       }
     });
@@ -67,7 +68,7 @@ export class AtencionPacienteComponent implements OnInit {
     this.error.set(id && !cita ? 'La cita solicitada no está disponible en su ámbito. Seleccione otra atención.' : '');
     this.elegida.set(cita);
     if (!id || cita) this.cambioCita.emit(cita);
-    if (cita && this.especialidades.disponibles().some(e => e.id === cita.especialidad_id)) this.especialidades.elegir(cita.especialidad_id);
+    if (cita && !this.moduloInicial() && this.especialidades.disponibles().some(e => e.id === cita.especialidad_id)) this.especialidades.elegir(cita.especialidad_id);
   }
   protected especialidadDisponible(): boolean { return !this.elegida() || this.especialidades.disponibles().some(e => e.id === this.elegida()!.especialidad_id); }
   protected puedeVerClinico(): boolean { return this.sesion.tieneAlgunPermiso('historia_clinica.leer', 'receta.leer'); }

@@ -1,5 +1,23 @@
 # Limitaciones conocidas y riesgos residuales
 
+## Actualización de ficha y marca (2026-10-09)
+
+La consulta N2 se habilita para los seis roles base dentro de clínica y ámbito,
+sin relación asistencial previa. Los roles personalizados conservan sus
+asignaciones: no reciben permisos automáticamente. N3 y Formulario 033 requieren
+permiso sensible adicional. Consultar otra especialidad no permite registrar
+con sus herramientas ni corregir al autor.
+
+Las herramientas vacías están preparadas desde el alta; no se crean controles,
+notas ni mediciones hasta una acción profesional. El inicio sin cita crea solo
+un vínculo asistencial. Fotografías de identificación, agenda y pagos mantienen
+sus permisos administrativos, separados de la carga clínica.
+
+La marca y la paleta se actualizan usando los recursos existentes. Las pruebas
+usan datos sintéticos y los envíos documentales siguen en sandbox. Esta revisión
+no resuelve las validaciones externas pendientes de E-1/E-2 ni evalúa modelos
+predictivos con datos reales. [Informe actual](verificacion-ficha-marca-2026-10-09.md).
+
 > **Verificación actual (2026-10-07):** rama `claude/friendly-gates-o240sb`, base `727c9f5`; frontend 605/605, lint y build aprobados, 462,85 kB iniciales dentro del presupuesto. Chromium 62/62 en 6,9 minutos con base temporal y API separadas; axe verifica seis roles y las 22 rutas del menú. Se corrigieron el ancho de Agenda a 320 px, los nombres accesibles del Formulario 033 y el acceso por teclado al contenido de Catálogo/Automatizaciones. Backend completo: 1855 aprobadas, tres pruebas de Anthropic real omitidas y cobertura 87,89 %. Contrato/métricas 8/8 y análisis estático aprobados; la prueba del historial de reprogramación identifica el evento en vez de depender de filas con fechas empatadas. [Evidencia y cambios](verificacion-2026-10-07.md).
 
 > **Última actualización:** 2026‑10‑07 · E‑35 resuelto: las superficies del odontograma se recorren y editan con teclado. E‑20: ACL de documentos administrables desde la interfaz y aplicadas a búsqueda y metadatos. Las pruebas de anamnesis, notas SOAP, recetas, delegaciones y Formulario MSP 033 pasaron en los 62 escenarios actuales usando PostgreSQL local. El bundle inicial está por debajo de 500 kB. Las ingestas pendientes se reanudan automáticamente; E‑40 queda limitado a fallos controlados del proveedor.

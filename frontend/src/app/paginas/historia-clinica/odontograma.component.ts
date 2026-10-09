@@ -1,3 +1,4 @@
+import { EspecialidadHistoriaService } from '../../nucleo/servicios/especialidad-historia.service';
 /**
  * Odontograma interactivo.
  *
@@ -87,13 +88,14 @@ export class OdontogramaComponent {
 
   private readonly api = inject(ApiService);
   private readonly sesion = inject(SesionService);
+  private readonly especialidades = inject(EspecialidadHistoriaService);
   protected readonly operacionFotos = inject(FotosRegistroService).operacion<Odontograma>();
   protected fotos: readonly FotoSeleccionada[] = [];
   private readonly capturaFotos = viewChild(CapturaFotosComponent);
   protected readonly puedeLeerFotos = this.sesion.tienePermiso(PERMISOS.imagenClinicaLeer);
   protected readonly puedeCargarFotos = this.sesion.tienePermiso(PERMISOS.imagenClinicaCargar);
 
-  protected readonly puedeEditar = this.sesion.tienePermiso(PERMISOS.odontogramaEscribir);
+  protected readonly puedeEditar = computed(() => this.sesion.tienePermiso(PERMISOS.odontogramaEscribir) && this.especialidades.puedeRegistrar('odontograma'));
   protected readonly puedeLeerSensible = this.sesion.tienePermiso(PERMISOS.historiaLeerSensible);
   private readonly puedeVerPlanes = this.sesion.tienePermiso(PERMISOS.planTratamientoLeer);
   protected readonly denticion = signal<Denticion>('PERMANENTE');
@@ -131,7 +133,7 @@ export class OdontogramaComponent {
   protected readonly hallazgosCara = HALLAZGOS_CARA;
   protected readonly regiones = REGIONES;
   protected readonly puedeGuardar = computed(
-    () => this.puedeEditar && !this.guardando() && (this.actual()?.vigente ?? true),
+    () => this.puedeEditar() && !this.guardando() && (this.actual()?.vigente ?? true),
   );
   protected readonly estadoSeleccionado = computed(() => {
     const codigo = this.seleccionada();

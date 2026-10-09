@@ -1,3 +1,5 @@
+import { HerramientasPacienteComponent, type HerramientaHistoria } from '../../compartido/herramientas-paciente.component';
+import { PeriodontogramaComponent } from './periodontograma.component';
 import { FotosRegistroComponent } from '../../compartido/fotos-registro.component';
 /**
  * Historia clinica. Conectada al backend real.
@@ -5,11 +7,10 @@ import { FotosRegistroComponent } from '../../compartido/fotos-registro.componen
  * Lo que esta pantalla tiene que hacer bien
  * -----------------------------------------
  * **Tiene que degradar por rol, sin filtrar que existe lo que no se puede
- * ver.** Los permisos clinicos no van juntos: un asistente tiene `receta.leer`
- * y `adherencia.leer` pero **no** `historia_clinica.leer`. Esta pantalla le
- * muestra las recetas y le dice que las notas no estan a su alcance, en lugar
- * de enviar una peticion que devolvera 403 y pintar un error rojo como si algo
- * se hubiera roto.
+ * ver.** Todos los roles base consultan el historial N2 dentro de su ambito.
+ * Solo el profesional registra desde su especialidad; N3 y los roles
+ * personalizados conservan sus permisos independientes. La pantalla ofrece
+ * las acciones autorizadas y el servidor vuelve a comprobarlas.
  *
  * **No puede presentar una pauta «cuando sea necesario» como pauta fija.** Un
  * PRN no genera horarios, y confundirlos es un error de medicacion. Se marca
@@ -59,7 +60,7 @@ import {
 import { SelectorEspecialidadComponent } from '../../compartido/selector-especialidad.component';
 import { FotoPerfilComponent } from '../../compartido/foto-perfil.component';
 import { GaleriaImagenesComponent } from '../../compartido/galeria-imagenes.component';
-import { IndicePlacaComponent } from './indice-placa.component';
+
 import { NotaEditorComponent } from './nota-editor.component';
 import { RecetaEditorComponent } from './receta-editor.component';
 import { OdontogramaComponent } from './odontograma.component';
@@ -117,17 +118,7 @@ const VIAS: Record<string, string> = {
   INTRAVENOSA: 'via intravenosa',
 };
 
-type Pestana =
-  | 'evolucion'
-  | 'odontograma'
-  | 'formulario033'
-  | 'periodoncia'
-  | 'imagenes'
-  | 'planes'
-  | 'recetas'
-  | 'indicaciones'
-  | 'faciograma'
-  | 'documentos';
+type Pestana = HerramientaHistoria;
 
 import { TipoDocumentoPipe } from '../../compartido/tipo-documento.pipe';
 import { ResumenModuloComponent } from '../../compartido/resumen-modulo.component';
@@ -141,6 +132,8 @@ import { RegistrosPacienteComponent } from '../../compartido/registros-paciente.
   standalone: true,
   imports: [FotosRegistroComponent,
     RegistrosPacienteComponent,
+    HerramientasPacienteComponent,
+    PeriodontogramaComponent,
     ResumenModuloComponent,
     IconoComponent,
     ResumenClinicoComponent,
@@ -155,7 +148,7 @@ import { RegistrosPacienteComponent } from '../../compartido/registros-paciente.
     Formulario033Component,
     FotoPerfilComponent,
     GaleriaImagenesComponent,
-    IndicePlacaComponent,
+
     NotaEditorComponent,
     RecetaEditorComponent,
     SelectorEspecialidadComponent,
@@ -173,7 +166,7 @@ export class HistoriaClinicaComponent implements OnInit {
   readonly citaContexto = input<string | null>(null);
   readonly sedeContexto = input<string | null>(null);
   readonly embebida = input(false);
-  readonly moduloInicial = input<'faciograma' | 'documentos' | null>(null);
+  readonly moduloInicial = input<HerramientaHistoria | null>(null);
   private readonly ruta = inject(ActivatedRoute, { optional: true });
   private readonly destroyRef = inject(DestroyRef);
   private readonly api = inject(ApiService);
@@ -236,7 +229,7 @@ export class HistoriaClinicaComponent implements OnInit {
     this.sesion.tienePermiso(PERMISOS.historiaLeerSensible),
   );
   protected readonly puedeEditarFormulario033 = computed(() =>
-    this.sesion.tienePermiso(PERMISOS.historiaEscribir) &&
+    this.sesion.tienePermiso(PERMISOS.historiaEscribir) && this.especialidades.puedeRegistrar('odontograma') &&
     this.sesion.tienePermiso(PERMISOS.historiaLeerSensible),
   );
   protected readonly puedeLeerPlanes = computed(() =>
@@ -246,11 +239,11 @@ export class HistoriaClinicaComponent implements OnInit {
     ),
   );
   protected readonly puedeEditarPlanes = computed(() =>
-    this.sesion.tienePermiso(PERMISOS.planTratamientoEscribir),
+    this.sesion.tienePermiso(PERMISOS.planTratamientoEscribir) && this.especialidades.puedeRegistrar(),
   );
 
   protected readonly puedeEscribirNotas = computed(() =>
-    this.sesion.tienePermiso(PERMISOS.historiaEscribir),
+    this.sesion.tienePermiso(PERMISOS.historiaEscribir) && this.especialidades.puedeRegistrar(),
   );
   protected readonly puedeSolicitarAccesoEmergencia = computed(() =>
     this.sesion.tienePermiso(PERMISOS.accesoEmergenciaSolicitar),
@@ -315,7 +308,7 @@ export class HistoriaClinicaComponent implements OnInit {
   );
 
   protected readonly puedeEscribirHistoria = computed(() =>
-    this.sesion.tienePermiso(PERMISOS.historiaEscribir),
+    this.sesion.tienePermiso(PERMISOS.historiaEscribir) && this.especialidades.puedeRegistrar(),
   );
 
   /** Recetas confirmadas, para adjuntarlas a las indicaciones. */
@@ -329,10 +322,10 @@ export class HistoriaClinicaComponent implements OnInit {
   );
 
   protected readonly puedeCrearRecetas = computed(() =>
-    this.sesion.tienePermiso(PERMISOS.recetaCrear),
+    this.sesion.tienePermiso(PERMISOS.recetaCrear) && this.especialidades.puedeRegistrar(),
   );
   protected readonly puedeConfirmarRecetas = computed(() =>
-    this.sesion.tienePermiso(PERMISOS.recetaConfirmar),
+    this.sesion.tienePermiso(PERMISOS.recetaConfirmar) && this.especialidades.puedeRegistrar(),
   );
   protected readonly creandoReceta = signal(false);
   protected readonly versionandoReceta = signal<Receta | null>(null);

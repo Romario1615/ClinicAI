@@ -30,6 +30,7 @@ export function identidadCon(permisos: readonly string[]): Identidad {
     apellido: 'Sintetica',
     clinica_id: 'c-1',
     roles: ['profesional'],
+    profesional_id: 'prof-1',
     permisos,
     ambito: {
       clinica_id: 'c-1',

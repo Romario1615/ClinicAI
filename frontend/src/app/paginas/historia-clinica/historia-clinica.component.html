@@ -160,6 +160,7 @@
     } @else {
       <app-selector-especialidad class="historia__especialidad pantalla__fijo" (cambio)="cambiarEspecialidad()" />
     }
+    @if (!embebida()) { <app-herramientas-paciente class="historia__herramientas pantalla__fijo" [pacienteId]="paciente()!.id" [citaId]="citaContexto()" (elegida)="cambiarEspecialidad(); elegirPestana($event)" /> }
     <app-pestanas
       class="pantalla__fijo"
       grupo="historia"
@@ -208,7 +209,7 @@
           />
         }
         @case ('periodoncia') {
-          <app-indice-placa class="llena" [pacienteId]="paciente()!.id" />
+          <div class="desplazable" tabindex="0" role="region" aria-label="Periodontograma del paciente"><app-periodontograma [pacienteId]="paciente()!.id" [citaId]="citaContexto()" /></div>
         }
         @case ('imagenes') {
           <!-- La galería es compartida: aquí solo se le da un marco que

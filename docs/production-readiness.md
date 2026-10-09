@@ -1,6 +1,16 @@
 # Estado de preparación para producción
 
-> **Revisión actual en main (2026-10-07):** faciograma y Documentos y PDF visibles
+> **Revisión de ficha y marca en main (2026-10-09):** consulta N2 de los seis
+> roles base dentro de clínica/ámbito; registro profesional según especialidad;
+> herramientas vacías desde el alta e inicio explícito sin cita. Migración `038`
+> aplicada y reversión de permisos verificada. Frontend **777/777** con cobertura,
+> lint y build aprobados; paquete inicial 468,69 kB. Los manuales propios y la
+> matriz de seguridad reflejan la decisión del propietario. La evidencia API y
+> de navegador está en [el informe](verificacion-ficha-marca-2026-10-09.md).
+> Las integraciones reales y las condiciones de producción pendientes siguen
+> abiertas; esta revisión acredita funcionamiento local con datos sintéticos.
+
+> **Revisión anterior en main (2026-10-07):** faciograma y Documentos y PDF visibles
 > desde la ficha, cita conservada y CRUD de clínicas/cuentas probado por rol.
 > Frontend 635/635; lint y build aprobados. Chromium 67/67 en 7,7 minutos, axe
 > en las 22 rutas y en la ficha facial; cuatro recorridos documentales repetidos

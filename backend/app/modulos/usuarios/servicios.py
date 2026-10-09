@@ -835,6 +835,7 @@ class ServicioAutenticacion:
             # Un perfil desactivado o incoherente no se convierte en personal
             # clinico sin relacion asistencial al perder su identificador.
             permisos -= PERMISOS_SOLO_ASISTENCIALES | {
+                "historia_clinica.consultar_compartida",
                 "adherencia.leer",
                 "alerta_adherencia.atender",
                 "acceso_emergencia.solicitar",
@@ -851,6 +852,7 @@ class ServicioAutenticacion:
         if (
             profesional_id is not None
             and perfil is not None
+            and "historia_clinica.consultar_compartida" not in permisos
             and ("profesional" in codigos_rol or permisos & PERMISOS_SOLO_ASISTENCIALES)
             and not (codigos_rol & {"administrador_clinica", "superadministrador"})
         ):
@@ -858,6 +860,22 @@ class ServicioAutenticacion:
                 ambito,
                 todas_las_especialidades=False,
                 especialidades=ambito.especialidades | {perfil.especialidad_id},
+            )
+
+        if "historia_clinica.consultar_compartida" in permisos:
+            ambito = replace(
+                ambito,
+                # La especialidad del perfil sigue siendo propia en un ámbito
+                # parcial; las áreas adicionales conservan sus asignaciones.
+                especialidades=ambito.especialidades
+                | (
+                    {perfil.especialidad_id}
+                    if profesional_id is not None and perfil is not None
+                    else frozenset()
+                ),
+                nivel_maximo=max(
+                    ambito.nivel_maximo, NivelSensibilidad.CLINICO, key=lambda n: n.orden
+                ),
             )
 
         return Principal(

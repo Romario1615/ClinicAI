@@ -148,7 +148,7 @@
                   @if (medicamentosDe(alerta); as nombres) { <p>Receta: {{ nombres }}</p> }
                   <p>{{ alerta.tomas_omitidas }} de {{ alerta.tomas_esperadas }} tomas sin registrar en el periodo.</p>
                 </div>
-                @if (sesion.tienePermiso('alerta_adherencia.atender')) {
+                @if (puedeRegistrar() && alerta.profesional_id === sesion.identidad()?.profesional_id && sesion.tienePermiso('alerta_adherencia.atender')) {
                   <button class="boton boton--pequeno" type="button" [disabled]="atendiendoAlerta() === alerta.id" (click)="atender(alerta)">
                     {{ atendiendoAlerta() === alerta.id ? 'Guardando…' : 'Marcar atendida' }}
                   </button>
@@ -216,7 +216,7 @@
                              decidir. El backend lo rechaza; ofrecerlo y que falle
                              sería peor que no ofrecerlo. -->
                         <span class="aun-no">aún no toca</span>
-                      } @else if (!puedeRegistrar()) {
+                      } @else if (!puedeRegistrarToma(fila.toma)) {
                         <span class="aun-no">sin permiso</span>
                       } @else {
                         <button

@@ -27,6 +27,11 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 from app.modulos.pacientes.modelos import TipoDocumento
 
 
+class InicioAtencionProfesional(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+    motivo: str = Field(min_length=5, max_length=500)
+
+
 class DatosPaciente(BaseModel):
     """Ficha administrativa. El nivel de identidad no lo decide este formulario."""
 

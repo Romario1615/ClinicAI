@@ -34,6 +34,12 @@ def autores_en_ambito(principal: Principal, modulo: str | None = None) -> Select
         consulta = consulta.where(
             or_(func.upper(Especialidad.codigo).startswith("ODO"), nombre.contains("odont"))
         )
+    if principal.tiene_permiso("historia_clinica.consultar_compartida"):
+        if not principal.ambito.todas_las_especialidades:
+            consulta = consulta.where(
+                Profesional.especialidad_id.in_(principal.ambito.especialidades)
+            )
+        return consulta
     if principal.profesional_id is not None:
         perfil = aliased(Profesional)
         propia = (

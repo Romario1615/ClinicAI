@@ -30,6 +30,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.modulos.usuarios.modelos import Permiso, Rol, RolPermiso
 from app.nucleo.autorizacion import (
     CATALOGO_PERMISOS,
+    PERMISOS_CONSULTA_CLINICA,
     PERMISOS_POR_ROL,
     PERMISOS_SOLO_ASISTENCIALES,
     validar_catalogo,
@@ -272,7 +273,7 @@ async def verificar_coherencia(sesion: AsyncSession) -> list[str]:
             .where(RolPermiso.rol_id == rol.id)
         )
         concedidos = set((await sesion.execute(consulta)).scalars())
-        clinicos = concedidos & PERMISOS_SOLO_ASISTENCIALES
+        clinicos = (concedidos & PERMISOS_SOLO_ASISTENCIALES) - PERMISOS_CONSULTA_CLINICA
         if clinicos:
             problemas.append(
                 f"El rol '{codigo_rol}' tiene permisos clinicos en la base de "

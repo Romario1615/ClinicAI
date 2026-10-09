@@ -7,8 +7,9 @@ El modelo tiene **dos dimensiones que se evaluan siempre las dos**:
   paciente y tipo de informacion.
 
 Tener el permiso `historia_clinica.leer` no da acceso a todas las historias
-clinicas: da acceso a las que caen dentro del ambito del principal y con las
-que existe relacion asistencial.  Comprobar solo el permiso es el error que
+clinicas: da acceso a las que caen dentro del ambito del principal. La consulta
+compartida N2 omite el vinculo previo; registrar sigue exigiendo relacion
+asistencial. Comprobar solo el permiso es el error que
 convierte un sistema con roles en un sistema sin control de acceso real.
 
 Tres reglas de diseno:
@@ -183,6 +184,12 @@ CATALOGO_PERMISOS: Final[tuple[DefinicionPermiso, ...]] = (
         "clinico",
         relacion=True,
         nivel=NivelSensibilidad.CLINICO_SENSIBLE,
+    ),
+    _p(
+        "historia_clinica.consultar_compartida",
+        "Consultar historia N2 y herramientas de las especialidades autorizadas",
+        "clinico",
+        nivel=NivelSensibilidad.CLINICO,
     ),
     _p(
         "historia_clinica.leer_metadatos",
@@ -700,8 +707,8 @@ PERMISOS_POR_ROL: Final[dict[str, frozenset[str]]] = {
             "paciente.editar",
             "historia_clinica.leer_metadatos",
             "receta.leer",
-            # El asistente dental toma radiografias y fotos, y consulta el
-            # odontograma y el plan para preparar el sillon. No los modifica.
+            # Asistencia consulta imágenes, odontograma y planes. La política
+            # compartida de abajo retira la carga de imágenes clínicas.
             "imagen_clinica.leer",
             "imagen_clinica.cargar",
             "odontograma.leer",
@@ -740,6 +747,24 @@ PERMISOS_POR_ROL: Final[dict[str, frozenset[str]]] = {
 }
 
 
+# Política solicitada el 2026-10-09: consulta del historial para todo el personal,
+# siempre dentro de clínica/ámbito. No concede escritura ni acceso sensible N3.
+PERMISOS_CONSULTA_CLINICA: Final[frozenset[str]] = frozenset(
+    {
+        "historia_clinica.consultar_compartida",
+        "historia_clinica.leer",
+        "historia_clinica.leer_metadatos",
+        "receta.leer",
+        "imagen_clinica.leer",
+        "odontograma.leer",
+        "plan_tratamiento.leer",
+    }
+)
+for _rol_base, _permisos_base in tuple(PERMISOS_POR_ROL.items()):
+    PERMISOS_POR_ROL[_rol_base] = _permisos_base | PERMISOS_CONSULTA_CLINICA
+PERMISOS_POR_ROL["asistente"] -= {"imagen_clinica.cargar"}
+
+
 def validar_catalogo() -> list[str]:
     """Comprueba la coherencia interna del modelo de autorizacion.
 
@@ -760,10 +785,10 @@ def validar_catalogo() -> list[str]:
             )
 
     for rol in ("superadministrador", "recepcion", "auditor"):
-        clinicos = PERMISOS_POR_ROL[rol] & PERMISOS_SOLO_ASISTENCIALES
+        clinicos = (PERMISOS_POR_ROL[rol] & PERMISOS_SOLO_ASISTENCIALES) - PERMISOS_CONSULTA_CLINICA
         if clinicos:
             problemas.append(
-                f"El rol '{rol}' no debe tener permisos clinicos: {sorted(clinicos)}. "
+                f"El rol '{rol}' no debe tener permisos de escritura clinica o lectura sensible: {sorted(clinicos)}. "
                 "Separar la administracion del acceso clinico es una decision "
                 "de diseno (docs/security.md, seccion 2)."
             )

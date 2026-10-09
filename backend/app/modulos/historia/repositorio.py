@@ -412,7 +412,9 @@ class RepositorioHistoria:
         tiene relaciones asistenciales y su acceso se controla por permiso y
         por auditoria, no por vinculo.
         """
-        if principal.profesional_id is None:
+        if principal.profesional_id is None or principal.tiene_permiso(
+            "historia_clinica.consultar_compartida"
+        ):
             return consulta
 
         # EXISTS y no union: un paciente puede tener varias relaciones con el

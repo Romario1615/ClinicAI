@@ -2,18 +2,97 @@
 
 import uuid
 
+from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modulos.auditoria.repositorio import RepositorioAuditoria
+from app.modulos.pacientes.acceso_clinico import GuardiaClinica
 from app.modulos.pacientes.esquemas import DatosPaciente
-from app.modulos.pacientes.modelos import Paciente
+from app.modulos.pacientes.modelos import Paciente, RelacionAsistencial
 from app.modulos.pacientes.repositorio import RepositorioPacientes
+from app.modulos.profesionales.modelos import Profesional
 from app.nucleo.auditoria import AccionAuditada, construir_entrada
 from app.nucleo.autorizacion import Principal
 from app.nucleo.errores import ConflictoEstado, DatosInvalidos, PermisoDenegado, RecursoNoEncontrado
 from app.nucleo.operaciones import completar_operacion, iniciar_operacion
 from app.nucleo.reloj import Reloj
+
+
+async def iniciar_atencion_profesional(
+    sesion: AsyncSession,
+    principal: Principal,
+    reloj: Reloj,
+    paciente_id: uuid.UUID,
+    motivo: str,
+    clave: str,
+) -> None:
+    """Un profesional inicia atención sin cita; registra su propio vínculo.
+
+    No crea notas ni mediciones. La consulta compartida no concede este vínculo:
+    hace falta una acción explícita, perfil activo y permiso de escritura.
+    """
+
+    if (
+        principal.es_agente
+        or not principal.tiene_permiso("historia_clinica.escribir")
+        or principal.profesional_id is None
+    ):
+        raise PermisoDenegado("Solo un profesional puede iniciar esta atención.")
+    perfil = await sesion.scalar(
+        select(Profesional).where(
+            Profesional.id == principal.profesional_id,
+            Profesional.clinica_id == principal.clinica_id,
+            Profesional.activo.is_(True),
+            Profesional.anulado_en.is_(None),
+        )
+    )
+    if perfil is None:
+        raise PermisoDenegado("El perfil profesional no está activo.")
+    paciente = await sesion.scalar(
+        RepositorioPacientes(sesion)
+        .consulta_autorizada(principal)
+        .where(Paciente.id == paciente_id)
+        .with_for_update()
+    )
+    if paciente is None:
+        raise RecursoNoEncontrado("El paciente solicitado no existe.")
+    operacion = await iniciar_operacion(
+        sesion,
+        principal,
+        reloj,
+        "paciente.iniciar_atencion",
+        clave,
+        {"paciente_id": str(paciente_id), "motivo": motivo},
+    )
+    if operacion.respuesta:
+        return
+
+    try:
+        await GuardiaClinica(sesion).exigir_relacion(principal, paciente_id, reloj.ahora())
+    except RecursoNoEncontrado:
+        relacion = RelacionAsistencial(
+            paciente_id=paciente_id,
+            profesional_id=perfil.id,
+            origen="ASIGNACION",
+            motivo=motivo,
+            creado_por=principal.actor_id,
+        )
+        sesion.add(relacion)
+        await sesion.flush()
+        await RepositorioAuditoria(sesion).registrar(
+            [
+                construir_entrada(
+                    accion=AccionAuditada.PACIENTE_ATENCION_ABIERTA,
+                    principal=principal,
+                    ahora=reloj.ahora(),
+                    entidad_tipo="relacion_asistencial",
+                    entidad_id=relacion.id,
+                    paciente_id=paciente_id,
+                )
+            ]
+        )
+    completar_operacion(operacion, {"paciente_id": str(paciente_id)}, reloj)
 
 
 async def guardar_paciente(

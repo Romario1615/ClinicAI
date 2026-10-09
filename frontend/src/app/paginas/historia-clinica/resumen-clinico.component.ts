@@ -1,3 +1,4 @@
+import { EspecialidadHistoriaService } from '../../nucleo/servicios/especialidad-historia.service';
 /**
  * «Antes de entrar»: lo que el profesional tiene que saber del paciente.
  *
@@ -269,6 +270,7 @@ export interface ResumenClinico {
 export class ResumenClinicoComponent {
   private readonly api = inject(OperacionesService);
   private readonly sesion = inject(SesionService);
+  private readonly especialidades = inject(EspecialidadHistoriaService);
   readonly pacienteId = input.required<string>();
   /**
    * Alergias de cada carga del resumen. La historia las repite en la cabecera
@@ -300,7 +302,7 @@ export class ResumenClinicoComponent {
 
   protected puedeEditarAnamnesis(): boolean {
     return this.sesion.tienePermiso('historia_clinica.escribir') &&
-      !!this.sesion.identidad()?.profesional_id;
+      this.especialidades.puedeRegistrar();
   }
 
   protected puedeAccederAnamnesis(): boolean {

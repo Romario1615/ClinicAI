@@ -1,5 +1,26 @@
 # Plan de pruebas
 
+## Ficha compartida y marca celeste turquesa (2026-10-09)
+
+Frontend completo **777/777**, cobertura 85,09 % sentencias, 71,95 % ramas,
+80,87 % funciones y 87,60 % líneas; lint/build aprobados. Backend del bloque:
+**257/257** en 363,62 s; comprobación final de política/manuales **76/76**.
+Ruff, formato, mypy y Bandit aprobados. Migración `038` aplicada y reversión
+exacta de permisos verificada.
+
+Chromium **17/17** en 5,4 min: seis roles con herramientas de un paciente
+recién creado, primera atención/nota sin cita y lectura posterior desde asistencia,
+portada en seis tamaños con axe, todos los menús en escritorio/móvil, formularios,
+CRUD administrativo, faciograma y PDF/WhatsApp sandbox. API temporal 8020 con
+límite de login solo para pruebas; la aplicación mantiene su configuración.
+
+Los escenarios de autorización actualizan la lectura compartida solicitada por
+el propietario; las pruebas negativas comprueban mutaciones, N3 y ámbitos
+ajenos. Regresión adicional: autorización e historia/medicación **16/16**
+en 1,6 min, con SOAP, recetas, 033, historial, PRN, alertas y plan. Total del
+bloque: **33 recorridos** en estas dos baterías.
+[Informe y comandos](verificacion-ficha-marca-2026-10-09.md).
+
 ## Faciograma visible y documentos desde la ficha (2026-10-07)
 
 Frontend **635/635**, lint y build aprobados; cobertura 86,19 % sentencias,

@@ -114,7 +114,7 @@ _RECEPCION = ManualSistema(
     introduccion=(
         "Recepción es la puerta de entrada de la clínica: agenda, registra a las personas que "
         "llegan, mantiene sus datos de contacto y cobra. Trabaja con información administrativa; "
-        "la historia clínica, las recetas y las imágenes clínicas no forman parte de este rol."
+        "consulta el historial y sus herramientas en modo lectura para coordinar la llegada."
     ),
     responsabilidades=(
         "Que cada cita quede reservada, confirmada o liberada a tiempo.",
@@ -123,11 +123,24 @@ _RECEPCION = ManualSistema(
         "Que los abonos y comprobantes queden registrados el mismo día.",
     ),
     limites=(
-        "No lee ni escribe historia clínica, recetas, odontograma ni radiografías.",
+        "Consulta registros clínicos N2 de su ámbito; no escribe historia, recetas ni mediciones.",
         "No configura horarios, feriados ni bloqueos: lo hace la administración desde Configuración.",
         "No emite facturas electrónicas: el sistema no está conectado al SRI.",
     ),
     secciones=(
+        _s(
+            "recepcion.historial-consulta",
+            "Consultar el expediente durante la llegada",
+            "/pacientes",
+            "Coordinar al paciente leyendo su historial sin alterar información clínica.",
+            (
+                "Abra Ver ficha y mantenga visible Contacto y consentimientos durante la recepción.",
+                "Pulse Elegir qué registrar para consultar notas, recetas o herramientas; cada tarjeta de recepción indica Solo consulta.",
+                "Las secciones vacías están preparadas desde el alta; avise al especialista para que registre la primera atención.",
+            ),
+            ("Recepción no crea evaluaciones, recetas ni fotos clínicas.",),
+            requiere=("historia_clinica.consultar_compartida", "paciente.leer_administrativo"),
+        ),
         _s(
             "recepcion.agente-ficha",
             "Coordinar turnos con el agente de una persona",
@@ -138,7 +151,9 @@ _RECEPCION = ManualSistema(
                 "En Más gestiones, configure sede, servicio, responsable y fechas si necesita buscar un horario; elija un turno ofrecido.",
                 "Compruebe el nombre de la persona, el horario y el motivo antes de pulsar Confirmar acción; Descartar conserva la agenda.",
             ),
-            ("Este apoyo de recepción no muestra resúmenes clínicos ni ejecuta prescripciones.",),
+            (
+                "El apoyo contextual respeta la consulta clínica autorizada y no ejecuta prescripciones.",
+            ),
             requiere=("paciente.leer_administrativo",),
         ),
         _s(
@@ -183,7 +198,9 @@ _RECEPCION = ManualSistema(
                 "En Contacto y consentimientos, registre Documentos por WhatsApp únicamente si el paciente lo autoriza y compruebe su teléfono.",
                 "Use Pagos de esta cita para consultar sus cargos; el presupuesto lo emite el profesional en su acceso clínico.",
             ),
-            ("Recepción no consulta el mapa facial ni emite recetas o documentos clínicos.",),
+            (
+                "Recepción consulta el mapa facial y los documentos disponibles; su emisión corresponde al profesional.",
+            ),
             requiere=("paciente.leer_administrativo", "paciente.editar", "agenda.leer"),
         ),
         _s(
@@ -381,8 +398,8 @@ _PROFESIONAL = ManualSistema(
     introduccion=(
         "El profesional atiende y decide. Lee y escribe la historia clínica de sus pacientes, "
         "registra hallazgos, planes y recetas, y aprueba el conocimiento de su especialidad. El "
-        "acceso clínico exige relación asistencial con el paciente: tener el permiso no abre "
-        "todas las historias."
+        "registro clínico exige relación asistencial con el paciente; puede consultar también "
+        "las áreas autorizadas en modo lectura."
     ),
     responsabilidades=(
         "Registrar cada atención en la historia, con su versión y autoría.",
@@ -392,10 +409,26 @@ _PROFESIONAL = ManualSistema(
     ),
     limites=(
         "La IA no crea, modifica ni suspende recetas, dosis ni diagnósticos: son decisiones suyas.",
-        "Sin relación asistencial no hay acceso clínico, salvo un acceso de emergencia declarado.",
+        "La consulta respeta el ámbito de pacientes; para registrar necesita relación asistencial, que puede iniciar explícitamente desde la ficha sin cita.",
         "La firma electrónica con validez jurídica todavía no está implementada.",
     ),
     secciones=(
+        _s(
+            "profesional.primera-atencion",
+            "Iniciar el expediente en la primera atención",
+            "/pacientes",
+            "Registrar desde la ficha con su especialidad y conservar la consulta de las otras áreas.",
+            (
+                "Después del alta administrativa, abra la ficha y pulse Elegir qué registrar; las herramientas ya están disponibles aunque estén vacías.",
+                "Si la atención no tiene cita ni vínculo previo, use Comenzar atención sin cita para registrar su responsabilidad y abrir Evolución.",
+                "Seleccione la herramienta de su especialidad y use su acción de nuevo registro; las herramientas de otras áreas permanecen en Solo consulta.",
+                "En el historial completo, Periodoncia abre el periodontograma de seis sitios y permite cambiar al índice de placa.",
+            ),
+            (
+                "El alta del paciente prepara sus secciones; solo una atención registrada crea contenido clínico real.",
+            ),
+            requiere=("historia_clinica.consultar_compartida", "paciente.leer_administrativo"),
+        ),
         _s(
             "profesional.agente-ficha",
             "Apoyarse en el agente mientras revisa el expediente",
@@ -403,7 +436,7 @@ _PROFESIONAL = ManualSistema(
             "Consultar la información autorizada y gestionar la agenda sin abandonar el historial.",
             (
                 "Desde la ficha de la persona atendida, mantenga abierta Historia y recetas y despliegue Agente del paciente.",
-                "Use Resumen clínico para revisar lo registrado dentro de su especialidad y relación asistencial; Protocolos consulta únicamente documentos aprobados y vigentes.",
+                "Use Resumen clínico para consultar lo autorizado en el expediente; Protocolos consulta únicamente documentos aprobados y vigentes.",
                 "Escoja una cita propia de esta ficha antes de preparar cambios; revise la propuesta y confirme expresamente la operación.",
             ),
             (
@@ -536,9 +569,8 @@ _PROFESIONAL = ManualSistema(
             (
                 "En Historia clínica, elija al paciente; el resumen muestra alergias y antecedentes "
                 "activos primero.",
-                "Si el sistema indica que no tiene acceso clínico, es que no consta relación "
-                "asistencial con esa persona.",
-                "Revise desde su especialidad; las notas, imágenes, planes y formularios de otras áreas requieren un ámbito concedido expresamente.",
+                "Si el expediente no está disponible, revise con administración su ámbito de pacientes y permisos vigentes.",
+                "Revise desde su especialidad o elija otra área autorizada para consultar; registrar y corregir exige su especialidad y autoría.",
             ),
             (
                 "Cada lectura de la historia queda registrada en la auditoría.",
@@ -723,21 +755,34 @@ _ASISTENTE = ManualSistema(
     rol="asistente",
     titulo="Manual del Asistente clínico",
     introduccion=(
-        "El asistente prepara el sillón, acompaña el recorrido del paciente, toma radiografías y "
-        "fotos y sigue la medicación. Consulta el odontograma y el plan para preparar cada "
-        "procedimiento, pero no los modifica ni lee las notas de evolución."
+        "El asistente prepara el sillón, acompaña el recorrido del paciente y consulta imágenes, "
+        "fotos e indicaciones. Revisa el odontograma y el plan para preparar cada "
+        "procedimiento; también lee la evolución, sin modificar ni ingresar información clínica."
     ),
     responsabilidades=(
         "Que el paciente avance por el recorrido sin esperas invisibles.",
-        "Que cada imagen quede cargada en la ficha correcta y con su pieza.",
+        "Comprobar las imágenes disponibles y comunicar al profesional las que faltan.",
         "Que las tomas y las alertas de medicación tengan seguimiento.",
     ),
     limites=(
-        "No lee notas de evolución ni escribe en la historia clínica.",
+        "Lee notas de evolución N2; no registra, corrige ni carga información clínica.",
         "No registra hallazgos en el odontograma ni modifica planes.",
         "No cambia horarios, dosis ni medicamentos: eso es del profesional.",
     ),
     secciones=(
+        _s(
+            "asistente.historial-completo",
+            "Preparar la asistencia con el historial íntegro",
+            "/pacientes",
+            "Revisar la documentación disponible de las áreas autorizadas antes de asistir.",
+            (
+                "En la ficha asignada, use Historia y recetas para leer las versiones disponibles.",
+                "Abra el selector de herramientas y consulte odontograma, periodontograma o faciograma según el trabajo del equipo.",
+                "Cuando no existan mediciones, comunique al profesional que está pendiente el primer registro; conserve la sección en modo consulta.",
+            ),
+            ("La asistencia no introduce ni modifica contenido clínico.",),
+            requiere=("historia_clinica.consultar_compartida", "paciente.leer_administrativo"),
+        ),
         _s(
             "asistente.agente-ficha",
             "Preparar la atención con apoyo del agente contextual",
@@ -749,7 +794,7 @@ _ASISTENTE = ManualSistema(
                 "Ante un cambio administrativo permitido, lea la propuesta completa y elija confirmarla o descartarla; una sesión nueva pierde los borradores pendientes.",
             ),
             (
-                "El panel no otorga herramientas dentales o estéticas de otra especialidad ni permite cambiar registros de otro autor.",
+                "Las herramientas dentales y estéticas se consultan según ámbito; el asistente no modifica sus registros.",
             ),
             requiere=("paciente.leer_administrativo",),
         ),
@@ -776,7 +821,7 @@ _ASISTENTE = ManualSistema(
             (
                 "En el alta de paciente, use Elegir foto para un archivo de identificación o Tomar foto para una cámara compatible.",
                 "Confirme que la vista previa corresponde a la persona seleccionada y guarde la ficha.",
-                "Las evidencias asistenciales generales se registran en Imágenes clínicas cuando su módulo y relación asistencial lo permiten.",
+                "Las evidencias asistenciales se consultan en Fotos y radiografías; el profesional autorizado realiza su carga clínica.",
             ),
             (
                 "Una fotografía de perfil es administrativa; no sustituye el consentimiento ni acredita la identidad por sí sola.",
@@ -828,19 +873,18 @@ _ASISTENTE = ManualSistema(
         ),
         _s(
             "asistente.imagenes",
-            "Cargar radiografías y fotos",
+            "Revisar radiografías y fotos disponibles",
             "/historia-clinica",
-            "Dejar la imagen disponible para el profesional en la ficha correcta.",
+            "Comprobar el archivo visual del paciente antes de la consulta.",
             (
-                "Abra la galería del paciente y cargue la imagen con su tipo.",
-                "Indique la pieza dental cuando la imagen sea de una pieza concreta.",
-                "Compruebe en la galería que la imagen quedó en el paciente correcto.",
+                "Desde la ficha, abra Fotos y radiografías para visualizar las imágenes existentes.",
+                "Revise el tipo y las piezas asociadas antes de preparar el material para el especialista.",
+                "Informe al autor cuando falte una imagen; la carga clínica se realiza con su sesión profesional.",
             ),
             (
-                "Solo verá pacientes con los que conste relación asistencial.",
-                "La imagen se guarda cifrada y sin metadatos de la cámara.",
+                "La asistencia tiene consulta visual; no carga, anula ni reemplaza imágenes clínicas.",
             ),
-            requiere=("imagen_clinica.leer", "imagen_clinica.cargar"),
+            requiere=("imagen_clinica.leer",),
         ),
         _s(
             "asistente.preparar",
@@ -900,10 +944,12 @@ _ASISTENTE = ManualSistema(
             "Ver los problemas con el tratamiento que los pacientes reportaron por mensaje.",
             (
                 "En Atención de mensajes, revise los reportes de tratamiento pendientes.",
-                "Confirme la revisión cuando el profesional ya esté informado.",
+                "Informe al profesional para que revise las alertas clínicas y registre su atención con su propia cuenta.",
             ),
-            ("Confirmar la revisión no clasifica la gravedad ni el resultado clínico.",),
-            requiere=("conversacion.leer", "alerta_adherencia.atender"),
+            (
+                "El seguimiento de mensajes no permite registrar tomas, atender alertas clínicas ni introducir notas profesionales.",
+            ),
+            requiere=("conversacion.leer",),
         ),
     ),
 )
@@ -918,7 +964,7 @@ _ADMINISTRADOR = ManualSistema(
     introduccion=(
         "La administración configura la clínica y su equipo: perfil, sedes, catálogo, horarios, "
         "cuentas, roles e integraciones. Supervisa la operación con el panel y revisa los accesos "
-        "de emergencia. Por diseño, no tiene acceso al contenido de la historia clínica."
+        "de emergencia. Consulta la historia N2 de su ámbito para supervisar la atención."
     ),
     responsabilidades=(
         "Que cada persona tenga exactamente los accesos que su trabajo necesita.",
@@ -927,11 +973,26 @@ _ADMINISTRADOR = ManualSistema(
         "Revisar cada acceso de emergencia que se declare.",
     ),
     limites=(
-        "Sin acceso al contenido clínico: separar administración y clínica es deliberado.",
+        "La consulta clínica de administración es de solo lectura; la firma y el registro son del profesional.",
         "Su rol exige segundo factor; sin él, ninguna operación se completa.",
         "Guardar una credencial no demuestra que el servicio externo esté conectado.",
     ),
     secciones=(
+        _s(
+            "administrador.historial-lectura",
+            "Supervisar expedientes con consulta clínica",
+            "/pacientes",
+            "Comprobar la continuidad documental de los pacientes de la clínica.",
+            (
+                "Localice la persona en Pacientes y abra su historial desde Ver ficha.",
+                "Utilice Herramientas del paciente para revisar documentos, planes y controles existentes en las áreas habilitadas.",
+                "Verifique el modo Solo consulta antes de coordinar con el especialista responsable una atención pendiente.",
+            ),
+            (
+                "La administración conserva funciones administrativas; no firma ni ingresa registros clínicos.",
+            ),
+            requiere=("historia_clinica.consultar_compartida", "paciente.leer_administrativo"),
+        ),
         _s(
             "administrador.agente-ficha",
             "Supervisar gestiones del agente desde una ficha",
@@ -943,7 +1004,7 @@ _ADMINISTRADOR = ManualSistema(
                 "Autorice la propuesta después de revisar paciente, horario y motivo; si cambian sus accesos, abra una conversación nueva.",
             ),
             (
-                "Administración utiliza datos operativos; este panel no agrega lectura clínica a su rol.",
+                "Administración puede consultar el historial autorizado; este panel conserva la prohibición de editarlo.",
                 "Funciones locales indica que todavía no se ha configurado un proveedor conversacional para la clínica.",
             ),
             requiere=("paciente.leer_administrativo",),
@@ -1262,7 +1323,7 @@ _AUDITOR = ManualSistema(
     introduccion=(
         "El auditor verifica sin intervenir. Consulta la operación, los accesos y los pagos para "
         "comprobar que se cumplen las políticas de la clínica, y no tiene permisos de escritura. "
-        "Puede saber qué registros clínicos existen, pero no leer su contenido."
+        "Puede revisar el contenido N2 autorizado y la trazabilidad, sin alterar versiones."
     ),
     responsabilidades=(
         "Revisar los accesos de emergencia y su justificación.",
@@ -1271,10 +1332,25 @@ _AUDITOR = ManualSistema(
     ),
     limites=(
         "No modifica datos: su rol es de solo lectura.",
-        "No lee el contenido de la historia clínica.",
+        "Consulta la historia N2 de su ámbito; los datos sensibles mantienen su permiso específico.",
         "Su rol exige segundo factor.",
     ),
     secciones=(
+        _s(
+            "auditor.historial-trazabilidad",
+            "Contrastar contenido y versiones del expediente",
+            "/pacientes",
+            "Revisar registros N2 y su procedencia dentro del ámbito de auditoría.",
+            (
+                "Busque el expediente autorizado y abra Historia y recetas para contrastar fechas y autores.",
+                "En el selector clínico, revise las herramientas del área correspondiente y los controles anteriores disponibles.",
+                "Compare la trazabilidad de cada versión con Auditoría; una sección vacía no constituye una atención documentada.",
+            ),
+            (
+                "El auditor observa y registra sus conclusiones fuera del expediente; no altera el historial.",
+            ),
+            requiere=("historia_clinica.consultar_compartida", "paciente.leer_administrativo"),
+        ),
         _s(
             "auditor.agente-ficha",
             "Examinar consultas del agente sin alterar la agenda",
@@ -1286,7 +1362,7 @@ _AUDITOR = ManualSistema(
                 "Consulte Auditoría para contrastar la apertura y las consultas del agente con el operador responsable.",
             ),
             (
-                "No obtiene el contenido del historial ni del resumen clínico por tener permiso de auditoría.",
+                "Su consulta del historial se concede por la política de lectura compartida y queda auditada.",
             ),
             requiere=("paciente.leer_administrativo",),
         ),
@@ -1301,7 +1377,7 @@ _AUDITOR = ManualSistema(
                 "Registre si el modelo fue evaluado localmente, es experimental o carece de historial; las recomendaciones quedan sujetas a una persona autorizada.",
             ),
             (
-                "Los gráficos de aprendizaje no conceden lectura del periodontograma, recetas o fotos clínicas al auditor.",
+                "Los gráficos agregados no amplían su ámbito de pacientes; el historial y sus herramientas se consultan desde cada ficha autorizada.",
             ),
             requiere=("dashboard.leer",),
         ),
@@ -1327,7 +1403,7 @@ _AUDITOR = ManualSistema(
                 "Solicite al responsable el informe de auditoría de creación, anulación y entrega documental para contrastar autores y fechas sin incluir contenido de la historia.",
             ),
             (
-                "La descarga clínica de PDFs y el gráfico facial no se habilitan para el rol auditor.",
+                "Los PDF y mapas de fichas autorizadas están disponibles para consulta; no puede emitir, corregir o anular registros clínicos.",
             ),
             requiere=("auditoria.leer",),
         ),
@@ -1440,7 +1516,7 @@ _SUPERADMINISTRADOR = ManualSistema(
     introduccion=(
         "El superadministrador opera la plataforma: registra clínicas con su sede principal y su "
         "primera cuenta de administración, agrega sucursales y asigna personal a cada clínica. "
-        "No tiene acceso clínico y cada cambio de acceso queda auditado."
+        "Consulta historia N2 únicamente en la clínica activa de su sesión; cada cambio de acceso queda auditado."
     ),
     responsabilidades=(
         "Dar de alta clínicas completas y coherentes en una sola operación.",
@@ -1448,11 +1524,24 @@ _SUPERADMINISTRADOR = ManualSistema(
         "Custodiar su propia cuenta: es la de mayor alcance del sistema.",
     ),
     limites=(
-        "Sin acceso al contenido clínico de ninguna clínica.",
+        "El historial de la clínica activa es de solo consulta; no registra información clínica.",
         "Su rol exige segundo factor.",
         "El acceso local de demostración no es un procedimiento para cuentas de producción.",
     ),
     secciones=(
+        _s(
+            "plataforma.historial-clinica-activa",
+            "Inspeccionar la ficha de la clínica de sesión",
+            "/pacientes",
+            "Comprobar el acceso de consulta autorizado en la organización activa.",
+            (
+                "Antes de buscar un paciente, compruebe la clínica activa de su sesión de plataforma.",
+                "Abra Ver ficha y consulte el selector de herramientas para comprobar que existen las secciones de cada área habilitada.",
+                "Revise el historial N2 sin ejecutar registro clínico; cambiar de clínica exige resolver una sesión con ese ámbito.",
+            ),
+            ("El rol global no permite cruzar identificadores de pacientes entre clínicas.",),
+            requiere=("historia_clinica.consultar_compartida", "paciente.leer_administrativo"),
+        ),
         _s(
             "superadministrador.agente-ficha",
             "Comprobar el apoyo contextual en la clínica activa",
@@ -1464,7 +1553,7 @@ _SUPERADMINISTRADOR = ManualSistema(
                 "Confirme cada propuesta administrativa expresamente; abrir el panel de otra persona inicia una conversación separada.",
             ),
             (
-                "La administración global no concede acceso clínico ni permite reutilizar la sesión del agente de otro operador.",
+                "La lectura clínica se limita al ámbito de la sesión; no puede reutilizar la conversación privada de otro operador.",
             ),
             requiere=("paciente.leer_administrativo",),
         ),
@@ -1733,8 +1822,10 @@ CAPACIDADES: Final[tuple[Seccion, ...]] = (
         "capacidad.historia",
         "Lectura clínica",
         "/historia-clinica",
-        "Consultar la historia de pacientes con relación asistencial.",
-        ("Elija al paciente; el sistema solo abre lo que su relación asistencial permite.",),
+        "Consultar la historia de pacientes dentro de su clínica y ámbito.",
+        (
+            "Elija al paciente y la especialidad que desea consultar; el registro requiere sus permisos clínicos y relación asistencial.",
+        ),
         requiere=("historia_clinica.leer",),
     ),
     _s(

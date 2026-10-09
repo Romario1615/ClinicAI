@@ -8,8 +8,7 @@
  *   «cuando sea necesario» es un error de medicacion, no un detalle de
  *   presentacion.
  * * **Bloqueo comprobado de informacion no autorizada.** El asistente ve la
- *   medicacion y no las notas, y la pantalla lo dice como un limite, no como
- *   una averia.
+ *   medicacion y las notas N2, con controles de consulta y sin registro clínico.
  * * **La historia no se borra: se versiona**, y las versiones anteriores se
  *   pueden ver. Si la interfaz solo mostrara la vigente, esa garantia existiria
  *   en la base y no serviria de nada a quien la audita.
@@ -198,7 +197,7 @@ test.describe('Historia clinica', () => {
     await expect(page.locator('.nota__correccion').first()).toBeVisible();
   });
 
-  test('el asistente ve la medicacion y el limite de las notas', async ({ page }) => {
+  test('el asistente abre la medicacion en consulta sin errores de permiso', async ({ page }) => {
     await acceder(page, 'asistente');
     await irA(page, /medicamentos/i);
 

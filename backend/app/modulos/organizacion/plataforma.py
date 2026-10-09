@@ -30,7 +30,12 @@ from app.modulos.usuarios.modelos import (
     Sesion as SesionAuth,
 )
 from app.nucleo.auditoria import AccionAuditada, construir_entrada
-from app.nucleo.autorizacion import PERMISOS_SOLO_ASISTENCIALES, Principal, TipoAmbito
+from app.nucleo.autorizacion import (
+    PERMISOS_CONSULTA_CLINICA,
+    PERMISOS_SOLO_ASISTENCIALES,
+    Principal,
+    TipoAmbito,
+)
 from app.nucleo.dependencias import Auditor, RelojActual, Sesion, exige_permiso
 from app.nucleo.errores import ConflictoEstado, DatosInvalidos, PermisoDenegado
 from app.nucleo.seguridad import hashear_contrasena, validar_politica_contrasena
@@ -624,7 +629,9 @@ async def _roles_globales(
         permisos.setdefault(rol_id, set()).add(codigo)
     congelados = {rol_id: frozenset(codigos) for rol_id, codigos in permisos.items()}
     for rol in roles:
-        protegidos = congelados.get(rol.id, frozenset()) & PERMISOS_SOLO_ASISTENCIALES
+        protegidos = (
+            congelados.get(rol.id, frozenset()) & PERMISOS_SOLO_ASISTENCIALES
+        ) - PERMISOS_CONSULTA_CLINICA
         if protegidos and rol.codigo != "profesional":
             raise DatosInvalidos(
                 "Los permisos clínicos solo se asignan mediante el rol profesional."

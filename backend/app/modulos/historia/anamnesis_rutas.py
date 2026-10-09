@@ -24,6 +24,7 @@ from app.modulos.historia.modelos import (
     RespuestaAnamnesis,
 )
 from app.modulos.historia.rutas import _exigir_acceso_anamnesis, _exigir_profesional
+from app.modulos.pacientes.acceso_clinico import GuardiaClinica
 from app.modulos.profesionales.ambito_clinico import autores_en_ambito
 from app.nucleo.auditoria import AccionAuditada, construir_entrada
 from app.nucleo.autorizacion import NivelSensibilidad, Principal
@@ -328,8 +329,10 @@ async def plantillas_activas(
     sesion: Sesion,
     reloj: RelojActual,
 ) -> list[PlantillaAnamnesisSalida]:
-    _exigir_profesional(principal)
-    await _exigir_acceso_anamnesis(sesion, principal, paciente_id, reloj.ahora())
+
+    await GuardiaClinica(sesion).acceso_clinico(
+        principal, paciente_id, "historia_clinica.leer", reloj.ahora()
+    )
     plantillas = await sesion.scalars(
         select(PlantillaAnamnesis)
         .where(
@@ -473,8 +476,10 @@ async def listar_respuestas(
     reloj: RelojActual,
     auditor: Auditor,
 ) -> list[RespuestaAnamnesisSalida]:
-    _exigir_profesional(principal)
-    await _exigir_acceso_anamnesis(sesion, principal, paciente_id, reloj.ahora())
+
+    await GuardiaClinica(sesion).acceso_clinico(
+        principal, paciente_id, "historia_clinica.leer", reloj.ahora()
+    )
     consulta = (
         select(RespuestaAnamnesis, PlantillaAnamnesis)
         .join(PlantillaAnamnesis, PlantillaAnamnesis.id == RespuestaAnamnesis.plantilla_id)

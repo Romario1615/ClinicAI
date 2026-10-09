@@ -49,6 +49,12 @@ export class EspecialidadHistoriaService {
     return this.elegida()?.modulos.includes(modulo) ?? false;
   }
 
+  /** Consultar otra especialidad conserva sus herramientas en modo lectura. */
+  puedeRegistrar(modulo?: ModuloHistoria): boolean {
+    return !!this.sesion.identidad()?.profesional_id &&
+      this.elegida()?.propia === true && (!modulo || this.tieneModulo(modulo));
+  }
+
   /** Carga una vez por sesión; si cambia la persona, vuelve a cargar. */
   cargar(): void {
     const usuario = this.sesion.identidad()?.usuario_id ?? null;

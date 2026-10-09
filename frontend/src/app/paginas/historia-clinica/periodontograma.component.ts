@@ -1,3 +1,4 @@
+import { EspecialidadHistoriaService } from '../../nucleo/servicios/especialidad-historia.service';
 import { Component, computed, effect, inject, input, signal } from '@angular/core';
 import { DatePipe, DecimalPipe, NgTemplateOutlet } from '@angular/common';
 import { HttpClient } from '@angular/common/http';
@@ -24,6 +25,7 @@ export class PeriodontogramaComponent {
   private readonly http = inject(HttpClient);
   private readonly config = inject(CONFIGURACION);
   private readonly sesion = inject(SesionService);
+  private readonly especialidades = inject(EspecialidadHistoriaService);
   private readonly destruir = inject(DestroyRef);
   private readonly catalogo = inject(CatalogoService);
   protected readonly sedes = signal<readonly {id:string; nombre:string}[]>([]);
@@ -42,7 +44,7 @@ export class PeriodontogramaComponent {
     const a=this.actual(), b=this.registros().find(r=>r.id===this.previo());
     return a && b ? compararPeriodontogramas(a,b) : null;
   });
-  protected readonly puedeEscribir = computed(()=>this.sesion.tienePermiso(PERMISOS.odontogramaEscribir));
+  protected readonly puedeEscribir = computed(()=>this.sesion.tienePermiso(PERMISOS.odontogramaEscribir) && this.especialidades.puedeRegistrar('periodoncia'));
   protected readonly error = signal('');
   protected readonly ocupado = signal(false);
   protected readonly editor = signal(false);

@@ -37,12 +37,19 @@ class ServicioRegistros:
         )
 
     async def especialidad(
-        self, principal: Principal, especialidad_id: uuid.UUID, facial: bool = False
+        self,
+        principal: Principal,
+        especialidad_id: uuid.UUID,
+        facial: bool = False,
+        *,
+        escribir: bool = False,
     ) -> None:
         permitidas = await especialidades_permitidas(self.sesion, principal)
         if not any(
-            e.id == especialidad_id and (not facial or "faciograma" in modulos)
-            for e, modulos, _ in permitidas
+            e.id == especialidad_id
+            and (not facial or "faciograma" in modulos)
+            and (not escribir or propia)
+            for e, modulos, propia in permitidas
         ):
             raise RecursoNoEncontrado("La especialidad o módulo no está disponible.")
 
@@ -72,7 +79,9 @@ class ServicioRegistros:
         )
         if fila is None:
             raise RecursoNoEncontrado("El registro no está disponible.")
-        await self.especialidad(principal, fila.especialidad_id, fila.tipo == "FACIOGRAMA")
+        await self.especialidad(
+            principal, fila.especialidad_id, fila.tipo == "FACIOGRAMA", escribir=escribir
+        )
         if escribir and fila.profesional_id != principal.profesional_id:
             raise PermisoDenegado("Solo el profesional autor puede modificar este registro.")
         return fila
@@ -83,7 +92,9 @@ class ServicioRegistros:
         paciente = await self.acceso(principal, paciente_id, True)
         if principal.profesional_id is None:
             raise PermisoDenegado("Se necesita un perfil profesional para emitir este registro.")
-        await self.especialidad(principal, datos.especialidad_id, datos.tipo == "FACIOGRAMA")
+        await self.especialidad(
+            principal, datos.especialidad_id, datos.tipo == "FACIOGRAMA", escribir=True
+        )
         # Una fila de paciente serializa las versiones y los reintentos.
         await self.sesion.execute(
             select(Paciente.id).where(Paciente.id == paciente_id).with_for_update()

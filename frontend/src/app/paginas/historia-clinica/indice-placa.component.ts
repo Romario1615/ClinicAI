@@ -1,3 +1,4 @@
+import { EspecialidadHistoriaService } from '../../nucleo/servicios/especialidad-historia.service';
 /**
  * Índice de placa de O'Leary (periodoncia).
  *
@@ -172,6 +173,7 @@ export class IndicePlacaComponent {
   protected fotos:readonly FotoSeleccionada[]=[];
   private readonly api = inject(ApiService);
   private readonly sesion = inject(SesionService);
+  private readonly especialidades = inject(EspecialidadHistoriaService);
 
   readonly pacienteId = input.required<string>();
 
@@ -186,7 +188,7 @@ export class IndicePlacaComponent {
   protected observacion = '';
 
   protected readonly puedeEscribir = computed(() =>
-    this.sesion.tienePermiso(PERMISOS.odontogramaEscribir),
+    this.sesion.tienePermiso(PERMISOS.odontogramaEscribir) && this.especialidades.puedeRegistrar('periodoncia'),
   );
   protected readonly conPlaca = computed(() =>
     [...this.placa().values()].reduce((total, caras) => total + caras.size, 0),

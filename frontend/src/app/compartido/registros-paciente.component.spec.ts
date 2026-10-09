@@ -14,7 +14,9 @@ describe('RegistrosPacienteComponent', () => {
   function montar(escribir = true, facial = false, registros: RegistroPaciente[] = []) {
     const permisos = escribir ? ['historia_clinica.leer', 'historia_clinica.escribir'] : ['historia_clinica.leer'];
     iniciarSesionCon(permisos); TestBed.inject(SesionService).establecerIdentidad({ ...identidadCon(permisos), profesional_id: 'prof-1' });
-    TestBed.inject(EspecialidadHistoriaService).elegir('esp-odo');
+    const especialidades = TestBed.inject(EspecialidadHistoriaService);
+    if (facial) especialidades.disponibles.set([{ id: 'esp-odo', nombre: 'Estética sintética', propia: true, modulos: ['faciograma', 'imagenes'] }]);
+    especialidades.elegir('esp-odo');
     const f = TestBed.createComponent(RegistrosPacienteComponent);
     f.componentRef.setInput('pacienteId', 'pac-1'); f.componentRef.setInput('citaId', 'cita-1'); f.componentRef.setInput('sedeId', 'sede-1'); f.componentRef.setInput('facial', facial); f.detectChanges();
     const http = TestBed.inject(HttpTestingController);

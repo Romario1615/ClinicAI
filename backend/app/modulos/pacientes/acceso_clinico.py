@@ -6,8 +6,8 @@ Las tres capas de `historia/rutas.py`, en un solo sitio
    le anadiera una herramienta por error. Despues, el permiso.
 2. **Sobre quien**: el paciente tiene que existir dentro del ambito del
    principal. Fuera de ambito responde 404, igual que si no existiera.
-3. **Con que vinculo**: si el principal es profesional, hace falta una
-   relacion asistencial vigente con ESE paciente.
+3. **Con que vinculo**: la consulta compartida permite leer sin vinculo previo;
+   la escritura profesional requiere relacion vigente con ESE paciente.
 
 Se repite el criterio de `ServicioHistoria._exigir_relacion`: la relacion se
 exige al profesional; el resto del personal clinico (asistente) queda
@@ -49,11 +49,18 @@ class GuardiaClinica:
         return paciente
 
     async def exigir_relacion(
-        self, principal: Principal, paciente_id: uuid.UUID, ahora: datetime
+        self,
+        principal: Principal,
+        paciente_id: uuid.UUID,
+        ahora: datetime,
+        *,
+        consulta: bool = False,
     ) -> None:
+        if consulta and principal.tiene_permiso("historia_clinica.consultar_compartida"):
+            return
         if principal.profesional_id is None:
             return
-        consulta = select(literal(1)).where(
+        consulta_relacion = select(literal(1)).where(
             RelacionAsistencial.paciente_id == paciente_id,
             RelacionAsistencial.profesional_id == principal.profesional_id,
             RelacionAsistencial.revocada_en.is_(None),
@@ -62,7 +69,7 @@ class GuardiaClinica:
                 RelacionAsistencial.vigente_hasta > ahora,
             ),
         )
-        if (await self._sesion.execute(consulta.limit(1))).first() is None:
+        if (await self._sesion.execute(consulta_relacion.limit(1))).first() is None:
             raise RecursoNoEncontrado("El paciente solicitado no existe.")
 
     async def acceso_clinico(
@@ -71,7 +78,9 @@ class GuardiaClinica:
         """Las tres capas en orden. Devuelve el paciente."""
         self.exigir(principal, permiso)
         paciente = await self.paciente(principal, paciente_id)
-        await self.exigir_relacion(principal, paciente_id, ahora)
+        await self.exigir_relacion(
+            principal, paciente_id, ahora, consulta=permiso.endswith(".leer")
+        )
         return paciente
 
 

@@ -119,8 +119,13 @@ def test_las_rutas_citadas_existen_en_el_frontend() -> None:
     assert citadas - rutas == set()
 
 
-def test_los_roles_administrativos_no_reciben_secciones_clinicas() -> None:
-    clinicos = {"historia_clinica.leer", "receta.crear", "odontograma.escribir"}
+def test_los_roles_administrativos_no_reciben_escritura_clinica() -> None:
+    clinicos = {
+        "historia_clinica.escribir",
+        "receta.crear",
+        "odontograma.escribir",
+        "imagen_clinica.cargar",
+    }
     for rol in ("superadministrador", "administrador_clinica", "recepcion", "auditor"):
         for seccion in MANUALES_SISTEMA[rol].secciones:
             assert not (seccion.requiere & clinicos), (rol, seccion.clave)

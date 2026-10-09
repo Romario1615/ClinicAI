@@ -293,7 +293,7 @@
       }
     }
 
-    @if (puedeEditar && (!actual() || actual()?.vigente)) {
+    @if (puedeEditar() && (!actual() || actual()?.vigente)) {
       <div class="odontograma__guardar">
         @if (actual()) {
           <label class="editor__campo editor__campo--motivo">
@@ -319,7 +319,7 @@
           {{ guardando() ? 'Guardando…' : actual() ? 'Guardar nueva versión' : 'Crear odontograma' }}
         </button>
       </div>
-    } @else if (!puedeEditar) {
+    } @else if (!puedeEditar()) {
       <p class="odontograma__lectura">Su rol puede consultar el odontograma, pero no modificarlo.</p>
     }
 

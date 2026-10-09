@@ -16,24 +16,25 @@ import { expect, test } from '../apoyo/prueba';
 import { acceder } from '../apoyo/sesion';
 
 test.describe('Autorizacion por rol', () => {
-  test('recepcion no ve las secciones clinicas', async ({ page }) => {
+  test('recepcion ve las secciones clinicas de consulta y conserva los limites administrativos', async ({ page }) => {
     await acceder(page, 'recepcion');
     const navegacion = page.locator('nav');
 
     await expect(navegacion.getByRole('link', { name: /agenda/i })).toBeVisible();
     await expect(navegacion.getByRole('link', { name: /pacientes/i })).toBeVisible();
-    // Recepcion no tiene ningun permiso clinico: ni historia ni recetas.
-    await expect(navegacion.getByRole('link', { name: /historia/i })).toHaveCount(0);
-    await expect(navegacion.getByRole('link', { name: /medicamentos/i })).toHaveCount(0);
+    // La política compartida permite consultar; no concede gestión de cuentas.
+    await expect(navegacion.getByRole('link', { name: /historia/i })).toBeVisible();
+    await expect(navegacion.getByRole('link', { name: /medicamentos/i })).toBeVisible();
+    await expect(navegacion.getByRole('link', { name: /usuarios/i })).toHaveCount(0);
   });
 
   test('el asistente si ve medicamentos, porque tiene receta.leer', async ({ page }) => {
     await acceder(page, 'asistente');
     const navegacion = page.locator('nav');
 
-    // Los permisos clinicos no van juntos: el asistente sigue la medicacion
-    // sin poder leer las notas.
+    // Asistencia consulta medicación y notas; no registra contenido clínico.
     await expect(navegacion.getByRole('link', { name: /medicamentos/i })).toBeVisible();
+    await expect(navegacion.getByRole('link', { name: /historia/i })).toBeVisible();
   });
 
   test('el profesional ve las secciones clinicas', async ({ page }) => {

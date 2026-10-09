@@ -775,14 +775,17 @@ async def listar_tomas(
     },
 )
 async def registrar_toma(
-    principal: Annotated[Principal, Depends(exige_permiso("adherencia.leer", "receta.leer"))],
+    principal: Annotated[
+        Principal,
+        Depends(exige_permiso("historia_clinica.escribir", "receta.leer", exigir_todos=True)),
+    ],
     datos: RegistroToma,
     servicio: ServicioDeHistoria,
     sesion: Sesion,
     auditor: Auditor,
     toma_id: Annotated[uuid.UUID, Path()],
 ) -> None:
-    """Lo registra el personal o el propio paciente.
+    """El profesional responsable registra la toma desde la interfaz clínica.
 
     No se acepta una toma futura: marcar como tomada una dosis que todavia no
     toca produce un registro de adherencia falso, y ese registro es lo que el
@@ -911,7 +914,14 @@ async def listar_alertas_adherencia(
     },
 )
 async def atender_alerta_adherencia(
-    principal: Annotated[Principal, Depends(exige_permiso("alerta_adherencia.atender"))],
+    principal: Annotated[
+        Principal,
+        Depends(
+            exige_permiso(
+                "alerta_adherencia.atender", "historia_clinica.escribir", exigir_todos=True
+            )
+        ),
+    ],
     datos: AtenderAlertaAdherencia,
     servicio: ServicioDeHistoria,
     sesion: Sesion,

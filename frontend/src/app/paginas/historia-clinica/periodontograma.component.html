@@ -11,7 +11,7 @@
       <div class="perio__filtros"><label>Control <select [ngModel]="r.id" (ngModelChange)="elegido.set($event)">@for(x of registros(); track x.id) {<option [value]="x.id">{{x.fecha_examen}} · v{{x.version}}{{x.anulado ? ' · Anulado' : !x.vigente ? ' · Corregido' : ''}}</option>}</select></label>
         <label>Comparar con <select [ngModel]="previo()" (ngModelChange)="previo.set($event)"><option [ngValue]="null">Sin comparación</option>@for(x of registros(); track x.id) {@if(x.id!==r.id && x.vigente && !x.anulado) {<option [value]="x.id">{{x.fecha_examen}}</option>}}</select></label>
         <button type="button" class="boton" [disabled]="ocupado()" (click)="descargar()">Descargar PDF</button>
-        @if(r.puede_editar) {<button type="button" class="boton" (click)="nuevo(true)">Corregir / anular</button>}
+        @if(r.puede_editar && puedeEscribir()) {<button type="button" class="boton" (click)="nuevo(true)">Corregir / anular</button>}
       </div>
       <div class="perio__metricas">
         <article><span>Sitios sondados</span><strong>{{r.resumen.sitios_sondados}} / {{r.resumen.sitios_posibles}}</strong></article>
@@ -29,7 +29,7 @@
           @let m = r.piezas[codigo]?.sitios?.[s.id];
           <tr><th>{{codigo}} · {{s.nombre}}</th><td>{{m?.profundidad ?? '—'}}</td><td>{{m?.margen ?? '—'}}</td><td>{{m?.profundidad !== null && m?.profundidad !== undefined && m?.margen !== null && m?.margen !== undefined ? m!.profundidad! + m!.margen! : '—'}}</td><td>{{m?.sangrado === null || m?.sangrado === undefined ? '—' : m!.sangrado ? 'Sí' : 'No'}}</td><td>{{m?.placa === null || m?.placa === undefined ? '—' : m!.placa ? 'Sí' : 'No'}}</td><td>{{m?.supuracion === null || m?.supuracion === undefined ? '—' : m!.supuracion ? 'Sí' : 'No'}}</td></tr>
         }}}</tbody></table></div><p>Motivo: {{r.motivo}} · Registrado {{r.creado_en | date:'medium'}} · Autor: {{r.profesional_id}}</p></details>
-    } @else {<div class="estado-vacio"><h3>Aún no hay controles periodontales</h3><p>Abra un nuevo examen y seleccione una pieza para registrar sus seis sitios.</p></div>}
+    } @else {<div class="estado-vacio"><h3>Aún no hay controles periodontales</h3><p>{{ puedeEscribir() ? 'Abra un nuevo examen y seleccione una pieza para registrar sus seis sitios.' : 'La herramienta está disponible. Los controles aparecerán cuando el especialista registre la primera evaluación.' }}</p></div>}
   }
 </section>
 <ng-template #grafico>

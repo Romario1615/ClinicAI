@@ -143,6 +143,12 @@ test('faciograma en la ficha conserva la cita, versiona zonas y descarga PDF en 
   }
   if (!encontrada) throw new Error('Prepare un paciente sintético con una cita de Estética facial.');
   const paciente = encontrada;
+  // La lectura compartida no acredita una relación de escritura: iniciar la
+  // atención explícita prepara el vínculo propio para este escenario sintético.
+  const inicio = await request.post(`${API}/pacientes/${paciente.id}/atencion-profesional`, {
+    headers:{...cabeceras,'Idempotency-Key':randomUUID()},data:{motivo:'Atención sintética para verificar registro facial'},
+  });
+  expect(inicio.status()).toBe(204);
   await page.goto('/acceso');
   await page.getByRole('combobox', { name:'Especialidad del profesional' }).selectOption(estetica.id);
   await page.getByRole('button', { name:/profesional de salud/i }).click();

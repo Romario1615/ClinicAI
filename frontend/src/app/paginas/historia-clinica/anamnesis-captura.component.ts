@@ -1,3 +1,4 @@
+import { EspecialidadHistoriaService } from '../../nucleo/servicios/especialidad-historia.service';
 import { PERMISOS } from '../../nucleo/servicios/configuracion';
 import { FotosRegistroComponent } from '../../compartido/fotos-registro.component';
 import { Component, effect, inject, input, signal, untracked, ChangeDetectionStrategy } from '@angular/core';
@@ -190,6 +191,7 @@ export class AnamnesisCapturaComponent {
   protected fotos: readonly FotoSeleccionada[] = [];
   private readonly operaciones = inject(OperacionesService);
   private readonly sesion = inject(SesionService);
+  private readonly especialidades = inject(EspecialidadHistoriaService);
   readonly pacienteId = input.required<string>();
   protected readonly plantillas = signal<readonly PlantillaAnamnesis[]>([]);
   protected readonly respuestas = signal<readonly RespuestaAnamnesis[]>([]);
@@ -209,7 +211,7 @@ export class AnamnesisCapturaComponent {
   }
 
   protected puedeEscribir(): boolean {
-    return this.sesion.tienePermiso('historia_clinica.escribir') && !!this.sesion.identidad()?.profesional_id;
+    return this.sesion.tienePermiso('historia_clinica.escribir') && this.especialidades.puedeRegistrar();
   }
 
   protected plantillaActual(): PlantillaAnamnesis | null {

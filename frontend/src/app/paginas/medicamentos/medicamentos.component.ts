@@ -113,7 +113,9 @@ export class MedicamentosComponent {
   protected readonly puedeRegistrar = computed(
     () =>
       this.sesion.tienePermiso(PERMISOS.adherenciaLeer) &&
-      this.sesion.tienePermiso(PERMISOS.recetaLeer),
+      this.sesion.tienePermiso(PERMISOS.recetaLeer) &&
+      this.sesion.tienePermiso('historia_clinica.escribir') &&
+      !!this.sesion.identidad()?.profesional_id,
   );
   protected readonly hayPaciente = computed(() => this.paciente() !== null);
   protected readonly diasVentana = DIAS_VENTANA;
@@ -220,6 +222,13 @@ export class MedicamentosComponent {
     this.cargando.set(true);
     this.error.set(null);
     this.ahora.set(Date.now());
+    this.recetas.set([]);
+    if (this.sesion.tienePermiso(PERMISOS.recetaLeer)) {
+      this.api.recetas(paciente.id).subscribe({
+        next: (recetas) => this.recetas.set(recetas),
+        error: () => this.recetas.set([]),
+      });
+    }
 
     this.api.tomas(paciente.id, DIAS_VENTANA).subscribe({
       next: (tomas) => {
@@ -236,14 +245,6 @@ export class MedicamentosComponent {
         next: (alertas) => {
           const propias = alertas.filter((alerta) => alerta.paciente_id === paciente.id);
           this.alertas.set(propias);
-          // Con varias alertas, cada una debe decir de qué receta es; si no,
-          // quien atiende no sabe cuál está revisando.
-          if (propias.length > 0 && this.sesion.tienePermiso(PERMISOS.recetaLeer)) {
-            this.api.recetas(paciente.id).subscribe({
-              next: (recetas) => this.recetas.set(recetas),
-              error: () => this.recetas.set([]),
-            });
-          }
         },
         error: (fallo: FalloApi) => this.errorAlertas.set(fallo),
       });
@@ -257,6 +258,7 @@ export class MedicamentosComponent {
   }
 
   protected atender(alerta: AlertaAdherencia): void {
+    if (!this.puedeRegistrar() || alerta.profesional_id !== this.sesion.identidad()?.profesional_id) return;
     this.atendiendoAlerta.set(alerta.id);
     this.errorAtendiendoAlerta.set(null);
     this.api.atenderAlertaAdherencia(alerta.id).subscribe({
@@ -280,6 +282,7 @@ export class MedicamentosComponent {
    * medio segundo.
    */
   protected registrar(toma: Toma, tomada: boolean): void {
+    if (!this.puedeRegistrarToma(toma)) return;
     this.registrando.set(toma.id);
     this.errorRegistro.set(null);
 
@@ -298,6 +301,11 @@ export class MedicamentosComponent {
   // ======================================================================
   //  Presentacion
   // ======================================================================
+  protected puedeRegistrarToma(toma: Toma): boolean {
+    return this.puedeRegistrar() && this.recetas().some(receta =>
+      receta.profesional_id === this.sesion.identidad()?.profesional_id &&
+      receta.medicamentos.some(medicamento => medicamento.id === toma.receta_medicamento_id));
+  }
   protected estado(clave: string): { texto: string; tono: string } {
     return ESTADOS[clave] ?? { texto: clave, tono: 'neutro' };
   }

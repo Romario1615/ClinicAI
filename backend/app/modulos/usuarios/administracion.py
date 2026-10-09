@@ -29,7 +29,12 @@ from app.modulos.usuarios.modelos import (
     Usuario,
     UsuarioRol,
 )
-from app.nucleo.autorizacion import PERMISOS_SOLO_ASISTENCIALES, Principal, TipoAmbito
+from app.nucleo.autorizacion import (
+    PERMISOS_CONSULTA_CLINICA,
+    PERMISOS_SOLO_ASISTENCIALES,
+    Principal,
+    TipoAmbito,
+)
 from app.nucleo.errores import ConflictoEstado, DatosInvalidos, RecursoNoEncontrado
 from app.nucleo.seguridad import hashear_contrasena
 
@@ -53,7 +58,11 @@ async def listar_permisos(sesion: AsyncSession, principal: Principal) -> list[Pe
     filas = (
         await sesion.execute(
             select(Permiso)
-            .where(Permiso.codigo.in_(principal.permisos - PERMISOS_SOLO_ASISTENCIALES))
+            .where(
+                Permiso.codigo.in_(
+                    principal.permisos - (PERMISOS_SOLO_ASISTENCIALES - PERMISOS_CONSULTA_CLINICA)
+                )
+            )
             .order_by(Permiso.categoria, Permiso.descripcion)
         )
     ).scalars()
@@ -201,7 +210,7 @@ async def crear_rol(
     codigos = set(datos.permisos)
     if not codigos <= principal.permisos:
         raise DatosInvalidos("Un rol solo puede incluir permisos que quien lo administra ya posee.")
-    if codigos & PERMISOS_SOLO_ASISTENCIALES:
+    if codigos & (PERMISOS_SOLO_ASISTENCIALES - PERMISOS_CONSULTA_CLINICA):
         raise DatosInvalidos(
             "Los permisos de historia clinica y prescripcion se asignan mediante el rol profesional."
         )
@@ -424,7 +433,7 @@ async def _roles_asignables(
         await _profesional(sesion, principal, profesional_id)
     for rol in roles:
         permisos = permisos_por_rol.get(rol.id, frozenset())
-        protegidos = permisos & PERMISOS_SOLO_ASISTENCIALES
+        protegidos = (permisos & PERMISOS_SOLO_ASISTENCIALES) - PERMISOS_CONSULTA_CLINICA
         if protegidos and rol.codigo != "profesional":
             raise DatosInvalidos("Los permisos clinicos solo se conceden al rol profesional.")
         delegables = permisos - (

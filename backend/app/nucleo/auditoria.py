@@ -101,6 +101,7 @@ class AccionAuditada(StrEnum):
 
     # --- Pacientes ---
     PACIENTE_CREADO = "paciente.creado"
+    PACIENTE_ATENCION_ABIERTA = "paciente.atencion_abierta"
     PACIENTE_MODIFICADO = "paciente.modificado"
     PACIENTE_CONSULTADO = "paciente.consultado"
     IDENTIDAD_VERIFICADA = "identidad.verificada"

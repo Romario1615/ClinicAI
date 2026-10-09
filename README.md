@@ -1,5 +1,50 @@
 # ClinicAI — Plataforma de gestión clínica
 
+## Ficha e historial compartidos, registro por especialidad (2026-10-09)
+
+**Pacientes → Ver ficha → Elegir qué registrar** reúne evolución y antecedentes,
+recetas, indicaciones, Documentos y PDF, odontograma, periodontograma, índice de
+placa, planes, faciograma y fotos/radiografías según las áreas activas de la
+clínica. El mismo selector está en **Historia clínica**. Las herramientas están
+disponibles desde el alta aunque todavía no tengan registros; las secciones
+comienzan vacías y no se generan diagnósticos ni mediciones ficticias.
+
+| Rol | Consulta del historial y herramientas | Registro clínico |
+|---|---|---|
+| Recepción | Dentro de clínica y ámbito | Solo consulta |
+| Asistencia clínica | Dentro de clínica y ámbito | Solo consulta; no carga fotos clínicas |
+| Administración de clínica | Dentro de clínica y ámbito | Solo consulta |
+| Auditoría | Dentro de clínica y ámbito, con trazabilidad | Solo consulta |
+| Superadministración | Solo pacientes de la clínica activa y ámbito | Solo consulta |
+| Profesional de salud | Su área y las otras autorizadas | Su especialidad, permiso y relación asistencial; correcciones según autoría |
+
+- **Primera atención sin cita:** el profesional abre el selector y pulsa
+  **Comenzar atención sin cita**. Crea solo su vínculo asistencial auditado,
+  con idempotencia, y permite comenzar la evolución; después registra cada
+  evaluación de forma explícita. Con cita propia se conserva su contexto.
+- **Especialidades:** Odontología registra odontograma, periodontograma y placa;
+  Estética/Dermatología/Cirugía plástica registra el faciograma. Las herramientas
+  de las otras áreas se muestran en consulta. Historia incorpora el
+  periodontograma completo que ya existía en la ficha.
+- **Consulta y edición:** recepción y asistencia no crean notas, recetas,
+  documentos clínicos, evaluaciones ni registros de tomas. La API comprueba
+  estos límites además de la interfaz. Los datos administrativos mantienen
+  sus permisos independientes. N3 y Formulario 033 requieren permiso sensible.
+- **Ayuda:** los seis manuales propios incluyen instrucciones distintas para
+  este recorrido, con sus responsabilidades y límites.
+- **Base de datos:** migración `20261009_038` detrás de `037`, aplicada y
+  reversible; respalda los permisos anteriores sin modificar historia clínica.
+  Los roles personalizados conservan sus asignaciones. Renueve la sesión para
+  cargar los permisos nuevos.
+
+[Decisión de acceso](docs/decisiones/0026-historial-compartido-y-registro-por-especialidad.md)
+y [verificación de ficha y marca](docs/verificacion-ficha-marca-2026-10-09.md).
+
+**Verificado:** frontend 777/777 con cobertura, API/dominio 257/257,
+política/manuales 76/76 y Chromium 33/33 (ficha/marca/formularios 17/17;
+autorización e historia/medicación 16/16). Ruff,
+formato, mypy, Bandit, lint y build aprobados; reversión de permisos comprobada.
+
 ## Logo y paleta celeste turquesa (2026-10-09)
 
 - **Portada:** logo ClinicAI destacado y nombre más grande; conserva la

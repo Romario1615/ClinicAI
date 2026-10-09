@@ -1082,8 +1082,9 @@ class TestAdherencia:
             actor_tipo=TipoActor.USUARIO,
             actor_id=uuid.uuid4(),
             clinica_id=uuid.uuid4(),
-            permisos=frozenset({"alerta_adherencia.atender"}),
+            permisos=frozenset({"alerta_adherencia.atender", "historia_clinica.escribir"}),
             ambito=Ambito(clinica_id=uuid.uuid4(), todos_los_pacientes=True),
+            profesional_id=uuid.uuid4(),
         )
         with pytest.raises(RecursoNoEncontrado):
             await servicio_historia.atender_alerta_adherencia(alerta.id, principal=otro)
