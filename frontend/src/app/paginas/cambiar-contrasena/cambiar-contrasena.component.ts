@@ -46,6 +46,11 @@ export class CambiarContrasenaComponent {
   protected readonly error = signal('');
 
   protected guardar(): void {
+    if (this.ocupado()) return;
+    if (!this.actual || this.nueva.length < 12 || this.nueva.length > 128) {
+      this.error.set('Ingrese la contraseña inicial y una nueva de 12 a 128 caracteres.');
+      return;
+    }
     if (this.nueva !== this.confirmacion) { this.error.set('Las contraseñas nuevas no coinciden.'); return; }
     this.ocupado.set(true); this.error.set('');
     this.api.guardar<void>('/autenticacion/cambio-contrasena', {

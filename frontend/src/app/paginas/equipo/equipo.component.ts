@@ -172,6 +172,7 @@ export class EquipoComponent implements OnInit {
   }
 
   protected guardar(): void {
+    if (this.guardando()) return;
     if (!this.form.nombre.trim() || !this.form.apellido.trim() || !this.form.especialidad_id || !this.form.sede_ids.length || !this.form.sede_principal_id) {
       this.fallar('Complete nombre, apellido, especialidad y al menos una sede.');
       return;

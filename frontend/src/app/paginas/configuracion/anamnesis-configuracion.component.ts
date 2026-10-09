@@ -248,6 +248,7 @@ export class AnamnesisConfiguracionComponent implements OnInit {
   }
 
   protected guardar(): void {
+    if (this.guardando()) return;
     this.error.set('');
     const payload = this.payload();
     if (!payload) return;
@@ -269,6 +270,7 @@ export class AnamnesisConfiguracionComponent implements OnInit {
   }
 
   protected publicar(): void {
+    if (this.guardando()) return;
     const id = this.idEditando();
     if (!id) return;
     this.guardando.set(true);

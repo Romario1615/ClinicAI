@@ -13,6 +13,16 @@ describe('AgenteDemoComponent · preparación flotante',()=>{
     http.expectOne(`${BASE}/catalogo/profesionales?especialidad_id=odo&sede_id=s`).flush([{id:'prof',nombre:'Profesional',apellido:'Sintético'}]);f.detectChanges();
   });
   afterEach(()=>http.verify());
+  it('los horarios devueltos tienen botones para elegir y la derivación permanece visible',()=>{
+    const c=f.componentInstance;
+    c['sesionId'].set('hilo-sintetico');
+    c['respuestaActual'].set({sesion_id:'hilo-sintetico',modo:'simulado',mensaje:'Hay un horario',requiere_humano:false,herramientas:['find_availability'],datos:{turnos:[{inicio:'2026-10-10T14:00:00Z',fin:'2026-10-10T14:30:00Z'}]}});
+    f.detectChanges();
+    expect((f.nativeElement as HTMLElement).querySelector('.chat__acciones .horarios button')?.textContent).toContain('Elegir 1');
+    c['requiereHumano'].set(true);f.detectChanges();
+    expect((f.nativeElement as HTMLElement).querySelector('.chat__acciones [role="status"]')?.textContent).toContain('Atención del personal requerida');
+    expect((f.nativeElement as HTMLElement).querySelector('.horarios')).toBeNull();
+  });
   function abrir(){f.componentInstance['preparando'].set(true);f.detectChanges();http.match(r=>r.url.includes('/pacientes')).forEach(r=>r.flush({elementos:[],total:0}));}
   it('abre los parámetros al elegir Preparar conversación',()=>{
     expect(f.nativeElement.querySelector('dialog')).toBeNull();

@@ -304,6 +304,7 @@ export class IntegracionesIaComponent implements OnInit {
   }
 
   private guardar(codigo: string, cuerpo: unknown, exito: string, despues: (r: Integracion) => void): void {
+    if (this.ocupado()) return;
     this.ocupado.set(true);
     this.error.set('');
     this.aviso.set('');

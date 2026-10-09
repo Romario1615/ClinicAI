@@ -53,6 +53,18 @@ describe('UsuariosComponent', () => {
         http.verify();
     });
 
+    it('ignora el segundo envío y conserva la cuenta mientras la API responde', () => {
+        montar(['usuario.leer', 'rol.asignar']);
+        c.cambiarEstado(USUARIOS[0], false);
+        c.cambiarEstado(USUARIOS[0], false);
+        const peticion = http.expectOne({ method: 'PUT', url: `${BASE}/usuarios/u1/estado` });
+        expect(c.ocupado()).toBe(true);
+        peticion.flush({ codigo: 'CONFLICTO', mensaje: 'Conflicto sintético.' }, { status: 409, statusText: 'Conflict' });
+        expect(c.ocupado()).toBe(false);
+        expect(c.error()).toContain('Conflicto sintético');
+        expect(c.usuarios()[0].activo).toBe(true);
+    });
+
     it('filtra el personal por texto, rol y estado', () => {
         montar(['usuario.leer']);
         expect(c.personal().map((u: {

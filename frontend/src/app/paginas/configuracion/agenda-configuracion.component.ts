@@ -131,6 +131,7 @@ export class AgendaConfiguracionComponent implements OnInit {
   protected quitarPausa(indice: number): void { this.pausas.splice(indice, 1); }
   protected editarHorario(item: HorarioSede): void { this.horarioEditando=item.id; this.horario={...item,hora_inicio:this.horaCorta(item.hora_inicio) ?? '',hora_fin:this.horaCorta(item.hora_fin) ?? '', descansos:[]}; this.pausas=item.descansos.map((pausa)=>({hora_inicio:this.horaCorta(pausa.hora_inicio) ?? '',hora_fin:this.horaCorta(pausa.hora_fin) ?? '',motivo:pausa.motivo ?? ''})); this.ventanaHorario.set(true); }
   protected guardarHorario(): void {
+    if (this.guardando()) return;
     const descansos = this.pausas.filter((pausa)=>pausa.hora_inicio || pausa.hora_fin).map((pausa)=>({...pausa,motivo:pausa.motivo||null}));
     const datos: DatosHorarioSede = {...this.horario, descansos}; this.guardando.set(true); this.mensaje.set('');
     this.api.guardarHorario(this.sedeId, datos, this.horarioEditando || undefined).subscribe({next:()=>{this.guardando.set(false);this.cerrarHorario();this.mostrar('Horario guardado.');this.cargar();},error:(e:unknown)=>{this.guardando.set(false);this.fallar(e,'No se pudo guardar el horario.')}});
@@ -140,7 +141,7 @@ export class AgendaConfiguracionComponent implements OnInit {
   protected cerrarFeriado(): void { this.ventanaFeriado.set(false); this.nuevoFeriado(); }
   protected nuevoFeriado(): void { this.feriadoEditando=''; this.alcanceFeriado='sede'; this.feriado=this.feriadoVacio(); }
   protected editarFeriado(item:FeriadoAgenda):void {this.feriadoEditando=item.id;this.alcanceFeriado=item.sede_id?'sede':'clinica';this.feriado={sede_id:item.sede_id,fecha:item.fecha,nombre:item.nombre,recurrente_anual:item.recurrente_anual,hora_inicio:this.horaCorta(item.hora_inicio),hora_fin:this.horaCorta(item.hora_fin)};this.ventanaFeriado.set(true);}
-  protected guardarFeriado():void {const datos:DatosFeriadoAgenda={...this.feriado,sede_id:this.alcanceFeriado==='sede'?this.sedeId||null:null,hora_inicio:this.feriado.hora_inicio||null,hora_fin:this.feriado.hora_fin||null};this.guardando.set(true);this.api.guardarFeriado(datos,this.feriadoEditando||undefined).subscribe({next:()=>{this.guardando.set(false);this.cerrarFeriado();this.mostrar('Feriado guardado.');this.cargar();},error:(e:unknown)=>{this.guardando.set(false);this.fallar(e,'No se pudo guardar el feriado.')}});}
+  protected guardarFeriado():void {if(this.guardando())return;const datos:DatosFeriadoAgenda={...this.feriado,sede_id:this.alcanceFeriado==='sede'?this.sedeId||null:null,hora_inicio:this.feriado.hora_inicio||null,hora_fin:this.feriado.hora_fin||null};this.guardando.set(true);this.api.guardarFeriado(datos,this.feriadoEditando||undefined).subscribe({next:()=>{this.guardando.set(false);this.cerrarFeriado();this.mostrar('Feriado guardado.');this.cargar();},error:(e:unknown)=>{this.guardando.set(false);this.fallar(e,'No se pudo guardar el feriado.')}});}
   protected solicitarEliminarFeriado(item:FeriadoAgenda):void {this.confirmacionEliminar.set({tipo:'feriado',id:item.id,descripcion:`el cierre «${item.nombre}»`});}
   protected cancelarEliminacion(): void { if (!this.guardando()) this.confirmacionEliminar.set(null); }
   protected confirmarEliminacion(): void {

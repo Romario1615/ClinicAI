@@ -53,6 +53,17 @@ describe('GastosComponent', () => {
   let fixture: ComponentFixture<GastosComponent>;
   let http: HttpTestingController;
 
+  it.each([0, -1, Number.NaN, Number.POSITIVE_INFINITY, 12.345])('no redondea ni envía un importe inválido: %s', importe => {
+    iniciar(['gasto.leer', 'gasto.registrar']);
+    http.expectOne(p => p.url === `${BASE}/gastos`).flush({ elementos: [], total: 0, importe_total: '0' });
+    const c = fixture.componentInstance;
+    c['formulario'].importe = importe;
+    c['formulario'].descripcion = 'Gasto sintético';
+    c['registrar'](true);
+    http.expectNone({ method: 'POST', url: `${BASE}/gastos` });
+    expect(c['falloAlta']()).not.toBeNull();
+  });
+
   function iniciar(permisos: readonly string[]): void {
     TestBed.configureTestingModule({
       imports: [GastosComponent],

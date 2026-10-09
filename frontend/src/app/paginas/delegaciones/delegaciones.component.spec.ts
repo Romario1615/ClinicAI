@@ -24,6 +24,16 @@ describe('DelegacionesComponent', () => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     let c: any;
 
+    it('un segundo envío no crea otra delegación mientras se guarda', () => {
+        c.delegante = 'p1'; c.delegado = 'p2';
+        c.desde = '2026-10-10'; c.hasta = '2026-10-11'; c.motivo = 'Cobertura sintética';
+        c.crear();
+        c.crear();
+        const peticion = http.expectOne({ method: 'POST', url: `${BASE}/profesionales/delegaciones` });
+        peticion.flush({ ...VIGENTE, id: 'd2' });
+        expect(c.delegaciones().some((d: { id: string }) => d.id === 'd2')).toBe(true);
+    });
+
     beforeEach(() => {
         TestBed.configureTestingModule({ imports: [DelegacionesComponent], providers: PROVEEDORES_PRUEBA });
         http = TestBed.inject(HttpTestingController);

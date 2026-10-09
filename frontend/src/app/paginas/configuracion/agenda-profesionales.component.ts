@@ -99,6 +99,7 @@ export class AgendaProfesionalesComponent implements OnInit {
   }
 
   protected guardar(): void {
+    if (this.guardando()) return;
     if (!this.sedeId || !this.profesionalId) return;
     this.guardando.set(true);
     const datos: DatosFranjaProfesional={...this.form, vigente_desde:this.form.vigente_desde||null, vigente_hasta:this.form.vigente_hasta||null};

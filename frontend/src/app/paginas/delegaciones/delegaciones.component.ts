@@ -212,6 +212,7 @@ export class DelegacionesComponent {
   }
 
   protected crear(): void {
+    if (this.guardando()) return;
     if (!this.delegante || !this.delegado || !this.desde || !this.hasta || this.motivo.trim().length < 5) {
       this.errorEditor.set('Complete profesionales, fechas y un motivo (mínimo 5 caracteres).');
       return;

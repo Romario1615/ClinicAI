@@ -749,9 +749,14 @@ export class GastosComponent {
   }
 
   protected registrar(valido: boolean | null): void {
+    if (this.guardando()) return;
     const importe = Number(this.formulario.importe);
     if (!valido || !Number.isFinite(importe) || importe <= 0) {
       this.falloAlta.set(new FalloApi('DATOS_INVALIDOS', 'Revise los campos obligatorios y el importe.', 422));
+      return;
+    }
+    if (Number(importe.toFixed(2)) !== importe) {
+      this.falloAlta.set(new FalloApi('DATOS_INVALIDOS', 'El importe admite como máximo dos decimales.', 422));
       return;
     }
     this.guardando.set(true);
@@ -791,6 +796,7 @@ export class GastosComponent {
   }
 
   protected anular(gasto: Gasto): void {
+    if (this.guardando()) return;
     if (this.motivo.trim().length < 5) {
       return;
     }

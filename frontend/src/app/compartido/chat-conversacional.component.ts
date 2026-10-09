@@ -6,6 +6,7 @@ import { FormsModule } from '@angular/forms';
   selector: 'app-chat-conversacional',
   standalone: true,
   imports: [FormsModule],
+  host: { role: 'region', '[attr.aria-label]': 'etiqueta()' },
   template: `
     <div #registro class="chat__mensajes desplazable" role="log" aria-live="polite" tabindex="0" [attr.aria-label]="etiqueta()">
       <ng-content select="[chat-mensaje]" />
@@ -21,7 +22,7 @@ import { FormsModule } from '@angular/forms';
       </div>
     }
     @if (error()) { <p class="chat__error" role="alert">{{ error() }}</p> }
-    <form class="chat__compositor" (ngSubmit)="enviar.emit()">
+    <form class="chat__compositor" (ngSubmit)="solicitarEnvio()">
       <label class="campo">
         <span class="campo__etiqueta">Mensaje</span>
         <textarea class="campo__control" name="mensaje" rows="2" maxlength="1000" [ngModel]="texto()" (ngModelChange)="texto.set($event)"
@@ -69,10 +70,15 @@ export class ChatConversacionalComponent {
 
   protected alEnter(evento: Event): void {
     const teclado = evento as KeyboardEvent;
-    if (!teclado.shiftKey) {
+    if (!teclado.shiftKey && !teclado.isComposing) {
       teclado.preventDefault();
-      this.enviar.emit();
+      this.solicitarEnvio();
     }
+  }
+
+  protected solicitarEnvio(): void {
+    if (this.ocupado() || this.deshabilitado() || !this.texto().trim() || this.texto().length > 1000) return;
+    this.enviar.emit();
   }
 
   protected elegir(valor: string): void {

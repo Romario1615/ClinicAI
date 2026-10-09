@@ -209,6 +209,7 @@ export class ModulosEspecialidadComponent {
   }
 
   protected guardar(esp: ModulosDeEspecialidad): void {
+    if (this.guardando()) return;
     const motivo = this.motivo.trim();
     if (motivo.length < 5) {
       this.errorCambio.set('Indique un motivo de al menos 5 caracteres.');

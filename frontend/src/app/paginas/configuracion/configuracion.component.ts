@@ -454,6 +454,7 @@ export class ConfiguracionComponent implements OnInit {
   }
 
   protected guardarClinica(): void {
+    if (this.guardandoClinica()) return;
     const datos = this.clinica();
     if (!datos) return;
     const { id, ...cambios } = datos;
@@ -490,6 +491,7 @@ export class ConfiguracionComponent implements OnInit {
   }
 
   protected guardar(codigo: 'anthropic' | 'whatsapp' | 'google_calendar' | 'smtp'): void {
+    if (this.guardando()) return;
     const formulario = this.formulario(codigo);
     const secretos = Object.fromEntries(
       Object.entries(formulario.secretos).filter(([, valor]) => valor.trim().length > 0),
@@ -552,6 +554,7 @@ export class ConfiguracionComponent implements OnInit {
   }
 
   protected cambiarAgenteWhatsApp(habilitada: boolean): void {
+    if (this.guardandoAgenteWhatsApp()) return;
     this.guardandoAgenteWhatsApp.set(true);
     this.error.set('');
     this.servicio.guardar('agente_whatsapp', { habilitada, ajustes: {}, secretos: {}, eliminar_secretos: [] }).subscribe({

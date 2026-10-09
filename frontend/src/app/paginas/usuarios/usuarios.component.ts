@@ -901,6 +901,7 @@ export class UsuariosComponent {
   }
 
   private enviar(ruta: string, datos: unknown, editar: boolean, mensaje: string, alGuardar: () => void): void {
+    if (this.ocupado()) return;
     this.ocupado.set(true);
     this.error.set('');
     this.aviso.set('');

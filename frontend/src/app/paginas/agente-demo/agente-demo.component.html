@@ -72,21 +72,23 @@
           </article>
         }
       </div>
-      @if (ocupado()) { <p chat-acciones role="status">Procesando…</p> }
+      <div chat-acciones>
+      @if (ocupado()) { <p role="status">Procesando…</p> }
       @if (requiereHumano()) {
-        <div chat-acciones class="derivacion" role="status"><strong>Atención del personal requerida</strong><p>La conversación quedó derivada. Inicie otra simulación para probar un nuevo recorrido.</p></div>
+        <div class="derivacion" role="status"><strong>Atención del personal requerida</strong><p>La conversación quedó derivada. Inicie otra simulación para probar un nuevo recorrido.</p></div>
       } @else if (pendiente() && !ocupado()) {
-        <div chat-acciones><p>No se recibió una respuesta. Reintente el mismo envío para comprobar su resultado.</p>
+        <div><p>No se recibió una respuesta. Reintente el mismo envío para comprobar su resultado.</p>
         <button class="boton boton--principal" type="button" (click)="enviar(pendiente()!.texto)">Reintentar envío</button></div>
       } @else {
         @if (turnos().length) {
-          <div chat-acciones class="horarios" aria-label="Horarios disponibles">
+          <div class="horarios" aria-label="Horarios disponibles">
             @for (turno of turnos(); track turno.inicio; let i = $index) {
               <button class="boton" type="button" [disabled]="ocupado()" (click)="elegir(i)">Elegir {{ i + 1 }} · {{ fechaHora(turno.inicio) }}</button>
             }
           </div>
         }
       }
+      </div>
       </app-chat-conversacional>
     </section>
   }

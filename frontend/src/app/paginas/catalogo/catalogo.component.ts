@@ -1,5 +1,6 @@
 import { Component, computed, inject, signal, ChangeDetectionStrategy } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { HttpErrorResponse } from '@angular/common/http';
 import { CapturaFotosComponent, type FotoSeleccionada } from '../../compartido/captura-fotos.component';
 import { FotosRegistroComponent } from '../../compartido/fotos-registro.component';
 import { FotosRegistroService } from '../../nucleo/servicios/fotos-registro.service';
@@ -8,6 +9,7 @@ import { forkJoin, of } from 'rxjs';
 import { PestanasComponent, type OpcionPestana } from '../../compartido/pestanas.component';
 import { VentanaFlotanteComponent } from '../../compartido/ventana-flotante.component';
 import { CatalogoService } from '../../nucleo/servicios/catalogo.service';
+import { FalloApi } from '../../nucleo/servicios/api.service';
 import { SesionService } from '../../nucleo/servicios/sesion.service';
 import { ModulosEspecialidadComponent } from './modulos-especialidad.component';
 import type { Consultorio, Especialidad, Sede, Servicio, Profesional, TipoConsultorio } from '../../nucleo/modelos/dominio';
@@ -231,6 +233,7 @@ export class CatalogoComponent {
   protected abrirNuevoConsultorio(): void { this.nuevo(); this.error.set(''); this.mensaje.set(''); this.operacionFotos.reiniciar(); this.fotos=[]; this.ventanaFormulario.set('consultorio'); }
 
   protected guardar(): void {
+    if (this.guardando()) return;
     if (!this.form.nombre.trim() || !this.sedeSeleccionada()) return;
     this.guardando.set(true); this.error.set(''); this.mensaje.set('');
     const operacion = this.editando()
@@ -241,7 +244,7 @@ export class CatalogoComponent {
         const confirmacion = this.editando() ? 'Consultorio actualizado.' : 'Consultorio creado.';
         this.guardando.set(false); this.seleccionarSede(this.sedeSeleccionada()); this.mensaje.set(confirmacion);
       },
-      error: (e: { error?: { mensaje?: string; detail?: string } }) => { this.guardando.set(false); this.error.set(e.error?.mensaje ?? e.error?.detail ?? 'No se pudo guardar el consultorio. Verifique que el nombre no esté repetido.'); },
+      error: (e: unknown) => { this.guardando.set(false); this.error.set(this.mensajeError(e, 'No se pudo guardar el consultorio. Verifique que el nombre no esté repetido.')); },
     });
   }
 
@@ -283,6 +286,7 @@ export class CatalogoComponent {
   }
 
   protected guardarEspecialidad(): void {
+    if (this.guardando()) return;
     const datos = {
       nombre: this.formEspecialidad.nombre.trim(),
       codigo: this.formEspecialidad.codigo.trim() || null,
@@ -300,8 +304,8 @@ export class CatalogoComponent {
         this.catalogo.especialidades().subscribe({ next: (items) => this.especialidades.set(items) });
         this.mensaje.set(editar ? 'Especialidad actualizada.' : 'Especialidad creada.');
       },
-      error: (e: { error?: { mensaje?: string; detail?: string } }) => {
-        this.guardando.set(false); this.error.set(e.error?.mensaje ?? e.error?.detail ?? 'No se pudo guardar la especialidad.');
+      error: (e: unknown) => {
+        this.guardando.set(false); this.error.set(this.mensajeError(e, 'No se pudo guardar la especialidad.'));
       },
     });
   }
@@ -333,6 +337,7 @@ export class CatalogoComponent {
   }
 
   protected guardarServicio(): void {
+    if (this.guardando()) return;
     if (!this.formServicio.nombre.trim() || !this.formServicio.especialidad_id) return;
     this.guardando.set(true); this.error.set(''); this.mensaje.set('');
     const datos: DatosServicio = { ...this.formServicio, nombre: this.formServicio.nombre.trim() };
@@ -346,8 +351,8 @@ export class CatalogoComponent {
         this.catalogo.servicios().subscribe({ next: (items) => this.servicios.set(items) });
         this.mensaje.set(editar ? 'Servicio actualizado.' : 'Servicio creado.');
       },
-      error: (e: { error?: { mensaje?: string; detail?: string } }) => {
-        this.guardando.set(false); this.error.set(e.error?.mensaje ?? e.error?.detail ?? 'No se pudo guardar el servicio.');
+      error: (e: unknown) => {
+        this.guardando.set(false); this.error.set(this.mensajeError(e, 'No se pudo guardar el servicio.'));
       },
     });
   }
@@ -411,5 +416,14 @@ export class CatalogoComponent {
       minutos_preparacion: 0, precio: null, moneda: 'USD', requiere_pago_previo: false,
       instrucciones_preparacion: null, tipo_consultorio_requerido: null,
     };
+  }
+
+  private mensajeError(error: unknown, alternativo: string): string {
+    if (error instanceof FalloApi) return error.message;
+    if (error instanceof HttpErrorResponse) {
+      if (typeof error.error?.mensaje === 'string') return error.error.mensaje;
+      if (typeof error.error?.detail === 'string') return error.error.detail;
+    }
+    return alternativo;
   }
 }

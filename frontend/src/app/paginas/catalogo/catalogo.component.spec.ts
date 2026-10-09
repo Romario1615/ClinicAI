@@ -3,7 +3,8 @@ import { provideHttpClient, withXhr } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { CONFIGURACION, CONFIGURACION_POR_DEFECTO } from '../../nucleo/servicios/configuracion';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { of } from 'rxjs';
+import { NEVER, of, throwError } from 'rxjs';
+import { FalloApi } from '../../nucleo/servicios/api.service';
 
 import { CatalogoComponent } from './catalogo.component';
 import { CatalogoService } from '../../nucleo/servicios/catalogo.service';
@@ -25,6 +26,41 @@ describe('CatalogoComponent', () => {
     let fixture: ComponentFixture<CatalogoComponent>;
     let catalogo: MockedObject<CatalogoService>;
     let sesion: MockedObject<SesionService>;
+
+    it('muestra el mensaje específico de las fotos pendientes al guardar', () => {
+        const c = fixture.componentInstance as unknown as {
+            form: { nombre: string }; seleccionarSede(id: string): void; guardar(): void; error(): string;
+        };
+        c.seleccionarSede(SEDE.id);
+        c.form.nombre = 'Sala sintética';
+        const aviso = 'El registro ya se guardó. Algunas fotos siguen pendientes. Reintente Guardar.';
+        catalogo.crearConsultorio.mockReturnValue(throwError(() => new FalloApi('FOTOS_PENDIENTES', aviso, 503)));
+        c.guardar();
+        expect(c.error()).toBe(aviso);
+        expect(catalogo.crearConsultorio).toHaveBeenCalledOnce();
+    });
+
+    it.each(['consultorio', 'especialidad', 'servicio'] as const)('impide dos envíos pendientes del formulario de %s', tipo => {
+        const c = fixture.componentInstance as unknown as {
+            form: { nombre: string }; formEspecialidad: { nombre: string; codigo: string; descripcion: string };
+            formServicio: typeof SERVICIO;
+            guardar(): void; guardarEspecialidad(): void; guardarServicio(): void;
+            seleccionarSede(id: string): void; cerrarVentana(): void;
+        };
+        c.seleccionarSede(SEDE.id);
+        c.form.nombre = 'Sala sintética';
+        c.formEspecialidad = { nombre: 'Área sintética', codigo: 'SINT', descripcion: '' };
+        c.formServicio = { ...SERVICIO };
+        catalogo.crearConsultorio.mockReturnValue(NEVER);
+        catalogo.crearEspecialidad.mockReturnValue(NEVER);
+        catalogo.crearServicio.mockReturnValue(NEVER);
+        const enviar = () => tipo === 'consultorio' ? c.guardar() : tipo === 'especialidad' ? c.guardarEspecialidad() : c.guardarServicio();
+        enviar();
+        enviar();
+        c.cerrarVentana();
+        const llamada = tipo === 'consultorio' ? catalogo.crearConsultorio : tipo === 'especialidad' ? catalogo.crearEspecialidad : catalogo.crearServicio;
+        expect(llamada).toHaveBeenCalledTimes(1);
+    });
 
     beforeEach(() => {
         catalogo = {
