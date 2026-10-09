@@ -1,5 +1,34 @@
 # Estado de preparación para producción
 
+## Revisión funcional por módulos (2026-10-09)
+
+Inventario automático de 99 plantillas, 66 formularios y 502 declaraciones de
+botones, combinado con regresión de componentes, API/dominio y navegador.
+La edición de horarios envía el esquema correcto; las consultas descartan
+contextos anteriores y las escrituras protegen cierre/envío. Conversaciones
+actualiza el hilo y aplica sus permisos existentes. Analítica verifica
+agregaciones ponderadas, porcentajes, datos faltantes y escalas.
+El Panel mantiene cifras, comparación y análisis en el contexto vigente
+y protege solicitudes de análisis duplicadas; seis pruebas reprodujeron
+los fallos antes de corregirlos.
+
+Frontend final **865/865**, líneas **88,29 %**; backend completo **2228
+aprobadas / tres externas omitidas**, cobertura **88,91 %**, y regresión
+numérica/indicadores/aprendizaje **57/57**. Chromium completo **110/110** antes
+del último ajuste del Panel y regresión posterior **9/9**, sin reintentos.
+Lint/build, Ruff/formato/mypy, Bandit afectado y auditorías npm/Python
+aprobados. Gitleaks sin secretos en el índice y commits examinados.
+
+Reversión de la migración existente **038 → 037 → 038** en una base exclusiva,
+con `alembic check` aprobado. La API temporal, seis bases y cuatro archivos
+sintéticos se retiraron; se conserva la aplicación 4200 y API 8000, ambas 200.
+
+[Informe de 18 puntos y matriz por módulo](verificacion-modulos-2026-10-09.md).
+No hay nuevas migraciones, endpoints, permisos concedidos ni dependencias.
+Trabajo local en `main`, sin publicación o despliegue. Meta, calendario y
+LLM reales, cámaras físicas, aceptación clínica y condiciones de despliegue
+siguen pendientes; las pruebas locales no acreditan esas integraciones.
+
 ## Identidad ClinicAI (2026-10-09)
 
 Marca propia integrada en acceso, navegación, cabecera móvil y recursos de

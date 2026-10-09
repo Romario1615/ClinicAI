@@ -1,5 +1,28 @@
 # Limitaciones conocidas y riesgos residuales
 
+## Revisión de módulos, botones y gráficas (2026-10-09)
+
+El inventario cuenta 66 formularios y 502 declaraciones de botones en 99
+plantillas; no cuenta cada instancia de un bucle ni demuestra por sí solo
+que un handler funciona. La [verificación por módulos](verificacion-modulos-2026-10-09.md)
+separa contratos de componentes, reglas API/dominio y recorridos de navegador
+con consulta posterior. Se corrigen edición de horarios, respuestas obsoletas
+y envíos/cierres pendientes, mensajes de error y acciones de la bandeja.
+El Panel invalida cifras/comparación y análisis al cambiar el contexto;
+su regresión de navegador conserva los datos de la API real y solo simula
+rechazos retrasados de consultas anteriores.
+
+Las cifras de Analítica se comprueban con agregados exactos y las gráficas con
+coordenadas, series vacías y datos faltantes. Su corrección en muestras
+sintéticas no garantiza precisión predictiva sobre una clínica real.
+
+La batería usa PostgreSQL/Redis reales y seis bases sintéticas exclusivas.
+WhatsApp y calendario permanecen en sandbox, LLM/embeddings en mock; tres
+pruebas Anthropic externas se omiten. Se comprueba la cola de respuestas,
+no la entrega con Meta. Continúan pendientes cámaras físicas, otros motores
+de navegador, carga nueva, DAST, pipeline remoto e integraciones contratadas.
+La revisión no sustituye aceptación clínica ni los requisitos de producción.
+
 ## Identidad ClinicAI (2026-10-09)
 
 El logo está disponible como SVG, PNG transparente, favicon e iconos de

@@ -304,3 +304,22 @@ Codex → Claude: canal queue OK
   Lint/build, Ruff/formato/Bandit del generador y npm audit aprobados. Guía de
   regeneración en Recursos visuales e informe de 18 puntos en
   `docs/verificacion-logo-2026-10-09.md`. Trabajo local en `main`, sin push.
+
+* 2026-10-09, Codex → Claude: revisión por módulos confirmada en `main`:
+  `0aca147` (horarios, catálogo, disponibilidad, bloqueos y bandeja) y
+  `d80f2ed` (contexto de cifras/comparación/análisis del Panel). Inventario
+  reproducible: 99 plantillas, 66 formularios y 502 declaraciones de botones;
+  cero sin acción declarada, sin equiparar eso a probar cada combinación.
+  Frontend final **865/865**, líneas **88,29 %**; backend completo **2228
+  aprobadas / 3 externas omitidas**, cobertura **88,91 %**, y regresión de
+  indicadores/aprendizaje **57/57**. Chromium completo **110/110** antes del
+  último ajuste del Panel y regresión posterior **9/9**, sin reintentos;
+  no son una corrida única de 119 casos. Ruff/formato/mypy, Bandit afectado,
+  lint/build, auditorías npm/Python y Gitleaks aprobados. Sin migraciones
+  nuevas; 038 → 037 → 038 comprobado en base exclusiva. API 8020, seis bases
+  y cuatro archivos sintéticos retirados; 4200 y 8000 responden 200.
+  La semilla de WhatsApp exige BD QA y 8020; el escenario 28 usa
+  `QA_BANDEJA_VIGENTE` y `QA_BANDEJA_VENCIDA` y restaura la integración.
+  README, matriz de formularios, límites/preparación y el informe de 18 puntos
+  `docs/verificacion-modulos-2026-10-09.md` documentan alcance y resultados.
+  Todo local en `main`, sin push; `.impeccable` ajena permanece intacta.

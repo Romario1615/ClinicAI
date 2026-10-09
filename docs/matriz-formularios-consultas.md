@@ -12,6 +12,28 @@ La existencia de una suite no acredita por sí sola todas las combinaciones de
 entradas: los resultados de ejecución y límites se registran en
 [el informe de esta revisión](verificacion-formularios-2026-10-09.md).
 
+## Revisión posterior por módulos y botones
+
+El [inventario reproducible](../infra/scripts/inventariar-interfaz.mjs)
+analiza **99 plantillas** con el compilador de Angular: **66 formularios** y
+**502 declaraciones de botones**. Resultado del 2026-10-09: cero errores de
+análisis y cero botones sin evento, navegación o acción nativa declarada.
+Los bucles cuentan una declaración; los controles compartidos se contabilizan
+en su componente. Ejecutar desde la raíz, con dependencias frontend instaladas:
+
+```powershell
+New-Item -ItemType Directory -Force tmp | Out-Null
+node infra/scripts/inventariar-interfaz.mjs > tmp/inventario-interfaz.json
+```
+
+La [matriz por módulos](verificacion-modulos-2026-10-09.md) relaciona esos
+controles con pruebas de componentes, API y navegador. Añade recorridos de
+catálogo, cuentas/roles, horarios/cierres, bloqueos, mensajería sandbox y
+disponibilidad profesional; comprueba el resultado consultando la API.
+Incluye regresiones de respuestas tardías, escrituras pendientes y escalas y
+agregaciones de Analítica. La existencia de un handler sigue sin acreditar
+todas las combinaciones de un control.
+
 ## Inventario
 
 Rutas relativas a `frontend/src/app/`. Los enlaces abren el código y su prueba.

@@ -1,5 +1,38 @@
 # ClinicAI — Plataforma de gestión clínica
 
+## Revisión por módulos, botones y gráficas (2026-10-09)
+
+Inventario reproducible de **99 plantillas**, **66 formularios** y **502
+declaraciones de botones**; cero controles sin acción declarada. La revisión
+combina componentes, API/PostgreSQL y recorridos completos de navegador.
+
+- Se corrige la edición de horarios: envía únicamente los campos admitidos
+  y permite cambiar la franja y retirar pausas.
+- Catálogo, horarios, cierres, bloqueos y disponibilidad profesional descartan
+  respuestas de sedes/profesionales anteriores y protegen los envíos pendientes.
+- Los errores de horario quedan dentro de la ventana, conservando el borrador.
+- La bandeja ofrece «Devolver al agente» en el estado correcto, actualiza la
+  asignación al tomar y respeta los permisos de consulta/respuesta/gestión.
+- Analítica verifica promedios ponderados, porcentajes, personas únicas por
+  día, datos faltantes y coordenadas de histórico, predicción y banda.
+- El Panel conserva el contexto de periodo/especialidad: descarta cifras,
+  comparaciones y análisis anteriores y evita consultas de análisis duplicadas.
+
+**Pruebas:** frontend **865/865**, cobertura de líneas **88,29 %**; backend
+completo **2228 aprobadas / tres externas omitidas**, cobertura **88,91 %**,
+y regresión de indicadores/aprendizaje **57/57**. Chromium completo
+**110/110**, seguido de **9/9** después del ajuste final del Panel; son
+corridas separadas, sin reintentos. Lint/build, Ruff/formato/mypy, Bandit
+afectado, auditorías npm/Python y Gitleaks aprobados.
+
+La API 8020, seis bases sintéticas y cuatro archivos de prueba se retiraron;
+aplicación 4200 y API 8000 responden 200. Trabajo guardado en `main` local.
+
+[Matriz por módulo, comandos y resultados](docs/verificacion-modulos-2026-10-09.md).
+[Inventario de formularios y reglas](docs/matriz-formularios-consultas.md).
+Las declaraciones estáticas no equivalen a ejecutar todas las combinaciones
+de los 502 controles; el informe distingue los recorridos y sus límites.
+
 ## Logo propio de ClinicAI (2026-10-09)
 
 Nueva marca en **celeste y turquesa**: una C con cruz de cuidado y tres nodos
