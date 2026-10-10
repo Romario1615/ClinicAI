@@ -47,6 +47,7 @@ from app.modulos.conocimiento.esquemas import (
     PaginaDocumentos,
     RespuestaBusqueda,
     RespuestaDocumento,
+    RespuestaExtraccion,
     RespuestaIngesta,
     RespuestaPermisoDocumento,
     RespuestaPermisosDocumento,
@@ -64,6 +65,7 @@ from app.modulos.conocimiento.modelos import (
     KnowledgePermission,
     KnowledgeVersion,
 )
+from app.modulos.conocimiento.ocr import extraer_escaneo
 from app.modulos.conocimiento.repositorio import condicion_acl_documento
 from app.modulos.conocimiento.servicios import ServicioConocimiento
 from app.modulos.organizacion.modelos import Especialidad, Sede
@@ -163,6 +165,53 @@ async def _a_respuesta(sesion: Sesion, documento: KnowledgeDocument) -> Respuest
 # ---------------------------------------------------------------------------
 #  Documentos
 # ---------------------------------------------------------------------------
+@enrutador.post(
+    "/extraer-escaneo",
+    response_model=RespuestaExtraccion,
+    summary="Reconocer un PDF escaneado para revisión humana, sin guardarlo",
+    responses={
+        403: {"description": "Sin permiso de carga"},
+        413: {"description": "Archivo demasiado grande"},
+        415: {"description": "PDF no admitido"},
+        503: {"description": "OCR no disponible u ocupado"},
+    },
+)
+async def reconocer_escaneo(
+    principal: PuedeCargar,
+    sesion: Sesion,
+    auditor: Auditor,
+    reloj: RelojActual,
+    configuracion: ConfiguracionActual,
+    archivo: Annotated[UploadFile, File()],
+) -> RespuestaExtraccion:
+    # No recibe un ID: solo reconoce los bytes que aporta el propio usuario.
+    # No consulta documentos, ni crea filas de conocimiento, ni ejecuta RAG.
+    try:
+        datos = await archivo.read(
+            min(configuracion.max_tamano_archivo_bytes, 20 * 1024 * 1024) + 1
+        )
+    finally:
+        await archivo.close()
+    respuesta = await extraer_escaneo(datos, configuracion)
+    await auditor.registrar(
+        [
+            construir_entrada(
+                accion=AccionAuditada.DOCUMENTO_EXTRAIDO,
+                principal=principal,
+                ahora=reloj.ahora(),
+                entidad_tipo="documento",
+                metodo="OCR_LOCAL",
+                paginas=respuesta.paginas,
+                paginas_vacias=len(respuesta.paginas_sin_texto),
+                caracteres=len(respuesta.contenido),
+                escaneo_antivirus=respuesta.escaneo_antivirus,
+            )
+        ]
+    )
+    await sesion.commit()
+    return respuesta
+
+
 @enrutador.get(
     "/documentos",
     response_model=PaginaDocumentos,

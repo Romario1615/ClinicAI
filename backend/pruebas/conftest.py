@@ -30,6 +30,7 @@ _PREFIJOS_AISLADOS = (
     "RAG_",
     "DEPURACION",
     "FRONTEND_",
+    "OCR_",
 )
 
 

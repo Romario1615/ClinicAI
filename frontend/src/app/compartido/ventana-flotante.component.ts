@@ -229,6 +229,8 @@ function localizar(huella: HuellaDeControl | null): HTMLElement | null {
       /* Sin esto, la rueda del ratón desplaza la lista de detrás y al cerrar
          nada está donde se dejó. */
       overscroll-behavior: contain;
+      /* El foco solo desplaza el cuerpo; la capa no es un contenedor de scroll. */
+      overflow: clip;
       animation: aparecer 140ms ease-out;
     }
 
@@ -261,7 +263,9 @@ function localizar(huella: HuellaDeControl | null): HTMLElement | null {
       backdrop-filter: var(--vidrio-desenfoque-fuerte, none);
       -webkit-backdrop-filter: var(--vidrio-desenfoque-fuerte, none);
       box-shadow: var(--vidrio-canto, 0 0 0 transparent), var(--sombra-2), 0 24px 48px rgb(22 32 46 / 18%);
-      overflow: hidden;
+      /* hidden permite scroll automático al enfocar y oculta la cabecera.
+         clip mantiene el marco fijo; el cuerpo sí admite desplazamiento. */
+      overflow: clip;
       animation: entrar-lateral 160ms cubic-bezier(0.2, 0.8, 0.3, 1);
     }
 

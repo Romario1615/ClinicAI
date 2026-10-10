@@ -202,6 +202,7 @@ class AccionAuditada(StrEnum):
 
     # --- Conocimiento y RAG ---
     DOCUMENTO_CARGADO = "documento.cargado"
+    DOCUMENTO_EXTRAIDO = "documento.extraido"
     DOCUMENTO_APROBADO = "documento.aprobado"
     DOCUMENTO_PUBLICADO = "documento.publicado"
     DOCUMENTO_ARCHIVADO = "documento.archivado"

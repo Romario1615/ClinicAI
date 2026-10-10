@@ -22,18 +22,21 @@ from __future__ import annotations
 
 import uuid
 from io import BytesIO
+from unittest.mock import AsyncMock
 
 import pytest
 import pytest_asyncio
 import sqlalchemy as sa
 from fastapi import FastAPI
 from httpx import AsyncClient
-from pypdf import PdfWriter
+from pypdf import PdfReader, PdfWriter
 from pypdf.generic import DecodedStreamObject, DictionaryObject, NameObject
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.ia.embeddings import EmbeddingsSimulado
 from app.modulos.auditoria.modelos import Auditoria
+from app.modulos.conocimiento import rutas as rutas_conocimiento
+from app.modulos.conocimiento.esquemas import RespuestaExtraccion
 from app.modulos.conocimiento.modelos import (
     EstadoDocumento,
     EstadoIngesta,
@@ -48,6 +51,7 @@ from app.modulos.organizacion.modelos import Clinica, Sede
 from app.modulos.usuarios.modelos import Rol, Usuario
 from app.nucleo.auditoria import AccionAuditada
 from pruebas.api.conftest import cabecera_bearer, conceder_permisos
+from pruebas.documentos_ocr import pdf_escanado
 
 pytestmark = [pytest.mark.api, pytest.mark.rag, pytest.mark.seguridad, pytest.mark.asyncio]
 
@@ -56,6 +60,150 @@ TEXTO = (
     "22:00 de la noche anterior. Puede beber agua sin limite durante el ayuno. "
     "Traiga la orden medica y su documento de identidad."
 )
+
+
+async def test_ocr_real_solo_previsualiza_y_audita_sin_guardar(
+    cliente: AsyncClient,
+    api: str,
+    cabeceras_cargador: dict[str, str],
+    sesion: AsyncSession,
+    clinica: Clinica,
+    usuario: Usuario,
+) -> None:
+    datos = pdf_escanado(pagina_blanca=True)
+    assert all(not pagina.extract_text().strip() for pagina in PdfReader(BytesIO(datos)).pages)
+    respuesta = await cliente.post(
+        f"{api}/conocimiento/extraer-escaneo",
+        headers=cabeceras_cargador,
+        files={"archivo": ("horario-sintetico.pdf", datos, "application/pdf")},
+    )
+    assert respuesta.status_code == 200, respuesta.text
+    res = respuesta.json()
+    assert "HORARIO SINTETICO" in res["contenido"]
+    assert "LUNES A VIERNES" in res["contenido"]
+    assert res["metodo"] == "OCR_LOCAL" and res["requiere_revision_humana"]
+    assert res["paginas"] == 2 and res["paginas_sin_texto"] == [2]
+    assert (
+        await sesion.scalar(
+            sa.select(sa.func.count())
+            .select_from(KnowledgeDocument)
+            .where(KnowledgeDocument.clinic_id == clinica.id)
+        )
+        == 0
+    )
+    auditoria = await sesion.scalar(
+        sa.select(Auditoria).where(
+            Auditoria.clinica_id == clinica.id,
+            Auditoria.actor_id == usuario.id,
+            Auditoria.accion == AccionAuditada.DOCUMENTO_EXTRAIDO.value,
+        )
+    )
+    assert auditoria is not None
+    assert auditoria.metadatos["paginas"] == 2 and auditoria.metadatos["paginas_vacias"] == 1
+    assert "HORARIO" not in str(auditoria.metadatos)
+    assert "horario-sintetico.pdf" not in str(auditoria.metadatos)
+
+
+async def test_ocr_no_autenticado_no_ejecuta_motor(
+    cliente: AsyncClient,
+    api: str,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    motor = AsyncMock()
+    monkeypatch.setattr(rutas_conocimiento, "extraer_escaneo", motor)
+    respuesta = await cliente.post(
+        f"{api}/conocimiento/extraer-escaneo",
+        files={"archivo": ("documento.pdf", b"%PDF-1.7", "application/pdf")},
+    )
+    assert respuesta.status_code == 401
+    motor.assert_not_called()
+
+
+async def test_ocr_permiso_lectura_no_permite_reconocer(
+    cliente: AsyncClient,
+    api: str,
+    sesion: AsyncSession,
+    usuario: Usuario,
+    clinica: Clinica,
+    sede: Sede,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    await conceder_permisos(sesion, usuario, clinica, "conocimiento.leer", sedes=(sede.id,))
+    cabeceras = await cabecera_bearer(cliente, usuario, clinica)
+    motor = AsyncMock()
+    monkeypatch.setattr(rutas_conocimiento, "extraer_escaneo", motor)
+    respuesta = await cliente.post(
+        f"{api}/conocimiento/extraer-escaneo",
+        headers=cabeceras,
+        files={"archivo": ("documento.pdf", b"%PDF-1.7", "application/pdf")},
+    )
+    assert respuesta.status_code == 403
+    motor.assert_not_called()
+
+
+@pytest.mark.parametrize("datos", [b"PK\x03\x04", b"%PDF-1.7\nno valido", b""])
+async def test_ocr_rechaza_tipo_real_invalido(
+    cliente: AsyncClient,
+    api: str,
+    cabeceras_cargador: dict[str, str],
+    datos: bytes,
+) -> None:
+    respuesta = await cliente.post(
+        f"{api}/conocimiento/extraer-escaneo",
+        headers=cabeceras_cargador,
+        files={"archivo": ("parece-pdf.pdf", datos, "application/pdf")},
+    )
+    assert respuesta.status_code == 415, respuesta.text
+
+
+async def test_ocr_no_lee_documentos_ajenos_ni_usa_identificadores_del_cliente(
+    cliente: AsyncClient,
+    api: str,
+    cabeceras_cargador: dict[str, str],
+    sesion: AsyncSession,
+    sufijo: str,
+    clinica: Clinica,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    ajena = Clinica(
+        nombre=f"Clínica OCR ajena {sufijo}",
+        identificacion_fiscal=f"OCR-AJ-{sufijo}",
+        zona_horaria="UTC",
+    )
+    sesion.add(ajena)
+    await sesion.flush()
+    doc = KnowledgeDocument(
+        clinic_id=ajena.id,
+        titulo="Contenido ajeno sintético",
+        tipo="POLITICA",
+        status="DRAFT",
+        sensitivity_level="N0",
+    )
+    sesion.add(doc)
+    await sesion.flush()
+    motor = AsyncMock(
+        return_value=RespuestaExtraccion(
+            contenido="Texto del propio archivo", paginas=1, escaneo_antivirus="NO_DISPONIBLE"
+        )
+    )
+    monkeypatch.setattr(rutas_conocimiento, "extraer_escaneo", motor)
+    respuesta = await cliente.post(
+        f"{api}/conocimiento/extraer-escaneo?document_id={doc.id}&clinic_id={ajena.id}",
+        headers=cabeceras_cargador,
+        files={"archivo": ("documento.pdf", b"%PDF-1.7", "application/pdf")},
+    )
+    assert respuesta.status_code == 200
+    assert respuesta.json()["contenido"] == "Texto del propio archivo"
+    assert (
+        await cliente.get(f"{api}/conocimiento/documentos/{doc.id}", headers=cabeceras_cargador)
+    ).status_code == 404
+    auditoria = await sesion.scalar(
+        sa.select(Auditoria).where(
+            Auditoria.clinica_id == clinica.id,
+            Auditoria.accion == AccionAuditada.DOCUMENTO_EXTRAIDO.value,
+        )
+    )
+    assert auditoria is not None and auditoria.entidad_id is None
 
 
 def _pdf_de_prueba(texto: str = "Guia de preparacion para el examen.") -> bytes:

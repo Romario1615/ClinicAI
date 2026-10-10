@@ -748,6 +748,8 @@ _PROFESIONAL = ManualSistema(
             "Que las respuestas a pacientes salgan solo de textos revisados por usted.",
             (
                 "Cargue el documento en texto, Word o PDF; queda en borrador.",
+                "Si el PDF es un escaneo, pulse Reconocer texto del escaneo; compare el resultado con el original, corrija términos y cifras y confirme la revisión antes de guardar.",
+                "Una página sin texto reconocido necesita comprobación manual. La extracción no autoriza su uso clínico ni publica respuestas por sí sola.",
                 "Revíselo y apruébelo; solo entonces es recuperable por el asistente y el agente.",
                 "Para modificar un documento aprobado, devuélvalo primero a borrador y apruebe la "
                 "nueva versión.",
@@ -1293,6 +1295,23 @@ _ADMINISTRADOR = ManualSistema(
                 "Archive lo que ya no aplica: deja de responderse de inmediato.",
             ),
             requiere=("conocimiento.leer", "conocimiento.aprobar", "conocimiento.archivar"),
+        ),
+        _s(
+            "administracion.escaneos",
+            "Incorporar archivos escaneados",
+            "/conocimiento",
+            "Convertir documentación administrativa en un borrador revisable.",
+            (
+                "Abra Cargar documento y seleccione un PDF de la clínica, de hasta 20 MB y 20 páginas; no incluya fichas ni datos individuales de pacientes.",
+                "Pulse Reconocer texto del escaneo; el reconocimiento es local, en español e inglés, y todavía no crea un documento.",
+                "Compruebe horarios, importes, caracteres y el orden de las tablas contra el archivo original; edite Contenido y marque He comparado y corregido el texto con el documento original.",
+                "Guarde el borrador y siga el circuito de revisión y aprobación. Si vuelve a editar el texto, deberá confirmar nuevamente su revisión.",
+            ),
+            (
+                "Si el motor está ocupado o falla, el archivo permanece seleccionado para reintentar; divida los documentos que excedan los límites.",
+                "El PDF original no se conserva como archivo de conocimiento. Las fotos adjuntas no se reconocen ni se indexan mediante OCR.",
+            ),
+            requiere=("conocimiento.leer", "conocimiento.cargar"),
         ),
         _s(
             "administracion.campanas",

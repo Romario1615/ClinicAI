@@ -402,6 +402,15 @@ export interface RespuestaIngesta {
   readonly escaneo_antivirus: 'LIMPIO' | 'NO_DISPONIBLE' | 'NO_APLICA';
 }
 
+export interface RespuestaExtraccion {
+  readonly contenido: string;
+  readonly metodo: 'OCR_LOCAL';
+  readonly paginas: number;
+  readonly paginas_sin_texto: readonly number[];
+  readonly requiere_revision_humana: true;
+  readonly escaneo_antivirus: 'LIMPIO' | 'NO_DISPONIBLE';
+}
+
 // ---------------------------------------------------------------------------
 //  Consentimientos de comunicacion
 // ---------------------------------------------------------------------------
@@ -1487,6 +1496,14 @@ export class ApiService {
    */
   ingerirVersion(documentoId: string, datos: DatosIngesta): Observable<RespuestaIngesta> {
     return this.post<RespuestaIngesta>(`/conocimiento/documentos/${documentoId}/versiones`, datos);
+  }
+
+  /** Vista previa local, sin crear documento ni publicar contenido. */
+  reconocerEscaneo(archivo: File): Observable<RespuestaExtraccion> {
+    const formulario = new FormData();
+    formulario.append('archivo', archivo, archivo.name);
+    return this.http.post<RespuestaExtraccion>(this.url('/conocimiento/extraer-escaneo'), formulario)
+      .pipe(catchError(traducirFallo));
   }
 
   /** Sube un PDF para que el servidor lo analice, extraiga e ingiera. */

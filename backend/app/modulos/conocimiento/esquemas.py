@@ -155,6 +155,17 @@ class RespuestaIngesta(BaseModel):
     escaneo_antivirus: Literal["LIMPIO", "NO_DISPONIBLE", "NO_APLICA"] = "NO_APLICA"
 
 
+class RespuestaExtraccion(BaseModel):
+    """Vista previa del propio archivo: no crea documento, versión ni embeddings."""
+
+    contenido: str = Field(min_length=1, max_length=500_000)
+    metodo: Literal["OCR_LOCAL"] = "OCR_LOCAL"
+    paginas: int = Field(ge=1, le=20)
+    paginas_sin_texto: list[int] = Field(default_factory=list, max_length=20)
+    requiere_revision_humana: Literal[True] = True
+    escaneo_antivirus: Literal["LIMPIO", "NO_DISPONIBLE"]
+
+
 class SolicitudBusqueda(BaseModel):
     consulta: str = Field(min_length=3, max_length=1000)
     limite: int = Field(default=8, ge=1, le=20)
@@ -198,6 +209,7 @@ __all__ = [
     "ReglaPermisoDocumento",
     "RespuestaBusqueda",
     "RespuestaDocumento",
+    "RespuestaExtraccion",
     "RespuestaIngesta",
     "RespuestaPermisoDocumento",
     "RespuestaPermisosDocumento",

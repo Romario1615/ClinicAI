@@ -40,6 +40,9 @@ const INGESTA = {
     escaneo_antivirus: 'NO_APLICA',
 };
 
+const OCR = { contenido: 'HORARIO SINTÉTICO\nLUNES A VIERNES', metodo: 'OCR_LOCAL', paginas: 2,
+    paginas_sin_texto: [2], requiere_revision_humana: true, escaneo_antivirus: 'NO_DISPONIBLE' };
+
 describe('CargarDocumentoComponent', () => {
     let fixture: ComponentFixture<CargarDocumentoComponent>;
     let http: HttpTestingController;
@@ -65,6 +68,105 @@ describe('CargarDocumentoComponent', () => {
     function texto(): string {
         return (fixture.nativeElement as HTMLElement).textContent ?? '';
     }
+
+    async function escaneo(): Promise<void> {
+        await c.leer(archivo('horario-sintetico.pdf', '%PDF-1.7', 'application/pdf'));
+        c.reconocerEscaneo();
+        const peticion = http.expectOne(`${BASE}/conocimiento/extraer-escaneo`);
+        expect((peticion.request.body as FormData).get('archivo')).toEqual(expect.any(File));
+        peticion.flush(OCR);
+        fixture.detectChanges();
+    }
+
+    it('OCR muestra un editor y las páginas sin texto, sin crear documento ni ingesta', async () => {
+        await escaneo();
+        expect(c.origen()).toBe('texto');
+        expect(c.contenido()).toContain('HORARIO');
+        expect(texto()).toContain('Revise el texto reconocido');
+        expect(texto()).toContain('Sin texto reconocido en las páginas 2');
+        expect(texto()).toContain('Antivirus del archivo original: no disponible en este entorno');
+        expect(c.puedeEnviar()).toBe(false);
+        const boton = (fixture.nativeElement as HTMLElement).querySelector<HTMLButtonElement>('button[type="submit"]');
+        expect(boton?.disabled).toBe(true);
+        c.enviar();
+        http.expectNone(`${BASE}/conocimiento/documentos`);
+    });
+
+    it('guarda únicamente el texto revisado y conserva el nombre del escaneo', async () => {
+        fixture.componentRef.setInput('documento', DOCUMENTO);
+        await escaneo();
+        c.editarContenido('Horario corregido: de 08:00 a 17:00.');
+        c.ocrRevisado.set(true);
+        c.enviar();
+        const version = http.expectOne(`${BASE}/conocimiento/documentos/doc-1/versiones`);
+        expect(version.request.body.contenido).toBe('Horario corregido: de 08:00 a 17:00.');
+        expect(version.request.body.nombre_archivo).toBe('horario-sintetico.pdf');
+        version.flush(INGESTA);
+        fixture.detectChanges();
+        expect(texto()).toContain('sin análisis antivirus');
+        http.expectNone(`${BASE}/conocimiento/documentos/doc-1/versiones/archivo`);
+    });
+
+    it('cambiar el texto obliga a confirmar nuevamente la revisión', async () => {
+        await escaneo();
+        c.ocrRevisado.set(true);
+        expect(c.puedeEnviar()).toBe(true);
+        c.editarContenido('Texto distinto');
+        expect(c.ocrRevisado()).toBe(false);
+        expect(c.puedeEnviar()).toBe(false);
+    });
+
+    it('OCR fallido conserva el PDF y permite reintentar sin crear borradores', async () => {
+        await c.leer(archivo('horario.pdf', '%PDF-1.7', 'application/pdf'));
+        c.reconocerEscaneo();
+        http.expectOne(`${BASE}/conocimiento/extraer-escaneo`).flush({ codigo: 'PROVEEDOR_NO_DISPONIBLE', mensaje: 'OCR ocupado' }, { status: 503, statusText: 'Service Unavailable' });
+        expect(c.archivoPdf()?.name).toBe('horario.pdf');
+        expect(c.error()?.message).toBe('OCR ocupado');
+        expect(c.enviando()).toBe(false);
+        c.reconocerEscaneo();
+        http.expectOne(`${BASE}/conocimiento/extraer-escaneo`).flush(OCR);
+        expect(c.extraccion()?.metodo).toBe('OCR_LOCAL');
+        http.expectNone(`${BASE}/conocimiento/documentos`);
+    });
+
+    it('no permite cerrar, cambiar archivo ni iniciar otro OCR mientras reconoce', async () => {
+        await c.leer(archivo('horario.pdf', '%PDF-1.7', 'application/pdf'));
+        const cerrado = vi.fn(); componente.cerrado.subscribe(cerrado);
+        c.reconocerEscaneo(); c.reconocerEscaneo(); c.cerrar();
+        await c.leer(archivo('otro.pdf', '%PDF-1.7', 'application/pdf'));
+        c.cambiarOrigen('texto');
+        expect(c.archivoPdf()?.name).toBe('horario.pdf');
+        expect(c.origen()).toBe('archivo');
+        expect(cerrado).not.toHaveBeenCalled();
+        const solicitudes = http.match(`${BASE}/conocimiento/extraer-escaneo`);
+        expect(solicitudes.length).toBe(1);
+        solicitudes[0].flush(OCR);
+    });
+
+    it('elegir otro archivo retira texto y confirmación de OCR', async () => {
+        await escaneo(); c.ocrRevisado.set(true); c.cambiarOrigen('archivo');
+        await c.leer(archivo('otro.pdf', '%PDF-1.7', 'application/pdf'));
+        expect(c.extraccion()).toBeNull();
+        expect(c.ocrRevisado()).toBe(false);
+        expect(c.contenido()).toBe('');
+        expect(c.archivoPdf()?.name).toBe('otro.pdf');
+    });
+
+    it('no ofrece OCR para Word', async () => {
+        await c.leer(archivo('guia.docx', 'PK', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'));
+        fixture.detectChanges();
+        c.reconocerEscaneo();
+        http.expectNone(`${BASE}/conocimiento/extraer-escaneo`);
+        expect(texto()).not.toContain('Reconocer texto del escaneo');
+    });
+
+    it('retira la petición de OCR al destruir la ventana', async () => {
+        await c.leer(archivo('horario.pdf', '%PDF-1.7', 'application/pdf'));
+        c.reconocerEscaneo();
+        const peticion = http.expectOne(`${BASE}/conocimiento/extraer-escaneo`);
+        fixture.destroy();
+        expect(peticion.cancelled).toBe(true);
+    });
 
     it('contiene el formulario en un diálogo nativo y mantiene la carga en su pie', () => {
         const dialogo = (fixture.nativeElement as HTMLElement).querySelector('dialog[open]');

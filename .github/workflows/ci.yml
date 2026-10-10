@@ -155,7 +155,12 @@ jobs:
         working-directory: backend
         run: uv sync --frozen --extra dev --extra llm
 
-      - name: Generar claves efimeras
+      - name: Instalar motor OCR local
+        # El OCR de integración usa el motor real con un PDF sintético.
+        # No depende de servicios externos ni de credenciales.
+        run: sudo apt-get update -qq && sudo apt-get install -y --no-install-recommends tesseract-ocr tesseract-ocr-spa tesseract-ocr-eng
+
+      - name: Generar claves efimeras de prueba
         # Se generan en el ejecutor y nunca se almacenan. No hacen falta
         # secretos del repositorio para probar: las claves solo tienen que ser
         # validas, no ser las de produccion. Y asi el pipeline funciona en una

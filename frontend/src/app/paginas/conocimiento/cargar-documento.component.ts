@@ -7,9 +7,9 @@ import { FotosRegistroService } from '../../nucleo/servicios/fotos-registro.serv
  * ---------------------------------
  * * **Documento nuevo**: crea el documento (nace en `DRAFT`) y sube su primera
  *   version.
- * * **Version nueva** de un documento existente: solo sube el texto. El
- *   estado no cambia; un documento publicado sigue respondiendo con su
- *   version aprobada mientras la nueva se revisa.
+ * * **Versión nueva** de un borrador existente: sube el texto o el archivo.
+ *   El backend exige retirar de publicación un documento aprobado antes de
+ *   cambiar su contenido y volver a revisarlo.
  *
  * Lo que esta pantalla no hace
  * ----------------------------
@@ -25,11 +25,12 @@ import { FotosRegistroService } from '../../nucleo/servicios/fotos-registro.serv
  *
  * Formatos
  * --------
- * Solo texto (`.txt`, `.md`, `.csv`). El endpoint de ingesta recibe texto, no
- * binarios: un PDF o un DOCX necesitan extraccion en el servidor, que todavia
- * no existe. Mientras tanto se puede pegar el texto copiado del documento.
+ * PDF con texto y Word (.docx): extracción directa en el servidor. Para PDF
+ * escaneados: OCR local y vista previa editable, antes de crear el borrador.
+ * También admite texto (`.txt`, `.md`, `.csv`) y texto pegado.
  */
-import { Component, computed, inject, input, output, signal, viewChild, ChangeDetectionStrategy } from '@angular/core';
+import { Component, computed, inject, input, output, signal, viewChild, ChangeDetectionStrategy, DestroyRef, ElementRef, Injector, afterNextRender } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormsModule, NgForm } from '@angular/forms';
 
 import { IconoComponent } from '../../compartido/icono.component';
@@ -38,6 +39,7 @@ import { ApiService, FalloApi } from '../../nucleo/servicios/api.service';
 import type {
   Documento,
   RespuestaIngesta,
+  RespuestaExtraccion,
   TipoDocumento,
 } from '../../nucleo/servicios/api.service';
 
@@ -96,7 +98,7 @@ type Origen = 'archivo' | 'texto';
                 queda bloqueada hasta que una persona lo revise.
               </p>
             }
-            @if (res.escaneo_antivirus === 'NO_DISPONIBLE') {
+            @if (res.escaneo_antivirus === 'NO_DISPONIBLE' || extraccion()?.escaneo_antivirus === 'NO_DISPONIBLE') {
               <p class="carga__alerta" role="status">
                 El documento se procesó sin análisis antivirus. Este modo local no debe recibir
                 documentos destinados a producción.
@@ -158,7 +160,7 @@ type Origen = 'archivo' | 'texto';
                 role="radio"
                 class="carga__pestana"
                 [attr.aria-checked]="origen() === 'archivo'"
-                (click)="origen.set('archivo')"
+                (click)="cambiarOrigen('archivo')"
               >
                 Subir archivo
               </button>
@@ -167,7 +169,7 @@ type Origen = 'archivo' | 'texto';
                 role="radio"
                 class="carga__pestana"
                 [attr.aria-checked]="origen() === 'texto'"
-                (click)="origen.set('texto')"
+                (click)="cambiarOrigen('texto')"
               >
                 Pegar texto
               </button>
@@ -204,25 +206,55 @@ type Origen = 'archivo' | 'texto';
                 }
               </label>
               <p class="campo__ayuda">
-                Los PDF y los documentos Word (.docx) se analizan y extraen en el servidor. Los
-                archivos escaneados sin texto seleccionable y los .doc antiguos requieren copiar el
-                texto en «Pegar texto».
+                PDF con texto y Word (.docx): extracción directa. Para PDF escaneados, reconozca
+                el texto y revíselo antes de guardar. Los .doc antiguos deben convertirse a .docx.
               </p>
+              @if (archivoPdf() && !esWord()) {
+                <div class="carga__ocr-opcion">
+                  <button type="button" class="boton" (click)="reconocerEscaneo()" [disabled]="enviando()">
+                    <app-icono nombre="archivo" [tamano]="18" />
+                    {{ reconociendo() ? 'Reconociendo texto…' : 'Reconocer texto del escaneo' }}
+                  </button>
+                  <p class="campo__ayuda">OCR local · español e inglés · hasta 20 páginas. No guarda el documento.</p>
+                </div>
+              }
             } @else {
+              @if (extraccion(); as ocr) {
+                <div class="carga__ocr" id="ocr-revision-resumen" role="status">
+                  <strong>Revise el texto reconocido</strong>
+                  <p>{{ nombreArchivo() }} · {{ ocr.paginas }} {{ ocr.paginas === 1 ? 'página' : 'páginas' }} · OCR local</p>
+                  <p>Compare con el original y corrija cifras, palabras y el orden del texto. La precisión depende del escaneo.</p>
+                  <p>Antivirus del archivo original: {{ ocr.escaneo_antivirus === 'LIMPIO' ? 'analizado' : 'no disponible en este entorno' }}.</p>
+                  @if (ocr.paginas_sin_texto.length) {
+                    <p>Sin texto reconocido en las páginas {{ ocr.paginas_sin_texto.join(', ') }}. Compruébelas antes de continuar.</p>
+                  }
+                </div>
+              }
               <label class="campo">
-                <span class="campo__etiqueta">Contenido</span>
+                <span class="campo__etiqueta" id="documento-contenido-etiqueta">Contenido</span>
                 <textarea
+                  #editorContenido
                   class="campo__control carga__texto"
                   name="contenido"
                   rows="9"
+                  aria-labelledby="documento-contenido-etiqueta"
+                  [attr.aria-describedby]="extraccion() ? 'ocr-revision-resumen documento-contenido-cuenta' : 'documento-contenido-cuenta'"
                   [ngModel]="contenido()"
-                  (ngModelChange)="contenido.set($event)"
+                  (ngModelChange)="editarContenido($event)"
                 ></textarea>
-                <span class="campo__ayuda numerico">
+                <span class="campo__ayuda numerico" id="documento-contenido-cuenta">
                   {{ contenido().length.toLocaleString('es') }} /
                   {{ maximo.toLocaleString('es') }} caracteres
                 </span>
               </label>
+              @if (extraccion()) {
+                <label class="carga__revision">
+                  <input type="checkbox" name="revisionOcr" [ngModel]="ocrRevisado()"
+                    (ngModelChange)="ocrRevisado.set($event)" />
+                  <span>He comparado y corregido el texto con el documento original.</span>
+                </label>
+                <p class="campo__ayuda">Se guarda como borrador. Su uso por el agente requiere la aprobación habitual.</p>
+              }
             }
 
             <label class="campo">
@@ -279,7 +311,7 @@ type Origen = 'archivo' | 'texto';
                 [disabled]="enviando() || !puedeEnviar() || (!documento() && !formCarga()?.valid)"
               >
                 <app-icono nombre="subir" [tamano]="18" />
-                {{ enviando() ? 'Procesando…' : documento() ? 'Subir versión' : 'Cargar documento' }}
+                {{ reconociendo() ? 'Reconociendo texto…' : enviando() ? 'Procesando…' : documento() ? 'Subir versión' : 'Cargar documento' }}
               </button>
           }
         </div>
@@ -287,6 +319,12 @@ type Origen = 'archivo' | 'texto';
   `,
   changeDetection: ChangeDetectionStrategy.Eager,
   styles: `
+    .carga__ocr-opcion { display: grid; gap: var(--espacio-2); margin: var(--espacio-3) 0; }
+    .carga__ocr { display: grid; gap: var(--espacio-2); padding: var(--espacio-4); margin-bottom: var(--espacio-3);
+      border: 1px solid var(--borde); border-radius: var(--radio); background: var(--superficie-hundida); overflow-wrap: anywhere; }
+    .carga__ocr p { margin: 0; font-size: .9rem; }
+    .carga__revision { display: flex; gap: var(--espacio-3); align-items: flex-start; padding: var(--espacio-3) 0; }
+    .carga__revision input { flex: 0 0 auto; width: 18px; height: 18px; margin-top: 2px; }
     .carga__sub {
       margin: 2px 0 0;
       font-size: 0.9rem;
@@ -402,6 +440,9 @@ type Origen = 'archivo' | 'texto';
   `,
 })
 export class CargarDocumentoComponent {
+  private readonly destroyRef = inject(DestroyRef);
+  private readonly injector = inject(Injector);
+  private readonly editorContenido = viewChild<ElementRef<HTMLTextAreaElement>>('editorContenido');
   protected readonly formCarga = viewChild<NgForm>('formulario');
   private readonly fotosApi=inject(FotosRegistroService);
   protected fotos:readonly FotoSeleccionada[]=[];
@@ -434,6 +475,9 @@ export class CargarDocumentoComponent {
   protected readonly nombreArchivo = signal<string | null>(null);
   protected readonly arrastrando = signal(false);
   protected readonly enviando = signal(false);
+  protected readonly reconociendo = signal(false);
+  protected readonly extraccion = signal<RespuestaExtraccion | null>(null);
+  protected readonly ocrRevisado = signal(false);
   protected readonly aviso = signal<string | null>(null);
   protected readonly error = signal<FalloApi | null>(null);
   protected readonly resultado = signal<RespuestaIngesta | null>(null);
@@ -447,6 +491,7 @@ export class CargarDocumentoComponent {
   protected readonly documentoCreadoId = signal<string | null>(null);
 
   protected readonly puedeEnviar = computed(() => {
+    if (this.extraccion() && !this.ocrRevisado()) return false;
     const pdf = this.origen() === 'archivo' ? this.archivoPdf() : null;
     if (this.origen() === 'archivo' && pdf) {
       return pdf.size > 0 && pdf.size <= MAXIMO_BYTES;
@@ -481,6 +526,10 @@ export class CargarDocumentoComponent {
   }
 
   private async leer(archivo: File): Promise<void> {
+    if (this.enviando() || this.ingestaGuardada()) return;
+    this.extraccion.set(null);
+    this.ocrRevisado.set(false);
+    this.error.set(null);
     this.aviso.set(null);
     this.archivoPdf.set(null);
     this.contenido.set('');
@@ -508,7 +557,7 @@ export class CargarDocumentoComponent {
       return;
     }
     if (archivo.size > MAXIMO_BYTES) {
-      this.aviso.set('El archivo supera 2 MB. Divídalo en documentos más pequeños.');
+      this.aviso.set('El archivo supera 20 MB. Divídalo en documentos más pequeños.');
       return;
     }
     const texto = await archivo.text();
@@ -535,6 +584,49 @@ export class CargarDocumentoComponent {
   }
 
   // ----- Envio -----
+  protected cambiarOrigen(origen: Origen): void {
+    if (this.enviando() || this.ingestaGuardada() || origen === this.origen()) return;
+    this.origen.set(origen);
+    this.extraccion.set(null);
+    this.ocrRevisado.set(false);
+    this.contenido.set('');
+    this.archivoPdf.set(null);
+    this.nombreArchivo.set(null);
+    this.aviso.set(null);
+    this.error.set(null);
+  }
+
+  protected editarContenido(texto: string): void {
+    this.contenido.set(texto);
+    if (this.extraccion()) this.ocrRevisado.set(false);
+  }
+
+  protected reconocerEscaneo(): void {
+    const archivo = this.archivoPdf();
+    if (!archivo || this.esWord() || this.enviando() || this.ingestaGuardada()) return;
+    this.enviando.set(true);
+    this.reconociendo.set(true);
+    this.error.set(null);
+    this.aviso.set(null);
+    this.api.reconocerEscaneo(archivo).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
+      next: (resultado) => {
+        this.extraccion.set(resultado);
+        this.ocrRevisado.set(false);
+        this.contenido.set(resultado.contenido);
+        this.origen.set('texto');
+        this.archivoPdf.set(null);
+        this.reconociendo.set(false);
+        this.enviando.set(false);
+        afterNextRender(() => this.editorContenido()?.nativeElement.focus(), { injector: this.injector });
+      },
+      error: (fallo: FalloApi) => {
+        this.error.set(fallo);
+        this.reconociendo.set(false);
+        this.enviando.set(false);
+      },
+    });
+  }
+
   protected enviar(): void {
     if (!this.puedeEnviar() || this.enviando()) {
       return;
@@ -589,7 +681,7 @@ export class CargarDocumentoComponent {
     this.api
       .ingerirVersion(documentoId, {
         contenido: this.contenido(),
-        nombre_archivo: this.origen() === 'archivo' ? this.nombreArchivo() : null,
+        nombre_archivo: this.origen() === 'archivo' || this.extraccion() ? this.nombreArchivo()?.slice(0, 255) : null,
         notas_cambio: this.notas.trim() || null,
       })
       .subscribe({

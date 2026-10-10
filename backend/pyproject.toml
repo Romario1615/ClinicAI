@@ -66,6 +66,8 @@ dependencies = [
 
     # --- Ingesta de documentos -------------------------------------------
     "pypdf>=5.1,<7",
+    # PDFium renderiza escaneos en un proceso desechable, sin Pillow.
+    "pypdfium2>=5.14,<6",
     # Deteccion del tipo real de archivo por su contenido, no por extension.
     # Se elige `filetype` (Python puro) en lugar de python-magic, que en
     # Windows exige libmagic como biblioteca nativa.
@@ -229,7 +231,7 @@ plugins = ["pydantic.mypy"]
 
 [[tool.mypy.overrides]]
 # Dependencias sin anotaciones publicadas
-module = ["arq.*", "fastembed.*", "filetype.*", "pgvector.*", "qrcode.*"]
+module = ["arq.*", "fastembed.*", "filetype.*", "pgvector.*", "qrcode.*", "pypdfium2.*"]
 ignore_missing_imports = true
 
 [[tool.mypy.overrides]]

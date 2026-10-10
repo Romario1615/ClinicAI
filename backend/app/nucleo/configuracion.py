@@ -219,6 +219,12 @@ class Configuracion(BaseSettings):
     antivirus_habilitado: bool = False
     clamav_host: str = "localhost"
     clamav_puerto: int = 3310
+    # OCR local: el documento nunca sale hacia un proveedor de IA.
+    ocr_habilitado: bool = True
+    ocr_ejecucion: Literal["local", "wsl"] = "local"
+    ocr_distribucion_wsl: str = "clinica"
+    ocr_max_paginas: Annotated[int, Field(ge=1, le=20)] = 20
+    ocr_tiempo_maximo_segundos: Annotated[int, Field(ge=15, le=120)] = 90
     # Almacen S3 compatible (MinIO en desarrollo). Solo con
     # `almacenamiento_archivos = "s3"`. Las credenciales entran por entorno.
     s3_endpoint: str = ""
