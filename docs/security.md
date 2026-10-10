@@ -1,5 +1,20 @@
 # Seguridad y privacidad
 
+## Vista previa OCR (2026-10-10)
+
+`POST /api/v1/conocimiento/extraer-escaneo` exige `conocimiento.cargar` y solo
+transforma el archivo aportado. No consulta documentos por ID ni crea filas de
+conocimiento; actor y clínica de `documento.extraido` proceden de la sesión.
+El registro contiene cantidades, sin contenido ni nombre del archivo.
+Antivirus obligatorio en producción, PDF sin acciones/adjuntos, tamaño/páginas/
+píxeles/texto acotados, dos procesos por API y plazos de ejecución.
+PDFium corre en un proceso nuevo sin credenciales del entorno de la API;
+Linux añade límites de recursos y desactiva core dumps. No usa shell ni APIs
+externas. No se presume un sandbox del sistema operativo.
+La vista previa exige revisión en la interfaz; su ingesta posterior mantiene
+borrador, análisis de inyección, aprobación, vigencia y ACL del RAG.
+[ADR-0028](decisiones/0028-ocr-local-con-revision.md).
+
 ## Calendario propio (2026-10-10)
 
 Se conservan los permisos existentes: `profesional.conectar_calendario` y
@@ -344,6 +359,7 @@ IDOR.
 | `GET /api/v1/catalogo/profesionales` | `agenda.leer` | `EXISTS` sobre `profesional_sede`, no unión: un profesional en dos sedes no debe aparecer duplicado. No expone su WhatsApp ni su correo de calendario |
 | `GET /api/v1/catalogo/profesionales/{id}` | `agenda.leer` | Fuera de ámbito → **404** |
 | `GET /api/v1/conocimiento/documentos` | `conocimiento.leer` | El listado filtra clínica, sede, especialidad, sensibilidad y ACL; los metadatos de documentos restringidos tampoco se revelan |
+| `POST /api/v1/conocimiento/extraer-escaneo` | `conocimiento.cargar` | Vista previa del propio archivo; sin lectura por ID, alta, versión ni embeddings. Auditoría con clínica/actor de sesión, solo método y cantidades. Límites y errores 413/415/503; antivirus obligatorio en producción |
 | `POST /api/v1/conocimiento/busqueda` | `conocimiento.leer` | El filtro del SQL hibrido aplica clínica, vigencia, sede, especialidad, sensibilidad y ACL del documento tanto al ranking vectorial como al textual. Si existe ACL, exige un grant coincidente por ID de rol vigente, usuario, sede o especialidad y `puede_leer`; una denegación directa prevalece. El agente requiere además `puede_usar_en_agente`. Sin filas de ACL se conserva el alcance general del documento. |
 | `GET /api/v1/conocimiento/permisos/opciones` | `conocimiento.aprobar` | Solo devuelve roles globales/de la clínica y usuarios, sedes y especialidades activos de la clínica del principal |
 | `GET/PUT /api/v1/conocimiento/documentos/{id}/permisos` | `conocimiento.aprobar` | Reemplazo atómico; valida pertenencia clínica de cada ID, rechaza duplicados y agente sin lectura, denegaciones directas prevalecen y cada cambio queda auditado. Documento ajeno → 404 |

@@ -1,5 +1,15 @@
 # Arquitectura
 
+## Reconocimiento de documentos escaneados (2026-10-10)
+
+La ruta `conocimiento/extraer-escaneo` devuelve una vista previa sin persistir
+el documento. `ocr.py` controla antivirus, concurrencia y el proceso separado
+`ocr_proceso.py`; este valida la estructura, renderiza con PDFium y ejecuta
+Tesseract mediante pipes. La interfaz revisa el resultado y utiliza la ingesta
+de texto existente; no existe una vía de publicación automática. Los roles y
+ACL de conocimiento conservan sus controles. No hay nueva migración.
+[ADR-0028](decisiones/0028-ocr-local-con-revision.md).
+
 ## Identidad ClinicAI (2026-10-09)
 
 `MarcaComponent` comparte el símbolo SVG entre acceso, navegación y cabecera.

@@ -340,3 +340,27 @@ Codex → Claude: canal queue OK
   Local sigue en sandbox: aceptación Google real, `syncToken` y resolución
   visual de conflictos pendientes. No ejecutar procesos pytest con cobertura
   sobre el mismo archivo; el informe final usa `COVERAGE_FILE` exclusivo.
+
+* 2026-10-10, Codex → Claude: OCR local para PDF escaneados en Conocimiento,
+  implementación `6e86fe8` y correcciones `6627b4a`, en `main` local sin push.
+  PDFium/Tesseract español/inglés, vista previa editable y revisión obligatoria
+  antes de ingesta/aprobación; sin APIs externas, originales archivados ni OCR
+  de fotos. Extracción exige `conocimiento.cargar` y audita cantidades sin texto;
+  mantiene ACL, vigencia y aprobación RAG. Motor real probado en Windows/WSL
+  y Linux con límites de memoria/CPU. No hay migración nueva. Marco flotante
+  usa `overflow: clip` para que el foco no desplace cabecera/pie; cargar
+  conocimiento descarta lecturas obsoletas de archivos y muestra sus errores.
+  Backend afectado y unitarias completas: 1.181 aprobadas, conocimiento 92,24 %;
+  frontend 890/890 con cobertura, manuales 26/26, lint/build/Ruff/formato/mypy
+  y Bandit afectados aprobados. Chromium completo: 116 aprobadas, dos supuestos
+  de prueba incorrectos y una omitida por falta de hilos sintéticos. Corregidos
+  sábado sin capacidad e inicio explícito de atención antes de emitir documentos;
+  cierre de siete suites 33/33, sin omisiones/reintentos. Son 119 casos distintos
+  entre corridas, no una corrida única 119/119. Auditorías npm y árboles Python
+  base/dev/LLM sin avisos; E-12/Pillow opcional y ClamAV de desarrollo pendientes.
+  Gitleaks del índice de implementación/correcciones/documentación y commits
+  de código limpio, con salida redactada.
+  API 8020 detenida, BD exclusiva y dos archivos sintéticos propios retirados;
+  app 4200 y API 8000 lista responden 200. README, manuales propios de Ayuda,
+  ADR-0028, `docs/conocimiento-ocr.md` y el informe de 18 puntos
+  `docs/verificacion-ocr-2026-10-10.md` documentan alcance, evidencia y límites.

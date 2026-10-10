@@ -1,5 +1,42 @@
 # ClinicAI — Plataforma de gestión clínica
 
+## Documentos escaneados con OCR local (2026-10-10)
+
+En **Conocimiento → Cargar documento**, seleccione un PDF y pulse **Reconocer
+texto del escaneo**. Puede corregir el texto y debe confirmar su comparación
+con el original antes de guardar. Se identifican las páginas sin texto y el
+estado real del antivirus. El documento entra como borrador y sigue el circuito
+habitual de aprobación; el reconocimiento no lo publica ni lo indexa por sí solo.
+
+El motor funciona en español e inglés, sin nuevas claves de API: PDFium y
+Tesseract en la infraestructura local, con procesos separados, límites y
+errores recuperables. Admite hasta 20 MB y 20 páginas; el original no se archiva.
+Las fotos adjuntas tienen su gestión habitual y no se convierten mediante OCR.
+Se conservan los permisos y ACL de conocimiento y los manuales propios en Ayuda.
+
+La revisión visual corrigió también el desplazamiento del marco de las
+ventanas al enfocar campos: cabecera y pie permanecen visibles y solo desplaza
+el cuerpo. El equipo local quedó configurado con Tesseract en WSL.
+Cambiar de archivo, pasar a texto pegado o cerrar descarta lecturas antiguas
+para conservar el contenido y nombre de la fuente elegida.
+
+[Uso y configuración](docs/conocimiento-ocr.md).
+[ADR-0028](docs/decisiones/0028-ocr-local-con-revision.md).
+[Pruebas, cobertura, límites y cierre](docs/verificacion-ocr-2026-10-10.md).
+
+Backend del bloque y regresión: **1.181 aprobadas**, cobertura de conocimiento
+**92,24 %**; OCR **98 % / 93 %**. Reconocimiento real verificado con PDF imagen
+sintético en la API Windows/WSL y con el proceso Linux, incluido su límite de
+memoria/CPU. La evidencia definitiva de frontend, navegador, auditorías y
+limpieza está en el informe. No se declara preparación global para producción;
+se conservan ClamAV pendiente en desarrollo y E-12 del extra opcional de embeddings.
+
+Frontend **890/890**, manuales **26/26**, lint/build aprobados. Chromium de
+cierre **33/33**, sin reintentos ni omisiones; las dos corridas cubren
+**119 casos distintos aprobados**, no una corrida única 119/119. API temporal,
+base exclusiva y dos archivos sintéticos retirados; app 4200 y API 8000 responden
+200. Implementación `6e86fe8`, correcciones `6627b4a`, en `main` local sin push.
+
 ## Google Calendar y calendario propio (2026-10-10)
 
 Se implementa el adaptador HTTP real y la renovación automática de tokens.

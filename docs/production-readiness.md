@@ -1,5 +1,18 @@
 # Estado de preparación para producción
 
+## OCR de documentos escaneados (2026-10-10)
+
+El flujo local admite PDF imagen con vista previa, corrección, confirmación
+humana e ingesta en borrador. Tiene límites, procesos separados, pruebas de
+permisos y regresión de RAG; la imagen backend incorpora Tesseract y `spa+eng`.
+La guía exige reconstrucción, verificación del motor, ClamAV operativo,
+dimensionamiento y pruebas de calidad con documentación autorizada de staging.
+La revisión no sustituye la aprobación ni acredita precisión clínica.
+No se declara preparación global para producción: se conservan las barreras
+operativas y legales existentes, aceptación externa y E-12 de embeddings.
+[Guía de operación](conocimiento-ocr.md).
+[Informe de verificación](verificacion-ocr-2026-10-10.md).
+
 ## Adaptador Google Calendar (2026-10-10)
 
 El modo real ya se construye y renueva tokens, con configuración por clínica,

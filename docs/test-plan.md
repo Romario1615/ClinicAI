@@ -1,5 +1,26 @@
 # Plan de pruebas
 
+## OCR local y marco de ventanas (2026-10-10)
+
+El PDF de prueba se genera como imagen sin capa de texto y sin datos clínicos.
+La API reconoce realmente dos páginas y distingue una página vacía. Las
+unitarias verifican límites, contenido activo, daño/cifrado, errores del motor,
+plazos, cancelación, entorno sin credenciales y cierre de procesos. La API
+exige sesión/permiso y la auditoría pertenece a la clínica efectiva; no crea
+documentos durante la extracción. La ingesta mantiene la regresión de RAG.
+
+Frontend: vista previa, corrección, revisión obligatoria, no duplicar envíos,
+reintentar y conservar nombre original. Las lecturas lentas de archivos
+anteriores no reemplazan la fuente vigente; cambiar a texto pegado o cerrar
+descarta el resultado y los errores se informan sin rechazos sin capturar.
+Chromium 31 mide el marco real,
+cabecera y pie después de enfocar/desplazar, con axe en escritorio/tableta/móvil.
+La cobertura se mide en Windows; el motor Linux se comprueba por separado.
+Ejecutar frontend y navegador secuencialmente en equipos con recursos limitados:
+una corrida simultánea produjo timeout de preparación y 503 del OCR acotado.
+No se aumentan plazos ni se añaden reintentos para ocultarlos.
+[Resultados y comandos](verificacion-ocr-2026-10-10.md).
+
 ## Formularios y consultas (2026-10-09)
 
 [Matriz](matriz-formularios-consultas.md): 66 formularios en 45 plantillas,
