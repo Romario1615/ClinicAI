@@ -1,5 +1,26 @@
 # Seguridad y privacidad
 
+## Calendario propio (2026-10-10)
+
+Se conservan los permisos existentes: `profesional.conectar_calendario` y
+conexiones derivadas del profesional de la sesión. La sincronización manual
+aplica `conexion_id` a detección, selección y reintento de errores; una conexión
+ajena sigue devolviendo 404. Las escrituras clínicas no cambian.
+
+La configuración de Google se lee por clínica y sus secretos se descifran con
+ese contexto. Desactivar una configuración impide usar las claves del entorno.
+La renovación bloquea la conexión y guarda tokens cifrados por profesional.
+El callback consume el estado firmado, verifica al profesional activo y audita
+la conexión como retorno del sistema vinculado al profesional. No se presume
+una nueva sesión autenticada en ese endpoint público.
+
+El enlace OAuth admite únicamente el host y ruta de autorización de Google,
+HTTPS y ausencia de credenciales en la URL. Se abre con `noopener noreferrer`.
+El callback HTML no contiene tokens y usa `no-store` y `no-referrer`.
+No se conceden permisos nuevos; recepción no conecta calendarios profesionales.
+
+[ADR-0027](decisiones/0027-calendario-google-y-renovacion.md).
+
 > Fase 0. Este documento define los controles exigidos y su estado. **El estado real de
 > implementación y verificación está en la última columna de cada tabla y en
 > [`production-readiness.md`](production-readiness.md).** Nada aquí debe leerse como

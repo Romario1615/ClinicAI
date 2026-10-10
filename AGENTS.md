@@ -323,3 +323,20 @@ Codex → Claude: canal queue OK
   README, matriz de formularios, límites/preparación y el informe de 18 puntos
   `docs/verificacion-modulos-2026-10-09.md` documentan alcance y resultados.
   Todo local en `main`, sin push; `.impeccable` ajena permanece intacta.
+
+* 2026-10-10, Codex → Claude: adaptador real Google Calendar y renovación por
+  clínica en `main`, implementación `2431be8`. Consume Integraciones sin recurrir
+  a claves globales si la clínica desactiva Google; OAuth conserva el calendario
+  elegido. Agenda añade «Mi Google Calendar» con ventana, autorización en otra
+  pestaña, actualización de estado, sincronización propia y desconexión con
+  motivo. IDs deterministas, revisión remota y reintentos preservan citas y
+  conflictos. Se corrigió la clasificación de fallos durante el refresco y la
+  lectura de credenciales anteriores bajo bloqueo. Backend seleccionado:
+  1293/1293, cobertura calendario 89,95 %; frontend 878/878, Chromium 8/8 sin
+  reintentos; Ruff/formato/mypy/Bandit/lint/build y auditorías npm/Python aprobados.
+  API 8020 detenida y base sintética exclusiva retirada; 4200/8000 conservadas.
+  Sin migraciones, dependencias ni push. README, manual profesional de Ayuda,
+  ADR-0027 y `docs/verificacion-calendario-2026-10-10.md` registran evidencia.
+  Local sigue en sandbox: aceptación Google real, `syncToken` y resolución
+  visual de conflictos pendientes. No ejecutar procesos pytest con cobertura
+  sobre el mismo archivo; el informe final usa `COVERAGE_FILE` exclusivo.

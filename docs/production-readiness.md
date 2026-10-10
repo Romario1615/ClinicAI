@@ -1,5 +1,21 @@
 # Estado de preparación para producción
 
+## Adaptador Google Calendar (2026-10-10)
+
+El modo real ya se construye y renueva tokens, con configuración por clínica,
+IDs deterministas y precondiciones. La sincronización manual aplica el filtro
+de la conexión propia. La interfaz profesional conserva la sesión en la pestaña
+original y ofrece consulta, autorización y desconexión con motivo.
+
+Esto completa código y contratos locales; **no acredita operación con Google**.
+Faltan proyecto/cuenta, credenciales y aceptación de permisos y eventos reales.
+La base y API de QA son exclusivas; el desarrollo conserva sandbox.
+No hay nuevas migraciones ni dependencias. Conciliación incremental, resolución
+visual de conflictos, alertas operativas y despliegue siguen pendientes.
+
+[Informe y evidencia](verificacion-calendario-2026-10-10.md).
+El criterio 6 sigue parcial; no se declara preparación para producción.
+
 ## Revisión funcional por módulos (2026-10-09)
 
 Inventario automático de 99 plantillas, 66 formularios y 502 declaraciones de
@@ -176,7 +192,7 @@ funcionalidad no existe todavía; **no** significa que esté bien.
 | 3 | No existen secretos en el repositorio | **verificado localmente** | Gitleaks escaneó el historial completo y no encontró secretos; coincidencias sintéticas de pruebas se revisaron y se registraron por huella en `.gitleaksignore`. La corrida CI sigue pendiente |
 | 4 | Las reservas concurrentes no generan duplicados | **verificado** | Restricción de exclusión `gist`; prueba de concurrencia real con 50 participantes y `asyncio.Barrier` sobre conexiones separadas |
 | 5 | La lista de espera funciona automáticamente | **parcial** | 55 pruebas focalizadas cubren selección, franjas locales, outbox, expiración, reagendamiento con cita previa, cadena limitada, rollback ante la restricción lXCLUDl y diez aceptaciones concurrentes por servicio y HTTP. Una solicitud obtiene 200 y nueve 409; solo se crea una cita. La **entrega real** del aviso depende de Meta (E‑1) |
-| 6 | Los calendarios se sincronizan | **parcial** | El flujo completo esta verificado con adaptador sandbox: OAuth con `state` firmado y de un solo uso, tokens cifrados y ligados al profesional, publicacion, retirada y **reconciliacion de cambios externos** -- borrado y movimiento manual del profesional (85 pruebas). Lo que falta: el **adaptador real de Google** y la renovacion automatica del token de acceso (E‑19). `MODO_CALENDARIO=google` no arranca, a proposito |
+| 6 | Los calendarios se sincronizan | **parcial** | Adaptador HTTP Google v3, renovación automática, OAuth por clínica y ventana propia en Agenda implementados el 2026-10-10. Verificados con HTTP controlado, PostgreSQL aislado y navegador real. El entorno local conserva sandbox; falta comprobar una cuenta real, cuotas y consentimiento (E‑1). Conciliación incremental y resolución visual de conflictos siguen pendientes. [Informe](verificacion-calendario-2026-10-10.md) |
 | 7 | Los recordatorios son persistentes y reintentables | **parcial** | Los avisos de citas confirmadas se guardan de forma durable (24 h y 3 h); los de tomas se generan al confirmar recetas y cubren solo pautas fijas. Se sustituyen/cancelan al modificar o cerrar su entidad. Un cron cada minuto materializa los vencidos en el outbox; el worker respeta el consentimiento específico y el outbox gestiona deduplicación, reintentos y huérfanos. Los recorridos se probaron contra PostgreSQL aislado. **Falta verificar la entrega real contra Meta** (E‑1)
 | 8 | Los permisos impiden accesos indebidos | **verificado** | Permiso + ámbito de 4 dimensiones + relación asistencial, aplicados en el `WHERE`. 404 y no 403 fuera de ámbito. La colección vigente incluye 698 casos con marcador `seguridad`, dentro de la regresión global aprobada. Los tres fallos previos del filtro de ámbito se conservan corregidos |
 | 9 | La historia clínica está protegida | **verificado** | Append‑only por disparador, versionado con autor y motivo, atacado con SQL directo en las pruebas |

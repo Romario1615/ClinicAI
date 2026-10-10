@@ -1,5 +1,36 @@
 # ClinicAI — Plataforma de gestión clínica
 
+## Google Calendar y calendario propio (2026-10-10)
+
+Se implementa el adaptador HTTP real y la renovación automática de tokens.
+La configuración OAuth de cada clínica se toma de **Integraciones**; una
+desactivación no utiliza las claves globales. El entorno local sigue en sandbox.
+
+En **Agenda → Mi Google Calendar**, el profesional puede consultar conexiones,
+preparar la autorización, continuar en otra pestaña, sincronizar y desconectar
+con motivo. La ventana conserva sesión, foco y formularios; bloquea envíos
+duplicados y muestra los errores del servidor. Solo aparece con permiso propio.
+
+La sincronización manual se limita a la conexión solicitada. Los eventos usan
+IDs deterministas, precondiciones y contenido neutro; los fallos del proveedor
+no borran citas ni se confunden con eventos desaparecidos. Los conflictos se
+conservan para revisión. El manual del profesional está actualizado en Ayuda.
+
+[Decisión y límites](docs/decisiones/0027-calendario-google-y-renovacion.md).
+[Configuración y aceptación con Google](docs/calendar-integration.md).
+[Verificación del bloque](docs/verificacion-calendario-2026-10-10.md).
+
+Verificado: **1.293 pruebas backend** del bloque y regresión, **878 frontend**
+con cobertura y **8 Chromium**, sin reintentos. Cobertura de calendario:
+**89,95 %**; lint, formato, tipos, build, Bandit, auditorías de dependencias
+y Gitleaks aprobados. La API temporal y la base sintética se retiraron;
+se conservan la aplicación 4200 y la API 8000. Implementación: `2431be8`,
+en `main` local, sin push.
+
+**Pendiente:** verificar una cuenta real de Google, sincronización incremental
+y resolución de conflictos en la interfaz. Las evaluaciones históricas más
+abajo describen el estado de su fecha; esta actualización las complementa.
+
 ## Revisión por módulos, botones y gráficas (2026-10-09)
 
 Inventario reproducible de **99 plantillas**, **66 formularios** y **502

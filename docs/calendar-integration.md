@@ -1,11 +1,12 @@
 # Integración con calendarios externos
 
-> **Última actualización:** 2026‑09‑12 · Fase 4.
+> **Última actualización:** 2026-10-10.
 >
-> **El adaptador real de Google no existe todavía.** Lo implementado es el flujo completo
-> con adaptador sandbox: OAuth con `state` firmado, tokens cifrados, publicación,
-> reconciliación de cambios externos y el trabajo periódico. No hay credenciales de Google
-> y no se inventan (CLAUDE.md, regla 3). Ver [limitación E‑1](known-limitations.md).
+> El adaptador HTTP de Google Calendar v3 y la renovación automática están
+> implementados y probados con respuestas HTTP controladas y PostgreSQL real.
+> El entorno local conserva `sandbox`; no se ha conectado una cuenta real de Google.
+> [ADR-0027](decisiones/0027-calendario-google-y-renovacion.md) e
+> [informe de verificación](verificacion-calendario-2026-10-10.md).
 
 ---
 
@@ -21,7 +22,7 @@ Esa frase decide cada caso dudoso sin tener que pensarlo dos veces:
 | El proveedor no responde | Reintenta el reflejo | La cita ya está confirmada en la base. Nadie pierde su turno porque Google estuviera caído |
 | El profesional **borra** el evento en su teléfono | Lo vuelve a crear | Borrar el reflejo no cancela la atención de un paciente |
 | El profesional **mueve** el evento de hora | Marca **conflicto**, no sobrescribe | Ese cambio es intencionado. Puede significar que no estará disponible, y resolverlo puede implicar reprogramar a un paciente: eso no lo decide una máquina |
-| El token caduca | Marca `TOKEN_VENCIDO` y deja los eventos pendientes | Distinto de `DESCONECTADO`: el primero exige que alguien vuelva a autorizar |
+| El token caduca | Renueva antes de vencer y reintenta una vez ante un 401 | Si Google revoca el refresco, marca `TOKEN_VENCIDO` y pide volver a autorizar; conserva la cita y su reflejo pendiente |
 | La cita se cancela | Retira el evento | Dejarlo haría que el profesional viera ocupado un hueco libre |
 
 ---
@@ -61,8 +62,8 @@ de un compañero y con la copia permanente de sus horarios de trabajo.
 
 ### Cómo está implementado
 
-`state` es un valor **firmado con HMAC-SHA256** que lleva dentro el profesional, el instante
-de emisión y un valor aleatorio. Al volver:
+`state` es un valor **firmado con HMAC-SHA256** que lleva dentro el profesional, el calendario
+elegido, el instante de emisión y un valor aleatorio. Al volver:
 
 1. **Firma verificada** en tiempo constante (`hmac.compare_digest`). Sin firma válida no se
    sigue.
@@ -112,6 +113,12 @@ Además:
 * El error del proveedor **no incluye el cuerpo de su respuesta**: puede contener fragmentos
   del código de autorización.
 
+La renovación bloquea la fila de la conexión mientras guarda los tokens cifrados.
+Se conserva el token de refresco si Google no lo rota. Un lote no renueva repetidamente
+la misma conexión; una respuesta 401 permite una única renovación y repetición de la
+operación. Los fallos transitorios mantienen el evento pendiente. `invalid_grant`
+exige una autorización nueva.
+
 ---
 
 ## 5. Quién puede conectar un calendario, y sobre quién
@@ -134,6 +141,24 @@ sistema: un 403 confirmaría que existe, y eso permite enumerar.
 | `POST /calendario/conexiones/{id}/desconexion` | Ídem · exige motivo, se audita |
 | `POST /calendario/conexiones/{id}/sincronizacion` | Ídem |
 | `GET /calendario/conexiones/{id}/eventos` | Ídem · solo estados, sin datos de la cita |
+
+### Desde la interfaz
+
+En **Agenda → Mi Google Calendar**, el profesional consulta sus conexiones,
+elige `primary` o el identificador de un calendario al que ya tenga acceso,
+y pulsa **Autorizar en Google**. Tras preparar la autorización aparece
+**Continuar en Google**, que abre otra pestaña. Así se conserva la sesión de ClinicAI.
+Al terminar, vuelve a la ventana original y pulsa **Actualizar estado**.
+
+La misma ventana permite **Sincronizar ahora** y **Desconectar**, con motivo
+obligatorio. Solo actúa sobre esa conexión del profesional. Reintenta errores
+agotados explícitamente, pero conserva los conflictos para revisión humana.
+El resumen distingue cambios, reintentos, errores, conflictos y autorizaciones vencidas.
+Desconectar elimina las credenciales guardadas; conserva los eventos que ya están
+en Google. Recepción no ve este acceso.
+
+En sandbox, autorizar muestra el mensaje de configuración pendiente y conserva
+el formulario. No se canjean códigos ni se simula una conexión externa exitosa.
 
 ---
 
@@ -216,11 +241,17 @@ el sistema, alguien tiene que resolverlo.
 
 ## 8. Configuración
 
-Ninguna de estas variables tiene valor en `.env.example` (CLAUDE.md, regla 2).
+Los secretos no tienen valores reales en `.env.example` (CLAUDE.md, regla 2).
+El administrador puede configurar **Configuración → Integraciones → Google Calendar**
+para la clínica: identificador OAuth, secreto, URI de retorno y alcances.
+Esa configuración se descifra usando el contexto de la clínica y prevalece sobre
+las variables globales. Una integración deshabilitada o incompleta no recurre a
+credenciales globales. Estas se admiten únicamente cuando no existe configuración
+de Google para la clínica.
 
 | Variable | Para qué |
 |---|---|
-| `MODO_CALENDARIO` | `sandbox` (por defecto) o `google`. **`sandbox` está prohibido en producción**; `google` **todavía falla**, porque el adaptador real no existe |
+| `MODO_CALENDARIO` | `sandbox` (por defecto) o `google`. El modo real se habilita en el servidor; `sandbox` está prohibido en producción |
 | `GOOGLE_CLIENT_ID` | Identificador de la aplicación OAuth |
 | `GOOGLE_CLIENT_SECRET` | **Secreto** |
 | `GOOGLE_REDIRECT_URI` | Debe coincidir exactamente con la registrada en Google |
@@ -233,24 +264,24 @@ En modo `sandbox` el adaptador en memoria se registra **bajo el nombre del prove
 de negocio, y si el registro usara otra clave, las conexiones creadas en desarrollo dejarían
 de resolver al pasar a producción.
 
-`MODO_CALENDARIO=google` **lanza `NotImplementedError` al arrancar**. Es deliberado: un
-entorno configurado para hablar con Google que en realidad no sale a la red es peor que uno
-que no arranca, porque parece funcionar.
+`MODO_CALENDARIO=google` construye el adaptador real sin llamadas de red al arrancar.
+Las operaciones utilizan HTTPS hacia los hosts fijos de Google, tiempos de espera
+limitados y errores sin cuerpos sensibles. Se publican eventos privados, sin asistentes.
+El ID determinista permite reconocer un envío anterior tras una respuesta perdida;
+un 409 solo se acepta si coincide con el origen, horario y contenido neutral esperado.
 
 ---
 
 ## 9. Qué falta para poner esto en producción
 
-1. **El adaptador real de Google Calendar.** No existe. Hay que implementar `crear`,
-   `actualizar`, `eliminar` y `consultar` contra la API v3, con `If-Match` para el control
-   optimista y `syncToken` para la reconciliación incremental —la columna
-   `token_sincronizacion_incremental` ya está en el modelo para eso, y evitaría la lectura
-   por evento que hoy hace caro el barrido.
-2. **La renovación del token de acceso.** El token de refresco se guarda y la conexión se
-   marca `TOKEN_VENCIDO` correctamente, pero **no hay código que lo canjee por uno nuevo**:
-   hoy hace falta volver a autorizar a mano. `MARGEN_RENOVACION` está definido y sin usar.
-3. **Credenciales de Google** y un proyecto OAuth con la URI de redirección registrada.
-4. **Verificación del camino real**, que es lo que cierra E‑1.
+1. **Credenciales de Google** y un proyecto OAuth con la URI de redirección registrada.
+2. **Verificación con una cuenta autorizada de prueba**, incluyendo consentimiento,
+   creación, modificación, retirada, revocación y cuotas. Las pruebas HTTP controladas
+   no sustituyen ese recorrido ni cierran E‑1.
+3. **Conciliación incremental con `syncToken`**. Sigue pendiente: el reconciliador
+   consulta cada evento. Se debe evaluar su cuota para el volumen del cliente.
+4. **Interfaz para resolver conflictos**. El sistema detecta y preserva los cambios
+   externos, pero aún no permite elegir su resolución desde la ventana.
 5. **Revisión jurídica** de la transferencia de datos a un tercero (limitación E‑2), aunque
    el evento no lleve datos clínicos: la relación profesional‑fecha sigue siendo un dato
    personal que sale del país.
@@ -262,7 +293,15 @@ que no arranca, porque parece funcionar.
 
 ## 10. Evidencia de las pruebas
 
-Ejecutadas el 2026‑09‑12 contra PostgreSQL 16 + pgvector 0.8.6 en contenedor.
+La evidencia vigente del adaptador HTTP, renovación, API, base aislada e interfaz
+está en el [informe del 2026-10-10](verificacion-calendario-2026-10-10.md).
+Las referencias técnicas son la [API de eventos de Google](https://developers.google.com/workspace/calendar/api/v3/reference/events/insert),
+su [gestión de errores](https://developers.google.com/workspace/calendar/api/guides/errors)
+y el [flujo OAuth de servidor](https://developers.google.com/identity/protocols/oauth2/web-server#offline).
+
+### Evidencia histórica del sandbox
+
+Ejecutada el 2026‑09‑12 contra PostgreSQL 16 + pgvector 0.8.6 en contenedor.
 
 | Suite | Casos | Qué cubre |
 |---|---|---|
