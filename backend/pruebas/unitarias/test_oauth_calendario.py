@@ -254,3 +254,18 @@ def test_los_tokens_no_aparecen_en_su_repr() -> None:
     assert "acceso-secreto" not in texto
     assert "refresco-secreto" not in texto
     assert "oculto" in texto
+
+
+def test_el_calendario_se_conserva_en_el_estado_firmado() -> None:
+    estado = oauth.nuevo_estado(uuid.uuid4(), ahora=AHORA, calendar_id="agenda@example.invalid")
+    firmado = oauth.firmar_estado(estado, SECRETO)
+    assert (
+        oauth.verificar_estado(firmado, SECRETO, ahora=AHORA).calendar_id
+        == "agenda@example.invalid"
+    )
+
+
+@pytest.mark.parametrize("valor", ["ñ.firma", "texto.ñ"])
+def test_estado_unicode_rechazado_como_firma_invalida(valor: str) -> None:
+    with pytest.raises(FirmaInvalida):
+        oauth.verificar_estado(valor, SECRETO, ahora=AHORA)

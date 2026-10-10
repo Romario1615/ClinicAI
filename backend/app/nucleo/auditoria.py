@@ -45,8 +45,9 @@ class AccionAuditada(StrEnum):
     # codigo sin punto rompe las consultas de auditoria que agrupan por
     # recurso.
     LOGOUT = "sesion.cerrada"
-    TOKEN_REFRESCADO = "token.refrescado"
-    TOKEN_REUTILIZADO = "token.reutilizado"
+    # Nombres públicos de acciones auditadas; no contienen credenciales.
+    TOKEN_REFRESCADO = "token.refrescado"  # nosec B105
+    TOKEN_REUTILIZADO = "token.reutilizado"  # nosec B105
     SESIONES_REVOCADAS = "sesiones.revocadas"
     CUENTA_BLOQUEADA = "cuenta.bloqueada"
     CONTRASENA_CAMBIADA = "contrasena.cambiada"
@@ -228,6 +229,7 @@ class AccionAuditada(StrEnum):
     CONVERSACION_CERRADA = "conversacion.cerrada"
     CALENDARIO_CONECTADO = "calendario.conectado"
     CALENDARIO_DESCONECTADO = "calendario.desconectado"
+    CALENDARIO_SINCRONIZADO = "calendario.sincronizado"
     CALENDARIO_CONFLICTO = "calendario.conflicto"
 
     # --- Pagos ---

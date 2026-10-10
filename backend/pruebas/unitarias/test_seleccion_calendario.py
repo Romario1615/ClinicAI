@@ -14,6 +14,7 @@ from __future__ import annotations
 import pytest
 
 from app.modulos.calendario.adaptadores import AdaptadorSandboxCalendario
+from app.modulos.calendario.google import AdaptadorGoogleCalendario
 from app.modulos.calendario.seleccion import PROVEEDOR_GOOGLE, construir_proveedores
 from app.nucleo.configuracion import Configuracion
 
@@ -37,11 +38,6 @@ def test_el_sandbox_se_registra_bajo_el_nombre_del_proveedor_real() -> None:
     assert proveedores.obtener("sandbox") is None
 
 
-def test_el_modo_google_falla_porque_no_hay_adaptador_real() -> None:
-    """Falla explicitamente en lugar de caer al sandbox en silencio.
-
-    Un entorno configurado para hablar con Google que en realidad no sale a la
-    red es peor que uno que no arranca, porque parece funcionar.
-    """
-    with pytest.raises(NotImplementedError, match="Fase 4b"):
-        construir_proveedores(Configuracion(modo_calendario="google"))
+def test_el_modo_google_construye_el_adaptador_real_sin_hacer_peticiones() -> None:
+    proveedores = construir_proveedores(Configuracion(modo_calendario="google"))
+    assert isinstance(proveedores.obtener(PROVEEDOR_GOOGLE), AdaptadorGoogleCalendario)

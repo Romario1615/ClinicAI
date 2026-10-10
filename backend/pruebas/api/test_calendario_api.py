@@ -259,7 +259,7 @@ async def test_sin_credenciales_de_google_el_inicio_devuelve_503(
         f"{api}/calendario/oauth/inicio", json={}, headers=cabeceras_profesional
     )
     assert respuesta.status_code == 503
-    assert "sandbox" in respuesta.text.lower()
+    assert "integraciones" in respuesta.text.lower()
 
 
 # ---------------------------------------------------------------------------
@@ -272,6 +272,56 @@ async def test_el_callback_rechaza_un_estado_sin_firma(cliente: AsyncClient, api
         params={"code": "codigo-cualquiera", "state": "inventado"},
     )
     assert respuesta.status_code == 403
+
+
+async def test_inicio_oauth_real_firma_el_calendario_elegido(
+    cliente: AsyncClient,
+    api: str,
+    cabeceras_profesional: dict[str, str],
+    profesional: Profesional,
+    configuracion: object,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from urllib.parse import parse_qs, urlparse  # noqa: PLC0415
+
+    from pydantic import SecretStr  # noqa: PLC0415
+
+    monkeypatch.setattr(configuracion, "modo_calendario", "google")
+    monkeypatch.setattr(configuracion, "google_client_id", "cliente-sintetico")
+    monkeypatch.setattr(configuracion, "google_client_secret", SecretStr("secreto-sintetico"))
+    respuesta = await cliente.post(
+        f"{api}/calendario/oauth/inicio",
+        headers=cabeceras_profesional,
+        json={"calendar_id": " agenda@example.invalid "},
+    )
+    assert respuesta.status_code == 200
+    url = urlparse(respuesta.json()["url_autorizacion"])
+    assert url.hostname == "accounts.google.com"
+    argumentos = parse_qs(url.query)
+    assert argumentos["client_id"] == ["cliente-sintetico"]
+    estado = oauth.verificar_estado(
+        argumentos["state"][0],
+        configuracion.clave_secreta.get_secret_value(),
+        ahora=INSTANTE_REFERENCIA,
+    )  # type: ignore[attr-defined]
+    assert estado.profesional_id == profesional.id
+    assert estado.calendar_id == "agenda@example.invalid"
+    assert "secreto-sintetico" not in respuesta.text
+
+
+@pytest.mark.parametrize("calendario", [" ", ".", "..", "agenda\nprivada"])
+async def test_inicio_rechaza_identificadores_invalidos(
+    cliente: AsyncClient,
+    api: str,
+    cabeceras_profesional: dict[str, str],
+    calendario: str,
+) -> None:
+    respuesta = await cliente.post(
+        f"{api}/calendario/oauth/inicio",
+        headers=cabeceras_profesional,
+        json={"calendar_id": calendario},
+    )
+    assert respuesta.status_code == 422
 
 
 async def test_el_callback_rechaza_un_estado_firmado_con_otro_secreto(
@@ -350,6 +400,8 @@ async def test_la_sincronizacion_manual_responde_un_resumen(
         "conflictos",
         "reintentables",
         "errores",
+        "sin_conexion",
+        "token_vencido",
     }
 
 
@@ -422,6 +474,7 @@ async def test_la_desconexion_queda_auditada(
 # y no se inventan (CLAUDE.md, regla 3). Lo sustituido es la llamada al
 # tercero; el consumo del `state`, el cifrado de los tokens y la escritura de
 # la conexion son los reales.
+@pytest.mark.parametrize("acepta_html", [False, True])
 async def test_el_callback_valido_crea_la_conexion_con_tokens_cifrados(
     cliente: AsyncClient,
     api: str,
@@ -429,6 +482,7 @@ async def test_el_callback_valido_crea_la_conexion_con_tokens_cifrados(
     profesional: Profesional,
     monkeypatch: pytest.MonkeyPatch,
     configuracion: object,
+    acepta_html: bool,
 ) -> None:
     from datetime import timedelta  # noqa: PLC0415
 
@@ -436,7 +490,12 @@ async def test_el_callback_valido_crea_la_conexion_con_tokens_cifrados(
 
     reloj = RelojFijo(INSTANTE_REFERENCIA)
     secreto = configuracion.clave_secreta.get_secret_value()  # type: ignore[attr-defined]
-    firmado = oauth.firmar_estado(oauth.nuevo_estado(profesional.id, ahora=reloj.ahora()), secreto)
+    firmado = oauth.firmar_estado(
+        oauth.nuevo_estado(
+            profesional.id, ahora=reloj.ahora(), calendar_id="agenda@example.invalid"
+        ),
+        secreto,
+    )
 
     async def _intercambio_simulado(**_argumentos: object) -> oauth.TokensObtenidos:
         return oauth.TokensObtenidos(
@@ -447,12 +506,24 @@ async def test_el_callback_valido_crea_la_conexion_con_tokens_cifrados(
         )
 
     monkeypatch.setattr(rutas_calendario.oauth, "intercambiar_codigo", _intercambio_simulado)
+    monkeypatch.setattr(configuracion, "modo_calendario", "google")
+    monkeypatch.setattr(configuracion, "google_client_id", "cliente-sintetico")
+    from pydantic import SecretStr  # noqa: PLC0415
+
+    monkeypatch.setattr(configuracion, "google_client_secret", SecretStr("secreto-sintetico"))
 
     respuesta = await cliente.get(
         f"{api}/calendario/oauth/callback",
         params={"code": "codigo-sintetico", "state": firmado},
+        headers={"Accept": "text/html" if acepta_html else "application/json"},
     )
     assert respuesta.status_code == 200, respuesta.text
+    if acepta_html:
+        assert "Google Calendar conectado" in respuesta.text
+        assert respuesta.headers["cache-control"] == "no-store"
+        assert "text/html" in respuesta.headers["content-type"]
+    else:
+        assert respuesta.json()["calendar_id"] == "agenda@example.invalid"
     # Los tokens no salen en la respuesta.
     assert "acceso-que-no-debe-aparecer" not in respuesta.text
     assert "refresco-que-no-debe-aparecer" not in respuesta.text
@@ -502,6 +573,11 @@ async def test_el_mismo_estado_no_se_puede_usar_dos_veces(
         )
 
     monkeypatch.setattr(rutas_calendario.oauth, "intercambiar_codigo", _intercambio_simulado)
+    monkeypatch.setattr(configuracion, "modo_calendario", "google")
+    monkeypatch.setattr(configuracion, "google_client_id", "cliente-sintetico")
+    from pydantic import SecretStr  # noqa: PLC0415
+
+    monkeypatch.setattr(configuracion, "google_client_secret", SecretStr("secreto-sintetico"))
 
     primera = await cliente.get(
         f"{api}/calendario/oauth/callback",

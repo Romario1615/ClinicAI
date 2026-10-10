@@ -45,7 +45,7 @@ logger = obtener_logger(__name__)
 
 URL_AUTORIZACION_GOOGLE = "https://accounts.google.com/o/oauth2/v2/auth"
 # Es la URL del endpoint de tokens de Google, no una credencial.
-URL_TOKEN_GOOGLE = "https://oauth2.googleapis.com/token"  # noqa: S105
+URL_TOKEN_GOOGLE = "https://oauth2.googleapis.com/token"  # noqa: S105  # nosec B105
 
 # Vida del `state`. Suficiente para que una persona complete la pantalla de
 # consentimiento de Google sin prisa, y corta para que un valor filtrado no
@@ -57,6 +57,7 @@ _PARTES_ESTADO = 2
 
 # A partir de aqui, la respuesta del proveedor es un rechazo.
 _HTTP_ERROR_CLIENTE = 400
+MAXIMO_CALENDAR_ID = 255
 
 
 @dataclass(frozen=True, slots=True)
@@ -64,6 +65,7 @@ class EstadoOauth:
     profesional_id: uuid.UUID
     emitido_en: datetime
     aleatorio: str
+    calendar_id: str = "primary"
 
     @property
     def identificador(self) -> str:
@@ -87,6 +89,7 @@ def firmar_estado(estado: EstadoOauth, secreto: str) -> str:
             "p": str(estado.profesional_id),
             "t": int(estado.emitido_en.timestamp()),
             "n": estado.aleatorio,
+            "c": estado.calendar_id,
         },
         separators=(",", ":"),
         sort_keys=True,
@@ -111,6 +114,11 @@ def verificar_estado(valor: str, secreto: str, *, ahora: datetime) -> EstadoOaut
         raise FirmaInvalida("El estado de OAuth no tiene el formato esperado.")
 
     codificado, firma_recibida = partes
+    try:
+        codificado.encode("ascii")
+        firma_recibida.encode("ascii")
+    except UnicodeEncodeError as exc:
+        raise FirmaInvalida("El estado de OAuth no tiene el formato esperado.") from exc
     esperada = (
         base64.urlsafe_b64encode(
             hmac.new(secreto.encode("utf-8"), codificado.encode("ascii"), hashlib.sha256).digest()
@@ -127,6 +135,13 @@ def verificar_estado(valor: str, secreto: str, *, ahora: datetime) -> EstadoOaut
         profesional_id = uuid.UUID(str(datos["p"]))
         emitido_en = datetime.fromtimestamp(int(datos["t"]), tz=ahora.tzinfo)
         aleatorio = str(datos["n"])
+        calendar_id = datos.get("c", "primary")
+        if (
+            not isinstance(calendar_id, str)
+            or not calendar_id.strip()
+            or len(calendar_id) > MAXIMO_CALENDAR_ID
+        ):
+            raise ValueError("Calendario invalido.")
     except (ValueError, KeyError, TypeError) as exc:
         raise FirmaInvalida("El estado de OAuth no se puede interpretar.") from exc
 
@@ -137,14 +152,22 @@ def verificar_estado(valor: str, secreto: str, *, ahora: datetime) -> EstadoOaut
     if emitido_en - ahora > timedelta(minutes=1):
         raise FirmaInvalida("El estado de OAuth tiene una fecha de emision invalida.")
 
-    return EstadoOauth(profesional_id=profesional_id, emitido_en=emitido_en, aleatorio=aleatorio)
+    return EstadoOauth(
+        profesional_id=profesional_id,
+        emitido_en=emitido_en,
+        aleatorio=aleatorio,
+        calendar_id=calendar_id,
+    )
 
 
-def nuevo_estado(profesional_id: uuid.UUID, *, ahora: datetime) -> EstadoOauth:
+def nuevo_estado(
+    profesional_id: uuid.UUID, *, ahora: datetime, calendar_id: str = "primary"
+) -> EstadoOauth:
     return EstadoOauth(
         profesional_id=profesional_id,
         emitido_en=ahora,
         aleatorio=secrets.token_urlsafe(24),
+        calendar_id=calendar_id,
     )
 
 
@@ -246,9 +269,19 @@ async def intercambiar_codigo(
 
     try:
         datos = respuesta.json()
-        acceso = str(datos["access_token"])
-        refresco = str(datos["refresh_token"])
-        segundos = int(datos.get("expires_in", 3600))
+        acceso = datos["access_token"]
+        refresco = datos["refresh_token"]
+        segundos = datos.get("expires_in", 3600)
+        if (
+            not isinstance(acceso, str)
+            or not acceso.strip()
+            or not isinstance(refresco, str)
+            or not refresco.strip()
+            or not isinstance(segundos, int)
+            or isinstance(segundos, bool)
+            or segundos <= 0
+        ):
+            raise ValueError("Credenciales incompletas.")
     except (ValueError, KeyError, TypeError) as exc:
         raise ProveedorExternoNoDisponible(
             "El proveedor de OAuth no devolvio un token de refresco. Vuelva a "

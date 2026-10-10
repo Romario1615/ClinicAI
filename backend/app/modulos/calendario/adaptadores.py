@@ -48,7 +48,7 @@ class ResultadoCalendario(StrEnum):
     # Es el nombre de un estado, no una credencial: significa que el token
     # caduco y que hay que volver a autorizar. La excepcion de lint esta
     # en la propia linea.
-    TOKEN_VENCIDO = "TOKEN_VENCIDO"  # noqa: S105
+    TOKEN_VENCIDO = "TOKEN_VENCIDO"  # noqa: S105  # nosec B105
     FALLO_TEMPORAL = "FALLO_TEMPORAL"
     FALLO_PERMANENTE = "FALLO_PERMANENTE"
 
@@ -93,6 +93,29 @@ class EstadoRemoto:
     # Cierto si el evento sigue llevando nuestra marca de origen. Si el
     # profesional lo edito tanto que la perdio, deja de ser nuestro reflejo.
     es_nuestro: bool = True
+    # Un fallo de lectura nunca significa que el evento haya desaparecido.
+    resultado: ResultadoCalendario = ResultadoCalendario.OK
+    detalle: str | None = None
+
+
+@dataclass(frozen=True, slots=True, repr=False)
+class RenovacionToken:
+    resultado: ResultadoCalendario
+    token_acceso: str | None = None
+    token_refresco: str | None = None
+    expira_en: datetime | None = None
+    alcances: str | None = None
+    detalle: str | None = None
+
+    def __repr__(self) -> str:
+        return f"RenovacionToken(resultado={self.resultado}, tokens=<oculto>)"
+
+
+@runtime_checkable
+class RenovadorCalendario(Protocol):
+    async def renovar_token(
+        self, credenciales: Credenciales, *, client_id: str, client_secret: str, ahora: datetime
+    ) -> RenovacionToken: ...
 
 
 @runtime_checkable

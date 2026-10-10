@@ -10,7 +10,9 @@ from __future__ import annotations
 import uuid
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
+
+PRIMER_CARACTER_IMPRIMIBLE = 32
 
 
 class RespuestaConexion(BaseModel):
@@ -42,6 +44,18 @@ class SolicitudInicioOauth(BaseModel):
     # de la cuenta y es el caso habitual.
     calendar_id: str = Field(default="primary", min_length=1, max_length=255)
 
+    @field_validator("calendar_id")
+    @classmethod
+    def validar_calendario(cls, valor: str) -> str:
+        limpio = valor.strip()
+        if (
+            not limpio
+            or limpio in {".", ".."}
+            or any(ord(c) < PRIMER_CARACTER_IMPRIMIBLE for c in limpio)
+        ):
+            raise ValueError("Indique un calendario valido.")
+        return limpio
+
 
 class RespuestaInicioOauth(BaseModel):
     """URL a la que hay que enviar al profesional.
@@ -68,6 +82,8 @@ class RespuestaSincronizacion(BaseModel):
     conflictos: int
     reintentables: int
     errores: int
+    sin_conexion: int = 0
+    token_vencido: int = 0
 
 
 class RespuestaEventoCalendario(BaseModel):

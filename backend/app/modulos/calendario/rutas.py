@@ -29,12 +29,14 @@ from datetime import datetime, timedelta
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Path, Query, Request, status
+from fastapi.responses import HTMLResponse, Response
 from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 
 from app.modulos.agenda.modelos import ClaveIdempotencia
 from app.modulos.calendario import oauth
 from app.modulos.calendario.adaptadores import RegistroCalendarios
+from app.modulos.calendario.configuracion import parametros_google
 from app.modulos.calendario.esquemas import (
     PaginaConexiones,
     PaginaEventos,
@@ -46,9 +48,9 @@ from app.modulos.calendario.esquemas import (
     SolicitudInicioOauth,
 )
 from app.modulos.calendario.servicios import ServicioCalendario
-from app.modulos.profesionales.modelos import CalendarioConexion, CalendarioEvento
+from app.modulos.profesionales.modelos import CalendarioConexion, CalendarioEvento, Profesional
 from app.nucleo.auditoria import AccionAuditada, construir_entrada
-from app.nucleo.autorizacion import Principal
+from app.nucleo.autorizacion import Principal, principal_sistema
 from app.nucleo.dependencias import (
     Auditor,
     ConfiguracionActual,
@@ -59,6 +61,7 @@ from app.nucleo.dependencias import (
 from app.nucleo.errores import (
     FirmaInvalida,
     PermisoDenegado,
+    ProveedorExternoNoDisponible,
     RecursoNoEncontrado,
 )
 from app.nucleo.idempotencia import AlcanceIdempotencia
@@ -146,19 +149,31 @@ async def iniciar_oauth(
     principal: PuedeConectar,
     configuracion: ConfiguracionActual,
     reloj: RelojActual,
+    sesion: Sesion,
     peticion: SolicitudInicioOauth | None = None,
 ) -> RespuestaInicioOauth:
     """Devuelve la URL de consentimiento con un `state` firmado de un solo uso."""
     profesional_id = _profesional_del_principal(principal)
     solicitud = peticion or SolicitudInicioOauth()
     ahora = reloj.ahora()
-
-    estado = oauth.nuevo_estado(profesional_id, ahora=ahora)
+    if configuracion.modo_calendario == "sandbox":
+        raise ProveedorExternoNoDisponible(
+            "Google Calendar sigue en modo de prueba. Pida al administrador configurar Integraciones y habilitar la conexion externa."
+        )
+    if principal.clinica_id is None:
+        raise PermisoDenegado("Esta cuenta no tiene una clinica asignada.")
+    parametros = await parametros_google(
+        sesion,
+        principal.clinica_id,
+        configuracion,
+        CifradorDatos(configuracion.clave_cifrado_datos.get_secret_value()),
+    )
+    estado = oauth.nuevo_estado(profesional_id, ahora=ahora, calendar_id=solicitud.calendar_id)
     firmado = oauth.firmar_estado(estado, configuracion.clave_secreta.get_secret_value())
     url = oauth.url_autorizacion(
-        client_id=configuracion.google_client_id,
-        redirect_uri=configuracion.google_redirect_uri,
-        scopes=configuracion.google_scopes,
+        client_id=parametros.client_id,
+        redirect_uri=parametros.redirect_uri,
+        scopes=parametros.scopes,
         estado_firmado=firmado,
     )
     logger.info(
@@ -183,9 +198,10 @@ async def retorno_oauth(
     sesion: Sesion,
     reloj: RelojActual,
     configuracion: ConfiguracionActual,
+    auditor: Auditor,
     codigo: Annotated[str, Query(alias="code", min_length=1, max_length=2048)],
     estado: Annotated[str, Query(alias="state", min_length=1, max_length=2048)],
-) -> RespuestaConexion:
+) -> RespuestaConexion | Response:
     """Consume el `state`, canjea el codigo y guarda los tokens cifrados.
 
     No lleva autenticacion de sesion: lo llama el navegador redirigido por
@@ -201,12 +217,19 @@ async def retorno_oauth(
         estado, configuracion.clave_secreta.get_secret_value(), ahora=ahora
     )
     await _consumir_estado(sesion, verificado.identificador, ahora=ahora)
-
+    profesional = await sesion.get(Profesional, verificado.profesional_id)
+    if profesional is None or not profesional.activo:
+        raise FirmaInvalida("La autorizacion de calendario ya no esta vigente.")
+    parametros = await parametros_google(
+        sesion, profesional.clinica_id, configuracion, _cifrador(solicitud)
+    )
+    if configuracion.modo_calendario == "sandbox":
+        raise ProveedorExternoNoDisponible("La conexion real requiere MODO_CALENDARIO=google.")
     tokens = await oauth.intercambiar_codigo(
         codigo=codigo,
-        client_id=configuracion.google_client_id,
-        client_secret=configuracion.google_client_secret.get_secret_value(),
-        redirect_uri=configuracion.google_redirect_uri,
+        client_id=parametros.client_id,
+        client_secret=parametros.client_secret,
+        redirect_uri=parametros.redirect_uri,
         ahora=ahora,
     )
 
@@ -216,17 +239,35 @@ async def retorno_oauth(
         _cifrador(solicitud),
         _proveedores(solicitud),
         url_sistema=configuracion.api_url,
+        configuracion=configuracion,
     )
     conexion = await servicio.conectar(
         profesional_id=verificado.profesional_id,
         proveedor="google",
-        calendar_id="primary",
+        calendar_id=verificado.calendar_id,
         token_acceso=tokens.token_acceso,
         token_refresco=tokens.token_refresco,
         expira_en=tokens.expira_en,
         alcances=tokens.alcances,
     )
+    await auditor.registrar(
+        [
+            construir_entrada(
+                accion=AccionAuditada.CALENDARIO_CONECTADO,
+                principal=principal_sistema(profesional.clinica_id),
+                ahora=ahora,
+                entidad_tipo="calendario_conexion",
+                entidad_id=conexion.id,
+                profesional_id=str(profesional.id),
+            )
+        ]
+    )
     await sesion.commit()
+    if "text/html" in solicitud.headers.get("accept", ""):
+        return HTMLResponse(
+            '<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Calendario conectado · ClinicAI</title></head><body><main><h1>Google Calendar conectado</h1><p>Vuelve a la pestaña de ClinicAI y pulsa Actualizar estado en Mi Google Calendar.</p><p>Puedes cerrar esta pestaña. La sesión de ClinicAI permanece en la ventana original.</p></main></body></html>',
+            headers={"Cache-Control": "no-store", "Referrer-Policy": "no-referrer"},
+        )
     return _a_respuesta(conexion)
 
 
@@ -259,6 +300,7 @@ async def desconectar(
         _cifrador(solicitud_http),
         _proveedores(solicitud_http),
         url_sistema=configuracion.api_url,
+        configuracion=configuracion,
     )
     conexion = await servicio.desconectar(conexion_id=conexion_id, motivo=peticion.motivo)
 
@@ -292,6 +334,7 @@ async def sincronizar(
     configuracion: ConfiguracionActual,
     solicitud_http: Request,
     conexion_id: IdConexion,
+    auditor: Auditor,
 ) -> RespuestaSincronizacion:
     """Publica ahora los eventos pendientes.
 
@@ -307,8 +350,23 @@ async def sincronizar(
         _cifrador(solicitud_http),
         _proveedores(solicitud_http),
         url_sistema=configuracion.api_url,
+        configuracion=configuracion,
     )
-    resumen = await servicio.sincronizar_pendientes()
+    await servicio.detectar_citas_sin_reflejo(conexion_id=conexion_id)
+    resumen = await servicio.sincronizar_pendientes(
+        conexion_id=conexion_id, reintentar_errores=True
+    )
+    await auditor.registrar(
+        [
+            construir_entrada(
+                accion=AccionAuditada.CALENDARIO_SINCRONIZADO,
+                principal=principal,
+                ahora=reloj.ahora(),
+                entidad_tipo="calendario_conexion",
+                entidad_id=conexion_id,
+            )
+        ]
+    )
     await sesion.commit()
     return RespuestaSincronizacion(
         creados=resumen.creados,
@@ -318,6 +376,8 @@ async def sincronizar(
         conflictos=resumen.conflictos,
         reintentables=resumen.reintentables,
         errores=resumen.errores,
+        sin_conexion=resumen.sin_conexion,
+        token_vencido=resumen.token_vencido,
     )
 
 

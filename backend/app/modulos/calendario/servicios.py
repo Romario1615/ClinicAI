@@ -36,17 +36,20 @@ import uuid
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modulos.agenda.modelos import Cita, EstadoCita
 from app.modulos.calendario.adaptadores import (
     AdaptadorCalendario,
     Credenciales,
+    EstadoRemoto,
     RegistroCalendarios,
+    RenovadorCalendario,
     RespuestaCalendario,
     ResultadoCalendario,
 )
+from app.modulos.calendario.configuracion import ParametrosGoogle, parametros_google
 from app.modulos.calendario.eventos import EventoExterno, construir_evento
 from app.modulos.organizacion.modelos import Consultorio, Sede
 from app.modulos.profesionales.modelos import (
@@ -54,8 +57,10 @@ from app.modulos.profesionales.modelos import (
     CalendarioEvento,
     EstadoEventoCalendario,
     EstadoSincronizacion,
+    Profesional,
 )
-from app.nucleo.errores import RecursoNoEncontrado
+from app.nucleo.configuracion import Configuracion
+from app.nucleo.errores import ProveedorExternoNoDisponible, RecursoNoEncontrado
 from app.nucleo.registro import obtener_logger
 from app.nucleo.reloj import Reloj
 from app.nucleo.seguridad import CifradorDatos
@@ -106,12 +111,17 @@ class ServicioCalendario:
         proveedores: RegistroCalendarios,
         *,
         url_sistema: str = "http://localhost:4200",
+        configuracion: Configuracion | None = None,
     ) -> None:
         self._sesion = sesion
         self._reloj = reloj
         self._cifrador = cifrador
         self._proveedores = proveedores
         self._url_sistema = url_sistema
+        self._configuracion = configuracion
+        self._renovadas: set[uuid.UUID] = set()
+        self._bloqueadas: set[uuid.UUID] = set()
+        self._parametros: dict[uuid.UUID, ParametrosGoogle] = {}
 
     # ------------------------------------------------------------------
     #  Ciclo de vida de la conexion
@@ -138,11 +148,13 @@ class ServicioCalendario:
         contexto = self._contexto(profesional_id)
         existente = (
             await self._sesion.execute(
-                select(CalendarioConexion).where(
+                select(CalendarioConexion)
+                .where(
                     CalendarioConexion.profesional_id == profesional_id,
                     CalendarioConexion.proveedor == proveedor,
                     CalendarioConexion.calendar_id == calendar_id,
                 )
+                .with_for_update()
             )
         ).scalar_one_or_none()
 
@@ -182,7 +194,13 @@ class ServicioCalendario:
         de su agenda al desconectar una integracion es una sorpresa
         desagradable y no reversible. Quedan como estaban.
         """
-        conexion = await self._sesion.get(CalendarioConexion, conexion_id)
+        conexion = (
+            await self._sesion.execute(
+                select(CalendarioConexion)
+                .where(CalendarioConexion.id == conexion_id)
+                .with_for_update()
+            )
+        ).scalar_one_or_none()
         if conexion is None:
             raise RecursoNoEncontrado("La conexion de calendario no existe.")
 
@@ -274,7 +292,9 @@ class ServicioCalendario:
         await self._sesion.flush()
         return creados
 
-    async def detectar_citas_sin_reflejo(self, *, limite: int = 100) -> int:
+    async def detectar_citas_sin_reflejo(
+        self, *, limite: int = 100, conexion_id: uuid.UUID | None = None
+    ) -> int:
         """Crea las filas de evento que faltan, comparando con la agenda.
 
         Por que por deteccion y no desde el servicio de agenda
@@ -301,8 +321,13 @@ class ServicioCalendario:
             (
                 await self._sesion.execute(
                     select(CalendarioConexion).where(
+                        *(
+                            [CalendarioConexion.id == conexion_id]
+                            if conexion_id is not None
+                            else []
+                        ),
                         CalendarioConexion.estado_sincronizacion
-                        == EstadoSincronizacion.CONECTADO.value
+                        == EstadoSincronizacion.CONECTADO.value,
                     )
                 )
             )
@@ -357,21 +382,46 @@ class ServicioCalendario:
             logger.info("calendario.reflejos_detectados", cantidad=creados)
         return creados
 
-    async def sincronizar_pendientes(self, *, limite: int = 50) -> ResumenSincronizacion:
+    async def sincronizar_pendientes(
+        self,
+        *,
+        limite: int = 50,
+        conexion_id: uuid.UUID | None = None,
+        reintentar_errores: bool = False,
+    ) -> ResumenSincronizacion:
         """Publica en el proveedor los eventos pendientes.
 
         Corre en el worker, en su propia transaccion. Un fallo de un evento no
         arrastra a los demas.
         """
+        self._reiniciar_lote()
+        if reintentar_errores:
+            if conexion_id is None:
+                raise ValueError("El reintento manual exige una conexion concreta.")
+            await self._sesion.execute(
+                update(CalendarioEvento)
+                .where(
+                    CalendarioEvento.calendario_conexion_id == conexion_id,
+                    CalendarioEvento.estado == EstadoEventoCalendario.ERROR.value,
+                )
+                .values(
+                    estado=EstadoEventoCalendario.PENDIENTE.value, intentos=0, ultimo_error=None
+                )
+            )
         consulta = (
             select(CalendarioEvento)
             .where(
+                *(
+                    [CalendarioEvento.calendario_conexion_id == conexion_id]
+                    if conexion_id is not None
+                    else []
+                ),
                 CalendarioEvento.estado.in_(
                     [
                         EstadoEventoCalendario.PENDIENTE.value,
                         EstadoEventoCalendario.ELIMINADO_EXTERNAMENTE.value,
                     ]
-                )
+                ),
             )
             .order_by(CalendarioEvento.creado_en)
             .limit(limite)
@@ -409,17 +459,19 @@ class ServicioCalendario:
         # Una cita que ya no ocupa el hueco no debe seguir reflejada: el
         # profesional veria ocupado un horario libre.
         if cita.estado not in ESTADOS_CON_REFLEJO:
-            return await self._eliminar_reflejo(evento, credenciales, adaptador, resumen)
+            return await self._eliminar_reflejo(evento, conexion, credenciales, adaptador, resumen)
 
         payload = await self._payload(cita)
         evento.intentos += 1
 
-        if evento.external_event_id is None:
-            respuesta = await adaptador.crear(credenciales, payload)
-        else:
-            respuesta = await adaptador.actualizar(
-                credenciales, evento.external_event_id, payload, etag=evento.etag
-            )
+        respuesta = await self._publicar(evento, credenciales, adaptador, payload)
+        if respuesta.resultado is ResultadoCalendario.TOKEN_VENCIDO:
+            nuevas = await self._renovar(conexion, credenciales, adaptador, forzar=True)
+            if nuevas is not None:
+                credenciales = nuevas
+                respuesta = await self._publicar(evento, credenciales, adaptador, payload)
+            else:
+                respuesta = self._fallo_renovacion(conexion, respuesta)
 
         return await self._aplicar_desenlace(
             evento=evento,
@@ -431,18 +483,139 @@ class ServicioCalendario:
             resumen=resumen,
         )
 
-    async def _contexto_de_envio(
+    async def _contexto_de_envio(  # noqa: PLR0911
         self, evento: CalendarioEvento
     ) -> tuple[CalendarioConexion, Credenciales, AdaptadorCalendario] | None:
         """Conexion, credenciales y adaptador, o `None` si falta alguno."""
-        conexion = await self._sesion.get(CalendarioConexion, evento.calendario_conexion_id)
+        if evento.calendario_conexion_id in self._bloqueadas:
+            return None
+        conexion = (
+            await self._sesion.execute(
+                select(CalendarioConexion)
+                .where(CalendarioConexion.id == evento.calendario_conexion_id)
+                .with_for_update(skip_locked=True)
+                .execution_options(populate_existing=True)
+            )
+        ).scalar_one_or_none()
         if conexion is None:
+            return None
+        if conexion.estado_sincronizacion == EstadoSincronizacion.DESCONECTADO.value:
             return None
         credenciales = self._credenciales(conexion)
         adaptador = self._proveedores.obtener(conexion.proveedor)
         if credenciales is None or adaptador is None:
             return None
+        if isinstance(adaptador, RenovadorCalendario):
+            if not await self._preparar_parametros(conexion):
+                return None
+            vencido = (
+                conexion.estado_sincronizacion == EstadoSincronizacion.TOKEN_VENCIDO.value
+                or conexion.expira_en is None
+                or conexion.expira_en <= self._reloj.ahora() + MARGEN_RENOVACION
+            )
+            if vencido:
+                credenciales = await self._renovar(conexion, credenciales, adaptador)
+                if credenciales is None:
+                    return None
         return conexion, credenciales, adaptador
+
+    @staticmethod
+    async def _publicar(
+        evento: CalendarioEvento,
+        credenciales: Credenciales,
+        adaptador: AdaptadorCalendario,
+        payload: EventoExterno,
+    ) -> RespuestaCalendario:
+        if evento.external_event_id is None:
+            return await adaptador.crear(credenciales, payload)
+        return await adaptador.actualizar(
+            credenciales, evento.external_event_id, payload, etag=evento.etag
+        )
+
+    async def _preparar_parametros(self, conexion: CalendarioConexion) -> bool:
+        if conexion.id in self._parametros:
+            return True
+        profesional = await self._sesion.get(Profesional, conexion.profesional_id)
+        if profesional is None or not profesional.activo or self._configuracion is None:
+            self._bloqueadas.add(conexion.id)
+            return False
+        try:
+            self._parametros[conexion.id] = await parametros_google(
+                self._sesion,
+                profesional.clinica_id,
+                self._configuracion,
+                self._cifrador,
+            )
+        except ProveedorExternoNoDisponible as exc:
+            conexion.ultimo_error = str(exc)
+            self._bloqueadas.add(conexion.id)
+            return False
+        return True
+
+    async def _renovar(
+        self,
+        conexion: CalendarioConexion,
+        credenciales: Credenciales,
+        adaptador: AdaptadorCalendario,
+        *,
+        forzar: bool = False,
+    ) -> Credenciales | None:
+        if not isinstance(adaptador, RenovadorCalendario):
+            return None
+        if conexion.id in self._renovadas:
+            return None if forzar else self._credenciales(conexion)
+        self._renovadas.add(conexion.id)
+        parametros = self._parametros[conexion.id]
+        respuesta = await adaptador.renovar_token(
+            credenciales,
+            client_id=parametros.client_id,
+            client_secret=parametros.client_secret,
+            ahora=self._reloj.ahora(),
+        )
+        if (
+            respuesta.resultado is not ResultadoCalendario.OK
+            or not respuesta.token_acceso
+            or respuesta.expira_en is None
+        ):
+            detalle = respuesta.detalle or "No se pudo renovar la conexion con Google."
+            conexion.ultimo_error = detalle
+            if respuesta.resultado is ResultadoCalendario.TOKEN_VENCIDO:
+                await self.marcar_token_vencido(conexion, detalle)
+            elif respuesta.resultado is ResultadoCalendario.FALLO_PERMANENTE:
+                conexion.estado_sincronizacion = EstadoSincronizacion.ERROR.value
+            self._bloqueadas.add(conexion.id)
+            return None
+        contexto = self._contexto(conexion.profesional_id)
+        conexion.token_acceso_cifrado = self._cifrador.cifrar(
+            respuesta.token_acceso, contexto=contexto
+        )
+        if respuesta.token_refresco:
+            conexion.token_refresco_cifrado = self._cifrador.cifrar(
+                respuesta.token_refresco, contexto=contexto
+            )
+        conexion.expira_en = respuesta.expira_en
+        if respuesta.alcances is not None:
+            conexion.alcances = respuesta.alcances
+        conexion.estado_sincronizacion = EstadoSincronizacion.CONECTADO.value
+        conexion.ultimo_error = None
+        await self._sesion.flush()
+        logger.info("calendario.token_renovado", conexion_id=str(conexion.id))
+        return self._credenciales(conexion)
+
+    def _fallo_renovacion(
+        self, conexion: CalendarioConexion, original: RespuestaCalendario
+    ) -> RespuestaCalendario:
+        """No confundir una caida al renovar con la revocacion del permiso."""
+        if conexion.id not in self._bloqueadas:
+            return original
+        if conexion.estado_sincronizacion == EstadoSincronizacion.TOKEN_VENCIDO.value:
+            return original
+        resultado = (
+            ResultadoCalendario.FALLO_PERMANENTE
+            if conexion.estado_sincronizacion == EstadoSincronizacion.ERROR.value
+            else ResultadoCalendario.FALLO_TEMPORAL
+        )
+        return RespuestaCalendario(resultado, detalle=conexion.ultimo_error)
 
     async def _aplicar_desenlace(
         self,
@@ -459,7 +632,7 @@ class ServicioCalendario:
             return self._aplicar_exito(evento, conexion, respuesta, resumen)
 
         if respuesta.resultado is ResultadoCalendario.NO_ENCONTRADO:
-            return await self._recrear(evento, credenciales, adaptador, payload, resumen)
+            return await self._recrear(evento, conexion, credenciales, adaptador, payload, resumen)
 
         if respuesta.resultado is ResultadoCalendario.CONFLICTO:
             # NO se sobrescribe. El profesional movio el evento a proposito, y
@@ -501,6 +674,8 @@ class ServicioCalendario:
         evento.sincronizado_en = ahora
         evento.ultimo_error = None
         conexion.ultima_sincronizacion_en = ahora
+        conexion.estado_sincronizacion = EstadoSincronizacion.CONECTADO.value
+        conexion.ultimo_error = None
         if nuevo:
             return _con(resumen, creados=resumen.creados + 1)
         return _con(resumen, actualizados=resumen.actualizados + 1)
@@ -542,6 +717,7 @@ class ServicioCalendario:
     async def _recrear(
         self,
         evento: CalendarioEvento,
+        conexion: CalendarioConexion,
         credenciales: Credenciales,
         adaptador: AdaptadorCalendario,
         payload: EventoExterno,
@@ -565,15 +741,28 @@ class ServicioCalendario:
             evento.estado = EstadoEventoCalendario.SINCRONIZADO.value
             evento.sincronizado_en = self._reloj.ahora()
             evento.ultimo_error = None
+            conexion.estado_sincronizacion = EstadoSincronizacion.CONECTADO.value
+            conexion.ultimo_error = None
             return _con(resumen, recreados=resumen.recreados + 1)
 
-        evento.estado = EstadoEventoCalendario.PENDIENTE.value
-        evento.ultimo_error = respuesta.detalle or "No se pudo recrear el evento."
-        return _con(resumen, reintentables=resumen.reintentables + 1)
+        if respuesta.resultado is ResultadoCalendario.NO_ENCONTRADO:
+            respuesta = RespuestaCalendario(
+                ResultadoCalendario.FALLO_TEMPORAL, detalle="No se pudo recrear el evento."
+            )
+        return await self._aplicar_desenlace(
+            evento=evento,
+            conexion=conexion,
+            credenciales=credenciales,
+            adaptador=adaptador,
+            payload=payload,
+            respuesta=respuesta,
+            resumen=resumen,
+        )
 
     async def _eliminar_reflejo(
         self,
         evento: CalendarioEvento,
+        conexion: CalendarioConexion,
         credenciales: Credenciales,
         adaptador: AdaptadorCalendario,
         resumen: ResumenSincronizacion,
@@ -586,15 +775,28 @@ class ServicioCalendario:
             return _con(resumen, eliminados=resumen.eliminados + 1)
 
         respuesta = await adaptador.eliminar(credenciales, evento.external_event_id)
+        if respuesta.resultado is ResultadoCalendario.TOKEN_VENCIDO:
+            nuevas = await self._renovar(conexion, credenciales, adaptador, forzar=True)
+            if nuevas is not None:
+                respuesta = await adaptador.eliminar(nuevas, evento.external_event_id)
+            else:
+                respuesta = self._fallo_renovacion(conexion, respuesta)
         if respuesta.resultado is ResultadoCalendario.OK:
             evento.estado = EstadoEventoCalendario.SINCRONIZADO.value
             evento.sincronizado_en = self._reloj.ahora()
             evento.ultimo_error = None
             return _con(resumen, eliminados=resumen.eliminados + 1)
-
-        evento.estado = EstadoEventoCalendario.PENDIENTE.value
-        evento.ultimo_error = respuesta.detalle or "No se pudo retirar el evento."
-        return _con(resumen, reintentables=resumen.reintentables + 1)
+        if respuesta.resultado is ResultadoCalendario.TOKEN_VENCIDO:
+            await self.marcar_token_vencido(
+                conexion, respuesta.detalle or "Google rechazo el token."
+            )
+            return _con(resumen, token_vencido=resumen.token_vencido + 1)
+        if respuesta.resultado is ResultadoCalendario.CONFLICTO:
+            evento.estado = EstadoEventoCalendario.CONFLICTO.value
+            evento.ultimo_error = respuesta.detalle
+            return _con(resumen, conflictos=resumen.conflictos + 1)
+        evento.intentos += 1
+        return self._aplicar_fallo(evento, conexion, respuesta, resumen)
 
     # ------------------------------------------------------------------
     #  Reconciliacion
@@ -608,6 +810,7 @@ class ServicioCalendario:
         marcado SINCRONIZADO para siempre y su agenda externa mostraria el
         hueco como libre.
         """
+        self._reiniciar_lote()
         consulta = (
             select(CalendarioEvento)
             .where(
@@ -621,22 +824,40 @@ class ServicioCalendario:
 
         resumen = ResumenSincronizacion()
         for evento in eventos:
-            conexion = await self._sesion.get(CalendarioConexion, evento.calendario_conexion_id)
-            if conexion is None:
+            contexto = await self._contexto_de_envio(evento)
+            if contexto is None:
                 resumen = _con(resumen, sin_conexion=resumen.sin_conexion + 1)
                 continue
-            credenciales = self._credenciales(conexion)
-            adaptador = self._proveedores.obtener(conexion.proveedor)
-            if credenciales is None or adaptador is None:
-                resumen = _con(resumen, sin_conexion=resumen.sin_conexion + 1)
-                continue
+            conexion, credenciales, adaptador = contexto
 
             cita = await self._sesion.get(Cita, evento.cita_id)
             if cita is None or cita.estado not in ESTADOS_CON_REFLEJO:
                 continue
 
-            assert evento.external_event_id is not None
+            if evento.external_event_id is None:
+                continue
             estado = await adaptador.consultar(credenciales, evento.external_event_id)
+            if estado.resultado is ResultadoCalendario.TOKEN_VENCIDO:
+                nuevas = await self._renovar(conexion, credenciales, adaptador, forzar=True)
+                if nuevas is not None:
+                    estado = await adaptador.consultar(nuevas, evento.external_event_id)
+                else:
+                    fallo = self._fallo_renovacion(
+                        conexion, RespuestaCalendario(estado.resultado, detalle=estado.detalle)
+                    )
+                    estado = EstadoRemoto(
+                        existe=True, resultado=fallo.resultado, detalle=fallo.detalle
+                    )
+            if estado.resultado is not ResultadoCalendario.OK:
+                conexion.ultimo_error = estado.detalle
+                if estado.resultado is ResultadoCalendario.TOKEN_VENCIDO:
+                    await self.marcar_token_vencido(
+                        conexion, estado.detalle or "Google rechazo el token."
+                    )
+                    resumen = _con(resumen, token_vencido=resumen.token_vencido + 1)
+                else:
+                    resumen = _con(resumen, reintentables=resumen.reintentables + 1)
+                continue
 
             if not estado.existe:
                 # Se marca y se deja que `sincronizar_pendientes` lo recree.
@@ -653,7 +874,7 @@ class ServicioCalendario:
                 resumen = _con(resumen, eliminados=resumen.eliminados + 1)
                 continue
 
-            if estado.etag is not None and estado.etag != evento.etag:
+            if not estado.es_nuestro or (estado.etag is not None and estado.etag != evento.etag):
                 evento.estado = EstadoEventoCalendario.CONFLICTO.value
                 evento.ultimo_error = (
                     "El evento cambio en el proveedor. No se sobrescribe: requiere revision humana."
@@ -680,6 +901,11 @@ class ServicioCalendario:
         que no basta para usar los tokens de otro.
         """
         return f"calendario:{profesional_id}".encode()
+
+    def _reiniciar_lote(self) -> None:
+        self._renovadas.clear()
+        self._bloqueadas.clear()
+        self._parametros.clear()
 
     def _credenciales(self, conexion: CalendarioConexion) -> Credenciales | None:
         if not conexion.token_acceso_cifrado or not conexion.token_refresco_cifrado:

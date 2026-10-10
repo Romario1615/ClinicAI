@@ -70,7 +70,12 @@ async def sincronizar_calendarios(ctx: dict[Any, Any], *_argumentos: Any, **_opc
     total = 0
     async for sesion in gestor.sesion():
         servicio = ServicioCalendario(
-            sesion, reloj, cifrador, proveedores, url_sistema=configuracion.api_url
+            sesion,
+            reloj,
+            cifrador,
+            proveedores,
+            url_sistema=configuracion.api_url,
+            configuracion=configuracion,
         )
         # Primero se detectan los reflejos que faltan, y luego se publican
         # en la misma ejecucion: asi una cita confirmada aparece en el
@@ -132,7 +137,12 @@ async def reconciliar_calendarios(ctx: dict[Any, Any], *_argumentos: Any, **_opc
     diferencias = 0
     async for sesion in gestor.sesion():
         servicio = ServicioCalendario(
-            sesion, reloj, cifrador, proveedores, url_sistema=configuracion.api_url
+            sesion,
+            reloj,
+            cifrador,
+            proveedores,
+            url_sistema=configuracion.api_url,
+            configuracion=configuracion,
         )
         resumen = await servicio.reconciliar(limite=TAMANO_LOTE_RECONCILIACION)
         await sesion.commit()

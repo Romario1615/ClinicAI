@@ -415,6 +415,25 @@ _PROFESIONAL = ManualSistema(
     ),
     secciones=(
         _s(
+            "profesional.calendario-google",
+            "Conectar su Google Calendar",
+            "/agenda",
+            "Consultar sus horarios desde Google sin exportar el expediente de los pacientes.",
+            (
+                "Abra Agenda y pulse Mi Google Calendar; la ventana muestra únicamente sus conexiones.",
+                "Use primary para el calendario principal o escriba el identificador de otro calendario propio y pulse Autorizar en Google; después pulse Continuar en Google.",
+                "Autorice con su cuenta en la nueva pestaña, ciérrela y vuelva a la ventana original de ClinicAI. Pulse Actualizar estado y Sincronizar ahora para reflejar las citas futuras.",
+                "Si aparece un conflicto, revise los horarios con la clínica. Una edición en Google no cambia ni cancela la cita interna.",
+                "Para detener la conexión, pulse Desconectar, indique el motivo y confirme. Las credenciales guardadas se retiran; los eventos ya publicados se conservan.",
+            ),
+            (
+                "La clínica debe configurar Google Calendar en Integraciones y el servidor debe usar el modo google. El entorno sandbox no contacta con Google.",
+                "La renovación es automática; si Google revoca la autorización, vuelva a autorizar su cuenta.",
+                "Los eventos externos no contienen nombres, diagnósticos, medicamentos ni motivos de consulta.",
+            ),
+            requiere=("profesional.conectar_calendario",),
+        ),
+        _s(
             "profesional.primera-atencion",
             "Iniciar el expediente en la primera atención",
             "/pacientes",

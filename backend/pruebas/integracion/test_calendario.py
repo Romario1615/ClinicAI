@@ -22,26 +22,41 @@ Nota sobre nombres: la fixture del catalogo de la conftest se llama `servicio`
 
 from __future__ import annotations
 
+import json
+import uuid
+from collections.abc import AsyncIterator, Callable
+from contextlib import asynccontextmanager
 from datetime import datetime, timedelta
 
+import httpx
 import pytest
 import pytest_asyncio
 import sqlalchemy as sa
+from pydantic import SecretStr
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.ia.proveedores_clinica import contexto_cifrado
 from app.modulos.agenda.modelos import Cita, EstadoCita, OrigenCita
 from app.modulos.calendario.adaptadores import (
     AdaptadorSandboxCalendario,
     RegistroCalendarios,
     ResultadoCalendario,
 )
+from app.modulos.calendario.configuracion import parametros_google
 from app.modulos.calendario.eventos import TITULO_EVENTO
+from app.modulos.calendario.google import AdaptadorGoogleCalendario
 from app.modulos.calendario.seleccion import PROVEEDOR_GOOGLE
 from app.modulos.calendario.servicios import (
     MAXIMO_INTENTOS_EVENTO,
     ServicioCalendario,
 )
-from app.modulos.organizacion.modelos import Clinica, Consultorio, Sede, Servicio
+from app.modulos.organizacion.modelos import (
+    Clinica,
+    ConfiguracionClinica,
+    Consultorio,
+    Sede,
+    Servicio,
+)
 from app.modulos.pacientes.modelos import Paciente
 from app.modulos.profesionales.modelos import (
     CalendarioConexion,
@@ -50,6 +65,8 @@ from app.modulos.profesionales.modelos import (
     EstadoSincronizacion,
     Profesional,
 )
+from app.nucleo.configuracion import Configuracion
+from app.nucleo.errores import ProveedorExternoNoDisponible
 from app.nucleo.reloj import RelojFijo
 from app.nucleo.seguridad import CifradorDatos
 
@@ -676,3 +693,457 @@ async def test_una_conexion_desconectada_no_recibe_reflejos(
         conexion_id=conexion.id, motivo="El profesional lo pidio."
     )
     assert await servicio_calendario.registrar_cita(cita) == []
+
+
+@asynccontextmanager
+async def _servicio_google(
+    sesion: AsyncSession,
+    reloj_fijo: RelojFijo,
+    cifrador: CifradorDatos,
+    manejar: Callable[[httpx.Request], httpx.Response],
+) -> AsyncIterator[ServicioCalendario]:
+    configuracion = Configuracion(
+        _env_file=None,
+        google_client_id="cliente-sintetico",
+        google_client_secret=SecretStr("secreto-sintetico"),
+        modo_calendario="google",
+    )
+    async with httpx.AsyncClient(transport=httpx.MockTransport(manejar)) as cliente:
+        registro = RegistroCalendarios()
+        registro.registrar("google", AdaptadorGoogleCalendario(cliente=cliente))
+        yield ServicioCalendario(
+            sesion,
+            reloj_fijo,
+            cifrador,
+            registro,
+            configuracion=configuracion,
+            url_sistema="https://clinica.example.invalid",
+        )
+
+
+def _insertar_google(peticion: httpx.Request) -> httpx.Response:
+    cuerpo = json.loads(peticion.content)
+    return httpx.Response(200, json={**cuerpo, "etag": '"revision-1"'})
+
+
+async def test_renueva_antes_de_publicar_y_guarda_el_token_cifrado(
+    sesion: AsyncSession,
+    reloj_fijo: RelojFijo,
+    cifrador: CifradorDatos,
+    conexion: CalendarioConexion,
+    cita: Cita,
+) -> None:
+    conexion.expira_en = reloj_fijo.ahora() + timedelta(minutes=5)
+    solicitudes = []
+
+    def manejar(peticion: httpx.Request) -> httpx.Response:
+        solicitudes.append(peticion)
+        if peticion.url.host == "oauth2.googleapis.com":
+            return httpx.Response(
+                200, json={"access_token": "renovado-sintetico", "expires_in": 3600}
+            )
+        assert peticion.headers["Authorization"] == "Bearer renovado-sintetico"
+        return _insertar_google(peticion)
+
+    async with _servicio_google(sesion, reloj_fijo, cifrador, manejar) as servicio_google:
+        await servicio_google.registrar_cita(cita)
+        resumen = await servicio_google.sincronizar_pendientes(conexion_id=conexion.id)
+        assert resumen.creados == 1
+        assert (await servicio_google.sincronizar_pendientes(conexion_id=conexion.id)).creados == 0
+    assert len(solicitudes) == 2
+    assert conexion.token_acceso_cifrado != "renovado-sintetico"
+    assert conexion.expira_en == reloj_fijo.ahora() + timedelta(hours=1)
+    assert conexion.estado_sincronizacion == EstadoSincronizacion.CONECTADO.value
+    contexto = f"calendario:{conexion.profesional_id}".encode()
+    assert (
+        cifrador.descifrar(conexion.token_acceso_cifrado, contexto=contexto) == "renovado-sintetico"
+    )
+    assert cifrador.descifrar(conexion.token_refresco_cifrado, contexto=contexto) == TOKEN_REFRESCO
+
+
+async def test_un_401_renueva_una_vez_y_repite_la_misma_insercion(
+    sesion: AsyncSession,
+    reloj_fijo: RelojFijo,
+    cifrador: CifradorDatos,
+    conexion: CalendarioConexion,
+    cita: Cita,
+) -> None:
+    ids = []
+    renovaciones = []
+
+    def manejar(peticion: httpx.Request) -> httpx.Response:
+        if peticion.url.host == "oauth2.googleapis.com":
+            renovaciones.append(peticion)
+            return httpx.Response(200, json={"access_token": "renovado", "expires_in": 3600})
+        ids.append(json.loads(peticion.content)["id"])
+        if peticion.headers["Authorization"] == f"Bearer {TOKEN_ACCESO}":
+            return httpx.Response(401)
+        return _insertar_google(peticion)
+
+    async with _servicio_google(sesion, reloj_fijo, cifrador, manejar) as servicio_google:
+        await servicio_google.registrar_cita(cita)
+        resumen = await servicio_google.sincronizar_pendientes(conexion_id=conexion.id)
+    assert resumen.creados == 1
+    assert ids[0] == ids[1]
+    assert len(renovaciones) == 1
+
+
+async def test_bloquear_conexion_lee_las_credenciales_actuales_de_la_fila(
+    sesion: AsyncSession,
+    reloj_fijo: RelojFijo,
+    cifrador: CifradorDatos,
+    conexion: CalendarioConexion,
+    cita: Cita,
+) -> None:
+    contexto = f"calendario:{conexion.profesional_id}".encode()
+
+    def manejar(peticion: httpx.Request) -> httpx.Response:
+        assert peticion.url.host == "www.googleapis.com"
+        assert peticion.headers["Authorization"] == "Bearer actual-sintetico"
+        return _insertar_google(peticion)
+
+    async with _servicio_google(sesion, reloj_fijo, cifrador, manejar) as servicio_google:
+        await servicio_google.registrar_cita(cita)
+        # Simula una fila actualizada mientras la sesion conserva su copia previa.
+        await sesion.execute(
+            sa.update(CalendarioConexion)
+            .where(CalendarioConexion.id == conexion.id)
+            .values(token_acceso_cifrado=cifrador.cifrar("actual-sintetico", contexto=contexto))
+            .execution_options(synchronize_session=False)
+        )
+        resumen = await servicio_google.sincronizar_pendientes(conexion_id=conexion.id)
+    assert resumen.creados == 1
+
+
+@pytest.mark.parametrize(
+    "codigo,error,estado",
+    [
+        (400, "invalid_grant", EstadoSincronizacion.TOKEN_VENCIDO.value),
+        (503, "temporarily_unavailable", EstadoSincronizacion.CONECTADO.value),
+    ],
+)
+async def test_fallo_de_renovacion_conserva_cita_y_evento_pendiente(
+    sesion: AsyncSession,
+    reloj_fijo: RelojFijo,
+    cifrador: CifradorDatos,
+    conexion: CalendarioConexion,
+    cita: Cita,
+    codigo: int,
+    error: str,
+    estado: str,
+) -> None:
+    conexion.expira_en = reloj_fijo.ahora() - timedelta(minutes=1)
+    solicitudes = []
+
+    def manejar(peticion: httpx.Request) -> httpx.Response:
+        solicitudes.append(peticion)
+        assert peticion.url.host == "oauth2.googleapis.com"
+        return httpx.Response(codigo, json={"error": error, "error_description": "dato-sensible"})
+
+    async with _servicio_google(sesion, reloj_fijo, cifrador, manejar) as servicio_google:
+        eventos = await servicio_google.registrar_cita(cita)
+        resumen = await servicio_google.sincronizar_pendientes(conexion_id=conexion.id)
+    assert len(solicitudes) == 1
+    assert resumen.creados == 0
+    assert eventos[0].estado == EstadoEventoCalendario.PENDIENTE.value
+    assert eventos[0].intentos == 0
+    assert conexion.estado_sincronizacion == estado
+    assert "dato-sensible" not in conexion.ultimo_error
+    assert cita.estado == EstadoCita.CONFIRMED.value
+
+
+async def test_renovacion_por_clinica_usa_su_secreto_y_no_el_global(
+    sesion: AsyncSession,
+    reloj_fijo: RelojFijo,
+    cifrador: CifradorDatos,
+    conexion: CalendarioConexion,
+    cita: Cita,
+) -> None:
+    sesion.add(
+        ConfiguracionClinica(
+            clinica_id=cita.clinica_id,
+            clave="integracion.google_calendar",
+            valor={
+                "habilitada": True,
+                "ajustes": {"client_id": "cliente-propio"},
+                "secretos_cifrados": {
+                    "client_secret": cifrador.cifrar(
+                        "secreto-propio",
+                        contexto=contexto_cifrado(
+                            cita.clinica_id, "google_calendar", "client_secret"
+                        ),
+                    )
+                },
+            },
+        )
+    )
+    await sesion.flush()
+    conexion.expira_en = reloj_fijo.ahora()
+
+    def manejar(peticion: httpx.Request) -> httpx.Response:
+        if peticion.url.host == "oauth2.googleapis.com":
+            assert b"client_id=cliente-propio" in peticion.content
+            assert b"client_secret=secreto-propio" in peticion.content
+            return httpx.Response(200, json={"access_token": "nuevo", "expires_in": 3600})
+        return _insertar_google(peticion)
+
+    async with _servicio_google(sesion, reloj_fijo, cifrador, manejar) as servicio_google:
+        await servicio_google.registrar_cita(cita)
+        assert (await servicio_google.sincronizar_pendientes(conexion_id=conexion.id)).creados == 1
+
+
+async def test_clinica_desactivada_no_publica_ni_usa_fallback_global(
+    sesion: AsyncSession,
+    reloj_fijo: RelojFijo,
+    cifrador: CifradorDatos,
+    conexion: CalendarioConexion,
+    cita: Cita,
+) -> None:
+    sesion.add(
+        ConfiguracionClinica(
+            clinica_id=cita.clinica_id,
+            clave="integracion.google_calendar",
+            valor={"habilitada": False},
+        )
+    )
+    await sesion.flush()
+
+    def manejar(_: httpx.Request) -> httpx.Response:
+        pytest.fail("Una clinica desactivada no debe contactar con Google.")
+
+    async with _servicio_google(sesion, reloj_fijo, cifrador, manejar) as servicio_google:
+        eventos = await servicio_google.registrar_cita(cita)
+        assert (await servicio_google.sincronizar_pendientes(conexion_id=conexion.id)).creados == 0
+    assert eventos[0].estado == EstadoEventoCalendario.PENDIENTE.value
+
+
+async def test_secreto_copiado_de_otra_clinica_no_descifra(
+    sesion: AsyncSession,
+    clinica: Clinica,
+    cifrador: CifradorDatos,
+) -> None:
+    sesion.add(
+        ConfiguracionClinica(
+            clinica_id=clinica.id,
+            clave="integracion.google_calendar",
+            valor={
+                "habilitada": True,
+                "ajustes": {"client_id": "cliente-propio"},
+                "secretos_cifrados": {
+                    "client_secret": cifrador.cifrar(
+                        "sintetico",
+                        contexto=contexto_cifrado(uuid.uuid4(), "google_calendar", "client_secret"),
+                    )
+                },
+            },
+        )
+    )
+    await sesion.flush()
+    with pytest.raises(ProveedorExternoNoDisponible):
+        await parametros_google(sesion, clinica.id, Configuracion(_env_file=None), cifrador)
+
+
+async def test_consulta_503_no_recrea_el_evento_ni_modifica_la_cita(
+    sesion: AsyncSession,
+    reloj_fijo: RelojFijo,
+    cifrador: CifradorDatos,
+    conexion: CalendarioConexion,
+    cita: Cita,
+) -> None:
+    def manejar(peticion: httpx.Request) -> httpx.Response:
+        if peticion.method == "POST":
+            return _insertar_google(peticion)
+        return httpx.Response(503)
+
+    async with _servicio_google(sesion, reloj_fijo, cifrador, manejar) as servicio_google:
+        eventos = await servicio_google.registrar_cita(cita)
+        await servicio_google.sincronizar_pendientes(conexion_id=conexion.id)
+        resumen = await servicio_google.reconciliar()
+    assert resumen.reintentables == 1
+    assert resumen.eliminados == 0
+    assert eventos[0].estado == EstadoEventoCalendario.SINCRONIZADO.value
+    assert cita.estado == EstadoCita.CONFIRMED.value
+
+
+@pytest.mark.parametrize("operacion", ["crear", "eliminar", "consultar"])
+@pytest.mark.parametrize(
+    "codigo,error,estado",
+    [
+        (503, "temporarily_unavailable", EstadoSincronizacion.CONECTADO.value),
+        (400, "invalid_client", EstadoSincronizacion.ERROR.value),
+    ],
+)
+async def test_401_con_renovacion_fallida_no_simula_revocacion(
+    sesion: AsyncSession,
+    reloj_fijo: RelojFijo,
+    cifrador: CifradorDatos,
+    conexion: CalendarioConexion,
+    cita: Cita,
+    operacion: str,
+    codigo: int,
+    error: str,
+    estado: str,
+) -> None:
+    fallar = False
+    guardado = {}
+    renovaciones = []
+
+    def manejar(peticion: httpx.Request) -> httpx.Response:
+        if peticion.url.host == "oauth2.googleapis.com":
+            renovaciones.append(peticion)
+            return httpx.Response(codigo, json={"error": error})
+        if fallar:
+            return httpx.Response(401)
+        if peticion.method == "POST":
+            guardado.update(json.loads(peticion.content), etag='"revision"')
+        return httpx.Response(200, json=guardado)
+
+    async with _servicio_google(sesion, reloj_fijo, cifrador, manejar) as servicio_google:
+        eventos = await servicio_google.registrar_cita(cita)
+        if operacion != "crear":
+            await servicio_google.sincronizar_pendientes(conexion_id=conexion.id)
+        if operacion == "eliminar":
+            cita.estado = EstadoCita.CANCELLED.value
+            cita.motivo_cancelacion = "Cancelación sintética para verificar reintentos."
+            eventos[0].estado = EstadoEventoCalendario.PENDIENTE.value
+        fallar = True
+        resumen = (
+            await servicio_google.reconciliar()
+            if operacion == "consultar"
+            else await servicio_google.sincronizar_pendientes(conexion_id=conexion.id)
+        )
+    assert len(renovaciones) == 1
+    assert conexion.estado_sincronizacion == estado
+    assert resumen.token_vencido == 0
+    assert resumen.errores == (1 if codigo == 400 and operacion != "consultar" else 0)
+    assert resumen.reintentables == (1 if codigo == 503 or operacion == "consultar" else 0)
+    assert eventos[0].estado == (
+        EstadoEventoCalendario.SINCRONIZADO.value
+        if operacion == "consultar"
+        else EstadoEventoCalendario.ERROR.value
+        if codigo == 400
+        else EstadoEventoCalendario.PENDIENTE.value
+    )
+
+
+@pytest.mark.parametrize("codigo", [503, 412])
+async def test_retirada_tras_renovar_conserva_el_fallo_del_segundo_intento(
+    sesion: AsyncSession,
+    reloj_fijo: RelojFijo,
+    cifrador: CifradorDatos,
+    conexion: CalendarioConexion,
+    cita: Cita,
+    codigo: int,
+) -> None:
+    guardado = {}
+
+    def manejar(peticion: httpx.Request) -> httpx.Response:
+        if peticion.url.host == "oauth2.googleapis.com":
+            return httpx.Response(200, json={"access_token": "nuevo", "expires_in": 3600})
+        if peticion.method == "POST":
+            guardado.update(json.loads(peticion.content), etag='"revision"')
+            return httpx.Response(200, json=guardado)
+        if peticion.headers["Authorization"] != "Bearer nuevo":
+            return httpx.Response(401)
+        if peticion.method == "DELETE":
+            return httpx.Response(codigo)
+        return httpx.Response(200, json=guardado)
+
+    async with _servicio_google(sesion, reloj_fijo, cifrador, manejar) as servicio_google:
+        eventos = await servicio_google.registrar_cita(cita)
+        await servicio_google.sincronizar_pendientes(conexion_id=conexion.id)
+        cita.estado = EstadoCita.CANCELLED.value
+        cita.motivo_cancelacion = "Cancelación sintética solicitada."
+        eventos[0].estado = EstadoEventoCalendario.PENDIENTE.value
+        resumen = await servicio_google.sincronizar_pendientes(conexion_id=conexion.id)
+    assert resumen.token_vencido == 0
+    assert resumen.reintentables == (1 if codigo == 503 else 0)
+    assert resumen.conflictos == (1 if codigo == 412 else 0)
+    assert conexion.estado_sincronizacion == EstadoSincronizacion.CONECTADO.value
+    assert eventos[0].estado == (
+        EstadoEventoCalendario.PENDIENTE.value
+        if codigo == 503
+        else EstadoEventoCalendario.CONFLICTO.value
+    )
+    assert cita.estado == EstadoCita.CANCELLED.value
+
+
+async def test_sincronizacion_filtrada_no_envia_eventos_de_otra_conexion(
+    servicio_calendario: ServicioCalendario,
+    conexion: CalendarioConexion,
+    cita: Cita,
+    sesion: AsyncSession,
+) -> None:
+    otra = await servicio_calendario.conectar(
+        profesional_id=conexion.profesional_id,
+        proveedor="google",
+        calendar_id="otro-calendario",
+        token_acceso=TOKEN_ACCESO,
+        token_refresco=TOKEN_REFRESCO,
+        expira_en=conexion.expira_en,
+        alcances=conexion.alcances,
+    )
+    eventos = await servicio_calendario.registrar_cita(cita)
+    assert (await servicio_calendario.sincronizar_pendientes(conexion_id=conexion.id)).creados == 1
+    pendientes = [e for e in eventos if e.calendario_conexion_id == otra.id]
+    assert pendientes[0].estado == EstadoEventoCalendario.PENDIENTE.value
+    await sesion.flush()
+
+
+@pytest.mark.parametrize(
+    "estado,actualizados",
+    [(EstadoEventoCalendario.ERROR.value, 1), (EstadoEventoCalendario.CONFLICTO.value, 0)],
+)
+async def test_reintento_manual_recupera_errores_y_conserva_conflictos(
+    servicio_calendario: ServicioCalendario,
+    conexion: CalendarioConexion,
+    cita: Cita,
+    estado: str,
+    actualizados: int,
+) -> None:
+    eventos = await servicio_calendario.registrar_cita(cita)
+    await servicio_calendario.sincronizar_pendientes(conexion_id=conexion.id)
+    eventos[0].estado = estado
+    eventos[0].intentos = MAXIMO_INTENTOS_EVENTO
+    resumen = await servicio_calendario.sincronizar_pendientes(
+        conexion_id=conexion.id, reintentar_errores=True
+    )
+    assert resumen.actualizados == actualizados
+    assert eventos[0].estado == (
+        EstadoEventoCalendario.SINCRONIZADO.value if actualizados else estado
+    )
+
+
+async def test_cancelacion_renueva_el_token_y_retira_el_reflejo(
+    sesion: AsyncSession,
+    reloj_fijo: RelojFijo,
+    cifrador: CifradorDatos,
+    conexion: CalendarioConexion,
+    cita: Cita,
+) -> None:
+    guardado = {}
+    renovaciones = []
+
+    def manejar(peticion: httpx.Request) -> httpx.Response:
+        if peticion.url.host == "oauth2.googleapis.com":
+            renovaciones.append(peticion)
+            return httpx.Response(200, json={"access_token": "nuevo", "expires_in": 3600})
+        if peticion.method == "POST":
+            guardado.update(json.loads(peticion.content), etag='"revision"')
+            return httpx.Response(200, json=guardado)
+        if peticion.headers["Authorization"] != "Bearer nuevo":
+            return httpx.Response(401)
+        if peticion.method == "DELETE":
+            return httpx.Response(204)
+        return httpx.Response(200, json=guardado)
+
+    async with _servicio_google(sesion, reloj_fijo, cifrador, manejar) as servicio_google:
+        eventos = await servicio_google.registrar_cita(cita)
+        await servicio_google.sincronizar_pendientes(conexion_id=conexion.id)
+        cita.estado = EstadoCita.CANCELLED.value
+        cita.motivo_cancelacion = "El paciente sintético solicita cancelar."
+        eventos[0].estado = EstadoEventoCalendario.PENDIENTE.value
+        resumen = await servicio_google.sincronizar_pendientes(conexion_id=conexion.id)
+    assert resumen.eliminados == 1
+    assert len(renovaciones) == 1
+    assert eventos[0].estado == EstadoEventoCalendario.SINCRONIZADO.value

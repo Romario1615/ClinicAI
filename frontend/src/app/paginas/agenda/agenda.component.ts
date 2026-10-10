@@ -57,6 +57,7 @@ import { PestanasComponent, type OpcionPestana } from '../../compartido/pestanas
 import { ReprogramarCitaComponent } from './reprogramar-cita.component';
 import { AccionesRecorridoComponent } from './acciones-recorrido.component';
 import { ProlongacionesPendientesComponent } from './prolongaciones-pendientes.component';
+import { CalendarioProfesionalComponent } from './calendario-profesional.component';
 import {
   CalendarioAgendaComponent,
   rangoVista,
@@ -221,6 +222,7 @@ function leerVista(): VistaCalendario | 'lista' {
     SelectorPacienteComponent,
     AccionesRecorridoComponent,
     ProlongacionesPendientesComponent,
+    CalendarioProfesionalComponent,
   ],
   templateUrl: './agenda.component.html',
   // Pantalla de trabajo: en escritorio ocupa el alto disponible y solo
