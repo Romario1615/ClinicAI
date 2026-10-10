@@ -78,6 +78,57 @@ describe('CargarDocumentoComponent', () => {
         fixture.detectChanges();
     }
 
+    function textoPendiente() {
+        let terminar!: (texto: string) => void;
+        const lectura = new Promise<string>(resolve => { terminar = resolve; });
+        const fichero = archivo('anterior.txt', 'Contenido sintético anterior.');
+        vi.spyOn(fichero, 'text').mockReturnValue(lectura);
+        return { fichero, terminar: (texto: string) => terminar(texto) };
+    }
+
+    it('una lectura anterior no sustituye el PDF ni su texto reconocido', async () => {
+        const anterior = textoPendiente();
+        const lectura = c.leer(anterior.fichero);
+        await escaneo();
+        c.ocrRevisado.set(true);
+        anterior.terminar('Texto antiguo que terminó de leerse tarde.');
+        await lectura;
+        expect(c.contenido()).toBe(OCR.contenido);
+        expect(c.nombreArchivo()).toBe('horario-sintetico.pdf');
+        expect(c.extraccion()?.metodo).toBe('OCR_LOCAL');
+        expect(c.ocrRevisado()).toBe(true);
+    });
+
+    it('cambiar a texto pegado invalida una lectura de archivo pendiente', async () => {
+        const anterior = textoPendiente();
+        const lectura = c.leer(anterior.fichero);
+        c.cambiarOrigen('texto');
+        c.editarContenido('Contenido pegado vigente.');
+        anterior.terminar('Texto antiguo que terminó de leerse tarde.');
+        await lectura;
+        expect(c.contenido()).toBe('Contenido pegado vigente.');
+        expect(c.nombreArchivo()).toBeNull();
+    });
+
+    it('un fallo al leer texto se informa sin dejar una promesa rechazada', async () => {
+        const fichero = archivo('no-legible.txt', 'Contenido sintético.');
+        vi.spyOn(fichero, 'text').mockRejectedValue(new Error('Fallo sintético de lectura'));
+        await c.leer(fichero);
+        expect(c.aviso()).toBe('No se pudo leer el archivo. Vuelva a seleccionarlo.');
+        expect(c.nombreArchivo()).toBeNull();
+        expect(c.puedeEnviar()).toBe(false);
+    });
+
+    it('destruir la ventana descarta el resultado de una lectura pendiente', async () => {
+        const anterior = textoPendiente();
+        const lectura = c.leer(anterior.fichero);
+        fixture.destroy();
+        anterior.terminar('Texto antiguo que terminó de leerse tarde.');
+        await lectura;
+        expect(c.contenido()).toBe('');
+        expect(c.nombreArchivo()).toBeNull();
+    });
+
     it('OCR muestra un editor y las páginas sin texto, sin crear documento ni ingesta', async () => {
         await escaneo();
         expect(c.origen()).toBe('texto');

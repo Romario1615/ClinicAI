@@ -235,6 +235,15 @@ test('cotización y receta confirmada generan PDF y entrega WhatsApp sandbox des
   await busqueda.getByRole('textbox', { name: /buscar por nombre/i }).fill(paciente.numero_documento!);
   await busqueda.getByRole('button', { name: 'Buscar', exact: true }).click();
   await page.getByRole('row').filter({ hasText: paciente.numero_documento! }).getByRole('button', { name: 'Ver ficha' }).click();
+  // La consulta compartida permite encontrar tomas de pacientes de colegas;
+  // consultar no concede escritura. Iniciar la atención por el recorrido
+  // explícito de la ficha establece y audita la relación del profesional.
+  await page.getByRole('button', { name: 'Elegir qué registrar', exact: true }).click();
+  const herramientas = page.getByRole('dialog', { name: 'Herramientas del paciente', exact: true });
+  const inicio = page.waitForResponse(r => r.request().method() === 'POST' && r.url().endsWith('/atencion-profesional'));
+  await herramientas.getByRole('button', { name: 'Comenzar atención sin cita', exact: true }).click();
+  expect((await inicio).status()).toBe(204);
+  await expect(herramientas).not.toBeVisible();
   await page.getByRole('tablist', { name: 'Secciones de la ficha' }).getByRole('tab', { name: 'Documentos y PDF', exact: true }).click();
   for (const tipo of ['COTIZACION', 'RECETA']) {
     await page.getByRole('button', { name: 'Crear documento', exact: true }).click();

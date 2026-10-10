@@ -448,6 +448,7 @@ export class CargarDocumentoComponent {
   protected fotos:readonly FotoSeleccionada[]=[];
   protected readonly ingestaGuardada=signal<RespuestaIngesta|null>(null);
   private readonly api = inject(ApiService);
+  private lecturaArchivo = 0;
 
   /** Documento existente: si llega, el dialogo sube una version nueva. */
   readonly documento = input<Documento | null>(null);
@@ -527,6 +528,7 @@ export class CargarDocumentoComponent {
 
   private async leer(archivo: File): Promise<void> {
     if (this.enviando() || this.ingestaGuardada()) return;
+    const lectura = ++this.lecturaArchivo;
     this.extraccion.set(null);
     this.ocrRevisado.set(false);
     this.error.set(null);
@@ -560,7 +562,17 @@ export class CargarDocumentoComponent {
       this.aviso.set('El archivo supera 20 MB. Divídalo en documentos más pequeños.');
       return;
     }
-    const texto = await archivo.text();
+    let texto: string;
+    try {
+      texto = await archivo.text();
+    } catch {
+      if (this.destroyRef.destroyed || lectura !== this.lecturaArchivo) return;
+      this.aviso.set('No se pudo leer el archivo. Vuelva a seleccionarlo.');
+      return;
+    }
+    // Cambiar archivo, pasar a texto pegado o cerrar invalida la lectura
+    // pendiente. Un resultado anterior no debe sustituir la fuente vigente.
+    if (this.destroyRef.destroyed || lectura !== this.lecturaArchivo) return;
     if (texto.trim().length === 0) {
       this.aviso.set('El archivo está vacío.');
       return;
@@ -586,6 +598,7 @@ export class CargarDocumentoComponent {
   // ----- Envio -----
   protected cambiarOrigen(origen: Origen): void {
     if (this.enviando() || this.ingestaGuardada() || origen === this.origen()) return;
+    this.lecturaArchivo++;
     this.origen.set(origen);
     this.extraccion.set(null);
     this.ocrRevisado.set(false);

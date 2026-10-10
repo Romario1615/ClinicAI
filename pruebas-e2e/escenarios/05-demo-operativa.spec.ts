@@ -394,8 +394,6 @@ test('recepción registra la llegada y asistencia clínica mide la espera y cier
       `/dashboard/?desde=${encodeURIComponent(inicioDia.toISOString())}&hasta=${encodeURIComponent(finDia.toISOString())}`,
     );
     expect(resumenPanel.espera.personas_en_espera).toBeGreaterThan(0);
-    expect(resumenPanel.ocupacion_agenda.minutos_disponibles).toBeGreaterThan(0);
-    expect(resumenPanel.ocupacion_agenda.porcentaje).not.toBeNull();
     await irA(page, 'Panel');
     await expect(page.locator('.rejilla .tarjeta').filter({ hasText: 'Sala de espera' }))
       .toContainText('paciente(s) esperando en el periodo');
@@ -405,10 +403,28 @@ test('recepción registra la llegada y asistencia clínica mide la espera y cier
       has: page.getByText('Ocupación de agenda', { exact: true }),
     });
     await expect(ocupacion).toBeVisible();
-    await expect(ocupacion).toContainText(`${resumenPanel.ocupacion_agenda.porcentaje}%`);
+    // Un sábado/feriado puede tener cero capacidad: no representa ocupación 0 %.
+    if (resumenPanel.ocupacion_agenda.minutos_disponibles === 0) {
+      expect(resumenPanel.ocupacion_agenda.porcentaje).toBeNull();
+      await expect(ocupacion.locator('progress')).toHaveCount(0);
+      await expect(ocupacion).toContainText(resumenPanel.ocupacion_agenda.detalle);
+    }
+    // Siete días incluyen el horario semanal de esta clínica sintética.
+    // Conservar las aserciones positivas sobre capacidad y porcentaje sin
+    // depender del día de ejecución ni inventar horarios en el producto.
+    const inicioSemana = new Date(inicioDia);
+    inicioSemana.setUTCDate(inicioSemana.getUTCDate() - 6);
+    const resumenPeriodo = await datos.leer(
+      `/dashboard/?desde=${encodeURIComponent(inicioSemana.toISOString())}&hasta=${encodeURIComponent(finDia.toISOString())}`,
+    );
+    expect(resumenPeriodo.ocupacion_agenda.minutos_disponibles).toBeGreaterThan(0);
+    expect(resumenPeriodo.ocupacion_agenda.porcentaje).not.toBeNull();
+    await page.getByRole('group', { name: 'Periodo', exact: true })
+      .getByRole('button', { name: '7 días', exact: true }).click();
+    await expect(ocupacion).toContainText(`${resumenPeriodo.ocupacion_agenda.porcentaje}%`);
     await expect(ocupacion.locator('progress')).toHaveAttribute(
       'aria-label',
-      `Ocupación de agenda: ${resumenPanel.ocupacion_agenda.porcentaje} por ciento`,
+      `Ocupación de agenda: ${resumenPeriodo.ocupacion_agenda.porcentaje} por ciento`,
     );
 
     await acceder(page, 'asistente');
