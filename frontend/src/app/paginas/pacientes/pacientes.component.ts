@@ -111,19 +111,6 @@ export class PacientesComponent {
   protected readonly avisoGuardado = signal('');
 
   protected nuevoPaciente(): void { this.paraEditar.set(null); this.editando.set(true); this.avisoGuardado.set(''); }
-  protected editarPaciente(paciente: Paciente): void {
-    // Se pide el detalle completo: el editor necesita `direccion` y `sexo`,
-    // que el listado no devuelve.
-    this.api.paciente(paciente.id).subscribe({
-      next: (detalle) => {
-        this.paraEditar.set(detalle);
-        this.pacienteEnFicha.set(null);
-        this.editando.set(true);
-        this.avisoGuardado.set('');
-      },
-      error: () => this.avisoGuardado.set('No se pudo abrir el formulario de edicion.'),
-    });
-  }
   protected pacienteGuardado(): void { this.editando.set(false); this.pacienteEnFicha.set(null); this.avisoGuardado.set('Paciente guardado correctamente.'); this.cargar(); }
 
   // --- Busqueda ---

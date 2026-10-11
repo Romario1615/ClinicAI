@@ -216,6 +216,31 @@ describe('PacientesComponent', () => {
         expect(texto()).toContain('administrativo');
     });
 
+    it('la ficha flotante permite editar los datos con paciente.editar', () => {
+        iniciarSesionCon(['paciente.leer_administrativo', 'paciente.editar']);
+        responderCargaInicial(pagina([paciente('1')]));
+
+        fixture.componentInstance['abrir'](paciente('1'));
+        fixture.detectChanges();
+        http.expectOne(`${BASE}/pacientes/id-1`).flush({
+            ...paciente('1'), sexo: 'F', direccion: 'Calle sintética', activo: true,
+        });
+        fixture.detectChanges();
+        http.expectOne((p) => p.url === `${BASE}/agenda/citas`).flush({
+            elementos: [], total: 0, limite: 50, desplazamiento: 0,
+        });
+        fixture.detectChanges();
+
+        const boton = Array.from((fixture.nativeElement as HTMLElement).querySelectorAll('button'))
+            .find((elemento) => elemento.textContent?.includes('Editar datos del paciente'));
+        expect(boton).toBeDefined();
+        boton!.click();
+        fixture.detectChanges();
+
+        const editor = (fixture.nativeElement as HTMLElement).querySelector('app-ficha-paciente app-editor-paciente');
+        expect(editor).not.toBeNull();
+    });
+
     it('un error al cargar se muestra con su codigo, sin dejar la tabla a medias', () => {
         fixture.detectChanges();
         http
