@@ -199,3 +199,23 @@ la API aislada (8031).
     `PUT /api/v1/catalogo/denticion-por-edad` con `edad_mixta`,
     `edad_permanente` (1–21, mixta < permanente) y `motivo` (5–300). Guardado
     explícito, como en el punto 20.
+
+## Anexo D · Revisión de código (Sonnet, por encargo de Claude) de los anexos A y B
+
+Sin fugas de datos ni pruebas relajadas. Correcciones:
+
+22. **Agenda: rol propio reactivo** (`agenda.component.ts` ~680). El acotado
+    del profesional lee `sesion.identidad()` una sola vez; derivarlo de forma
+    reactiva o esperar a la identidad. Un usuario con rol profesional y otro
+    administrativo abre en «Todos».
+23. **Mensaje del día vacío** (`calendario-agenda.component.ts` ~288,
+    `agenda.component.ts` ~607). «Sin turnos de atención» aparece cuando no
+    hay *citas*, aunque haya turnos libres: usar «Sin citas este día» salvo
+    que `huecosDia()` confirme que no hay turnos.
+24. **Búsqueda del próximo día con citas** (`buscarProximoDiaConTurnos`,
+    ~667‑690): tope de páginas, excluir canceladas en la consulta y
+    `takeUntilDestroyed` en la petición interior.
+25. **Método muerto** `pacientes.component.ts:114` `editarPaciente`: quitarlo
+    y probar que la ficha flotante permite editar con `paciente.editar`.
+26. **E2E 33:~46**: la prueba de teclado debe colapsar antes el grupo y exigir
+    que `Space` lo expanda (hoy puede no ejercitar la tecla).
