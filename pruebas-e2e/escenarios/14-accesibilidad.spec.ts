@@ -51,6 +51,7 @@ test.describe('Accesibilidad WCAG 2.2 AA', () => {
     // Cuatro auditorías axe y ventanas a varios tamaños dentro de este recorrido.
     test.setTimeout(60_000);
     await acceder(page, 'recepcion');
+    await irA(page, 'Panel');
     await expect(page.getByRole('heading', { name: 'Panel de seguimiento' })).toBeVisible();
     await exigirSinIncidencias(page);
 

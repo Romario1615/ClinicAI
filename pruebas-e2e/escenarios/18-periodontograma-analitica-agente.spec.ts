@@ -124,7 +124,7 @@ test('agente de la ficha: historial al lado, resumen, citas, permisos y teclado'
 test('analítica descriptiva, predictiva y prescriptiva con metodología visible',async({page})=>{
   await acceder(page,'administradora');
   await irA(page,'Analítica IA');
-  await expect(page.getByRole('heading',{name:'Tu clínica, con perspectiva'})).toBeVisible();
+  await expect(page.getByRole('heading',{name:'Actividad y previsiones de tu clínica'})).toBeVisible();
   await expect(page.locator('.analitica__kpi').first()).toBeVisible();
   await page.getByRole('button',{name:'Predictivo · qué puede pasar',exact:true}).click();
   await expect(page.locator('.analitica__modelo').first()).toBeVisible();

@@ -32,7 +32,8 @@ test.describe('Acceso local por roles', () => {
   test('recepción entra y ve la navegación de su rol', async ({ page }) => {
     await acceder(page, 'recepcion');
     const navegacion = page.getByRole('navigation', { name: 'Secciones' });
-    await navegacion.getByRole('button', { name: /^Atención clínica/ }).click();
+    const categoria = navegacion.getByRole('button', { name: /^Atención clínica/ });
+    if (await categoria.getAttribute('aria-expanded') === 'false') await categoria.click();
     await expect(navegacion.getByRole('link', { name: /agenda/i })).toBeVisible();
     await expect(navegacion.getByRole('link', { name: /pacientes/i })).toBeVisible();
   });

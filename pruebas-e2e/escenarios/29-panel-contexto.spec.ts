@@ -1,9 +1,10 @@
 /** Una respuesta retrasada no debe cambiar las cifras del filtro vigente. */
 import { test, expect } from '../apoyo/prueba';
-import { acceder } from '../apoyo/sesion';
+import { acceder, irA } from '../apoyo/sesion';
 
 test('el Panel conserva las cifras reales del periodo vigente aunque fallen después consultas anteriores', async ({ page }) => {
   await acceder(page, 'administradora');
+  await irA(page, 'Panel');
   await page.getByRole('tab', { name: 'Cifras del periodo', exact: true }).click();
   const tarjeta = page.locator('article.tarjeta').filter({ has: page.getByText('Citas del periodo', { exact: true }) });
   await expect(tarjeta).toBeVisible();

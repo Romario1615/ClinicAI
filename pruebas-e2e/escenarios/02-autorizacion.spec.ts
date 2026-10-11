@@ -19,7 +19,8 @@ test.describe('Autorizacion por rol', () => {
   test('recepcion ve las secciones clinicas de consulta y conserva los limites administrativos', async ({ page }) => {
     await acceder(page, 'recepcion');
     const navegacion = page.locator('nav');
-    await navegacion.getByRole('button', { name: /^Atención clínica/ }).click();
+    const clinica = navegacion.getByRole('button', { name: /^Atención clínica/ });
+    if (await clinica.getAttribute('aria-expanded') === 'false') await clinica.click();
 
     await expect(navegacion.getByRole('link', { name: /agenda/i })).toBeVisible();
     await expect(navegacion.getByRole('link', { name: /pacientes/i })).toBeVisible();
@@ -32,7 +33,8 @@ test.describe('Autorizacion por rol', () => {
   test('el asistente si ve medicamentos, porque tiene receta.leer', async ({ page }) => {
     await acceder(page, 'asistente');
     const navegacion = page.locator('nav');
-    await navegacion.getByRole('button', { name: /^Atención clínica/ }).click();
+    const clinica = navegacion.getByRole('button', { name: /^Atención clínica/ });
+    if (await clinica.getAttribute('aria-expanded') === 'false') await clinica.click();
 
     // Asistencia consulta medicación y notas; no registra contenido clínico.
     await expect(navegacion.getByRole('link', { name: /medicamentos/i })).toBeVisible();
@@ -42,11 +44,13 @@ test.describe('Autorizacion por rol', () => {
   test('el profesional ve las secciones clinicas', async ({ page }) => {
     await acceder(page, 'profesional');
     const navegacion = page.locator('nav');
-    await navegacion.getByRole('button', { name: /^Atención clínica/ }).click();
+    const clinica = navegacion.getByRole('button', { name: /^Atención clínica/ });
+    if (await clinica.getAttribute('aria-expanded') === 'false') await clinica.click();
 
     await expect(navegacion.getByRole('link', { name: /historia/i })).toBeVisible();
     await expect(navegacion.getByRole('link', { name: /medicamentos/i })).toBeVisible();
-    await navegacion.getByRole('button', { name: /^Comunicación e IA/ }).click();
+    const ia = navegacion.getByRole('button', { name: /^Comunicación e IA/ });
+    if (await ia.getAttribute('aria-expanded') === 'false') await ia.click();
     await expect(navegacion.getByRole('link', { name: /conocimiento/i })).toBeVisible();
   });
 

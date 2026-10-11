@@ -20,10 +20,12 @@ for (const rol of ROLES) {
     const visitados = new Set(['/ayuda']);
     for (const grupo of await nav.locator('.navegacion__categoria').all()) {
       const boton = grupo.locator('.navegacion__desplegar');
+      const enlacesDelGrupo = grupo.locator('a');
+      expect(await enlacesDelGrupo.count()).toBeGreaterThan(0);
       if (await boton.getAttribute('aria-expanded') === 'false') await boton.click();
       await expect(nav.locator('.navegacion__desplegar[aria-expanded="true"]')).toHaveCount(1);
       const enlaces = grupo.getByRole('link');
-      expect(await enlaces.count()).toBeGreaterThan(0);
+      await expect(enlaces).not.toHaveCount(0);
       for (const enlace of await enlaces.all()) {
         await expect(enlace).toBeVisible();
         visitados.add((await enlace.getAttribute('href'))!);
@@ -41,7 +43,7 @@ test('teclado y Atrás revelan la sección actual y conservan el foco visible', 
   const nav = page.locator('#navegacion-principal');
   const clinica = nav.locator('#categoria-clinica');
   await clinica.focus();
-  await page.keyboard.press('Space');
+  if (await clinica.getAttribute('aria-expanded') === 'false') await page.keyboard.press('Space');
   await expect(clinica).toHaveAttribute('aria-expanded', 'true');
   await page.keyboard.press('Tab');
   const agenda = nav.getByRole('link', { name: 'Agenda', exact: true });

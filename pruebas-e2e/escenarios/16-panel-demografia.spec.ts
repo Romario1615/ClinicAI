@@ -1,5 +1,5 @@
 /** Geometría del perfil agregado con categorías largas, valores y celdas protegidas. */
-import { acceder } from '../apoyo/sesion';
+import { acceder, irA } from '../apoyo/sesion';
 import { expect, test } from '../apoyo/prueba';
 
 test('el perfil de pacientes contiene textos y barras sin solaparlos en escritorio y móvil', async ({ page }) => {
@@ -34,6 +34,7 @@ test('el perfil de pacientes contiene textos y barras sin solaparlos en escritor
   });
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await acceder(page, 'administradora');
+  await irA(page, 'Panel');
   await page.getByRole('tab', { name:'Pacientes', exact:true }).click();
   const tarjeta = page.getByRole('region', { name: 'Perfil de pacientes', exact: true });
   await expect(tarjeta.locator('.demografia__fila')).toHaveCount(11);

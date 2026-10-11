@@ -24,13 +24,13 @@ test('el agente conserva los datos personales largos dentro de su tarjeta', asyn
   await page.getByRole('row').filter({ hasText: paciente.numero_documento! }).getByRole('button', { name: 'Ver ficha' }).click();
   await page.getByRole('button', { name: 'Agente del paciente', exact: true }).click();
   await expect(page.getByRole('region', { name: 'Agente del paciente' })).toContainText('Funciones locales');
-  const datos = page.locator('.ficha__datos dd');
+  const datos = page.locator('.ficha__rapido dd');
   await expect(datos.filter({ hasText: '@example.invalid' })).toHaveCount(1);
   for (const ancho of [1440, 1280, 1024, 821, 768, 390]) {
     await page.setViewportSize({ width: ancho, height: 900 });
     const mediciones = await datos.evaluateAll(elementos => elementos.map(elemento => {
       const campo = elemento.getBoundingClientRect();
-      const tarjeta = elemento.closest('.ficha__bloque')!.getBoundingClientRect();
+      const tarjeta = elemento.closest('.ficha__lado')!.getBoundingClientRect();
       return { dentro: campo.left >= tarjeta.left && campo.right <= tarjeta.right + 1,
         textoContenido: elemento.scrollWidth <= elemento.clientWidth + 1 };
     }));

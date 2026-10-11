@@ -60,6 +60,7 @@ test.describe('Pacientes', () => {
     await page.getByRole('button', { name: /ver ficha/i }).first().click();
 
     await expect(page.locator('.ficha')).toBeVisible();
+    await page.getByRole('tab', { name: 'Resumen', exact: true }).click();
     // La ficha actual reúne historial y herramientas, también para recepción.
     // El resumen administrativo no se debe presentar como historia vacía.
     await expect(page.locator('.ficha')).toContainText('Datos personales');

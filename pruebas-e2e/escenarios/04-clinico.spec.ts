@@ -361,6 +361,20 @@ test('el profesional completa un plan y atiende su control posterior', async ({ 
   await expect(page).toHaveURL(/procedimiento_plan=/);
   await expect(page.getByText('Esta cita quedará vinculada al procedimiento seleccionado en el plan.'))
     .toBeVisible();
+  // El profesional conserva su agenda propia y elige el servicio que requiere
+  // la consulta de disponibilidad; la vista inicial ya no lo preselecciona.
+  const servicio = page.getByRole('combobox', { name: 'Servicio', exact: true });
+  if (!(await servicio.inputValue())) {
+    const opciones = await servicio.locator('option').evaluateAll((items) =>
+      items.map((opcion) => (opcion as HTMLOptionElement).value).filter(Boolean),
+    );
+    expect(opciones.length, 'el profesional debe tener al menos un servicio disponible').toBeGreaterThan(0);
+    const disponibilidadInicial = page.waitForResponse(
+      (respuesta) => respuesta.url().includes('/agenda/disponibilidad') && respuesta.status() === 200,
+    );
+    await servicio.selectOption(opciones[0]);
+    await disponibilidadInicial;
+  }
   const fecha = page.getByLabel('Fecha', { exact: true });
   for (let dias = 2; dias <= 30; dias += 1) {
     const cargando = page.waitForResponse(

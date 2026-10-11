@@ -448,7 +448,9 @@ interface Columna {
        distingue por el peso, no por el color. */
     .bloque__detalle { color: var(--texto); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
 
-    .vacio { flex: none; margin: 0; color: var(--texto-suave); text-align: center; }
+    .vacio { display: flex; flex: none; flex-direction: column; align-items: center; gap: var(--espacio-2); min-width: 0; max-width: 100%; margin: 0; color: var(--texto-suave); text-align: center; }
+    .vacio p { margin: 0; }
+    .vacio button { max-width: 100%; white-space: normal; overflow-wrap: anywhere; }
 
     /* ---- Mes ---- */
     .mes { display: flex; flex-direction: column; min-height: 0; border: 1px solid var(--borde); border-radius: var(--radio); overflow: hidden; background: var(--superficie-elevada); }

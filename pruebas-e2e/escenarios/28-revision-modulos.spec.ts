@@ -16,6 +16,7 @@ function escritura(page: Page, final: string, metodo = 'POST') {
 
 test('catálogo: crear, editar, desactivar y reactivar; los servicios protegen su especialidad', async ({ page, request }) => {
   test.setTimeout(120_000);
+  page.on('dialog', dialog => dialog.accept());
   const headers = await cabeceras(request), sufijo = randomUUID().slice(0, 8);
   const especialidad = `Área sintética ${sufijo}`, servicio = `Servicio sintético ${sufijo}`, sala = `Sala sintética ${sufijo}`;
   const panelEspecialidades = page.locator('#catalogo-panel-especialidades');
