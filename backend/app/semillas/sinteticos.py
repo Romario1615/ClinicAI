@@ -747,6 +747,14 @@ async def cargar_datos_sinteticos(  # noqa: PLR0912, PLR0915
         else:
             estado = aleatorio.choices(estados, weights=pesos, k=1)[0]
 
+        # Fechas administrativas verosímiles: la cita se reservó entre 1 y 14
+        # días antes de su inicio, nunca en el futuro. Si todas quedaran con
+        # `creado_en` = hoy, la Analítica (que solo cuenta citas registradas
+        # antes del día medido, para no reescribir el pasado) las ignoraría.
+        creada = min(inicio - timedelta(days=aleatorio.randint(1, 14)), ahora)
+        fin_previsto = inicio + timedelta(minutes=servicio.duracion_minutos)
+        cancelada = min(max(creada, inicio - timedelta(hours=aleatorio.randint(2, 48))), ahora)
+
         sede_id = sedes[0].id
         fila_sede = (
             (
@@ -774,9 +782,10 @@ async def cargar_datos_sinteticos(  # noqa: PLR0912, PLR0915
             motivo_cancelacion=(
                 "El paciente reprogramo por telefono" if estado is EstadoCita.CANCELLED else None
             ),
-            confirmada_en=ahora if estado is not EstadoCita.CANCELLED else None,
-            completada_en=ahora if estado is EstadoCita.COMPLETED else None,
-            cancelada_en=ahora if estado is EstadoCita.CANCELLED else None,
+            creado_en=creada,
+            confirmada_en=creada if estado is not EstadoCita.CANCELLED else None,
+            completada_en=fin_previsto if estado is EstadoCita.COMPLETED else None,
+            cancelada_en=cancelada if estado is EstadoCita.CANCELLED else None,
         )
         # =================================================================
         #  Punto de guardado por cita
