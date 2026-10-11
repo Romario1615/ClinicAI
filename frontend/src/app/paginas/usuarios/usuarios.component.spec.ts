@@ -83,6 +83,9 @@ describe('UsuariosComponent', () => {
         const texto = (fixture.nativeElement as HTMLElement).textContent ?? '';
         expect(texto).not.toContain('Dar acceso a una persona');
         expect(texto).not.toContain('Crear rol');
+        expect(texto).not.toContain('Editar datos');
+        expect(texto).not.toContain('Gestionar accesos');
+        expect(texto).not.toContain('Quitar acceso');
         c.pestana.set('roles');
         fixture.detectChanges();
         expect((fixture.nativeElement as HTMLElement).textContent).toContain('Del sistema');

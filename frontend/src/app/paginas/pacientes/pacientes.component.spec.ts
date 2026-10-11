@@ -27,6 +27,7 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { PacientesComponent } from './pacientes.component';
 import { CONFIGURACION, CONFIGURACION_POR_DEFECTO } from '../../nucleo/servicios/configuracion';
 import type { Paciente } from '../../nucleo/modelos/dominio';
+import { iniciarSesionCon } from '../../nucleo/pruebas/sesion-sintetica';
 
 const BASE = CONFIGURACION_POR_DEFECTO.urlApi;
 
@@ -98,6 +99,13 @@ describe('PacientesComponent', () => {
         const peticion = http.expectOne((p) => p.url === `${BASE}/pacientes/`);
         expect(peticion.request.params.get('limite')).toBe('25');
         peticion.flush(pagina([paciente('1')]));
+    });
+
+    it('oculta el alta cuando el principal solo puede consultar pacientes', () => {
+        iniciarSesionCon(['paciente.leer_administrativo']);
+        responderCargaInicial(pagina([paciente('1')]));
+        expect(Array.from((fixture.nativeElement as HTMLElement).querySelectorAll('button')).some((boton) => boton.textContent?.includes('Registrar paciente'))).toBe(false);
+        expect(texto()).not.toContain('Registrar paciente');
     });
 
     it('una respuesta antigua no pisa la de una busqueda posterior', () => {

@@ -1,11 +1,11 @@
 import { TestBed } from '@angular/core/testing';
 import { HttpTestingController } from '@angular/common/http/testing';
 import { FotosRegistroComponent } from './fotos-registro.component';
-import { BASE,PROVEEDORES_PRUEBA,archivo } from '../nucleo/pruebas/sesion-sintetica';
+import { BASE,PROVEEDORES_PRUEBA,archivo,iniciarSesionCon } from '../nucleo/pruebas/sesion-sintetica';
 
 describe('FotosRegistroComponent',()=>{
   let http:HttpTestingController;
-  function montar(editar=false){const f=TestBed.createComponent(FotosRegistroComponent);f.componentRef.setInput('tipo','gasto');f.componentRef.setInput('registroId','g');f.componentRef.setInput('puedeEditar',editar);f.detectChanges();return f;}
+  function montar(editar=false,permisos=['imagen_clinica.leer','imagen_clinica.cargar']){iniciarSesionCon(permisos);const f=TestBed.createComponent(FotosRegistroComponent);f.componentRef.setInput('tipo','gasto');f.componentRef.setInput('registroId','g');f.componentRef.setInput('puedeEditar',editar);f.detectChanges();return f;}
   beforeEach(()=>{TestBed.configureTestingModule({imports:[FotosRegistroComponent],providers:PROVEEDORES_PRUEBA});http=TestBed.inject(HttpTestingController);});afterEach(()=>http.verify());
   it('no descarga hasta abrir la ventana y libera imágenes al cerrar',()=>{
     const f=montar();
@@ -32,5 +32,10 @@ describe('FotosRegistroComponent',()=>{
     const c=f.componentInstance as any;
     c.abierta.set(true);f.detectChanges();const vieja=http.expectOne(`${BASE}/fotos-registro/gasto/g`);
     f.componentRef.setInput('registroId','nuevo');f.detectChanges();http.expectOne(`${BASE}/fotos-registro/gasto/nuevo`).flush([]);vieja.flush([{id:'vieja'}]);expect(c.fotos()).toHaveLength(0);
+  });
+  it('oculta la lectura y edición de adjuntos si faltan los permisos del principal',()=>{
+    const f=montar(true,[]);
+    expect(f.nativeElement.textContent).not.toContain('Fotos y adjuntos');
+    expect(f.nativeElement.querySelector('app-captura-fotos')).toBeNull();
   });
 });

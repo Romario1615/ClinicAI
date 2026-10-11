@@ -163,6 +163,16 @@ describe('ConocimientoComponent', () => {
         expect(acciones.querySelector('.portada__accion')?.textContent).toContain('Cargar documento');
     });
 
+    it('oculta acciones de carga y acceso cuando faltan sus permisos', () => {
+        const identidad = identidadAprobadora();
+        TestBed.inject(SesionService).establecerIdentidad({ ...identidad, permisos: ['conocimiento.leer'] });
+        cargar([documento('sin-permisos')]);
+        const fila = fixture.nativeElement.querySelector('tbody tr') as HTMLElement;
+        expect(fila.querySelectorAll('.celda-acciones button')).toHaveLength(0);
+        expect(texto()).not.toContain('Cargar documento');
+        expect(texto()).not.toContain('Accesos');
+    });
+
     describe('cuando no hay fuente aprobada', () => {
         it('muestra el mensaje del backend y NO pinta resultados parecidos', () => {
             cargar([documento('1')]);

@@ -119,6 +119,7 @@ describe('AgendaComponent · reserva y series', { timeout: 20_000 }, () => {
     roles: readonly string[] = ['profesional'],
     profesionalId: string | null = PROFESIONAL.id,
     usarFiltrosReserva = true,
+    permisos: readonly string[] = ['cita.crear', 'agenda.leer'],
   ): void {
     vi.spyOn(window, 'confirm').mockReturnValue(true);
     TestBed.configureTestingModule({
@@ -146,9 +147,9 @@ describe('AgendaComponent · reserva y series', { timeout: 20_000 }, () => {
         },
       ],
     });
-    iniciarSesionCon(['cita.crear', 'agenda.leer']);
+    iniciarSesionCon(permisos);
     TestBed.inject(SesionService).establecerIdentidad({
-      ...identidadCon(['cita.crear', 'agenda.leer']),
+      ...identidadCon(permisos),
       roles,
       profesional_id: profesionalId,
     });
@@ -190,6 +191,14 @@ describe('AgendaComponent · reserva y series', { timeout: 20_000 }, () => {
     montar({}, ['profesional'], PROFESIONAL.id, false);
     expect(fixture.componentInstance['servicioId']()).toBe('');
     expect(fixture.componentInstance['profesionalId']()).toBe(PROFESIONAL.id);
+  });
+
+  it('oculta las acciones de cita cuando el principal solo puede consultar la agenda', () => {
+    montar({}, ['profesional'], PROFESIONAL.id, false, ['agenda.leer']);
+    const acciones = fixture.componentInstance['accionesDe']({
+      ...cita('2030-01-21T14:00:00Z'), estado: 'CONFIRMED', llegada_en: null,
+    });
+    expect(Object.values(acciones).every((visible) => !visible)).toBe(true);
   });
 
   it('la vista Día pasa al calendario solo las citas del profesional elegido', () => {

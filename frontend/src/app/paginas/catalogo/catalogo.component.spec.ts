@@ -285,6 +285,18 @@ describe('CatalogoComponent', () => {
         // Sin gestión de especialidades no se ofrecen sus pestañas.
         const pestanas = Array.from((fixture.nativeElement as HTMLElement).querySelectorAll('[role="tab"]')).map((p) => p.id);
         expect(pestanas).toEqual(['catalogo-pestana-sedes', 'catalogo-pestana-servicios', 'catalogo-pestana-profesionales']);
+        expect((fixture.nativeElement as HTMLElement).textContent).not.toContain('Editar');
+        expect((fixture.nativeElement as HTMLElement).textContent).not.toContain('Nuevo servicio');
+    });
+
+    it('oculta la captura de fotos si falta imagen_clinica.cargar', () => {
+        sesion.tienePermiso.mockImplementation((codigo: string) => codigo !== 'imagen_clinica.cargar');
+        fixture.destroy();
+        fixture = TestBed.createComponent(CatalogoComponent);
+        fixture.detectChanges();
+        (fixture.componentInstance as unknown as { abrirNuevoServicio(): void }).abrirNuevoServicio();
+        fixture.detectChanges();
+        expect(fixture.nativeElement.querySelector('app-captura-fotos')).toBeNull();
     });
 
     it('muestra una parte del catálogo a la vez', () => {
