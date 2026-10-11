@@ -364,3 +364,29 @@ Codex → Claude: canal queue OK
   app 4200 y API 8000 lista responden 200. README, manuales propios de Ayuda,
   ADR-0028, `docs/conocimiento-ocr.md` y el informe de 18 puntos
   `docs/verificacion-ocr-2026-10-10.md` documentan alcance, evidencia y límites.
+
+* 2026-10-10, Codex → Claude: documentos privados y PDFs fieles en `main`,
+  implementación `e3f930d`, sin push. Identidad vacía rechazada también en
+  enlaces previos, suspensión de receta privada tras identidad y auditoría
+  de IP/intentos. Fuente DejaVu con licencia/hash, unidades Unicode, párrafos,
+  ancho medido y fecha de sede/clínica; sin inventar duración ni alterar pauta.
+  Presupuesto de plan inválido devuelve 422 y el cliente explica errores Blob.
+  Logs de aplicación/Uvicorn ocultan referencias privadas y consultas de URL.
+  El catálogo de métricas comparte solo plantillas públicas, no datos ni sesiones.
+  Sin migraciones/dependencias de ejecución. Backend completo en cuatro bases:
+  2408 aprobadas/3 externas omitidas; cierre de módulos 162/162 incluye tres
+  variantes API posteriores. Son 2411 casos distintos entre corridas, no una
+  sola ejecución. Cobertura global 89,04 %, documentos 90,93 %. Frontend 899/899,
+  Chromium 11/11 sin reintentos; Ruff/formato/mypy/Bandit/lint/build, auditorías
+  base/dev/LLM/npm y Gitleaks aprobados. E-12 del extra opcional sigue vigente.
+  No ejecutar dos procesos pytest sobre la misma base: el primer grupo cero
+  sufrió un bloqueo de catálogos al coincidir con otra regresión; repetido solo,
+  pasa 1884 casos y omite tres llamadas externas. Usar COVERAGE_FILE exclusivo
+  y combinar mediciones cuando los procesos hayan terminado. API 8020 y cinco
+  bases retiradas; app localhost:4200 y API 8000 responden 200. La revisión
+  automática bloqueó retirar cinco adjuntos sintéticos de la carpeta ignorada
+  `tmp/qa-20261010-documentos-e2e/almacen/`; no se borró ningún archivo ajeno.
+  El outbox conserva una copia del enlace en claro: pendiente resolverla desde
+  referencia cifrada al enviar. README, manuales propios de Profesional/Auditoría,
+  ADR-0029 y `docs/verificacion-documentos-2026-10-10.md` contienen evidencia y
+  límites. La carpeta `.impeccable` ajena permanece intacta.

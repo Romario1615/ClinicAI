@@ -1,5 +1,21 @@
 # Arquitectura
 
+## Integridad de documentos privados (2026-10-10)
+
+`documentos/servicios.py` verifica referencias de identidad, convierte planes
+con errores de dominio y resuelve la zona de exportación. `fuente_pdf.py`
+incorpora una fuente propia y métricas verificadas a pypdf; `pdf.py` conserva
+párrafos y ajusta filas al ancho disponible. La caché solo contiene recursos
+de distribución. No cambia el esquema ni la pauta confirmada de las recetas.
+Las descargas generan el archivo antes de auditar éxito; los fallos de identidad
+conservan su contador/auditoría. [ADR-0029](decisiones/0029-documentos-fieles-e-identidad-obligatoria.md).
+
+`nucleo/registro.py` aplica la redacción de tokens en rutas públicas y parámetros
+de URL también a mensajes libres de Uvicorn/httpx. El catálogo de métricas de
+`main.py` comparte solo plantillas públicas de la topología fija; los contadores,
+sesiones, configuración y datos permanecen por aplicación. Una ruta desconocida
+se agrega como `no_encontrada`, sin convertir su identificador en etiqueta.
+
 ## Reconocimiento de documentos escaneados (2026-10-10)
 
 La ruta `conocimiento/extraer-escaneo` devuelve una vista previa sin persistir

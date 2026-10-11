@@ -1,5 +1,36 @@
 # ClinicAI — Plataforma de gestión clínica
 
+## Documentos privados y PDFs fieles (2026-10-10)
+
+En **Ficha del paciente → Documentos y PDF** se conservan símbolos como `μg`,
+`≤` y `cm²`, párrafos y fechas locales de sede/clínica. El PDF incorpora una
+fuente del proyecto; si no puede representar un carácter, muestra un error
+explicativo y no solicita el envío. Las ausencias de documento o duración se
+indican explícitamente, sin cambiar la pauta confirmada de una receta.
+
+Los enlaces requieren datos de identidad registrados y rechazan identidad vacía,
+también en entregas antiguas. La comprobación no revela que una receta esté
+suspendida antes de verificar al paciente. Los intentos e IP quedan auditados
+sin guardar los datos de verificación. Emitir un presupuesto desde un plan
+que supere los límites devuelve una explicación y no un error del servidor.
+
+Los registros de la aplicación y Uvicorn ocultan los tokens de enlaces privados
+y los parámetros de las URL. La exportación rechaza también marcas invisibles
+que podrían hacer ambiguo el texto mostrado.
+
+Los manuales propios de Profesional y Auditoría están actualizados en **Ayuda**.
+No hay nuevas migraciones ni dependencias de ejecución.
+[Decisión técnica y límites](docs/decisiones/0029-documentos-fieles-e-identidad-obligatoria.md).
+[Pruebas y evidencia](docs/verificacion-documentos-2026-10-10.md).
+
+Backend completo por particiones: **2408 aprobadas / 3 externas omitidas**;
+cierre de módulos **162/162**, cobertura global **89,04 %**. Frontend **899/899**
+con cobertura y Chromium de documentos/ficha **11/11**, sin reintentos.
+Lint/build, Ruff/formato/mypy, Bandit y Gitleaks aprobados. API temporal y cinco
+bases exclusivas retiradas; app 4200 y API 8000 responden 200. Cinco adjuntos
+sintéticos temporales permanecen por bloqueo de la revisión automática al
+eliminarlos, documentado en el informe. Implementación `e3f930d`, local en `main`.
+
 ## Documentos escaneados con OCR local (2026-10-10)
 
 En **Conocimiento → Cargar documento**, seleccione un PDF y pulse **Reconocer

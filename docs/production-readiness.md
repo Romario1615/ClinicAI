@@ -1,5 +1,18 @@
 # Estado de preparación para producción
 
+## Documentos privados y PDF (2026-10-10)
+
+Se corrigieron identidad vacía, representación de caracteres, párrafos y fecha
+local; se mantienen permisos, ámbitos, receta confirmada y consentimiento.
+El despliegue debe incluir la carpeta `documentos/fuentes` con licencia y métricas;
+la imagen actual copia esos archivos con el backend, sin instalar fontTools.
+Staging debe probar documentos autorizados y configuración horaria por sede.
+También debe comprobar redacción de enlaces/consultas en logs de la API y proxy,
+y revisar registros históricos según la política de conservación.
+Quedan firma certificada, aceptación del canal real y construcción del enlace
+desde su referencia en el outbox. No se declara preparación global para producción.
+[ADR-0029](decisiones/0029-documentos-fieles-e-identidad-obligatoria.md).
+
 ## OCR de documentos escaneados (2026-10-10)
 
 El flujo local admite PDF imagen con vista previa, corrección, confirmación

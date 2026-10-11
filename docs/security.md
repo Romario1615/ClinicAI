@@ -132,16 +132,27 @@ actualiza la política de lectura de [ADR-0022](decisiones/0022-crud-faciograma-
 | `GET /historia/pacientes/{id}/registros` y `/{registro}/pdf` | Lectura clínica, clínica, sede, especialidad, módulos y sensibilidad; consulta compartida sin vínculo previo y lectura auditada |
 | `POST /historia/pacientes/{id}/registros`, `/{registro}/anulacion` | Escritura clínica; mismo ámbito; versión sucesora/anulación solo por el autor, con motivo |
 | `POST /historia/planes/{id}/presupuesto-documento` | Escritura clínica, lectura autorizada del plan y módulo activo; cita/sede validadas |
-| `POST /historia/pacientes/{id}/registros/{registro}/whatsapp` | Lectura/escritura clínica, versión vigente N2 no facial, destinatario confirmado y consentimiento específico |
-| `POST /publico/documentos/{token}/acceso` | Token aleatorio y verificación de identidad, vigencia, clínica activa, cinco errores máximos y límite por IP; sin sesión de personal |
+| `POST /historia/pacientes/{id}/registros/{registro}/whatsapp` | Lectura/escritura clínica, versión vigente N2 no facial, destinatario confirmado, consentimiento específico y datos registrados que permitan verificar identidad; PDF representable antes de encolar |
+| `POST /publico/documentos/{token}/acceso` | Token aleatorio, verificación contra nacimiento registrado o documento de cuatro caracteres verificables si falta la fecha; nunca compara identidad vacía. Vigencia N2 no facial, clínica activa, cinco errores máximos y límite por IP; IP/intentos auditados, estado de receta comprobado tras identidad y error genérico de disponibilidad |
 
 Los enlaces caducan en 1–30 días. El aviso de WhatsApp no contiene información
 clínica. El worker verifica de nuevo vigencia y consentimiento antes de enviar;
 la revocación de consentimiento no retira un enlace ya entregado. Corregir o
 anular el registro invalida sus enlaces anteriores. Descargas con `no-store`,
-`nosniff` y política de referrer restrictiva. Tokens almacenados como hash más
-copia cifrada; no se imprimen en logs. N3 y faciogramas no admiten enlace público.
+`nosniff` y política de referrer restrictiva. En `entrega_documento`, el token se
+almacena como hash más copia cifrada. El enlace completo también forma parte de
+la carga útil saliente del outbox: **esa copia no está cifrada por la aplicación**;
+debe protegerse el acceso y respaldo de la base, y queda pendiente construirla
+desde la referencia de entrega al enviar. Con la redacción habilitada, la cadena
+común oculta tokens en rutas de documentos/indicaciones y parámetros de URL,
+incluidos mensajes libres de Uvicorn/httpx. La redacción es obligatoria en
+producción. No sanea registros históricos ni los de proxies externos: revisar
+su conservación y aplicar la misma protección al desplegar.
+N3 y faciogramas no admiten enlace público.
 Los PDFs conservan trazabilidad, pero no incorporan firma certificada.
+La fuente local incorporada conserva símbolos admitidos y párrafos; un glifo
+no representable o una zona horaria inválida produce un error 422 y no se encola
+la entrega. No se generan PDFs mediante HTML ni se aceptan fuentes externas.
 La copia PDF de una receta conserva el nivel más restrictivo entre el solicitado
 para el documento y el de la receta confirmada. Marcarla N3 nunca se reduce a N2
 al copiar la pauta. Las copias de recetas no admiten edición directa: primero se
@@ -492,6 +503,12 @@ Los registros de las librerías (uvicorn, SQLAlchemy, httpx) pasan por **la mism
 de redacción**, no por una salida paralela. Importa: SQLAlchemy escribe las sentencias con
 sus parámetros enlazados, y esos parámetros son nombres, documentos y teléfonos de
 pacientes. Hay una prueba que lo comprueba emitiendo una línea desde `sqlalchemy.engine`.
+
+Desde el 2026-10-10, los patrones cubren también referencias de enlaces privados
+y consultas de URL (OAuth, búsquedas y verificadores). Las pruebas emiten un
+registro de acceso real de Uvicorn y comprueban que desaparecen referencia y
+consulta; el identificador de documento en un campo permitido se conserva.
+Esto no constituye una auditoría de registros históricos o infraestructura externa.
 
 Existe además una prueba de seguridad que provoca errores en cada módulo y verifica que
 ningún dato personal ni clínico aparece en la salida de los logs.

@@ -207,19 +207,21 @@ datos sintéticos).
 
 | Sev. | Hallazgo | Dónde | Estado |
 |---|---|---|---|
-| alta | El enlace público entrega el PDF sin verificar identidad si el paciente no tiene fecha de nacimiento ni documento | `backend/app/modulos/documentos/rutas.py:504` | **Pendiente** |
-| media | El presupuesto desde un plan devuelve 500 por un ValidationError sin capturar | `backend/app/modulos/documentos/rutas.py:250` | **Pendiente** |
-| media | El PDF sustituye por «?» los caracteres fuera de cp1252 y deja ambigua la dosis de una receta | `backend/app/modulos/documentos/pdf.py:40` | **Pendiente** |
-| media | La fecha de emisión del PDF se imprime en UTC ISO y no en la zona horaria de la clínica | `backend/app/modulos/documentos/servicios.py:283` | **Pendiente** |
-| baja | El PDF muestra el literal 'None' en la duración y en el documento del paciente | `backend/app/modulos/documentos/servicios.py:339` | **Pendiente** |
-| baja | El token del enlace se guarda en claro en outbox_mensaje.carga_util y security.md lo niega | `backend/app/modulos/documentos/rutas.py:426` | **Pendiente** |
-| baja | El acceso público revela que el documento era una receta suspendida antes de verificar identidad | `backend/app/modulos/documentos/rutas.py:492` | **Pendiente** |
-| baja | Los saltos de línea de observaciones e instrucciones se pierden en el PDF | `backend/app/modulos/documentos/pdf.py:28` | **Pendiente** |
-| baja | La auditoría del acceso público no registra IP ni número de intentos | `backend/app/modulos/documentos/rutas.py:512` | **Pendiente** |
-| baja | La prueba de inyección en PDF no verifica la inyección | `backend/pruebas/unitarias/test_pdf_documentos.py:15` | **Pendiente** |
+| alta | El enlace público entrega el PDF sin verificar identidad si el paciente no tiene fecha de nacimiento ni documento | `backend/app/modulos/documentos/rutas.py:504` | Corregido el 2026-10-10; evidencia en `docs/verificacion-documentos-2026-10-10.md` |
+| media | El presupuesto desde un plan devuelve 500 por un ValidationError sin capturar | `backend/app/modulos/documentos/rutas.py:250` | Corregido el 2026-10-10; evidencia en `docs/verificacion-documentos-2026-10-10.md` |
+| media | El PDF sustituye por «?» los caracteres fuera de cp1252 y deja ambigua la dosis de una receta | `backend/app/modulos/documentos/pdf.py:40` | Corregido el 2026-10-10; evidencia en `docs/verificacion-documentos-2026-10-10.md` |
+| media | La fecha de emisión del PDF se imprime en UTC ISO y no en la zona horaria de la clínica | `backend/app/modulos/documentos/servicios.py:283` | Corregido el 2026-10-10; evidencia en `docs/verificacion-documentos-2026-10-10.md` |
+| baja | El PDF muestra el literal 'None' en la duración y en el documento del paciente | `backend/app/modulos/documentos/servicios.py:339` | Corregido el 2026-10-10; evidencia en `docs/verificacion-documentos-2026-10-10.md` |
+| baja | El token del enlace se guarda en claro en outbox_mensaje.carga_util y security.md lo niega | `backend/app/modulos/documentos/rutas.py:426` | **Pendiente**: aclarado en security.md; la carga útil del outbox sigue en claro |
+| baja | El acceso público revela que el documento era una receta suspendida antes de verificar identidad | `backend/app/modulos/documentos/rutas.py:492` | Corregido el 2026-10-10; evidencia en `docs/verificacion-documentos-2026-10-10.md` |
+| baja | Los saltos de línea de observaciones e instrucciones se pierden en el PDF | `backend/app/modulos/documentos/pdf.py:28` | Corregido el 2026-10-10; evidencia en `docs/verificacion-documentos-2026-10-10.md` |
+| baja | La auditoría del acceso público no registra IP ni número de intentos | `backend/app/modulos/documentos/rutas.py:512` | Corregido el 2026-10-10; evidencia en `docs/verificacion-documentos-2026-10-10.md` |
+| baja | La prueba de inyección en PDF no verifica la inyección | `backend/pruebas/unitarias/test_pdf_documentos.py:15` | Corregido el 2026-10-10; evidencia en `docs/verificacion-documentos-2026-10-10.md` |
+| media | El registro de acceso escribe el token del enlace privado en la ruta | `backend/app/nucleo/registro.py` | Confirmado y corregido el 2026-10-10: redacción compartida de rutas y consultas; no sanea logs históricos de despliegues ajenos |
+| baja | La descarga de PDF del personal pierde la explicación del servidor | `frontend/src/app/nucleo/servicios/api.service.ts` | Confirmado y corregido el 2026-10-10: JSON Blob acotado y respuesta genérica inmediata para cuerpo vacío/grande |
 
-El primero es el importante: si el paciente no tiene fecha de nacimiento ni
-documento, el enlace público entrega el PDF sin verificar identidad.
+El primer fallo se reprodujo y corrigió: un paciente sin referencias de identidad
+ya no puede superar la verificación, tampoco mediante un enlace antiguo.
 
 ### 5.2 Reportados y **sin verificar**
 
@@ -232,7 +234,6 @@ algunas pueden no ser reales.
 | media | Iniciar sesión en una clínica inactiva revela si la contraseña es correcta, reinicia el contador de intentos y falsea ultimo_acceso_en | `backend/app/modulos/usuarios/servicios.py:926` |
 | media | PUT /usuarios/{id}/datos permite a un rol con solo usuario.editar cambiar el correo (identificador de acceso) de cuentas con más privilegios | `backend/app/modulos/usuarios/administracion.py:346` |
 | media | Desactivar una clínica no detiene recordatorios, mensajes ni el agente de WhatsApp | `backend/app/modulos/organizacion/plataforma.py:1032` |
-| media | docs/security.md afirma que los tokens de enlace no se imprimen en logs, pero el registro de acceso guarda la ruta con el token | `docs/security.md:34` |
 | media | Faltan casos de 'rol no autorizado' en las pruebas de los cinco endpoints nuevos (CLAUDE.md §5.6) | `backend/pruebas/api/test_crud_administrativo_api.py:25` |
 | media | La agenda ignora la navegación con paciente o procedimiento_plan sin cita: «Agendar» del plan embebido y «Gestionar citas» no hacen nada | `frontend/src/app/paginas/agenda/agenda.component.ts:537` |
 | media | «Ver ficha del paciente» desde una cita abre directamente la historia embebida y lee datos clínicos auditados que nadie pidió | `frontend/src/app/paginas/agenda/agenda.component.html:553` |
@@ -261,7 +262,6 @@ algunas pueden no ser reales.
 | baja | Cambiar la sede después de guardar el presupuesto reutiliza la clave de idempotencia y da conflicto | `frontend/src/app/paginas/historia-clinica/planes-tratamiento.component.ts:583` |
 | baja | «Editar datos» sobre la propia cuenta cierra la sesión sin avisar | `frontend/src/app/paginas/usuarios/usuarios.component.ts:217` |
 | baja | La prueba «mantiene la vista previa e informa si falla la carga de sedes» no comprueba que la vista previa se mantenga | `frontend/src/app/paginas/historia-clinica/planes-tratamiento.component.spec.ts:131` |
-| baja | La descarga de PDF del personal pierde el mensaje del servidor: siempre muestra «Ocurrio un error inesperado.» | `frontend/src/app/nucleo/servicios/registros-paciente.service.ts:31` |
 | baja | Recepción y auditoría leen que la especialidad de la cita «no está asignada a su cuenta» y que deben pedir acceso al administrador | `frontend/src/app/compartido/atencion-paciente.component.ts:24` |
 | baja | Si fallan las citas de contexto, o la cita está fuera de las 100 más recientes, la historia de la pestaña queda oculta sin forma de reintentar | `frontend/src/app/compartido/atencion-paciente.component.ts:60` |
 | baja | «Pagos de esta cita» sin cita elegida abre los pagos de toda la clínica, y «Gestionar citas» en /agenda no hace nada | `frontend/src/app/compartido/atencion-paciente.component.ts:73` |

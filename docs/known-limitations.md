@@ -1,5 +1,25 @@
 # Limitaciones conocidas y riesgos residuales
 
+## PDF y entrega privada (2026-10-10)
+
+La exportación conserva caracteres incluidos en DejaVu Sans, párrafos y fechas
+locales. No admite todo Unicode ni composición bidireccional: glifos ausentes,
+emojis fuera de la fuente, marcas no compuestas y separadores Unicode invisibles
+producen error 422, sin alterar el texto almacenado. Los saltos ordinarios de
+párrafo se conservan.
+La fuente añade aproximadamente 489 kB al PDF de ejemplo. Una receta sin duración
+no recibe una duración inventada ni firma electrónica certificada.
+
+Los registros antiguos no conservaban zona horaria; su PDF utiliza la zona vigente
+de sede/clínica. Los enlaces exigen una identidad registrada, incluidos los antiguos.
+La copia del token en `entrega_documento` está cifrada; el enlace de la carga útil
+del outbox sigue en claro. Queda pendiente resolverlo al enviar desde una referencia
+y revisar conservación y respaldos en producción. No se prueba envío real a Meta.
+La redacción nueva protege los registros de la aplicación/Uvicorn; no modifica
+registros históricos ni la configuración de proxies externos. Su revisión y
+conservación siguen siendo parte del despliegue.
+[Decisión y alcance](decisiones/0029-documentos-fieles-e-identidad-obligatoria.md).
+
 ## OCR local de conocimiento (2026-10-10)
 
 Se implementa reconocimiento explícito de PDF imagen y vista previa editable
