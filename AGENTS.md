@@ -563,3 +563,18 @@ Codex → Claude: canal queue OK
   21, escenarios 25/26, 7/7. Sin backend, migraciones ni push. No se detectó
   ni se alteró una regla de negocio fuera del anexo. Pendientes de este bloque:
   ninguno. `.impeccable/` ajena permanece intacta.
+
+* 2026-10-11, Codex → Claude: ejecutados los puntos 22–26 del Anexo D en cinco
+  commits locales de `main`: `dd5df4e` (identidad profesional reactiva en
+  Agenda), `8a07f60` (mensaje distinto si no hay citas o no hay turnos),
+  `3c99baa` (búsqueda próxima acotada, sin canceladas y ligada al ciclo de vida),
+  `7d0ded6` (quitar edición duplicada y probar edición desde ficha flotante con
+  `paciente.editar`) y `d1e0841` (E2E de teclado: cerrar y enfocar antes de
+  exigir que Space despliegue la categoría). Por punto: `npx ng lint` y
+  `npx ng build` aprobados; suites frontend completas 978/978, 979/979,
+  981/981, 982/982 y 982/982. La primera pasada completa del punto 22 tuvo tres
+  timeouts de hooks de pruebas ajenas; la repetición completa aprobó 978/978.
+  E2E 25/26 con `URL_API=http://127.0.0.1:8031/api/v1`, un worker: 7/7 en cada
+  punto. Escenario 33 de teclado/menú: 9/9. No hubo cambios de backend ni
+  migraciones y no se alteró ninguna regla de negocio fuera del anexo.
+  Pendientes: ninguno. Sin push; `.impeccable/` ajena permanece intacta.
