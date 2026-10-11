@@ -1,5 +1,14 @@
 # Estado de preparación para producción
 
+## Buscador de secciones (2026-10-10)
+
+Cambio compatible del frontend: utiliza la matriz de navegación vigente y no
+requiere migraciones, claves ni dependencias nuevas. En staging comprobar
+permisos reales, búsqueda por nombre/categoría, vacío, teclado, cierre del cajón
+y elección de la sección actual. Desplegar o revertir el paquete frontend
+completo. Los datos y canales del producto conservan sus requisitos existentes.
+[Informe del bloque](verificacion-buscador-secciones-2026-10-10.md).
+
 ## Menú por categorías (2026-10-10)
 
 El armazón organiza los módulos existentes sin cambiar contratos de API ni esquema.

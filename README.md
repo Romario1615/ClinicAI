@@ -1,5 +1,25 @@
 # ClinicAI — Plataforma de gestión clínica
 
+## Buscar una sección (2026-10-10)
+
+El menú incluye **Buscar sección**. Abre una ventana con los módulos disponibles
+para la persona conectada; escribir un nombre o categoría filtra la lista sin
+depender de tildes o mayúsculas. Por ejemplo, `finanzas` muestra Pagos y Gastos,
+si tiene sus permisos. Ayuda también aparece entre los resultados.
+
+La consulta se descarta al cerrar o cambiar de usuario. En móvil, Escape cierra
+primero la búsqueda y conserva el menú; al seleccionar un módulo se cierran ambos
+y el foco pasa al contenido. El menú mantiene las cinco categorías existentes.
+
+[Funcionamiento y verificación](docs/verificacion-buscador-secciones-2026-10-10.md).
+[Captura revisada](docs/imagenes/buscador-secciones-2026-10-10.png).
+
+Frontend completo **921/921** con cobertura antes del último ajuste de foco,
+regresión posterior de componentes **36/36**; Chromium de categorías/buscador
+**18/18** y cierre visual **9/9**, en corridas separadas. Lint, tipos, build sin
+avisos, auditorías npm y Gitleaks del índice aprobados. Implementación `4e0ba71`,
+local en `main`. App 4200/API 8000 conservadas; entorno de QA retirado.
+
 ## Secciones agrupadas por categorías (2026-10-10)
 
 El menú lateral y el cajón móvil muestran categorías desplegables, con una

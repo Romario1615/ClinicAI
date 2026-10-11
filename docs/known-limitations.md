@@ -1,5 +1,17 @@
 # Limitaciones conocidas y riesgos residuales
 
+## Búsqueda de secciones (2026-10-10)
+
+El buscador filtra nombres de módulos y categorías autorizadas; no busca
+contenido clínico ni ejecuta acciones del agente. No incluye sinónimos o
+personalización del orden. La búsqueda global de pacientes mantiene su acceso
+propio en la cabecera. Abrir un módulo en otra pestaña conserva las reglas de
+sesión en memoria: esa pestaña debe autenticarse.
+
+La verificación automática de este bloque usa Chromium y datos sintéticos;
+otros motores y lectores de pantalla físicos requieren aceptación en staging.
+[Evidencia y alcance](verificacion-buscador-secciones-2026-10-10.md).
+
 ## Categorías del menú (2026-10-10)
 
 La organización es común para todos los roles; cada persona ve únicamente las

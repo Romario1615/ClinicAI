@@ -1,5 +1,21 @@
 # Arquitectura
 
+## Buscador de secciones (2026-10-10)
+
+`AppComponent` entrega a `BuscadorSeccionesComponent` los mismos enlaces ya
+filtrados por permisos, rol y modo local. No existe una segunda matriz de acceso.
+El componente busca palabras del nombre y de la categoría, normalizadas sin diacríticos;
+exige todas las palabras y omite grupos vacíos. Ayuda participa en la búsqueda.
+La consulta reside en memoria, sin peticiones de búsqueda ni persistencia.
+
+El selector usa `VentanaFlotanteComponent`; devuelve el foco al botón de apertura
+al cancelar. Una elección normal usa el router, bloquea duplicados y muestra
+errores dentro de la ventana. Los enlaces conservan dirección y gestos para
+otra pestaña. Un resultado de navegación de otra identidad se descarta.
+Tras el cierre/render el foco pasa al contenido. El cajón móvil devuelve el foco
+al botón al cerrar y lo lleva al contenido al completar una navegación.
+Los cambios de parámetros también revelan la categoría actual.
+
 ## Navegación por categorías (2026-10-10)
 
 `AppComponent` asigna cada enlace a una categoría tipada. Filtra primero por
