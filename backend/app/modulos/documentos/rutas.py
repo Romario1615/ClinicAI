@@ -1,11 +1,9 @@
 from __future__ import annotations
 
 import hashlib
-import hmac
 import secrets
 import uuid
 from datetime import timedelta
-from decimal import Decimal
 from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, Path, Query, Request, Response
@@ -22,13 +20,18 @@ from app.modulos.documentos.esquemas import (
     ContextoAtencion,
     EntregaSalida,
     Motivo,
-    Partida,
     PresupuestoDesdePlan,
     RegistroNuevo,
     RegistroSalida,
 )
 from app.modulos.documentos.modelos import EntregaDocumento, RegistroPaciente
-from app.modulos.documentos.servicios import ServicioRegistros, pdf_registro
+from app.modulos.documentos.servicios import (
+    ServicioRegistros,
+    documento_verificable,
+    pdf_en_contexto,
+    presupuesto_del_plan,
+    verificar_identidad,
+)
 from app.modulos.historia.especialidades import especialidades_permitidas, exige_modulo
 from app.modulos.historia.modelos import Receta
 from app.modulos.odontologia.modelos import PlanTratamiento
@@ -115,6 +118,9 @@ async def auditar(
     reloj: RelojActual,
     fila: RegistroPaciente,
     accion: AccionAuditada,
+    *,
+    ip: str | None = None,
+    intentos: int | None = None,
 ) -> None:
     await auditor.registrar(
         [
@@ -127,6 +133,8 @@ async def auditar(
                 paciente_id=fila.paciente_id,
                 nivel_sensibilidad=NivelSensibilidad(fila.nivel_sensibilidad),
                 version=fila.version,
+                ip=ip,
+                intentos=intentos,
             )
         ]
     )
@@ -253,26 +261,7 @@ async def presupuesto_desde_plan(
         e.id == autor.especialidad_id and "planes" in modulos for e, modulos, _ in permitidas
     ):
         raise PermisoDenegado("Los planes de tratamiento no están disponibles en esa especialidad.")
-    partidas = [
-        Partida(descripcion=p.descripcion, cantidad=Decimal(1), precio_unitario=p.precio)
-        for p in seleccion[1]
-        if p.estado != "CANCELADO"
-    ]
-    if not partidas:
-        raise DatosInvalidos("El plan no tiene procedimientos pendientes de presupuestar.")
-    nuevo = RegistroNuevo(
-        clave_idempotencia=datos.clave_idempotencia,
-        tipo="PRESUPUESTO",
-        titulo=plan.titulo,
-        especialidad_id=autor.especialidad_id,
-        sede_id=datos.sede_id,
-        cita_id=datos.cita_id,
-        motivo="Presupuesto del plan registrado",
-        partidas=partidas,
-        moneda=plan.moneda,
-        nivel_sensibilidad="N3" if plan.nivel_sensibilidad == "N3" else "N2",
-        observaciones=f"Plan de origen: {plan.id}. {plan.observaciones or ''}",
-    )
+    nuevo = presupuesto_del_plan(plan, seleccion[1], autor.especialidad_id, datos)
     fila = await ServicioRegistros(sesion, reloj).crear(principal, plan.paciente_id, nuevo)
     await auditar(auditor, principal, reloj, fila, AccionAuditada.REGISTRO_PACIENTE_CREADO)
     await sesion.commit()
@@ -326,9 +315,9 @@ async def anular(
     return RegistroSalida.model_validate(copia)
 
 
-def respuesta_pdf(fila: RegistroPaciente) -> Response:
+async def respuesta_pdf(fila: RegistroPaciente, sesion: Sesion) -> Response:
     return Response(
-        pdf_registro(fila),
+        await pdf_en_contexto(fila, sesion),
         media_type="application/pdf",
         headers={
             "Content-Disposition": f'attachment; filename="ClinicAI-{fila.tipo.lower()}-{fila.id.hex[:12]}-v{fila.version}.pdf"',
@@ -372,9 +361,10 @@ async def descargar(
     # Exportar una receta suspendida como vigente sería inseguro.
     if fila.tipo == "RECETA":
         await exigir_vigente(sesion, fila)
+    respuesta = await respuesta_pdf(fila, sesion)
     await auditar(auditor, principal, reloj, fila, AccionAuditada.REGISTRO_PACIENTE_LEIDO)
     await sesion.commit()
-    return respuesta_pdf(fila)
+    return respuesta
 
 
 @enrutador.post(PREFIJO + "/{registro_id}/whatsapp", response_model=EntregaSalida)
@@ -397,6 +387,12 @@ async def compartir(
     paciente = await servicio.acceso(principal, paciente_id, True)
     if not paciente.telefono_whatsapp:
         raise DatosInvalidos("El paciente no tiene teléfono WhatsApp registrado.")
+    if paciente.fecha_nacimiento is None and documento_verificable(paciente) is None:
+        raise DatosInvalidos(
+            "Registre una fecha de nacimiento o documento válido para verificar la identidad del paciente antes de compartir el PDF."
+        )
+    # No encolar un enlace a un documento que no puede representarse fielmente.
+    await respuesta_pdf(fila, sesion)
     await sesion.execute(select(Paciente.id).where(Paciente.id == paciente_id).with_for_update())
     clave = str(datos.clave_idempotencia)
     entrega = await sesion.scalar(
@@ -477,7 +473,8 @@ async def acceso_publico(
     auditor: Auditor,
     limitador: Limitador,
 ) -> Response:
-    origen = peticion.client.host if peticion.client else "desconocido"
+    ip = peticion.client.host if peticion.client else None
+    origen = ip or "desconocido"
     await limitador.exigir(f"documentos:ip:{origen}", limite=10, fallar_cerrado=True)
     huella = hashlib.sha256(token.encode()).hexdigest()
     entrega = await sesion.scalar(
@@ -494,9 +491,14 @@ async def acceso_publico(
     ):
         raise no_disponible
     fila = await sesion.get(RegistroPaciente, entrega.registro_id)
-    if fila is None:
+    if (
+        fila is None
+        or not fila.vigente
+        or fila.anulado
+        or fila.tipo == "FACIOGRAMA"
+        or fila.nivel_sensibilidad == "N3"
+    ):
         raise no_disponible
-    await exigir_vigente(sesion, fila)
     paciente = await sesion.get(Paciente, fila.paciente_id)
     clinica = await sesion.get(Clinica, fila.clinica_id)
     if paciente is None or clinica is None or not clinica.activa:
@@ -505,13 +507,8 @@ async def acceso_publico(
         raise DatosInvalidos(
             "Indique su fecha de nacimiento o los últimos cuatro caracteres del documento."
         )
-    coincide = (
-        datos.fecha_nacimiento == paciente.fecha_nacimiento
-        if paciente.fecha_nacimiento
-        else hmac.compare_digest(
-            (datos.ultimos_digitos_documento or "").upper(),
-            (paciente.numero_documento or "")[-4:].upper(),
-        )
+    coincide = verificar_identidad(
+        paciente, datos.fecha_nacimiento, datos.ultimos_digitos_documento
     )
     actor = _principal_paciente(paciente)
     if not coincide:
@@ -526,11 +523,26 @@ async def acceso_publico(
                     entidad_tipo="entrega_documento",
                     entidad_id=entrega.id,
                     paciente_id=paciente.id,
+                    ip=ip,
+                    intentos=entrega.intentos_fallidos,
                 )
             ]
         )
         await sesion.commit()
         raise CredencialesInvalidas("Los datos no coinciden o el enlace está bloqueado.")
-    await auditar(auditor, actor, reloj, fila, AccionAuditada.REGISTRO_PACIENTE_LEIDO)
+    try:
+        await exigir_vigente(sesion, fila)
+    except RecursoNoEncontrado:
+        raise no_disponible from None
+    respuesta = await respuesta_pdf(fila, sesion)
+    await auditar(
+        auditor,
+        actor,
+        reloj,
+        fila,
+        AccionAuditada.REGISTRO_PACIENTE_LEIDO,
+        ip=ip,
+        intentos=entrega.intentos_fallidos,
+    )
     await sesion.commit()
-    return respuesta_pdf(fila)
+    return respuesta

@@ -11,7 +11,7 @@
  */
 import { HttpClient, HttpErrorResponse, HttpParams } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
-import { Observable, catchError, throwError } from 'rxjs';
+import { Observable, catchError, from, mergeMap, throwError } from 'rxjs';
 
 import { CONFIGURACION } from './configuracion';
 import type {
@@ -1689,6 +1689,24 @@ export function traducirFallo(error: unknown): Observable<never> {
           0,
         ),
     );
+  }
+
+  // Una descarga PDF/imagen recibe también sus errores JSON como Blob.
+  // Leer solo un cuerpo pequeño; no convertir archivos binarios en mensajes.
+  if (error.error instanceof Blob) {
+    if (error.error.size === 0 || error.error.size > 65536) {
+      return traducirFallo(new HttpErrorResponse({ error: null, status: error.status }));
+    }
+    const lectura: Promise<unknown> = error.error.text().then(texto => {
+          try {
+            const cuerpo: unknown = JSON.parse(texto);
+            return cuerpo !== null && typeof cuerpo === 'object' && !Array.isArray(cuerpo) ? cuerpo : null;
+          } catch { return null; }
+        }, () => null);
+    return from(lectura).pipe(mergeMap(cuerpo => traducirFallo(new HttpErrorResponse({
+      error: cuerpo, status: error.status, statusText: error.statusText, headers: error.headers,
+      url: error.url ?? undefined,
+    }))));
   }
 
   const cuerpo = error.error as

@@ -1,18 +1,24 @@
 from __future__ import annotations
 
 import hashlib
+import hmac
+import re
 import uuid
+from datetime import UTC, date
 from decimal import ROUND_HALF_UP, Decimal
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
+from pydantic import ValidationError
 from sqlalchemy import Select, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modulos.agenda.repositorio import RepositorioAgenda
-from app.modulos.documentos.esquemas import ZONAS, RegistroNuevo
+from app.modulos.documentos.esquemas import ZONAS, Partida, PresupuestoDesdePlan, RegistroNuevo
 from app.modulos.documentos.modelos import RegistroPaciente
 from app.modulos.documentos.pdf import generar_pdf
 from app.modulos.historia.especialidades import especialidades_permitidas
 from app.modulos.historia.modelos import Receta, RecetaMedicamento
+from app.modulos.odontologia.modelos import PlanTratamiento, ProcedimientoPlan
 from app.modulos.organizacion.modelos import Clinica, Sede
 from app.modulos.pacientes.acceso_clinico import GuardiaClinica
 from app.modulos.pacientes.modelos import Paciente
@@ -20,6 +26,53 @@ from app.modulos.profesionales.modelos import Profesional
 from app.nucleo.autorizacion import Principal
 from app.nucleo.errores import ConflictoEstado, DatosInvalidos, PermisoDenegado, RecursoNoEncontrado
 from app.nucleo.reloj import Reloj
+
+
+def documento_verificable(paciente: Paciente) -> str | None:
+    final = (paciente.numero_documento or "").strip()[-4:]
+    return final if re.fullmatch(r"[0-9A-Za-z]{4}", final) else None
+
+
+def verificar_identidad(paciente: Paciente, nacimiento: date | None, documento: str | None) -> bool:
+    if paciente.fecha_nacimiento is not None:
+        return nacimiento is not None and nacimiento == paciente.fecha_nacimiento
+    registrado = documento_verificable(paciente)
+    return bool(
+        registrado and documento and hmac.compare_digest(documento.upper(), registrado.upper())
+    )
+
+
+def presupuesto_del_plan(
+    plan: PlanTratamiento,
+    procedimientos: list[ProcedimientoPlan],
+    especialidad_id: uuid.UUID,
+    datos: PresupuestoDesdePlan,
+) -> RegistroNuevo:
+    try:
+        partidas = [
+            Partida(descripcion=p.descripcion, cantidad=Decimal(1), precio_unitario=p.precio)
+            for p in procedimientos
+            if p.estado != "CANCELADO"
+        ]
+        if not partidas:
+            raise DatosInvalidos("El plan no tiene procedimientos pendientes de presupuestar.")
+        return RegistroNuevo(
+            clave_idempotencia=datos.clave_idempotencia,
+            tipo="PRESUPUESTO",
+            titulo=plan.titulo,
+            especialidad_id=especialidad_id,
+            sede_id=datos.sede_id,
+            cita_id=datos.cita_id,
+            motivo="Presupuesto del plan registrado",
+            partidas=partidas,
+            moneda=plan.moneda,
+            nivel_sensibilidad="N3" if plan.nivel_sensibilidad == "N3" else "N2",
+            observaciones=f"Plan de origen: {plan.id}. {plan.observaciones or ''}",
+        )
+    except ValidationError as exc:
+        raise DatosInvalidos(
+            "El plan supera los límites del presupuesto (texto, importe o cantidad de partidas). Revise el plan antes de emitirlo."
+        ) from exc
 
 
 class ServicioRegistros:
@@ -142,9 +195,7 @@ class ServicioRegistros:
         )
         if nivel == "N3" and not principal.tiene_permiso("historia_clinica.leer_sensible"):
             raise PermisoDenegado("Se requiere permiso de datos clínicos sensibles.")
-        clinica = await self.sesion.get(Clinica, paciente.clinica_id)
-        autor = await self.sesion.get(Profesional, principal.profesional_id)
-        assert clinica is not None and autor is not None
+        clinica, autor = await self._identidad_emisor(paciente.clinica_id, principal.profesional_id)
         contenido: dict[str, object] = {
             "solicitud_hash": huella,
             "zonas": [z.model_dump() for z in datos.zonas],
@@ -160,6 +211,7 @@ class ServicioRegistros:
             "profesional": f"{autor.nombre} {autor.apellido}",
             "registro_profesional": autor.numero_registro_profesional,
             "sede": sede.nombre if sede else None,
+            "zona_horaria": (sede.zona_horaria if sede else None) or clinica.zona_horaria,
         }
         if datos.tipo == "RECETA":
             nivel_receta = await self._receta(principal, paciente_id, datos, contenido)
@@ -189,6 +241,15 @@ class ServicioRegistros:
         self.sesion.add(fila)
         await self.sesion.flush()
         return fila
+
+    async def _identidad_emisor(
+        self, clinica_id: uuid.UUID, profesional_id: uuid.UUID
+    ) -> tuple[Clinica, Profesional]:
+        clinica = await self.sesion.get(Clinica, clinica_id)
+        autor = await self.sesion.get(Profesional, profesional_id)
+        if clinica is None or autor is None:
+            raise RecursoNoEncontrado("La clínica o el profesional no está disponible.")
+        return clinica, autor
 
     async def _contexto(
         self, principal: Principal, paciente: Paciente, datos: RegistroNuevo
@@ -290,17 +351,36 @@ class ServicioRegistros:
         return nivel
 
 
-def pdf_registro(fila: RegistroPaciente) -> bytes:
+async def pdf_en_contexto(fila: RegistroPaciente, sesion: AsyncSession) -> bytes:
+    clinica = await sesion.get(Clinica, fila.clinica_id)
+    sede = await sesion.get(Sede, fila.sede_id) if fila.sede_id else None
+    zona = sede.zona_horaria if sede and sede.clinica_id == fila.clinica_id else None
+    if clinica is None:
+        raise RecursoNoEncontrado("El documento no está disponible.")
+    return pdf_registro(fila, zona or clinica.zona_horaria)
+
+
+def pdf_registro(fila: RegistroPaciente, zona_horaria: str = "UTC") -> bytes:
     c = fila.contenido
+    zona = str(c.get("zona_horaria") or zona_horaria)
+    try:
+        fecha = (
+            fila.creado_en.replace(tzinfo=UTC) if fila.creado_en.tzinfo is None else fila.creado_en
+        )
+        emision = fecha.astimezone(ZoneInfo(zona)).strftime("%d/%m/%Y %H:%M %z")
+    except (ZoneInfoNotFoundError, ValueError) as exc:
+        raise DatosInvalidos(
+            "Revise la zona horaria de la clínica o sede antes de exportar el documento."
+        ) from exc
     lineas = [
         str(c.get("clinica", "")),
         str(c.get("clinica_contacto", "")),
         f"Identificación fiscal: {c.get('identificacion_fiscal') or 'No registrada'}",
-        f"Paciente: {c.get('paciente')} | Documento: {c.get('documento')}",
+        f"Paciente: {c.get('paciente') or 'No registrado'} | Documento: {c.get('documento') or 'No registrado'}",
         f"Profesional: {c.get('profesional')} | Registro: {c.get('registro_profesional') or 'No registrado'}",
         f"Sede: {c.get('sede') or 'Sin cita asociada'}",
         f"Referencia: {fila.raiz_id} | Versión: {fila.version}",
-        f"Emitido: {fila.creado_en.isoformat()}",
+        f"Emitido: {emision} ({zona})",
         "ANULADO"
         if fila.anulado
         else "HISTÓRICO: sustituido por una versión posterior"
@@ -328,7 +408,7 @@ def pdf_registro(fila: RegistroPaciente) -> bytes:
                 [
                     "",
                     f"TOTAL: {total:.2f} {c.get('moneda')}",
-                    f"Válido hasta: {c.get('valido_hasta') or 'Sin fecha indicada'}",
+                    f"Válido hasta: {date.fromisoformat(str(c['valido_hasta'])).strftime('%d/%m/%Y') if c.get('valido_hasta') else 'Sin fecha indicada'}",
                     "Presupuesto orientativo. No es una factura ni acredita pago.",
                 ]
             )
@@ -356,7 +436,9 @@ def pdf_registro(fila: RegistroPaciente) -> bytes:
                     [
                         f"{m['nombre']} {m.get('concentracion') or ''}",
                         f"Dosis: {m['dosis']} | Vía: {m['via']} | {pauta}",
-                        f"Duración: {m['duracion_dias']} días",
+                        f"Duración: {m['duracion_dias']} días"
+                        if m.get("duracion_dias") is not None
+                        else "Duración: no indicada en la receta confirmada",
                         f"Primera toma: {m.get('hora_primera_toma') or 'Según la indicación del profesional'}",
                         str(m.get("instrucciones") or ""),
                     ]

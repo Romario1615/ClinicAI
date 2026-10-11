@@ -18,6 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.mensajeria.adaptadores import AdaptadorSandbox, RegistroCanales
 from app.mensajeria.servicios import ResumenProceso, ServicioOutbox
 from app.modulos.agenda.modelos import Cita
+from app.modulos.auditoria.modelos import Auditoria
 from app.modulos.documentos.modelos import EntregaDocumento, RegistroPaciente
 from app.modulos.historia.modelos import Receta
 from app.modulos.odontologia.modelos import PlanTratamiento, ProcedimientoPlan
@@ -129,6 +130,169 @@ async def test_crud_presupuesto_pdf_versionado_y_anulacion(
     assert len(historial.json()) == 3
     fila = await sesion.get(RegistroPaciente, uuid.UUID(original["id"]))
     assert fila is not None and fila.contenido["partidas"] == datos["partidas"]
+
+
+async def _enlace_prueba(cliente, api, acceso, especialidad, sede, paciente, sesion, **cambios):
+    ruta = f"{api}/historia/pacientes/{paciente.id}/registros"
+    registro = await cliente.post(ruta, json=nuevo(especialidad, sede, **cambios), headers=acceso)
+    assert registro.status_code == 201, registro.text
+    sesion.add(
+        Consentimiento(
+            paciente_id=paciente.id,
+            tipo="DOCUMENTOS_WHATSAPP",
+            otorgado=True,
+            version_texto="1",
+            texto_hash="0" * 64,
+            canal="PRESENCIAL",
+        )
+    )
+    await sesion.flush()
+    envio = await cliente.post(
+        f"{ruta}/{registro.json()['id']}/whatsapp",
+        json={"clave_idempotencia": str(uuid.uuid4()), "identidad_destinatario_confirmada": True},
+        headers=acceso,
+    )
+    assert envio.status_code == 200, envio.text
+    token = envio.json()["enlace"].rsplit("/", 1)[-1]
+    return f"{api}/publico/documentos/{token}/acceso", uuid.UUID(envio.json()["id"])
+
+
+@pytest.mark.parametrize("documento", [None, "", "12", "   "])
+async def test_enlace_preexistente_jamas_verifica_identidad_vacia(
+    cliente, api, acceso, especialidad, sede, paciente, sesion, documento
+):
+    ruta, entrega_id = await _enlace_prueba(
+        cliente, api, acceso, especialidad, sede, paciente, sesion
+    )
+    paciente.fecha_nacimiento = None
+    paciente.numero_documento = documento
+    paciente.tipo_documento = "SIN_DOCUMENTO"
+    await sesion.flush()
+    respuesta = await cliente.post(ruta, json={"fecha_nacimiento": "1990-01-01"})
+    assert respuesta.status_code == 401, respuesta.text
+    entrega = await sesion.get(EntregaDocumento, entrega_id)
+    assert entrega is not None and entrega.intentos_fallidos == 1
+
+
+async def test_documento_no_se_comparte_sin_identidad_registrada(
+    cliente, api, acceso, especialidad, sede, paciente, sesion
+):
+    paciente.fecha_nacimiento = None
+    paciente.numero_documento = None
+    paciente.tipo_documento = "SIN_DOCUMENTO"
+    await sesion.flush()
+    ruta = f"{api}/historia/pacientes/{paciente.id}/registros"
+    registro = await cliente.post(ruta, json=nuevo(especialidad, sede), headers=acceso)
+    assert registro.status_code == 201
+    respuesta = await cliente.post(
+        f"{ruta}/{registro.json()['id']}/whatsapp",
+        json={"clave_idempotencia": str(uuid.uuid4()), "identidad_destinatario_confirmada": True},
+        headers=acceso,
+    )
+    assert respuesta.status_code == 422, respuesta.text
+    assert "identidad" in respuesta.json()["mensaje"]
+    assert not await sesion.scalar(
+        select(EntregaDocumento.id).where(
+            EntregaDocumento.registro_id == uuid.UUID(registro.json()["id"])
+        )
+    )
+    assert not await sesion.scalar(
+        select(OutboxMensaje.id).where(OutboxMensaje.destino_id == paciente.id)
+    )
+
+
+async def test_verificacion_por_documento_sin_nacimiento_y_limite_de_intentos(
+    cliente, api, acceso, especialidad, sede, paciente, sesion
+):
+    paciente.fecha_nacimiento = None
+    paciente.numero_documento = "QA-SINT-AB12"
+    await sesion.flush()
+    ruta, entrega_id = await _enlace_prueba(
+        cliente, api, acceso, especialidad, sede, paciente, sesion
+    )
+    incorrecta = await cliente.post(ruta, json={"ultimos_digitos_documento": "XX99"})
+    assert incorrecta.status_code == 401
+    correcta = await cliente.post(ruta, json={"ultimos_digitos_documento": "ab12"})
+    assert correcta.status_code == 200 and correcta.content.startswith(b"%PDF-")
+    assert (await sesion.get(EntregaDocumento, entrega_id)).intentos_fallidos == 1
+    auditorias = list(
+        await sesion.scalars(
+            select(Auditoria).where(
+                Auditoria.paciente_id == paciente.id,
+                Auditoria.accion.in_(["documento.acceso_fallido", "registro_paciente.leido"]),
+            )
+        )
+    )
+    assert any(a.ip is not None and (a.metadatos or {}).get("intentos") == 1 for a in auditorias)
+    assert "AB12" not in str([a.metadatos for a in auditorias])
+
+
+async def test_receta_suspendida_no_revela_estado_antes_de_verificacion(
+    cliente, api, acceso, especialidad, sede, paciente, sesion, clinica, profesional, reloj
+):
+    receta = await _receta(sesion, clinica, paciente, profesional, reloj)
+    ruta, _ = await _enlace_prueba(
+        cliente,
+        api,
+        acceso,
+        especialidad,
+        sede,
+        paciente,
+        sesion,
+        tipo="RECETA",
+        receta_id=str(receta.id),
+        partidas=[],
+    )
+    receta.estado = "SUSPENDIDA"
+    receta.suspendida_en = reloj.ahora()
+    receta.motivo_suspension = "Prueba sintética"
+    await sesion.flush()
+    incorrecta = await cliente.post(ruta, json={"fecha_nacimiento": "1990-01-01"})
+    assert incorrecta.status_code == 401
+    correcta = await cliente.post(ruta, json={"fecha_nacimiento": "1990-04-12"})
+    assert correcta.status_code == 404
+    assert "receta" not in correcta.json()["mensaje"].lower()
+
+
+@pytest.mark.parametrize("no_representable", ["😀", "\u2028", "\u034f", "\ufe0f"])
+async def test_pdf_unicode_fecha_y_error_controlado_no_envia_documento(
+    cliente, api, acceso, especialidad, sede, paciente, sesion, no_representable
+):
+    ruta = f"{api}/historia/pacientes/{paciente.id}/registros"
+    sede.zona_horaria = "America/Guayaquil"
+    await sesion.flush()
+    r = await cliente.post(
+        ruta,
+        json=nuevo(
+            especialidad, sede, observaciones="Unidades sintéticas: μg ≤ 5\nSegundo párrafo"
+        ),
+        headers=acceso,
+    )
+    assert r.status_code == 201
+    assert r.json()["contenido"]["zona_horaria"] == "America/Guayaquil"
+    pdf = await cliente.get(f"{ruta}/{r.json()['id']}/pdf", headers=acceso)
+    assert pdf.status_code == 200
+    texto = "\n".join(p.extract_text() for p in PdfReader(BytesIO(pdf.content)).pages)
+    assert "μg ≤ 5\nSegundo párrafo" in texto and "America/Guayaquil" in texto
+    no_exportable = await cliente.post(
+        ruta,
+        json=nuevo(especialidad, sede, observaciones=f"Texto {no_representable} fin"),
+        headers=acceso,
+    )
+    assert no_exportable.status_code == 201
+    pdf = await cliente.get(f"{ruta}/{no_exportable.json()['id']}/pdf", headers=acceso)
+    assert pdf.status_code == 422 and f"U+{ord(no_representable):04X}" in pdf.json()["mensaje"]
+    envio = await cliente.post(
+        f"{ruta}/{no_exportable.json()['id']}/whatsapp",
+        json={"clave_idempotencia": str(uuid.uuid4()), "identidad_destinatario_confirmada": True},
+        headers=acceso,
+    )
+    assert envio.status_code == 422
+    assert not await sesion.scalar(
+        select(EntregaDocumento.id).where(
+            EntregaDocumento.registro_id == uuid.UUID(no_exportable.json()["id"])
+        )
+    )
 
 
 async def test_faciograma_persistente_zonas_y_pdf(
@@ -597,8 +761,22 @@ async def test_grupos_separados_y_paginados(cliente, api, acceso, especialidad, 
     assert [r["tipo"] for r in facial.json()] == ["FACIOGRAMA"]
 
 
+@pytest.mark.parametrize(
+    "caso", ["valido", "descripcion_vacia", "precio", "observaciones", "partidas"]
+)
 async def test_plan_propuesto_genera_documento_persistente(
-    cliente, api, acceso, sesion, usuario, clinica, profesional, paciente, especialidad, sede, reloj
+    cliente,
+    api,
+    acceso,
+    sesion,
+    usuario,
+    clinica,
+    profesional,
+    paciente,
+    especialidad,
+    sede,
+    reloj,
+    caso,
 ):
     especialidad.codigo = "ODONTOLOGIA"
     especialidad.nombre = "Odontología sintética"
@@ -613,17 +791,31 @@ async def test_plan_propuesto_genera_documento_persistente(
     )
     sesion.add(plan)
     await sesion.flush()
-    sesion.add(
-        ProcedimientoPlan(
-            plan_id=plan.id, descripcion="Procedimiento sintético", precio=Decimal("45.50"), fase=1
+    if caso == "observaciones":
+        plan.observaciones = "X" * 4000
+    for indice in range(101 if caso == "partidas" else 1):
+        sesion.add(
+            ProcedimientoPlan(
+                plan_id=plan.id,
+                descripcion="" if caso == "descripcion_vacia" else "Procedimiento sintético",
+                precio=Decimal("1000000") if caso == "precio" else Decimal("45.50"),
+                fase=1,
+                orden=indice,
+            )
         )
-    )
     await sesion.flush()
     r = await cliente.post(
         f"{api}/historia/planes/{plan.id}/presupuesto-documento",
         json={"clave_idempotencia": str(uuid.uuid4()), "sede_id": str(sede.id)},
         headers=acceso,
     )
+    if caso != "valido":
+        assert r.status_code == 422, r.text
+        assert "límites" in r.json()["mensaje"]
+        assert not await sesion.scalar(
+            select(RegistroPaciente.id).where(RegistroPaciente.paciente_id == paciente.id)
+        )
+        return
     assert r.status_code == 201, r.text
     assert r.json()["contenido"]["partidas"][0]["precio_unitario"] == "45.50"
     assert str(plan.id) in r.json()["contenido"]["observaciones"]

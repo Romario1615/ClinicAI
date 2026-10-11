@@ -559,11 +559,13 @@ _PROFESIONAL = ManualSistema(
                 "En la ficha del paciente, abra Documentos y PDF y pulse Crear documento; complete conceptos, cantidades, precios, moneda y vigencia del presupuesto o cotización.",
                 "Para una receta, seleccione Receta confirmada; su pauta y firmante se copian del registro confirmado, sin editar medicamentos en el documento.",
                 "Guarde la versión y use Descargar PDF; desde Planes también puede guardar un presupuesto y descargar su archivo.",
+                "Compruebe la fecha de emisión en la zona de la sede y los párrafos del PDF. Si se indica un carácter no representable, revise el texto con el autor: la aplicación no sustituye unidades ni dosis.",
                 "Antes de Enviar por WhatsApp, revise teléfono y consentimiento Documentos por WhatsApp; confirme el destinatario en la ventana.",
                 "Consulte la entrega en Mensajes: sandbox registra una simulación; con proveedor configurado, el paciente recibe un enlace privado con vigencia de siete días.",
             ),
             (
                 "El enlace exige fecha de nacimiento registrada o cuatro caracteres del documento si falta esa fecha; caduca y se bloquea tras cinco fallos.",
+                "Sin datos de identidad registrados no se puede solicitar el enlace; registre esos datos por el circuito autorizado. Una duración ausente se muestra como no indicada, sin inventar una pauta.",
                 "Editar o anular invalida los enlaces anteriores. Los registros faciales y documentos N3 se entregan presencialmente.",
                 "El PDF no sustituye una factura ni incorpora firma electrónica certificada.",
             ),
@@ -1444,6 +1446,7 @@ _AUDITOR = ManualSistema(
             (
                 "En Usuarios, contraste las cuentas inactivas y los roles conservados con las bajas autorizadas por la clínica.",
                 "Solicite al responsable el informe de auditoría de creación, anulación y entrega documental para contrastar autores y fechas sin incluir contenido de la historia.",
+                "En accesos públicos documentales, contraste la IP y el contador de intentos fallidos con los eventos de entrega; no solicite la fecha o los caracteres usados para verificar identidad.",
             ),
             (
                 "Los PDF y mapas de fichas autorizadas están disponibles para consulta; no puede emitir, corregir o anular registros clínicos.",

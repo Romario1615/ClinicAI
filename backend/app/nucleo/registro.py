@@ -121,6 +121,13 @@ MARCA_REDACTADO = "[redactado]"
 # un texto libre, por ejemplo en el mensaje de una excepcion de base de datos
 # que incluye los valores de la fila.
 PATRONES_CONTENIDO: tuple[tuple[re.Pattern[str], str], ...] = (
+    # Los logs de terceros incorporan URL como texto libre: quitar consultas
+    # completas (búsquedas, OAuth y credenciales), y tokens de enlaces privados.
+    (re.compile(r"((?:https?://|/)[^\s?\"<>]+)\?[^\s\"<>]*", re.IGNORECASE), r"\1?[redactado]"),
+    (
+        re.compile(r"(/(?:publico/)?(?:documentos|indicaciones)/)[^/\s?\"<>]+", re.IGNORECASE),
+        r"\1[redactado]",
+    ),
     # Cedula ecuatoriana (10 digitos) y RUC (13).  Se exige frontera de
     # palabra para no destrozar identificadores numericos legitimos.
     (re.compile(r"\b\d{10}(?:001)?\b"), "[documento]"),

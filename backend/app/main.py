@@ -28,6 +28,8 @@ from __future__ import annotations
 import hmac
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from functools import cache
+from types import SimpleNamespace
 from typing import Any
 
 import redis.asyncio as redis_async
@@ -308,21 +310,32 @@ def crear_aplicacion(
     _configurar_contrato_openapi(aplicacion)
 
     if configuracion.metricas_habilitadas:
-        # Las métricas necesitan plantillas, no el documento OpenAPI completo.
-        # iter_route_contexts conserva los prefijos de los routers incluidos en
-        # la versión de FastAPI fijada por uv.lock.
-        rutas_metricas = list(
-            dict.fromkeys(
-                contexto.path_format
-                for contexto in iter_route_contexts(aplicacion.routes)
-                if isinstance(contexto.route, APIRoute)
-                and contexto.include_in_schema
-                and contexto.path_format is not None
-            )
-        )
+        rutas_metricas = list(_plantillas_metricas())
         rutas_metricas.append(configuracion.ruta_metricas)
         aplicacion.state.metricas.configurar_rutas(rutas_metricas)
     return aplicacion
+
+
+@cache
+def _plantillas_metricas() -> tuple[str, ...]:
+    """La topología del backend es fija; solo se conservan plantillas públicas.
+
+    No se reutilizan aplicaciones, sesiones, contadores ni datos de pacientes.
+    El mapa no necesita proveedores ni BD. La ruta configurable de métricas
+    se añade en cada aplicación, fuera de este catálogo.
+    """
+    mapa = FastAPI()
+    mapa.state.configuracion = SimpleNamespace(metricas_habilitadas=False)
+    _registrar_rutas(mapa)
+    return tuple(
+        dict.fromkeys(
+            contexto.path_format
+            for contexto in iter_route_contexts(mapa.routes)
+            if isinstance(contexto.route, APIRoute)
+            and contexto.include_in_schema
+            and contexto.path_format is not None
+        )
+    )
 
 
 def _registrar_rutas_del_equipo(aplicacion: FastAPI) -> None:

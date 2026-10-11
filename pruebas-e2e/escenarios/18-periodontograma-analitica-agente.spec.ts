@@ -136,7 +136,7 @@ test('analítica descriptiva, predictiva y prescriptiva con metodología visible
   expect(a11y.violations).toEqual([]);
 });
 
-test('recepción tiene apoyo administrativo, sin herramientas ni resumen clínico',async({page,request})=>{
+test('recepción consulta el resumen del paciente y conserva el acceso sin escritura clínica',async({page,request})=>{
   const paciente=await pacienteConNotas(request);
   await acceder(page,'recepcion');await irA(page,'Pacientes');
   const buscar=page.getByRole('form',{name:'Buscar pacientes'});
@@ -147,7 +147,23 @@ test('recepción tiene apoyo administrativo, sin herramientas ni resumen clínic
   await expect(page.getByRole('tab',{name:'Faciograma',exact:true})).toHaveCount(0);
   await page.getByRole('button',{name:'Agente del paciente',exact:true}).click();
   const agente=page.getByRole('region',{name:'Agente del paciente'});
-  await expect(agente.getByRole('button',{name:'Resumen clínico',exact:true})).toHaveCount(0);
+  // ADR-0026: recepción consulta N2; ese permiso no concede registro clínico.
+  const resumen=page.waitForResponse(r=>r.request().method()==='POST' && /\/asistente\/pacientes\/.*\/mensajes$/.test(r.url()));
+  await agente.getByRole('button',{name:'Resumen clínico',exact:true}).click();
+  const respuesta=await resumen;
+  expect(respuesta.status()).toBe(200);
+  const contenido=await respuesta.json();
+  expect(contenido.paciente_id).toBe(paciente.id);
+  expect(contenido.datos.elementos.length).toBeGreaterThan(0);
+  await expect(agente.getByRole('log')).toContainText(contenido.texto);
+  const sesion=await request.post(`${API}/autenticacion/sesion-local`,{data:{codigo_rol:'recepcion'}});
+  const headers={Authorization:`Bearer ${(await sesion.json()).token_acceso}`};
+  const alta=await request.post(`${API}/historia/pacientes/${paciente.id}/registros`,{headers,data:{
+    clave_idempotencia:randomUUID(),tipo:'PRESUPUESTO',titulo:'Prueba de prohibición clínica',
+    especialidad_id:randomUUID(),sede_id:randomUUID(),motivo:'Registro sintético no autorizado',
+    partidas:[{descripcion:'Concepto sintético',cantidad:'1',precio_unitario:'10'}],
+  }});
+  expect(alta.status()).toBe(403);
   await agente.getByRole('button',{name:'Mis citas',exact:true}).click();
   await expect(agente.getByRole('log')).toContainText(/citas?|proximas/i);
 });

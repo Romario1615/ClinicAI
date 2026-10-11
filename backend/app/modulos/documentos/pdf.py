@@ -3,29 +3,19 @@
 from __future__ import annotations
 
 from io import BytesIO
-from textwrap import wrap
 
 from pypdf import PdfWriter
 from pypdf.generic import DecodedStreamObject, DictionaryObject, IndirectObject, NameObject
 
 from app.modulos.documentos.esquemas import ZONAS
+from app.modulos.documentos.fuente_pdf import fuente_pdf, incorporar_fuente, texto_pdf
 
 
 def generar_pdf(titulo: str, lineas: list[str], mapa: dict[str, str] | None = None) -> bytes:
     escritor = PdfWriter()
-    fuente = DictionaryObject(
-        {
-            NameObject("/Type"): NameObject("/Font"),
-            NameObject("/Subtype"): NameObject("/Type1"),
-            NameObject("/BaseFont"): NameObject("/Helvetica"),
-            NameObject("/Encoding"): NameObject("/WinAnsiEncoding"),
-        }
-    )
-    referencia = escritor._add_object(fuente)
+    referencia = incorporar_fuente(escritor)
     filas = [
-        fragmento
-        for linea in [titulo, "", *lineas]
-        for fragmento in (wrap(linea, 48, replace_whitespace=False) or [""])
+        fragmento for linea in [titulo, "", *lineas] for fragmento in fuente_pdf().filas(linea)
     ]
     grupos = [filas[i : i + 42] for i in range(0, len(filas), 42)] or [[]]
     for indice, grupo in enumerate(grupos):
@@ -35,12 +25,8 @@ def generar_pdf(titulo: str, lineas: list[str], mapa: dict[str, str] | None = No
         )
         comandos = ["0.08 0.35 0.37 rg 0 755 595 87 re f", "1 1 1 rg"]
 
-        def texto(valor: str, x: int, y: int, tamano: int = 11) -> str:
-            # Hexadecimal evita cualquier interpretación como operadores PDF.
-            codificado = valor.encode("cp1252", errors="replace").hex()
-            return f"BT /F1 {tamano} Tf {x} {y} Td <{codificado}> Tj ET"
-
-        cabecera = wrap(titulo, 38)[:2]
+        texto = texto_pdf
+        cabecera = fuente_pdf().filas(titulo, tamano=13)[:2]
         comandos.append(texto("ClinicAI", 42, 811, 20))
         comandos.extend(texto(linea, 42, 787 - i * 16, 13) for i, linea in enumerate(cabecera))
         comandos.append("0.12 0.17 0.22 rg")
@@ -74,7 +60,7 @@ def _agregar_mapa(escritor: PdfWriter, referencia: IndirectObject, estados: dict
     )
 
     def texto(valor: str, x: int, y: int, tamano: int = 9) -> str:
-        return f"BT /F1 {tamano} Tf {x} {y} Td <{valor.encode('cp1252', errors='replace').hex()}> Tj ET"
+        return texto_pdf(valor, x, y, tamano)
 
     comandos = [
         "0.08 0.35 0.37 rg",
