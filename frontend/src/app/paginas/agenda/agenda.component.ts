@@ -399,13 +399,13 @@ export class AgendaComponent {
    * denominador supuesto es peor que ninguno.
    */
   protected readonly resumenDia = computed(() => {
-    const vivas = this.citas().filter((cita) => cita.estado !== 'CANCELLED');
-    const ocupados = [...cargaPorProfesional(vivas).values()].reduce((a, b) => a + b, 0);
+    const visibles = this.citas().filter((cita) => this.verCanceladas() || cita.estado !== 'CANCELLED');
+    const ocupados = [...cargaPorProfesional(visibles).values()].reduce((a, b) => a + b, 0);
     const libres = this.secuencia()
       .filter((fila): fila is FilaDia & { tipo: 'hueco' } => fila.tipo === 'hueco')
       .reduce((total, hueco) => total + minutosEntre(hueco.inicio, hueco.fin), 0);
     return {
-      citas: vivas.length,
+      citas: visibles.length,
       ocupado: duracionLegible(ocupados),
       libre: duracionLegible(libres),
       tramosLibres: this.secuencia().filter((fila) => fila.tipo === 'hueco').length,

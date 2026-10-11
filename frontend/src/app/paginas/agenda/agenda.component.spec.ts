@@ -195,6 +195,17 @@ describe('AgendaComponent · reserva y series', { timeout: 20_000 }, () => {
     expect(fixture.componentInstance['citasCalendario']()).toEqual([propias]);
   });
 
+  it('el pie cuenta las citas que se muestran, incluidas las canceladas al activarlas', () => {
+    montar();
+    const confirmada = cita('2030-01-21T14:00:00Z');
+    const cancelada = cita('2030-01-21T14:30:00Z', { id: 'cita-cancelada', estado: 'CANCELLED' });
+    fixture.componentInstance['citas'].set([confirmada, cancelada]);
+
+    expect(fixture.componentInstance['resumenDia']()).toMatchObject({ citas: 1, ocupado: '30 min' });
+    fixture.componentInstance['verCanceladas'].set(true);
+    expect(fixture.componentInstance['resumenDia']()).toMatchObject({ citas: 2, ocupado: '30 min' });
+  });
+
   /** Responde la carga del día: sin citas y con los turnos que toquen. */
   function responderDia(quitar: readonly string[] = []): void {
     http
