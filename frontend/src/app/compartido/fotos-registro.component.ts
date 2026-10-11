@@ -7,6 +7,37 @@ import { VentanaFlotanteComponent } from './ventana-flotante.component';
 import { PERMISOS } from '../nucleo/servicios/configuracion';
 import { SesionService } from '../nucleo/servicios/sesion.service';
 
+/** Permisos por tipo de registro: mismos que `DESTINOS` del backend. */
+interface DestinoFoto { readonly leer: readonly string[]; readonly escribir: readonly string[]; readonly clinico?: boolean }
+const CLINICO_HISTORIA: DestinoFoto = { leer: ['historia_clinica.leer'], escribir: ['historia_clinica.escribir'], clinico: true };
+const CLINICO_DENTAL: DestinoFoto = { leer: ['odontograma.leer'], escribir: ['odontograma.escribir'], clinico: true };
+export const DESTINOS_FOTO: Readonly<Record<string, DestinoFoto>> = {
+  clinica: { leer: ['clinica.leer', 'configuracion.escribir'], escribir: ['clinica.escribir'] },
+  usuario: { leer: ['usuario.leer'], escribir: ['usuario.editar', 'usuario.crear'] },
+  rol: { leer: ['usuario.leer'], escribir: ['rol.asignar'] },
+  profesional: { leer: ['profesional.gestionar'], escribir: ['profesional.gestionar'] },
+  sede: { leer: ['sede.gestionar'], escribir: ['sede.gestionar'] },
+  especialidad: { leer: ['especialidad.gestionar'], escribir: ['especialidad.gestionar'] },
+  servicio: { leer: ['servicio.gestionar'], escribir: ['servicio.gestionar'] },
+  consultorio: { leer: ['sede.gestionar'], escribir: ['sede.gestionar'] },
+  gasto: { leer: ['gasto.leer'], escribir: ['gasto.registrar'] },
+  pago: { leer: ['pago.leer'], escribir: ['pago.registrar', 'pago.validar'] },
+  cargo: { leer: ['pago.leer'], escribir: ['pago.registrar', 'pago.validar'] },
+  cita: { leer: ['agenda.leer'], escribir: ['cita.crear', 'cita.reprogramar'] },
+  paciente: { leer: ['paciente.leer_administrativo'], escribir: ['paciente.editar', 'paciente.crear'] },
+  campana: { leer: ['promocion.gestionar'], escribir: ['promocion.gestionar'] },
+  nota: CLINICO_HISTORIA,
+  anamnesis: CLINICO_HISTORIA,
+  registro: CLINICO_HISTORIA,
+  receta: { leer: ['receta.leer'], escribir: ['receta.crear'], clinico: true },
+  odontograma: CLINICO_DENTAL,
+  periodontograma: CLINICO_DENTAL,
+  placa: CLINICO_DENTAL,
+  formulario033: CLINICO_DENTAL,
+  plan: { leer: ['plan_tratamiento.leer'], escribir: ['plan_tratamiento.escribir'], clinico: true },
+  conocimiento: { leer: ['conocimiento.leer'], escribir: ['conocimiento.cargar'] },
+};
+
 @Component({selector:'app-fotos-registro',standalone:true,imports:[FormsModule,CapturaFotosComponent,VentanaFlotanteComponent],template:`
   @if(puedeLeer()){<button class="boton boton--pequeno" type="button" (click)="abierta.set(true)">Fotos y adjuntos</button>}
   @if(abierta()){<app-ventana-flotante titulo="Fotos del registro" [ocupada]="ocupado()" (cerrar)="abierta.set(false)">
@@ -23,8 +54,10 @@ export class FotosRegistroComponent {
   private readonly sesion=inject(SesionService);
   private readonly destruir=inject(DestroyRef);
   readonly tipo=input.required<string>();readonly registroId=input.required<string>();readonly puedeEditar=input(false);
-  protected readonly puedeLeer=computed(()=>this.sesion.tienePermiso(PERMISOS.imagenClinicaLeer));
-  protected readonly puedeEditarFotos=computed(()=>this.puedeEditar()&&this.sesion.tienePermiso(PERMISOS.imagenClinicaCargar));
+  // Espejo de DESTINOS (backend/app/modulos/imagenes/adjuntos_repositorio.py): el permiso
+  // depende del tipo de registro. Los tipos clínicos exigen además imagen_clinica.* (GuardiaClinica).
+  protected readonly puedeLeer=computed(()=>{const d=DESTINOS_FOTO[this.tipo()];return !!d&&this.sesion.tieneAlgunPermiso(...d.leer)&&(!d.clinico||this.sesion.tienePermiso(PERMISOS.imagenClinicaLeer));});
+  protected readonly puedeEditarFotos=computed(()=>{const d=DESTINOS_FOTO[this.tipo()];return this.puedeEditar()&&!!d&&this.sesion.tieneAlgunPermiso(...d.escribir)&&(!d.clinico||this.sesion.tienePermiso(PERMISOS.imagenClinicaCargar));});
   protected readonly abierta=signal(false);
   private readonly captura=viewChild(CapturaFotosComponent);
   protected readonly fotos=signal<readonly FotoRegistro[]>([]);protected readonly urls=signal<ReadonlyMap<string,string>>(new Map());protected readonly error=signal('');protected readonly ocupado=signal(false);protected readonly retirando=signal<string|null>(null);

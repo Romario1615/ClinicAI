@@ -5,7 +5,8 @@ import { BASE,PROVEEDORES_PRUEBA,archivo,iniciarSesionCon } from '../nucleo/prue
 
 describe('FotosRegistroComponent',()=>{
   let http:HttpTestingController;
-  function montar(editar=false,permisos=['imagen_clinica.leer','imagen_clinica.cargar']){iniciarSesionCon(permisos);const f=TestBed.createComponent(FotosRegistroComponent);f.componentRef.setInput('tipo','gasto');f.componentRef.setInput('registroId','g');f.componentRef.setInput('puedeEditar',editar);f.detectChanges();return f;}
+  // Un gasto exige gasto.leer/gasto.registrar (DESTINOS del backend), no imagen_clinica.*.
+  function montar(editar=false,permisos=['gasto.leer','gasto.registrar'],tipo='gasto'){iniciarSesionCon(permisos);const f=TestBed.createComponent(FotosRegistroComponent);f.componentRef.setInput('tipo',tipo);f.componentRef.setInput('registroId','g');f.componentRef.setInput('puedeEditar',editar);f.detectChanges();return f;}
   beforeEach(()=>{TestBed.configureTestingModule({imports:[FotosRegistroComponent],providers:PROVEEDORES_PRUEBA});http=TestBed.inject(HttpTestingController);});afterEach(()=>http.verify());
   it('no descarga hasta abrir la ventana y libera imágenes al cerrar',()=>{
     const f=montar();
@@ -37,5 +38,24 @@ describe('FotosRegistroComponent',()=>{
     const f=montar(true,[]);
     expect(f.nativeElement.textContent).not.toContain('Fotos y adjuntos');
     expect(f.nativeElement.querySelector('app-captura-fotos')).toBeNull();
+  });
+  it('usa el permiso del tipo de registro: imagen_clinica no abre las fotos de un gasto',()=>{
+    const f=montar(true,['imagen_clinica.leer','imagen_clinica.cargar']);
+    expect(f.nativeElement.textContent).not.toContain('Fotos y adjuntos');
+  });
+  it('con gasto.leer se consulta, pero sin gasto.registrar no se adjunta',()=>{
+    const f=montar(true,['gasto.leer']);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const c=f.componentInstance as any;
+    expect(f.nativeElement.textContent).toContain('Fotos y adjuntos');
+    c.abierta.set(true);f.detectChanges();http.expectOne(`${BASE}/fotos-registro/gasto/g`).flush([]);f.detectChanges();
+    expect(f.nativeElement.querySelector('app-captura-fotos')).toBeNull();
+  });
+  it('un registro clínico exige su permiso y además imagen_clinica',()=>{
+    expect(montar(false,['historia_clinica.leer'],'nota').nativeElement.textContent).not.toContain('Fotos y adjuntos');
+    expect(montar(false,['historia_clinica.leer','imagen_clinica.leer'],'nota').nativeElement.textContent).toContain('Fotos y adjuntos');
+  });
+  it('oculta el acceso en tipos que el backend no admite',()=>{
+    expect(montar(false,['gasto.leer'],'desconocido').nativeElement.textContent).not.toContain('Fotos y adjuntos');
   });
 });

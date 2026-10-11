@@ -168,7 +168,10 @@ describe('ConocimientoComponent', () => {
         TestBed.inject(SesionService).establecerIdentidad({ ...identidad, permisos: ['conocimiento.leer'] });
         cargar([documento('sin-permisos')]);
         const fila = fixture.nativeElement.querySelector('tbody tr') as HTMLElement;
-        expect(fila.querySelectorAll('.celda-acciones button')).toHaveLength(0);
+        // Solo queda consultar las fotos del documento: el backend las abre con
+        // conocimiento.leer (DESTINOS de fotos-registro). Ninguna acción de cambio.
+        const acciones = [...fila.querySelectorAll('.celda-acciones button')].map((b) => b.textContent?.trim());
+        expect(acciones).toEqual(['Fotos y adjuntos']);
         expect(texto()).not.toContain('Cargar documento');
         expect(texto()).not.toContain('Accesos');
     });
