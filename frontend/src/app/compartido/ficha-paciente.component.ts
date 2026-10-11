@@ -223,10 +223,12 @@ const DETALLE_CLINICO: Partial<Record<Pestana, string>> = {
         } @else if (error()) {
           <p class="ficha__error" role="alert">{{ error()!.message }}</p>
         } @else {
-          <app-selector-especialidad class="ficha__especialidad" [compacto]="true" (cambio)="cambiarEspecialidad()" />
-          @if (accesosClinicos().length && !sinAccesoClinico()) {
-            <app-herramientas-paciente class="ficha__herramientas" [pacienteId]="pacienteId()" [citaId]="citaParaAtencion()" [abrirInicialmente]="elegirRegistroInicial()" (elegida)="abrirHerramienta($event)" />
-          }
+          <div class="ficha__controles">
+            <app-selector-especialidad class="ficha__especialidad" [compacto]="true" (cambio)="cambiarEspecialidad()" />
+            @if (accesosClinicos().length && !sinAccesoClinico()) {
+              <app-herramientas-paciente class="ficha__herramientas" [pacienteId]="pacienteId()" [citaId]="citaParaAtencion()" [abrirInicialmente]="elegirRegistroInicial()" (elegida)="abrirHerramienta($event)" />
+            }
+          </div>
           <div class="ficha__pestanas" role="tablist" aria-label="Secciones de la ficha">
             @for (tab of pestanas(); track tab.clave) {
               <button
@@ -460,7 +462,9 @@ const DETALLE_CLINICO: Partial<Record<Pestana, string>> = {
       .ficha.ficha--con-agente { grid-template-columns:minmax(0,1fr); height:auto; overflow:visible; }
       .ficha__agente { min-height:580px; border-left:0; border-top:1px solid var(--borde); }
     }
-    .ficha__herramientas { display:block; margin:10px 16px; }
+    .ficha__controles { display:flex; align-items:center; justify-content:space-between; gap:8px; min-width:0; padding:6px 12px; border-bottom:1px solid var(--borde); }
+    .ficha__especialidad { display:block; flex:1 1 auto; min-width:0; margin:0; }
+    .ficha__herramientas { display:block; flex:0 1 auto; min-width:0; margin:0; }
     .ficha__registrar { display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 20px;flex-wrap:wrap; }
     .ficha {
       position: relative;
@@ -569,10 +573,13 @@ const DETALLE_CLINICO: Partial<Record<Pestana, string>> = {
       min-height: 0;
     }
 
-    .ficha__especialidad { display: block; margin-bottom: var(--espacio-3); }
     .ficha__pestanas {
       display: flex;
-      flex-wrap: wrap;
+      flex: 0 0 auto;
+      flex-wrap: nowrap;
+      overflow-x: auto;
+      overscroll-behavior-inline: contain;
+      scrollbar-width: thin;
       gap: 2px;
       padding: 0 var(--espacio-3);
       border-bottom: 1px solid var(--borde);
@@ -580,6 +587,7 @@ const DETALLE_CLINICO: Partial<Record<Pestana, string>> = {
 
     .ficha__pestana {
       min-height: var(--toque-minimo);
+      flex: 0 0 auto;
       padding: 0 var(--espacio-3);
       border: 0;
       background: transparent;
@@ -852,6 +860,10 @@ const DETALLE_CLINICO: Partial<Record<Pestana, string>> = {
       .ficha__rejilla {
         grid-template-columns: 1fr;
       }
+    }
+    @media (max-width: 700px) {
+      .ficha__controles { align-items:stretch; flex-wrap:wrap; }
+      .ficha__especialidad, .ficha__herramientas { flex:1 1 100%; }
     }
   `,
 })

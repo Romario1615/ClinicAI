@@ -14,7 +14,7 @@ import { EspecialidadHistoriaService } from '../nucleo/servicios/especialidad-hi
   standalone: true,
   template: `
     @if (servicio.disponibles().length > 0) {
-      <div class="contexto">
+      <div class="contexto" [class.contexto--compacto]="compacto()">
         <span class="contexto__etiqueta" id="contexto-especialidad">Revisando como</span>
         @if (servicio.disponibles().length === 1) {
           <strong class="contexto__unica">{{ servicio.elegida()?.nombre }}</strong>
@@ -48,6 +48,7 @@ import { EspecialidadHistoriaService } from '../nucleo/servicios/especialidad-hi
     .contexto { display: flex; flex-wrap: wrap; align-items: center; gap: var(--espacio-2) var(--espacio-3);
       padding: var(--espacio-2) var(--espacio-3); border: 1px solid var(--borde); border-radius: var(--radio);
       background: var(--superficie); }
+    .contexto--compacto { flex-wrap: nowrap; gap: 6px 10px; padding: 0; border: 0; background: transparent; }
     .contexto__etiqueta { color: var(--texto-suave); font-size: 0.8rem; font-weight: 600;
       letter-spacing: 0.04em; text-transform: uppercase; }
     .contexto__unica { padding: 2px 10px; border-radius: 999px; background: var(--acento-suave);
@@ -62,6 +63,7 @@ import { EspecialidadHistoriaService } from '../nucleo/servicios/especialidad-hi
     .contexto__propia { color: var(--texto-suave); font-weight: 400; }
     .contexto__selector { flex: 0 1 18rem; min-width: 0; max-width: 100%; min-height: 2.5rem; padding: .4rem .7rem; border: 1px solid var(--borde); border-radius: var(--radio-md); background: var(--fondo); color: var(--texto); font: inherit; font-size: .85rem; }
     .contexto__nota { flex: 1 1 260px; color: var(--texto-suave); font-size: 0.8rem; text-align: right; }
+    .contexto--compacto .contexto__nota { flex: 0 1 auto; min-width: 0; max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: .72rem; }
     @media (max-width: 640px) { .contexto__nota { text-align: left; } }
   `,
 })
