@@ -68,6 +68,7 @@ from app.modulos.documentos import rutas as rutas_documentos
 from app.modulos.gastos import rutas as rutas_gastos
 from app.modulos.historia import acceso_emergencia as rutas_acceso_emergencia
 from app.modulos.historia import anamnesis_rutas as rutas_anamnesis
+from app.modulos.historia import denticion as rutas_denticion
 from app.modulos.historia import especialidades as rutas_especialidades_historia
 from app.modulos.historia import resumen_clinico as rutas_resumen_clinico
 from app.modulos.historia import rutas as rutas_historia
@@ -342,6 +343,7 @@ def _registrar_rutas_del_equipo(aplicacion: FastAPI) -> None:
     """Fotos del equipo, especialidad de la historia, recorrido y asistente interno."""
     aplicacion.include_router(rutas_fotos_usuario.enrutador, prefix=PREFIJO_API)
     aplicacion.include_router(rutas_especialidades_historia.enrutador, prefix=PREFIJO_API)
+    aplicacion.include_router(rutas_denticion.enrutador, prefix=PREFIJO_API)
     aplicacion.include_router(rutas_recorrido.enrutador, prefix=PREFIJO_API)
     aplicacion.include_router(rutas_asistente.enrutador, prefix=PREFIJO_API)
     aplicacion.include_router(rutas_agente_paciente.enrutador, prefix=PREFIJO_API)

@@ -60,6 +60,7 @@ class AccionAuditada(StrEnum):
     USUARIO_MODIFICADO = "usuario.modificado"
     USUARIO_FOTO_ACTUALIZADA = "usuario.foto_actualizada"
     ESPECIALIDAD_MODULOS_CAMBIADOS = "especialidad.modulos_cambiados"
+    DENTICION_POR_EDAD_CAMBIADA = "clinica.denticion_por_edad_cambiada"
     RECORRIDO_CONSULTADO = "paciente.recorrido_consultado"
     CITA_CONSULTORIO_ASIGNADO = "cita.consultorio_asignado"
     CITA_SALIDA_REGISTRADA = "cita.salida_registrada"
