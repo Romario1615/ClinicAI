@@ -142,7 +142,7 @@ export class AccesoComponent implements OnInit {
           // La contraseña se borra del estado en cuanto deja de hacer falta.
           this.contrasena = '';
           this.codigo2fa = '';
-          const destino = this.ruta.snapshot.queryParamMap.get('destino') ?? '/panel';
+          const destino = this.ruta.snapshot.queryParamMap.get('destino') ?? this.destinoInicial();
           void this.router.navigateByUrl(destino);
         },
         error: (fallo: unknown) => {
@@ -169,7 +169,7 @@ export class AccesoComponent implements OnInit {
     ingreso.subscribe({
       next: () => {
         this.enviando.set(false);
-        const destino = this.ruta.snapshot.queryParamMap.get('destino') ?? '/panel';
+        const destino = this.ruta.snapshot.queryParamMap.get('destino') ?? this.destinoInicial();
         void this.router.navigateByUrl(destino);
       },
       error: (fallo: unknown) => {
@@ -187,6 +187,10 @@ export class AccesoComponent implements OnInit {
     return rol.codigo === 'profesional' && this.especialidadLocal
       ? this.especialidadesLocales().find(e => e.id === this.especialidadLocal)?.nombre
       : rol.especialidad;
+  }
+
+  private destinoInicial(): string {
+    return this.sesion.tienePermiso('agenda.leer') ? '/agenda' : '/panel';
   }
 
   /** Cada foto entra cuando sale la anterior; todas comparten el mismo ciclo. */

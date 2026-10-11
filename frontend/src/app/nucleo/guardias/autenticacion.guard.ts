@@ -43,7 +43,7 @@ export const guardiaAutenticacion: CanActivateFn = (_ruta, estado) => {
 export const guardiaInvitado: CanActivateFn = () => {
   const sesion = inject(SesionService);
   const router = inject(Router);
-  return sesion.autenticado() ? router.createUrlTree(['/panel']) : true;
+  return sesion.autenticado() ? router.createUrlTree(['/agenda']) : true;
 };
 
 /**
@@ -57,7 +57,7 @@ export function guardiaPermiso(...codigos: readonly string[]): CanActivateFn {
     throw new Error('guardiaPermiso necesita al menos un codigo de permiso.');
   }
 
-  return () => {
+  return (ruta) => {
     const sesion = inject(SesionService);
     const router = inject(Router);
 
@@ -67,6 +67,9 @@ export function guardiaPermiso(...codigos: readonly string[]): CanActivateFn {
     if (sesion.tieneAlgunPermiso(...codigos)) {
       return true;
     }
+    // Al entrar en la Agenda sin ese permiso, el Panel es la primera pantalla
+    // disponible para todos los roles autenticados.
+    if (ruta.routeConfig?.path === 'agenda') return router.createUrlTree(['/panel']);
     return router.createUrlTree(['/sin-permiso']);
   };
 }

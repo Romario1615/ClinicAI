@@ -288,7 +288,7 @@ export const routes: Routes = [
         (m) => m.SinPermisoComponent,
       ),
   },
-  { path: '', pathMatch: 'full', redirectTo: 'panel' },
+  { path: '', pathMatch: 'full', redirectTo: 'agenda' },
   // Comodin al final: cualquier ruta desconocida lleva al panel en lugar de
   // dejar la pantalla en blanco, que es lo que pasa sin esta entrada.
   { path: '**', redirectTo: 'panel' },

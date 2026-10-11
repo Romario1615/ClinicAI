@@ -133,7 +133,7 @@ describe('contrato de acceso de las rutas', () => {
     sesion.establecerIdentidad(identidad([permiso]));
 
     const resultado = TestBed.runInInjectionContext(() =>
-      guardiaDeAcceso(path)(RUTA, ESTADO),
+      guardiaDeAcceso(path)({ ...RUTA, routeConfig: { path: path.replace(/^\//, '') } } as ActivatedRouteSnapshot, ESTADO),
     );
 
     expect(resultado).toBe(true);
@@ -144,11 +144,11 @@ describe('contrato de acceso de las rutas', () => {
     sesion.establecerIdentidad(identidad());
 
     const resultado = TestBed.runInInjectionContext(() =>
-      guardiaDeAcceso(path)(RUTA, ESTADO),
+      guardiaDeAcceso(path)({ ...RUTA, routeConfig: { path: path.replace(/^\//, '') } } as ActivatedRouteSnapshot, ESTADO),
     );
 
     const router = TestBed.inject(Router);
-    expect(router.serializeUrl(resultado as never)).toContain('/sin-permiso');
+    expect(router.serializeUrl(resultado as never)).toContain(path === '/agenda' ? '/panel' : '/sin-permiso');
   });
 
   it('ninguna ruta nueva queda fuera de la matriz', () => {

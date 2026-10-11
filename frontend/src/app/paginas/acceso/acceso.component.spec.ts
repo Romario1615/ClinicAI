@@ -6,6 +6,7 @@ import { AccesoComponent } from './acceso.component';
 import { AutenticacionService } from '../../nucleo/servicios/autenticacion.service';
 import { BASE, PROVEEDORES_PRUEBA, identidadCon } from '../../nucleo/pruebas/sesion-sintetica';
 import { FalloApi } from '../../nucleo/servicios/api.service';
+import { SesionService } from '../../nucleo/servicios/sesion.service';
 
 describe('AccesoComponent · especialidades locales', () => {
   const entrar = vi.fn();
@@ -33,6 +34,18 @@ describe('AccesoComponent · especialidades locales', () => {
   it('la selección clínica no cambia el ingreso de recepción', () => {
     const f = montar(); f.componentInstance['especialidadLocal'] = 'est'; f.componentInstance['entrarComo']('recepcion');
     expect(entrar).toHaveBeenCalledWith('recepcion');
+  });
+  it('envía a Agenda por omisión cuando la sesión tiene permiso', () => {
+    const f = montar();
+    vi.spyOn(TestBed.inject(SesionService), 'tienePermiso').mockReturnValue(true);
+    f.componentInstance['entrarComo']('recepcion');
+    expect(TestBed.inject(Router).navigateByUrl).toHaveBeenCalledWith('/agenda');
+  });
+  it('mantiene el Panel como destino inicial cuando no tiene permiso de Agenda', () => {
+    const f = montar();
+    vi.spyOn(TestBed.inject(SesionService), 'tienePermiso').mockReturnValue(false);
+    f.componentInstance['entrarComo']('auditor');
+    expect(TestBed.inject(Router).navigateByUrl).toHaveBeenCalledWith('/panel');
   });
   it('mantiene el ingreso profesional predeterminado sin seleccionar', () => {
     const f = montar(); f.componentInstance['entrarComo']('profesional');

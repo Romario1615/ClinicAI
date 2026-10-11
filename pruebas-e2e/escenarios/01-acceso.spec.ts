@@ -47,8 +47,16 @@ test.describe('Acceso local por roles', () => {
 
   test('administración de clínica entra en el entorno local', async ({ page }) => {
     await acceder(page, 'administradora');
+    await expect(page).toHaveURL(/\/agenda$/);
     await expect(page.getByRole('navigation', { name: 'Secciones' })).toBeVisible();
-    await expect(page.locator('h1').first()).toContainText(/panel/i);
+    await expect(page.locator('app-agenda')).toBeVisible();
+  });
+
+  test('el destino solicitado al acceder prevalece sobre la Agenda inicial', async ({ page }) => {
+    await page.goto('/acceso?destino=%2Fpacientes');
+    await page.getByRole('button', { name: /recepción/i }).click();
+    await expect(page).toHaveURL(/\/pacientes$/);
+    await expect(page.getByRole('heading', { name: 'Pacientes de su ámbito' })).toBeVisible();
   });
 
   test('el menú móvil se despliega encima del contenido y cierra con Escape o al tocar fuera', async ({ page }) => {
