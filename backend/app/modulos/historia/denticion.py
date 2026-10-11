@@ -93,12 +93,15 @@ def _clinica(principal: Principal) -> uuid.UUID:
 # ---------------------------------------------------------------------------
 enrutador = APIRouter(tags=["historia clinica"])
 
-PuedeVerOdontograma = Annotated[Principal, Depends(exige_permiso("odontograma.leer"))]
+# Lee quien usa el odontograma y quien configura los cortes en Catálogo.
+PuedeVerCortes = Annotated[
+    Principal, Depends(exige_permiso("odontograma.leer", "especialidad.gestionar"))
+]
 PuedeGestionar = Annotated[Principal, Depends(exige_permiso("especialidad.gestionar"))]
 
 
 @enrutador.get("/historia/denticion-por-edad", response_model=DenticionPorEdad)
-async def ver_denticion(principal: PuedeVerOdontograma, sesion: Sesion) -> DenticionPorEdad:
+async def ver_denticion(principal: PuedeVerCortes, sesion: Sesion) -> DenticionPorEdad:
     """Cortes de edad de la clínica de quien pregunta. No contiene datos clínicos."""
     return await denticion_de_clinica(sesion, _clinica(principal))
 

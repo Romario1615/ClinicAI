@@ -120,3 +120,20 @@ async def test_administracion_cambia_los_cortes_con_motivo_version_y_auditoria(
         )
     ).scalar_one()
     assert de_la_ajena == 0
+
+
+async def test_quien_configura_los_cortes_los_lee_sin_permiso_de_odontograma(
+    cliente: AsyncClient,
+    api: str,
+    sesion: AsyncSession,
+    usuario: Usuario,
+    clinica: Clinica,
+    sede: Sede,
+) -> None:
+    await conceder_permisos(sesion, usuario, clinica, "especialidad.gestionar", sedes=(sede.id,))
+    vista = await cliente.get(
+        f"{api}/historia/denticion-por-edad",
+        headers=await cabecera_bearer(cliente, usuario, clinica),
+    )
+    assert vista.status_code == 200
+    assert vista.json() == {"edad_mixta": 6, "edad_permanente": 13}

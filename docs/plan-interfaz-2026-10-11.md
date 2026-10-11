@@ -219,3 +219,14 @@ Sin fugas de datos ni pruebas relajadas. Correcciones:
     y probar que la ficha flotante permite editar con `paciente.editar`.
 26. **E2E 33:~46**: la prueba de teclado debe colapsar antes el grupo y exigir
     que `Space` lo expanda (hoy puede no ejercitar la tecla).
+
+## Anexo E · Revisión de código del anexo C
+
+27. **Fotos clínicas** (`compartido/fotos-registro.component.ts` ~10): el
+    backend (`imagenes/rutas.py:33‑40`) acepta `imagen_clinica.leer` **o**
+    `paciente.leer_administrativo` para leer, e `imagen_clinica.cargar` **o**
+    `paciente.editar` para cargar. `puedeLeer`/`puedeEditarFotos` deben
+    aceptar las mismas alternativas.
+28. Resuelto por Claude en backend: `GET /historia/denticion-por-edad` acepta
+    también `especialidad.gestionar`, así Catálogo carga los cortes sin
+    `odontograma.leer`.
