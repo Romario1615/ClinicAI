@@ -43,8 +43,12 @@ test('teclado y Atrás revelan la sección actual y conservan el foco visible', 
   const nav = page.locator('#navegacion-principal');
   const clinica = nav.locator('#categoria-clinica');
   await clinica.focus();
-  if (await clinica.getAttribute('aria-expanded') === 'false') await page.keyboard.press('Space');
+  if (await clinica.getAttribute('aria-expanded') !== 'false') await page.keyboard.press('Space');
+  await expect(clinica).toHaveAttribute('aria-expanded', 'false');
+  await expect(clinica).toBeFocused();
+  await page.keyboard.press('Space');
   await expect(clinica).toHaveAttribute('aria-expanded', 'true');
+  await expect(clinica).toBeFocused();
   await page.keyboard.press('Tab');
   const agenda = nav.getByRole('link', { name: 'Agenda', exact: true });
   await expect(agenda).toBeFocused();
