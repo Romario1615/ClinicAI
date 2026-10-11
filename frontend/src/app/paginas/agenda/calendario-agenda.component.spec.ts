@@ -158,8 +158,17 @@ describe('CalendarioAgendaComponent', () => {
     });
 
     it('dice que no hay citas', () => {
-        montar({ vista: 'dia', citas: [] });
+        montar({ vista: 'dia', citas: [], proximoDiaConTurnos: '2026-10-06' });
         expect(c.vacio()).toBe(true);
-        expect((fixture.nativeElement as HTMLElement).textContent).toContain('No hay citas este día');
+        const elemento = fixture.nativeElement as HTMLElement;
+        expect(elemento.textContent).toContain('Sin turnos de atención este día');
+        expect(elemento.querySelectorAll('.tiempo__horas span')).toHaveLength(14);
+        expect(elemento.querySelectorAll('.tiempo__columna')).toHaveLength(0);
+        const boton = elemento.querySelector<HTMLButtonElement>('.vacio button');
+        expect(boton?.textContent).toContain('Ir al próximo día con turnos: Martes, 6 de octubre');
+        let fecha = '';
+        c.diaElegido.subscribe((valor: string) => (fecha = valor));
+        boton?.click();
+        expect(fecha).toBe('2026-10-06');
     });
 });

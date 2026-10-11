@@ -170,7 +170,14 @@ describe('AgendaComponent · reserva y series', { timeout: 20_000 }, () => {
         .expectOne((p) => p.method === 'GET' && p.url === `${BASE}/agenda/citas`)
         .flush({ elementos: [], total: 0, limite: 200, desplazamiento: 0 });
       fixture.detectChanges();
+      responderBusquedaProximoDia();
     }
+  }
+
+  function responderBusquedaProximoDia(): void {
+    http
+      .expectOne((p) => p.method === 'GET' && p.url === `${BASE}/agenda/citas`)
+      .flush({ elementos: [], total: 0, limite: 200, desplazamiento: 0 });
   }
 
   it('abre el equipo completo para administración y la agenda propia para profesionales', () => {
@@ -225,6 +232,7 @@ describe('AgendaComponent · reserva y series', { timeout: 20_000 }, () => {
       motivos_sin_turno: {},
     });
     fixture.detectChanges();
+    responderBusquedaProximoDia();
   }
 
   it('abre las herramientas con el paciente y la cita elegida, conservando el detalle de agenda', () => {

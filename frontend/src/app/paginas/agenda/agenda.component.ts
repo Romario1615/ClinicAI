@@ -280,6 +280,9 @@ export class AgendaComponent {
   protected readonly citasRango = signal<readonly Cita[]>([]);
   protected readonly cargandoRango = signal(false);
   private solicitudRango = 0;
+  /** Próxima fecha con citas activas; solo se consulta si el día visible está vacío. */
+  protected readonly proximoDiaConTurnos = signal<string | null>(null);
+  private solicitudProximoDia = 0;
 
   // --- Estado de carga ---
   protected readonly cargandoCatalogo = signal(true);
@@ -601,6 +604,12 @@ export class AgendaComponent {
             : resultado.citas,
         );
         this.disponibilidad.set(resultado.disponibilidad);
+        if (this.vista() === 'dia' && !this.citas().some((cita) => cita.estado !== 'CANCELLED')) {
+          this.buscarProximoDiaConTurnos();
+        } else {
+          this.solicitudProximoDia++;
+          this.proximoDiaConTurnos.set(null);
+        }
         this.ajustarReservaAbierta();
       });
     this.cargarCatalogo();
@@ -653,6 +662,44 @@ export class AgendaComponent {
     return peticion$.pipe(
       catchError((fallo: unknown): Observable<CargaDelDia> => of({ fallo: this.aFallo(fallo) })),
     );
+  }
+
+  /** Busca citas activas cercanas para ofrecer una salida útil desde un día vacío. */
+  private buscarProximoDiaConTurnos(): void {
+    const solicitud = ++this.solicitudProximoDia;
+    this.proximoDiaConTurnos.set(null);
+    const inicioFecha = sumarDias(this.fecha(), 1);
+    const finFecha = sumarDias(this.fecha(), 62);
+    const desde = rangoDelDia(inicioFecha, this.zona()).desde;
+    const hasta = rangoDelDia(sumarDias(finFecha, 1), this.zona()).desde;
+    const filtro = {
+      desde,
+      hasta,
+      sede_id: this.sedeId(),
+      profesional_id: this.profesionalId() || undefined,
+      limite: 200,
+    };
+
+    const cargarPagina = (desplazamiento: number): void => {
+      this.api.citas({ ...filtro, desplazamiento }).subscribe({
+        next: (pagina) => {
+          if (solicitud !== this.solicitudProximoDia) return;
+          const primera = pagina.elementos.find((cita) => cita.estado !== 'CANCELLED');
+          if (primera) {
+            const fecha = new Intl.DateTimeFormat('en-CA', {
+              timeZone: this.zona(), year: 'numeric', month: '2-digit', day: '2-digit',
+            }).format(new Date(primera.inicio));
+            this.proximoDiaConTurnos.set(fecha);
+          } else if (pagina.elementos.length > 0 && desplazamiento + pagina.elementos.length < pagina.total) {
+            cargarPagina(desplazamiento + pagina.elementos.length);
+          }
+        },
+        error: () => {
+          if (solicitud === this.solicitudProximoDia) this.proximoDiaConTurnos.set(null);
+        },
+      });
+    };
+    cargarPagina(0);
   }
 
   // ======================================================================

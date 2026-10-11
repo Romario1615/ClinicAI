@@ -285,7 +285,18 @@ interface Columna {
         }
       </div>
       @if (vacio()) {
-        <p class="vacio">{{ vista() === 'dia' ? 'No hay citas este día.' : 'No hay citas esta semana.' }}</p>
+        <div class="vacio" role="status">
+          @if (vista() === 'dia') {
+            <p>Sin turnos de atención este día.</p>
+            @if (proximoDiaConTurnos()) {
+              <button type="button" class="boton boton--pequeno" (click)="diaElegido.emit(proximoDiaConTurnos()!)">
+                Ir al próximo día con turnos: {{ etiquetaProximoDia() }}
+              </button>
+            }
+          } @else {
+            <p>No hay citas esta semana.</p>
+          }
+        </div>
       }
     }
   `,
@@ -538,6 +549,7 @@ export class CalendarioAgendaComponent {
   readonly citas = input<readonly Cita[]>([]);
   /** Tramos libres del profesional elegido, solo en la vista de día. */
   readonly huecos = input<readonly (FilaDia & { tipo: 'hueco' })[]>([]);
+  readonly proximoDiaConTurnos = input<string | null>(null);
   readonly profesionales = input<readonly Profesional[]>([]);
   readonly profesionalId = input('');
   readonly citaSeleccionadaId = input<string | null>(null);
@@ -551,6 +563,14 @@ export class CalendarioAgendaComponent {
   readonly diaElegido = output<string>();
 
   protected readonly nombresDia = NOMBRES_DIA;
+  protected readonly etiquetaProximoDia = computed(() => {
+    const fecha = this.proximoDiaConTurnos();
+    if (!fecha) return '';
+    const texto = new Intl.DateTimeFormat('es', {
+      weekday: 'long', day: 'numeric', month: 'long', timeZone: 'UTC',
+    }).format(new Date(`${fecha}T12:00:00Z`));
+    return texto.charAt(0).toUpperCase() + texto.slice(1);
+  });
 
   private readonly marco = viewChild<ElementRef<HTMLElement>>('marco');
   private readonly rejillaMes = viewChild<ElementRef<HTMLElement>>('rejillaMes');
