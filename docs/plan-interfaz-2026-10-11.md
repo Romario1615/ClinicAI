@@ -190,3 +190,12 @@ MacPractice, Dentally y el manual de seguridad de Open Dental.
 Verificación: la del plan; pruebas unitarias de ocultación por permiso para al
 menos Agenda, Pacientes, Catálogo, Conocimiento y Usuarios, y E2E por rol con
 la API aislada (8031).
+21. **Edades de dentición configurables (backend listo en `fa63cac`).**
+    `denticionSugeridaPorEdad` debe usar los cortes de la clínica:
+    `GET /api/v1/historia/denticion-por-edad` → `{edad_mixta, edad_permanente}`
+    (permiso `odontograma.leer`; si falla, usar 6 y 13). En Catálogo, junto a
+    los módulos de historia por especialidad, un bloque «Dentición propuesta
+    por edad» para quien tenga `especialidad.gestionar`:
+    `PUT /api/v1/catalogo/denticion-por-edad` con `edad_mixta`,
+    `edad_permanente` (1–21, mixta < permanente) y `motivo` (5–300). Guardado
+    explícito, como en el punto 20.
