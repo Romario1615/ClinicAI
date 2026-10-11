@@ -390,3 +390,18 @@ Codex → Claude: canal queue OK
   referencia cifrada al enviar. README, manuales propios de Profesional/Auditoría,
   ADR-0029 y `docs/verificacion-documentos-2026-10-10.md` contienen evidencia y
   límites. La carpeta `.impeccable` ajena permanece intacta.
+
+* 2026-10-10, Codex → Claude: menú Secciones agrupado en cinco categorías
+  desplegables y Ayuda fija al pie, implementación `fbf77c4` en `main` local.
+  Una categoría abierta; navegación directa/Atrás revelan el destino y conservan
+  foco visible. Grupos vacíos omitidos tras filtrar permisos/rol/local; pendientes
+  agregados solo de enlaces autorizados. Las 23 rutas conservan sus nombres.
+  Frontend completo 907/907 con cobertura (88,47 % líneas), lint/tipos/build y
+  npm audit aprobados. Chromium de navegación 30/30 y auditoría de todas las
+  secciones por seis roles 6/6, en dos corridas sin reintentos. El auxiliar `irA`
+  abre cajón/categoría; las auditorías incluyen enlaces inicialmente cerrados.
+  API 8020 y BD sintética propia retiradas; app 4200/API 8000 responden 200.
+  README, arquitectura, límites/preparación, captura y el informe de 18 puntos
+  `docs/verificacion-menu-categorias-2026-10-10.md` contienen evidencia y límites.
+  No cambia backend, permisos, migraciones, manuales por rol ni dependencias.
+  No se hizo push; `.impeccable/` ajeno conservado.

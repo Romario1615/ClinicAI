@@ -1,5 +1,15 @@
 # Limitaciones conocidas y riesgos residuales
 
+## Categorías del menú (2026-10-10)
+
+La organización es común para todos los roles; cada persona ve únicamente las
+secciones autorizadas y no puede personalizar el orden. Una categoría abierta
+a la vez reduce la lista inicial. La apertura no se persiste entre sesiones y
+las categorías extensas usan desplazamiento interno. Los avisos del encabezado
+agregan los contadores existentes; no son métricas nuevas ni sustituyen la campana.
+Este cambio de interfaz no altera la autorización del backend ni concede escritura
+clínica. La verificación de navegador de este bloque usa Chromium y datos sintéticos.
+
 ## PDF y entrega privada (2026-10-10)
 
 La exportación conserva caracteres incluidos en DejaVu Sans, párrafos y fechas

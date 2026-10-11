@@ -1,5 +1,35 @@
 # ClinicAI — Plataforma de gestión clínica
 
+## Secciones agrupadas por categorías (2026-10-10)
+
+El menú lateral y el cajón móvil muestran categorías desplegables, con una
+abierta a la vez. Al navegar, acceder desde un enlace o usar Atrás se abre la
+categoría de la pantalla actual. Pulse una categoría para mostrar sus secciones
+o volver a cerrarla. **Ayuda** permanece accesible al pie del menú.
+
+| Categoría | Secciones, según los permisos de la persona |
+|---|---|
+| Resumen | Panel, Analítica IA |
+| Atención clínica | Agenda, Pacientes, Lista de espera, Historia clínica, Medicamentos |
+| Comunicación e IA | Conocimiento, Atención de mensajes, Agente demo local, Asistente, Automatizaciones |
+| Finanzas | Pagos, Gastos y caja |
+| Administración | Clínicas, Usuarios y roles, Delegaciones de firma, Equipo clínico, Promociones, Catálogo, Seguridad clínica, Configuración |
+
+Las categorías sin secciones autorizadas se omiten. Los pendientes de mensajes,
+lista de espera y seguridad siguen visibles en el encabezado de su categoría
+cuando está cerrada. Los controles admiten Tab, Enter y Espacio; Escape cierra
+el cajón móvil y devuelve el foco. Las listas extensas desplazan dentro del menú.
+
+Este cambio organiza los accesos existentes. Conserva la consulta y edición por
+rol/especialidad, el logo, las rutas y los manuales propios de **Ayuda**.
+No añade migraciones, claves de API ni dependencias.
+[Verificación y alcance](docs/verificacion-menu-categorias-2026-10-10.md).
+
+Frontend **907/907** con cobertura, Chromium de navegación **30/30** y auditoría
+de accesibilidad por rol **6/6**, en corridas separadas. Lint/tipos de frontend/build
+aprobados. Implementación `fbf77c4`, local en `main`.
+[Vista del menú revisada](docs/imagenes/menu-categorias-2026-10-10.png).
+
 ## Documentos privados y PDFs fieles (2026-10-10)
 
 En **Ficha del paciente → Documentos y PDF** se conservan símbolos como `μg`,

@@ -1,5 +1,15 @@
 # Estado de preparación para producción
 
+## Menú por categorías (2026-10-10)
+
+El armazón organiza los módulos existentes sin cambiar contratos de API ni esquema.
+Desplegar el frontend completo conserva compatibilidad con el backend actual;
+el rollback consiste en restaurar el paquete frontend anterior. Staging debe
+comprobar los roles realmente asignados, navegación directa, historial del navegador
+y cajón móvil. No requiere credenciales externas adicionales. La evidencia del
+bloque está en [el informe de navegación](verificacion-menu-categorias-2026-10-10.md);
+no sustituye la evaluación de los canales externos pendientes del producto.
+
 ## Documentos privados y PDF (2026-10-10)
 
 Se corrigieron identidad vacía, representación de caracteres, párrafos y fecha

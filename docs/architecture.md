@@ -1,5 +1,21 @@
 # Arquitectura
 
+## Navegación por categorías (2026-10-10)
+
+`AppComponent` asigna cada enlace a una categoría tipada. Filtra primero por
+permisos, rol y modo local; después agrupa y omite categorías vacías. Ayuda tiene
+un acceso permanente. Solo una categoría está desplegada y `NavigationEnd` revela
+la correspondiente al destino, incluidas rutas anidadas y parámetros. La apertura
+vive en memoria y se recalcula al cambiar la identidad; no se guarda en el navegador.
+
+Los encabezados son botones nativos con `aria-expanded` y `aria-controls`; las
+listas cerradas usan `hidden` y no admiten foco. Los enlaces conservan sus rutas
+y `aria-current`. Antes de ocultar una lista que conservaba el foco tras Atrás,
+este pasa al encabezado visible. Solo se agregan pendientes de enlaces autorizados.
+La región de categorías desplaza dentro del menú, dejando marca y Ayuda accesibles.
+El auxiliar E2E `irA` abre el cajón y la categoría antes de pulsar el enlace;
+las auditorías recorren también las secciones de categorías inicialmente cerradas.
+
 ## Integridad de documentos privados (2026-10-10)
 
 `documentos/servicios.py` verifica referencias de identidad, convierte planes
