@@ -11,12 +11,13 @@
  * algo que va a recibir un 403 (CLAUDE.md, regla 7).
  */
 import { DOCUMENT } from '@angular/common';
-import { Component, DestroyRef, computed, effect, inject, signal, ChangeDetectionStrategy, ElementRef } from '@angular/core';
-import { toSignal } from '@angular/core/rxjs-interop';
-import { NavigationEnd, Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
+import { Component, DestroyRef, Injector, afterNextRender, computed, effect, inject, signal, ChangeDetectionStrategy, ElementRef } from '@angular/core';
+import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
+import { NavigationCancel, NavigationEnd, NavigationError, NavigationSkipped, Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { filter, map } from 'rxjs';
 
 import { BuscadorGlobalComponent } from './compartido/buscador-global.component';
+import { BuscadorSeccionesComponent } from './compartido/buscador-secciones.component';
 import { FotoPersonaComponent } from './compartido/foto-persona.component';
 import { FondoIAComponent } from './compartido/fondo-ia.component';
 import { IconoComponent, type NombreIcono } from './compartido/icono.component';
@@ -226,6 +227,7 @@ const NAVEGACION: readonly EnlaceNavegacion[] = [
     IconoComponent,
     MarcaComponent,
     BuscadorGlobalComponent,
+    BuscadorSeccionesComponent,
     FotoPersonaComponent,
     FondoIAComponent,
     VentanaFlotanteComponent,
@@ -236,14 +238,15 @@ const NAVEGACION: readonly EnlaceNavegacion[] = [
 })
 export class AppComponent {
   private readonly elemento = inject<ElementRef<HTMLElement>>(ElementRef);
+  private readonly inyector = inject(Injector);
   private readonly autenticacion = inject(AutenticacionService);
   private readonly router = inject(Router);
   private readonly rutaActual = toSignal(
     this.router.events.pipe(
       filter((evento): evento is NavigationEnd => evento instanceof NavigationEnd),
-      map((evento) => evento.urlAfterRedirects.split(/[?#]/)[0]),
+      map((evento) => evento.urlAfterRedirects),
     ),
-    { initialValue: this.router.url.split(/[?#]/)[0] },
+    { initialValue: this.router.url },
   );
   protected readonly sesion = inject(SesionService);
   private readonly modoLocal = inject(ModoLocalService);
@@ -254,6 +257,10 @@ export class AppComponent {
   protected readonly miFotoAbierta = signal(false);
   protected readonly notificacionesAbiertas = signal(false);
   protected readonly categoriaAbierta = signal<CategoriaSecciones | null>('resumen');
+  protected readonly buscadorSeccionesAbierto = signal(false);
+  protected readonly abriendoSeccion = signal(false);
+  protected readonly errorSeccion = signal<string | null>(null);
+  private enfocarContenidoAlNavegar = false;
   /** Pantalla estrecha: el menú es un cajón que tapa el contenido. */
   private readonly pantallaEstrecha = signal(false);
   /**
@@ -288,11 +295,31 @@ export class AppComponent {
       }
     });
 
+    // No se conserva una búsqueda ni una ventana de la identidad anterior.
+    effect(() => {
+      this.sesion.identidad();
+      this.cerrarBuscadorSecciones();
+      this.menuAbierto.set(false);
+      this.notificacionesAbiertas.set(false);
+      this.enfocarContenidoAlNavegar = false;
+    });
+
+    this.router.events.pipe(
+      filter((evento) => evento instanceof NavigationEnd || evento instanceof NavigationSkipped ||
+        evento instanceof NavigationCancel || evento instanceof NavigationError),
+      takeUntilDestroyed(destruccion),
+    ).subscribe((evento) => {
+      if (this.enfocarContenidoAlNavegar) {
+        this.enfocarContenidoAlNavegar = false;
+        if (evento instanceof NavigationEnd || evento instanceof NavigationSkipped) this.enfocarDespues('#contenido');
+      }
+    });
+
     // Un acceso directo, una redirección o Atrás también revela su categoría.
     // La apertura es por sesión: no se conserva el menú de otra persona.
     effect(() => {
       const categorias = this.categorias();
-      const ruta = this.rutaActual();
+      const ruta = this.rutaActual().split(/[?#]/)[0];
       this.abrirCategoria(
         this.categoriaActiva() ?? (ruta === '/ayuda' ? null : categorias[0]?.id ?? null),
       );
@@ -342,8 +369,15 @@ export class AppComponent {
   });
 
   protected readonly enlaceAyuda = computed(() => this.enlaces().find((enlace) => enlace.categoria === 'ayuda'));
+  protected readonly gruposSecciones = computed(() => {
+    const ayuda = this.enlaceAyuda();
+    return [
+      ...this.categorias(),
+      ...(ayuda ? [{ id: 'ayuda', etiqueta: 'Ayuda', enlaces: [ayuda] }] : []),
+    ];
+  });
   protected readonly categoriaActiva = computed(() => {
-    const ruta = this.rutaActual();
+    const ruta = this.rutaActual().split(/[?#]/)[0];
     return this.categorias().find((categoria) => categoria.enlaces.some((enlace) =>
       ruta === enlace.ruta || ruta.startsWith(`${enlace.ruta}/`),
     ))?.id ?? null;
@@ -380,6 +414,7 @@ export class AppComponent {
     const abrir = !this.menuAbierto();
     this.notificacionesAbiertas.set(false);
     this.menuAbierto.set(abrir);
+    if (abrir && this.pantallaEstrecha()) this.enfocarDespues('#buscar-seccion');
   }
 
   protected alternarNotificaciones(): void {
@@ -405,6 +440,7 @@ export class AppComponent {
    * teclado tendría que empezar desde el principio de la página.
    */
   protected cerrarCapasDesplegadas(): void {
+    if (this.buscadorSeccionesAbierto()) return;
     const raiz = this.elemento.nativeElement;
     const activo = raiz.ownerDocument.activeElement;
     let devolverA: HTMLElement | null = null;
@@ -421,6 +457,8 @@ export class AppComponent {
 
   /** Los paneles del encabezado se descartan al pulsar fuera y nunca quedan abiertos a la vez. */
   protected cerrarCapasAlPulsarFuera(evento: MouseEvent): void {
+    // La ventana de búsqueda conserva el cajón como contexto y origen del foco.
+    if (this.buscadorSeccionesAbierto()) return;
     const objetivo = evento.target as Node;
     const raiz = this.elemento.nativeElement;
     if (this.menuAbierto()) {
@@ -435,7 +473,68 @@ export class AppComponent {
   }
 
   protected cerrarMenu(): void {
+    const raiz = this.elemento.nativeElement;
+    if (this.menuAbierto() && this.pantallaEstrecha() &&
+      (raiz.querySelector('#navegacion-principal')?.contains(raiz.ownerDocument.activeElement) ||
+        raiz.ownerDocument.activeElement?.classList.contains('navegacion__fondo'))) {
+      raiz.querySelector<HTMLElement>('.cabecera__menu')?.focus();
+    }
     this.menuAbierto.set(false);
+  }
+
+  protected alElegirEnlace(evento: MouseEvent, ruta: string): void {
+    if (evento.button !== 0 || evento.ctrlKey || evento.metaKey || evento.shiftKey || evento.altKey) return;
+    const enfocar = this.menuAbierto() && this.pantallaEstrecha();
+    const mismaRuta = this.router.url === ruta;
+    this.enfocarContenidoAlNavegar = enfocar && !mismaRuta;
+    this.cerrarMenu();
+    // RouterLink puede emitir NavigationSkipped antes de este manejador.
+    // La elección del destino actual también tiene que cerrar y llevar el foco.
+    if (enfocar && mismaRuta) this.enfocarDespues('#contenido');
+  }
+
+  protected abrirBuscadorSecciones(): void {
+    this.errorSeccion.set(null);
+    this.notificacionesAbiertas.set(false);
+    this.buscadorSeccionesAbierto.set(true);
+    this.enfocarDespues('#consulta-secciones');
+  }
+
+  protected cerrarBuscadorSecciones(): void {
+    this.buscadorSeccionesAbierto.set(false);
+    this.errorSeccion.set(null);
+  }
+
+  protected async elegirSeccion(evento: MouseEvent, ruta: string): Promise<void> {
+    // Los enlaces conservan abrir en otra pestaña y copiar dirección.
+    if (evento.button !== 0 || evento.ctrlKey || evento.metaKey || evento.shiftKey || evento.altKey) return;
+    evento.preventDefault();
+    if (this.abriendoSeccion() || !this.enlaces().some((enlace) => enlace.ruta === ruta)) return;
+    this.abriendoSeccion.set(true);
+    this.errorSeccion.set(null);
+    const identidad = this.sesion.identidad();
+    try {
+      const abierta = await this.router.navigateByUrl(ruta);
+      if (this.sesion.identidad() !== identidad) return;
+      if (abierta || this.router.url === ruta) {
+        this.cerrarBuscadorSecciones();
+        this.cerrarMenu();
+        this.enfocarDespues('#contenido');
+      } else {
+        this.errorSeccion.set('No se pudo abrir la sección. Vuelva a intentarlo.');
+      }
+    } catch {
+      if (this.sesion.identidad() === identidad) {
+        this.errorSeccion.set('No se pudo abrir la sección. Vuelva a intentarlo.');
+      }
+    } finally {
+      this.abriendoSeccion.set(false);
+    }
+  }
+
+  private enfocarDespues(selector: string): void {
+    afterNextRender(() => this.elemento.nativeElement.querySelector<HTMLElement>(selector)?.focus({ preventScroll: true }),
+      { injector: this.inyector });
   }
 
   protected cerrarSesion(): void {

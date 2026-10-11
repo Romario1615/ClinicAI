@@ -1,0 +1,36 @@
+<app-ventana-flotante ceja="Navegación" titulo="Buscar sección" forma="centrada" [anchoMaximo]="600"
+  [ocupada]="ocupada()" [error]="error()" (cerrar)="cerrar.emit()">
+  <div class="secciones-busqueda">
+    <label for="consulta-secciones">Nombre de la sección o categoría</label>
+    <input id="consulta-secciones" class="campo__control" type="search" maxlength="120" autocomplete="off" spellcheck="false"
+      placeholder="Por ejemplo: agenda, finanzas o analítica"
+      [disabled]="ocupada()" [value]="consulta()"
+      (input)="consulta.set($any($event.target).value)" aria-describedby="resumen-secciones" />
+    <p id="resumen-secciones" class="secciones-busqueda__resumen" role="status" aria-live="polite" aria-atomic="true">
+      {{ cantidad() }} {{ cantidad() === 1 ? 'sección disponible' : 'secciones disponibles' }}
+    </p>
+  </div>
+  <div class="secciones-resultados" [attr.aria-busy]="ocupada()">
+    @for (grupo of resultados(); track grupo.id) {
+      <section class="secciones-resultados__grupo" [attr.aria-labelledby]="'buscar-grupo-' + grupo.id">
+        <h3 [id]="'buscar-grupo-' + grupo.id">{{ grupo.etiqueta }}</h3>
+        <ul>
+          @for (enlace of grupo.enlaces; track enlace.ruta) {
+            <li>
+              <a [href]="enlace.ruta" (click)="elegir.emit({ evento: $event, ruta: enlace.ruta })"
+                [attr.aria-disabled]="ocupada() ? 'true' : null">
+                <app-icono [nombre]="enlace.icono" [tamano]="18" />
+                <span>{{ enlace.etiqueta }}</span>
+                @if (enlace.demostracion) { <span class="secciones-resultados__demo">demo</span> }
+                <app-icono nombre="siguiente" [tamano]="16" />
+              </a>
+            </li>
+          }
+        </ul>
+      </section>
+    } @empty {
+      <p class="secciones-resultados__vacio">No se encontraron secciones. Pruebe con otro nombre o categoría.</p>
+    }
+  </div>
+  <p pie class="secciones-busqueda__pie">Seleccione una sección para abrirla.</p>
+</app-ventana-flotante>

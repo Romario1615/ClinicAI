@@ -135,6 +135,11 @@
       </app-ventana-flotante>
     }
 
+    @if (buscadorSeccionesAbierto()) {
+      <app-buscador-secciones [grupos]="gruposSecciones()" [ocupada]="abriendoSeccion()" [error]="errorSeccion()"
+        (elegir)="elegirSeccion($event.evento, $event.ruta)" (cerrar)="cerrarBuscadorSecciones()" />
+    }
+
     <nav
       id="navegacion-principal"
       class="navegacion"
@@ -146,6 +151,11 @@
       </div>
 
       <p class="navegacion__grupo">Secciones</p>
+      <button id="buscar-seccion" type="button" class="navegacion__buscar" aria-haspopup="dialog"
+        (click)="abrirBuscadorSecciones()">
+        <app-icono nombre="buscar" [tamano]="17" />
+        <span>Buscar sección</span>
+      </button>
       <div class="navegacion__categorias">
         @for (categoria of categorias(); track categoria.id) {
           @let abierta = categoriaAbierta() === categoria.id;
@@ -185,7 +195,7 @@
                     routerLinkActive="navegacion__enlace--activo"
                     ariaCurrentWhenActive="page"
                     class="navegacion__enlace"
-                    (click)="cerrarMenu()"
+                    (click)="alElegirEnlace($event, enlace.ruta)"
                   >
                     <span class="navegacion__texto">
                       <app-icono [nombre]="enlace.icono" [tamano]="17" />
@@ -214,7 +224,7 @@
           [routerLink]="ayuda.ruta"
           routerLinkActive="navegacion__enlace--activo"
           ariaCurrentWhenActive="page"
-          (click)="cerrarMenu()"
+          (click)="alElegirEnlace($event, ayuda.ruta)"
         >
           <span class="navegacion__texto">
             <app-icono [nombre]="ayuda.icono" [tamano]="19" />

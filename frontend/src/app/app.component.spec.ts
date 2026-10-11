@@ -157,6 +157,204 @@ describe('AppComponent', () => {
         fixture.detectChanges();
     }
 
+    function abrirBuscador(): HTMLElement {
+        const boton = fixture.nativeElement.querySelector('#buscar-seccion') as HTMLButtonElement;
+        boton.focus();
+        boton.click();
+        fixture.detectChanges();
+        return fixture.nativeElement.querySelector('dialog') as HTMLElement;
+    }
+
+    function buscar(texto: string): void {
+        const consulta = fixture.nativeElement.querySelector('#consulta-secciones') as HTMLInputElement;
+        consulta.value = texto;
+        consulta.dispatchEvent(new Event('input', { bubbles: true }));
+        fixture.detectChanges();
+    }
+
+    it('el buscador muestra exactamente los enlaces autorizados, incluidos Ayuda y el simulador local', () => {
+        TestBed.inject(HttpTestingController).expectOne(`${CONFIGURACION_POR_DEFECTO.urlApi}/autenticacion/accesos-locales`)
+            .flush({ habilitado: true, roles: [] });
+        const permisos = [...Object.values(PERMISOS), 'pago.leer'];
+        iniciar(permisos);
+        sesion.establecerIdentidad({ ...identidadCon(permisos), roles: ['superadministrador'] });
+        fixture.detectChanges();
+        const destinos = [...fixture.nativeElement.querySelectorAll('nav a')].map((a) => (a as HTMLAnchorElement).getAttribute('href'));
+        const modal = abrirBuscador();
+        const resultados = [...modal.querySelectorAll('.secciones-resultados a')].map((a) => a.getAttribute('href'));
+        expect(resultados.sort()).toEqual(destinos.sort());
+        expect(resultados).toHaveLength(23);
+        expect(modal.querySelector('#resumen-secciones')?.textContent).toContain('23 secciones disponibles');
+        expect(modal.querySelector('.secciones-resultados__demo')).not.toBeNull();
+    });
+
+    it('buscar no revela secciones sin permiso ni el simulador cuando la API no confirma local', () => {
+        iniciar(['agenda.leer', PERMISOS.conversacionResponder]);
+        const modal = abrirBuscador();
+        expect(modal.querySelector('a[href="/agenda"]')).not.toBeNull();
+        for (const ruta of ['/pacientes', '/usuarios', '/plataforma/clinicas', '/agente-demo']) {
+            expect(modal.querySelector(`a[href="${ruta}"]`)).toBeNull();
+        }
+    });
+
+    it('busca por nombre y categoría sin depender de tildes, mayúsculas u orden de palabras', () => {
+        iniciar([PERMISOS.metricasLeer, PERMISOS.historiaLeer, 'pago.leer']);
+        const modal = abrirBuscador();
+        buscar('  IA ANALITICA  ');
+        expect(modal.querySelectorAll('.secciones-resultados a')).toHaveLength(1);
+        expect(modal.querySelector('.secciones-resultados a')?.getAttribute('href')).toBe('/analitica');
+        buscar('finanzas');
+        expect(modal.querySelector('.secciones-resultados a')?.getAttribute('href')).toBe('/pagos');
+        buscar('clinica historia');
+        expect(modal.querySelector('.secciones-resultados a')?.getAttribute('href')).toBe('/historia-clinica');
+        buscar('sin coincidencia');
+        expect(modal.querySelectorAll('.secciones-resultados a')).toHaveLength(0);
+        expect(modal.textContent).toContain('No se encontraron secciones');
+        buscar('ayuda');
+        expect(modal.querySelector('#resumen-secciones')?.textContent).toContain('1 sección disponible');
+    });
+
+    it('al abrir enfoca la consulta y cerrar devuelve el foco al buscador sin conservar el texto', async () => {
+        iniciar(['agenda.leer']);
+        const modal = abrirBuscador();
+        await fixture.whenStable();
+        expect(document.activeElement?.id).toBe('consulta-secciones');
+        buscar('agenda');
+        modal.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+        await fixture.whenStable();
+        fixture.detectChanges();
+        expect(fixture.nativeElement.querySelector('dialog')).toBeNull();
+        expect(document.activeElement?.id).toBe('buscar-seccion');
+        abrirBuscador();
+        expect((fixture.nativeElement.querySelector('#consulta-secciones') as HTMLInputElement).value).toBe('');
+    });
+
+    it('la búsqueda conserva el cajón al pulsar dentro y Escape cierra solo la ventana', () => {
+        iniciar(['agenda.leer']);
+        (fixture.nativeElement.querySelector('.cabecera__menu') as HTMLButtonElement).click();
+        fixture.detectChanges();
+        const modal = abrirBuscador();
+        (modal.querySelector('input') as HTMLInputElement).click();
+        fixture.detectChanges();
+        expect(fixture.nativeElement.querySelector('.navegacion--abierta')).not.toBeNull();
+        modal.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+        fixture.detectChanges();
+        expect(fixture.nativeElement.querySelector('.navegacion--abierta')).not.toBeNull();
+    });
+
+    it('elegir una sección abre su ruta, cierra las capas y enfoca el contenido', async () => {
+        const router = TestBed.inject(Router);
+        router.resetConfig([{ path: 'agenda', component: PaginaPruebaComponent }]);
+        iniciar(['agenda.leer']);
+        // El cambio de ruta y el cierre se producen tras resolver la promesa;
+        // el foco se comprueba con el render automático que usa la aplicación.
+        fixture.autoDetectChanges();
+        const modal = abrirBuscador();
+        (modal.querySelector('a[href="/agenda"]') as HTMLAnchorElement).click();
+        await fixture.whenStable();
+        fixture.detectChanges();
+        expect(router.url).toBe('/agenda');
+        expect(fixture.nativeElement.querySelector('dialog')).toBeNull();
+        expect(document.activeElement?.id).toBe('contenido');
+        // Una navegación a la misma dirección se omite, pero la elección sigue funcionando.
+        const siguiente = abrirBuscador();
+        (siguiente.querySelector('a[href="/agenda"]') as HTMLAnchorElement).click();
+        await fixture.whenStable();
+        fixture.detectChanges();
+        expect(fixture.nativeElement.querySelector('dialog')).toBeNull();
+        expect(document.activeElement?.id).toBe('contenido');
+    });
+
+    it('un rechazo o error de navegación se explica en la ventana y permite repetir la elección', async () => {
+        iniciar(['agenda.leer']);
+        const router = TestBed.inject(Router);
+        const navegar = vi.spyOn(router, 'navigateByUrl').mockResolvedValueOnce(false).mockRejectedValueOnce(new Error('fallo sintético'));
+        const modal = abrirBuscador();
+        const enlace = modal.querySelector('a[href="/agenda"]') as HTMLAnchorElement;
+        enlace.click();
+        await fixture.whenStable();
+        fixture.detectChanges();
+        expect(modal.querySelector('[role="alert"]')?.textContent).toContain('No se pudo abrir la sección');
+        expect(modal.querySelector('input')?.disabled).toBe(false);
+        enlace.click();
+        await fixture.whenStable();
+        fixture.detectChanges();
+        expect(navegar).toHaveBeenCalledTimes(2);
+        expect(modal.querySelector('[role="alert"]')?.textContent).toContain('Vuelva a intentarlo');
+    });
+
+    it('no duplica la navegación y descarta su resultado si cambia la identidad', async () => {
+        iniciar(['agenda.leer']);
+        let resolver!: (abierta: boolean) => void;
+        const navegar = vi.spyOn(TestBed.inject(Router), 'navigateByUrl').mockReturnValue(new Promise<boolean>((resolucion) => { resolver = resolucion; }));
+        const modal = abrirBuscador();
+        const enlace = modal.querySelector('a[href="/agenda"]') as HTMLAnchorElement;
+        enlace.click();
+        enlace.click();
+        fixture.detectChanges();
+        expect(navegar).toHaveBeenCalledTimes(1);
+        expect(modal.querySelector('input')?.disabled).toBe(true);
+        sesion.establecerIdentidad({ ...identidadCon([]), usuario_id: 'otra-persona-sintetica' });
+        fixture.detectChanges();
+        expect(fixture.nativeElement.querySelector('dialog')).toBeNull();
+        resolver(false);
+        await fixture.whenStable();
+        fixture.detectChanges();
+        abrirBuscador();
+        expect(fixture.nativeElement.querySelector('[role="alert"]')).toBeNull();
+        expect(fixture.nativeElement.querySelector('.secciones-resultados a[href="/agenda"]')).toBeNull();
+    });
+
+    it('un cambio de parámetros también revela la categoría del destino', async () => {
+        const router = TestBed.inject(Router);
+        router.resetConfig([{ path: 'pagos', component: PaginaPruebaComponent }]);
+        iniciar(['agenda.leer', 'pago.leer']);
+        await router.navigateByUrl('/pagos?paciente=uno');
+        fixture.detectChanges();
+        (fixture.nativeElement.querySelector('#categoria-clinica') as HTMLButtonElement).click();
+        fixture.detectChanges();
+        await router.navigateByUrl('/pagos?paciente=dos');
+        fixture.detectChanges();
+        expect(fixture.nativeElement.querySelector('#categoria-finanzas').getAttribute('aria-expanded')).toBe('true');
+    });
+
+    it('mantiene los gestos de nueva pestaña y rechaza destinos fuera de los enlaces autorizados', async () => {
+        iniciar(['agenda.leer']);
+        abrirBuscador();
+        const navegar = vi.spyOn(TestBed.inject(Router), 'navigateByUrl');
+        const vm = fixture.componentInstance as unknown as { elegirSeccion(evento: MouseEvent, ruta: string): Promise<void> };
+        const nuevaPestana = new MouseEvent('click', { ctrlKey: true, cancelable: true });
+        await vm.elegirSeccion(nuevaPestana, '/agenda');
+        expect(nuevaPestana.defaultPrevented).toBe(false);
+        const ajeno = new MouseEvent('click', { cancelable: true });
+        await vm.elegirSeccion(ajeno, '/usuarios');
+        expect(ajeno.defaultPrevented).toBe(true);
+        expect(navegar).not.toHaveBeenCalled();
+    });
+
+    it('un enlace móvil a la ruta actual cierra el cajón y enfoca el contenido aunque se omita la navegación', async () => {
+        const router = TestBed.inject(Router);
+        router.resetConfig([{ path: 'agenda', component: PaginaPruebaComponent }]);
+        iniciar(['agenda.leer']);
+        fixture.autoDetectChanges();
+        const vm = fixture.componentInstance as unknown as { pantallaEstrecha: WritableSignal<boolean> };
+        vm.pantallaEstrecha.set(true);
+        await router.navigateByUrl('/agenda');
+        await fixture.whenStable();
+        const raiz = fixture.nativeElement as HTMLElement;
+        const boton = raiz.querySelector('.cabecera__menu') as HTMLButtonElement;
+        boton.style.display = 'inline-flex';
+        boton.click();
+        await fixture.whenStable();
+        const enlace = raiz.querySelector('nav a[href="/agenda"]') as HTMLAnchorElement;
+        enlace.focus();
+        enlace.click();
+        await fixture.whenStable();
+        expect(raiz.querySelector('.navegacion--abierta')).toBeNull();
+        expect(raiz.querySelector('#contenido')?.hasAttribute('inert')).toBe(false);
+        expect(document.activeElement?.id).toBe('contenido');
+    });
+
     it('sin permisos adicionales solo ofrece Resumen y Ayuda, sin categorías vacías', () => {
         iniciar([]);
         const botones = fixture.nativeElement.querySelectorAll('.navegacion__desplegar') as NodeListOf<HTMLButtonElement>;
