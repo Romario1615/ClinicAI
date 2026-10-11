@@ -76,7 +76,7 @@ function sumarDias(fecha: string, dias: number): string {
   imports: [CapturaFotosComponent,FotosRegistroComponent,FormsModule, SelectorPacienteComponent, ResumenModuloComponent, VentanaFlotanteComponent, IconoComponent, PestanasComponent],
   host: { class: 'pantalla' },
   template: `
-    <header class="modulo-cabecera pantalla__fijo"><div class="modulo-cabecera__texto"><p class="ceja">ADMINISTRACIÓN</p><h1><app-icono nombre="balance-clinico" [tamano]="28" /> Pagos</h1><p>Registro de efectivo y transferencias en USD. La confirmación la realiza el personal autorizado.</p></div><img class="modulo-cabecera__imagen" src="/images/pagos-administrativos.png" alt="" aria-hidden="true" loading="lazy" /></header>
+    <header class="modulo-cabecera pantalla__fijo"><div class="modulo-cabecera__texto"><p class="ceja">ADMINISTRACIÓN</p><h1><app-icono nombre="balance-clinico" [tamano]="28" /> Pagos</h1><p>Registro de efectivo y transferencias en USD. La confirmación la realiza el personal autorizado.</p></div><img class="modulo-cabecera__imagen" src="/images/pagos-administrativos.webp" alt="" aria-hidden="true" loading="lazy" /></header>
 
     <app-resumen-modulo class="pantalla__fijo" modulo="pagos" />
     @if (pacienteContextoId) {

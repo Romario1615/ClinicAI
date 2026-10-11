@@ -35,6 +35,7 @@ import { FondoIAComponent } from '../../compartido/fondo-ia.component';
 import { MarcaComponent } from '../../compartido/marca.component';
 import type { RolAccesoLocal } from '../../nucleo/modelos/dominio';
 import { especialidadDelRol } from '../../nucleo/utilidades/especialidad-rol';
+import { rutaIconoRol } from '../../nucleo/utilidades/icono-rol';
 
 /** Fotos de la portada: se funden una tras otra, cada una `SEGUNDOS_POR_FOTO`. */
 const FOTOS_PORTADA = [
@@ -76,6 +77,7 @@ export class AccesoComponent implements OnInit {
   protected readonly especialidadesLocales = signal<readonly { id: string; nombre: string }[]>([]);
   protected especialidadLocal = '';
   protected readonly especialidadDelRol = especialidadDelRol;
+  protected readonly iconoRol = rutaIconoRol;
 
   ngOnInit(): void {
     this.modoLocal.accesosLocales().subscribe({
@@ -185,11 +187,6 @@ export class AccesoComponent implements OnInit {
     return rol.codigo === 'profesional' && this.especialidadLocal
       ? this.especialidadesLocales().find(e => e.id === this.especialidadLocal)?.nombre
       : rol.especialidad;
-  }
-
-  protected iconoRol(codigo: string): string {
-    const conocidos = ['recepcion', 'profesional', 'asistente', 'auditor', 'administradora', 'superadministrador'];
-    return `/images/acceso-icono-${conocidos.includes(codigo) ? codigo : 'seguridad'}.webp`;
   }
 
   /** Cada foto entra cuando sale la anterior; todas comparten el mismo ciclo. */

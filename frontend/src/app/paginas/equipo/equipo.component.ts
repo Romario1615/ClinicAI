@@ -41,7 +41,7 @@ const ESTADOS: readonly { codigo: FormularioEquipo['estado_disponibilidad']; eti
   template: `
     <header class="encabezado pantalla__fijo">
       <div class="encabezado__texto"><p class="ceja"><app-icono nombre="equipo" [tamano]="16" /> PERSONAL DE LA CLÍNICA</p><h1>Equipo clínico</h1><p>Administre perfiles profesionales y sus sedes de atención.</p></div>
-      <img src="/images/equipo-clinica-colaboracion.jpg" alt="" aria-hidden="true" fetchpriority="low" />
+      <img src="/images/equipo-clinica-colaboracion.webp" alt="" aria-hidden="true" fetchpriority="low" />
     </header>
     @if (error() && !formularioAbierto()) { <p class="aviso error pantalla__fijo" role="alert">{{ error() }}</p> }
     @if (mensaje()) { <p class="aviso pantalla__fijo" role="status">{{ mensaje() }}</p> }

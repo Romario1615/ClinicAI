@@ -460,7 +460,7 @@ const CATEGORIAS: Record<string, string> = {
       border-radius: var(--radio);
       background-image:
         linear-gradient(90deg, rgb(255 255 255 / 99%) 0%, rgb(255 255 255 / 96%) 38%, rgb(255 255 255 / 68%) 59%, rgb(255 255 255 / 4%) 100%),
-        url('/images/usuarios-roles-acceso.jpg');
+        url('/images/usuarios-roles-acceso.webp');
       background-position: center, 66% 52%;
       background-size: cover;
       animation: usuarios-fondo 32s ease-in-out infinite alternate;

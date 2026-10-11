@@ -126,7 +126,7 @@ import { AnamnesisConfiguracionComponent } from './anamnesis-configuracion.compo
         <h2>Los servicios de tu clínica, en un solo lugar</h2>
         <p>Configura conexiones y credenciales por clínica cuando tengas tus cuentas de proveedor.</p>
       </div>
-      <img src="/images/integraciones-clinicai-banner.png" alt="" aria-hidden="true" loading="lazy" fetchpriority="low" />
+      <img src="/images/integraciones-clinicai-banner.webp" alt="" aria-hidden="true" loading="lazy" fetchpriority="low" />
     </section>
 
     <section class="aviso-seguridad" aria-label="Seguridad de las credenciales">

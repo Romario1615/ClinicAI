@@ -18,6 +18,7 @@ import { GraficoRedComponent } from '../../compartido/grafico-red.component';
 import { IconoComponent } from '../../compartido/icono.component';
 import { FalloApi } from '../../nucleo/servicios/api.service';
 import { AyudaService, type Manual, type SeccionManual } from './ayuda.service';
+import { rutaIconoRol } from '../../nucleo/utilidades/icono-rol';
 
 /** Nombre visible de cada pantalla, igual que en la navegación. */
 const PANTALLAS: Readonly<Record<string, string>> = {
@@ -118,13 +119,13 @@ function normalizar(texto: string): string {
         >
           <div class="ayuda__resumen desplazable" tabindex="0" role="region" aria-label="El rol y sus límites">
             <article class="tarjeta ayuda__intro">
-              <p class="ceja">{{ manual.tipo === 'SISTEMA' ? 'ROL DEL SISTEMA' : 'ROL DE SU CLÍNICA' }}</p>
+              <div class="ayuda__identidad"><img [src]="iconoRol(manual.rol_codigo)" alt="" width="36" height="36" decoding="async" /><p class="ceja">{{ manual.tipo === 'SISTEMA' ? 'ROL DEL SISTEMA' : 'ROL DE SU CLÍNICA' }}</p></div>
               <h2 id="titulo-manual">{{ manual.titulo }}</h2>
               <p>{{ manual.introduccion }}</p>
               @if (manual.responsabilidades.length) {
                 <h3>De qué se ocupa</h3>
                 <ul class="ayuda__lista ayuda__lista--tic">
-                  @for (texto of manual.responsabilidades; track texto) {
+                  @for (texto of manual.responsabilidades; track $index) {
                     <li>{{ texto }}</li>
                   }
                 </ul>
@@ -134,7 +135,7 @@ function normalizar(texto: string): string {
               <p class="ceja"><app-icono nombre="escudo" [tamano]="15" /> LÍMITES</p>
               <h2 id="titulo-limites">Lo que este rol no hace</h2>
               <ul class="ayuda__lista ayuda__lista--limite">
-                @for (texto of manual.limites; track texto) {
+                @for (texto of manual.limites; track $index) {
                   <li>{{ texto }}</li>
                 }
               </ul>
@@ -150,15 +151,27 @@ function normalizar(texto: string): string {
               <app-icono nombre="buscar" [tamano]="16" />
               <span class="solo-lectores">Buscar en el manual</span>
               <input
+                #busqueda
                 type="search"
                 placeholder="Buscar una tarea…"
                 [value]="filtro()"
-                (input)="filtro.set($any($event.target).value)"
+                (input)="filtrar($any($event.target).value)"
               />
             </label>
+            <div class="ayuda__acciones">
+              @if (filtro().length) {
+                <button type="button" class="boton boton--pequeno" (click)="limpiarBusqueda(busqueda)">Limpiar búsqueda</button>
+              }
+              @if (seccionesVisibles().length) {
+                <button type="button" class="boton boton--pequeno"
+                  [attr.aria-controls]="'tareas-' + manual.rol_codigo"
+                  (click)="alternarTodas()">{{ todasAbiertas() ? 'Contraer todas' : 'Expandir todas' }}</button>
+              }
+            </div>
           </div>
+          <p class="ayuda__resultado" role="status">Mostrando {{ seccionesVisibles().length }} de {{ manual.secciones.length }} tareas</p>
 
-          <div class="ayuda__lista-tareas desplazable" tabindex="0" role="region" aria-label="Tareas del manual">
+          <div class="ayuda__lista-tareas desplazable" [id]="'tareas-' + manual.rol_codigo" tabindex="0" role="region" aria-label="Tareas del manual">
           @if (seccionesVisibles().length === 0) {
             <app-vacio
               titulo="Ninguna tarea coincide"
@@ -168,23 +181,24 @@ function normalizar(texto: string): string {
             <ol class="ayuda__tareas">
               @for (seccion of seccionesVisibles(); track seccion.clave; let indice = $index) {
                 <li class="tarjeta ayuda__tarea">
-                  <details [open]="indice === 0 || filtro().length > 0">
+                  <details [open]="abiertas().has(seccion.clave)" (toggle)="alAlternar(seccion.clave, $event)">
                     <summary>
                       <span class="ayuda__numero numerico" aria-hidden="true">{{ indice + 1 }}</span>
                       <span class="ayuda__titulos">
                         <strong>{{ seccion.titulo }}</strong>
                         <span>{{ seccion.proposito }}</span>
                       </span>
+                      <app-icono class="ayuda__flecha" nombre="siguiente" [tamano]="18" />
                     </summary>
                     <div class="ayuda__cuerpo">
                       <ol class="ayuda__pasos">
-                        @for (paso of seccion.pasos; track paso) {
+                        @for (paso of seccion.pasos; track $index) {
                           <li>{{ paso }}</li>
                         }
                       </ol>
                       @if (seccion.limites.length) {
                         <ul class="ayuda__lista ayuda__lista--limite">
-                          @for (texto of seccion.limites; track texto) {
+                          @for (texto of seccion.limites; track $index) {
                             <li>{{ texto }}</li>
                           }
                         </ul>
@@ -236,7 +250,7 @@ function normalizar(texto: string): string {
       box-shadow: var(--vidrio-canto), var(--vidrio-sombra);
     }
     .ayuda__pestana {
-      min-height: 40px;
+      min-height: 44px;
       padding: 0 var(--espacio-4);
       border: 0;
       border-radius: 999px;
@@ -268,10 +282,16 @@ function normalizar(texto: string): string {
     .ayuda__barra {
       flex: none;
     }
+    .ayuda__acciones { display:flex; flex-wrap:wrap; gap:.5rem; }
+    .ayuda__acciones .boton { min-height:44px; }
+    .ayuda__resultado { flex:none; margin:0 0 .75rem; color:var(--texto-suave); font-size:.78rem; }
     .ayuda__intro h2,
     .ayuda__limites h2 {
       margin-top: var(--espacio-1);
     }
+    .ayuda__identidad { display:flex; align-items:center; gap:.75rem; margin-bottom:.8rem; }
+    .ayuda__identidad img { flex:0 0 36px; padding:6px; border:1px solid var(--borde); border-radius:12px; background:var(--acento-suave); }
+    .ayuda__identidad .ceja { margin:0; }
     .ayuda__intro h3 {
       margin-top: var(--espacio-4);
       font-size: 0.95rem;
@@ -335,7 +355,7 @@ function normalizar(texto: string): string {
       display: flex;
       align-items: center;
       gap: var(--espacio-2);
-      min-height: 42px;
+      min-height: 44px;
       padding: 0 var(--espacio-3);
       border: 1px solid var(--borde-fuerte);
       border-radius: 999px;
@@ -347,6 +367,7 @@ function normalizar(texto: string): string {
       box-shadow: 0 0 0 4px rgb(95 209 196 / 26%);
     }
     .ayuda__buscar input {
+      min-width:0;
       width: min(260px, 52vw);
       border: 0;
       background: transparent;
@@ -364,6 +385,8 @@ function normalizar(texto: string): string {
     }
     .ayuda__tarea {
       padding: 0;
+      overflow:hidden;
+      border:1px solid var(--borde);
     }
     .ayuda__tarea summary {
       display: flex;
@@ -393,7 +416,12 @@ function normalizar(texto: string): string {
     .ayuda__titulos {
       display: grid;
       gap: 2px;
+      min-width:0;
+      overflow-wrap:anywhere;
     }
+    .ayuda__flecha { flex:0 0 18px; margin-left:auto; margin-top:.4rem; color:var(--acento); }
+    details[open] .ayuda__flecha { transform:rotate(90deg); }
+    details[open] summary { margin-bottom:.75rem; border-bottom:1px solid var(--borde); background:var(--superficie-hundida); }
     .ayuda__titulos span {
       color: var(--texto-suave);
       font-size: 0.92rem;
@@ -436,6 +464,8 @@ function normalizar(texto: string): string {
       color: var(--acento-fuerte);
       font-size: 0.78rem;
       font-weight: 600;
+      max-width:100%;
+      overflow-wrap:anywhere;
     }
     @media (max-width: 720px) {
       .ayuda__grafico {
@@ -474,12 +504,14 @@ function normalizar(texto: string): string {
 })
 export class AyudaComponent {
   private readonly ayuda = inject(AyudaService);
+  protected readonly iconoRol = rutaIconoRol;
 
   protected readonly manuales = signal<readonly Manual[]>([]);
   protected readonly cargando = signal(true);
   protected readonly error = signal<FalloApi | null>(null);
   protected readonly indiceActivo = signal(0);
   protected readonly filtro = signal('');
+  protected readonly abiertas = signal<ReadonlySet<string>>(new Set());
 
   protected readonly activo = computed<Manual | null>(() => this.manuales()[this.indiceActivo()] ?? null);
 
@@ -499,6 +531,10 @@ export class AyudaComponent {
       return terminos.every((termino) => texto.includes(termino));
     });
   });
+  protected readonly todasAbiertas = computed(() => {
+    const visibles = this.seccionesVisibles();
+    return visibles.length > 0 && visibles.every(s => this.abiertas().has(s.clave));
+  });
 
   constructor() {
     this.cargar();
@@ -511,6 +547,8 @@ export class AyudaComponent {
       next: (manuales) => {
         this.manuales.set(manuales);
         this.indiceActivo.set(0);
+        this.filtro.set('');
+        this.abrirPrimera(manuales[0]);
         this.cargando.set(false);
       },
       error: (fallo: unknown) => {
@@ -525,6 +563,46 @@ export class AyudaComponent {
   protected elegir(indice: number): void {
     this.indiceActivo.set(indice);
     this.filtro.set('');
+    this.abrirPrimera(this.activo());
+  }
+
+  private abrirPrimera(manual: Manual | null | undefined): void {
+    const primera = manual?.secciones[0];
+    this.abiertas.set(new Set(primera ? [primera.clave] : []));
+  }
+
+  protected filtrar(texto: string): void {
+    this.filtro.set(texto);
+    if (texto.trim()) {
+      this.abiertas.update(previas => new Set([...previas, ...this.seccionesVisibles().map(s => s.clave)]));
+    }
+  }
+
+  protected limpiarBusqueda(campo: HTMLInputElement): void {
+    campo.focus();
+    this.filtro.set('');
+  }
+
+  protected alternarTodas(): void {
+    const contraer = this.todasAbiertas();
+    const visibles = this.seccionesVisibles();
+    this.abiertas.update(previas => {
+      const nuevas = new Set(previas);
+      visibles.forEach(s => { if (contraer) nuevas.delete(s.clave); else nuevas.add(s.clave); });
+      return nuevas;
+    });
+  }
+
+  protected alAlternar(clave: string, evento: Event): void {
+    // Un toggle pendiente del manual anterior no cambia el que acaba de abrirse.
+    if (!this.seccionesVisibles().some(s => s.clave === clave)) return;
+    const abierta = (evento.currentTarget as HTMLDetailsElement).open;
+    if (this.abiertas().has(clave) === abierta) return;
+    this.abiertas.update(previas => {
+      const nuevas = new Set(previas);
+      if (abierta) nuevas.add(clave); else nuevas.delete(clave);
+      return nuevas;
+    });
   }
 
   /** Flechas entre pestañas, como en cualquier lista de pestañas accesible. */

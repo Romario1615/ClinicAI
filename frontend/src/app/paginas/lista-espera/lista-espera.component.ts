@@ -88,7 +88,7 @@ import { ResumenModuloComponent } from '../../compartido/resumen-modulo.componen
           Una cancelación genera una oferta para una persona a la vez, con plazo para responder.
         </p>
       </div>
-      <img class="modulo-cabecera__imagen" src="/images/lista-espera.png" alt="" aria-hidden="true" loading="lazy" />
+      <img class="modulo-cabecera__imagen" src="/images/lista-espera.webp" alt="" aria-hidden="true" loading="lazy" />
       <div class="acciones cabecera__acciones">
         <button type="button" class="boton" (click)="cargar()" [disabled]="cargando()">
           Actualizar

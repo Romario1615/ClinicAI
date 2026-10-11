@@ -27,7 +27,7 @@ const TIPOS: readonly { readonly valor: TipoConsultorio; readonly etiqueta: stri
   selector: 'app-catalogo', standalone: true, imports: [FotosRegistroComponent,CapturaFotosComponent, FormsModule, ModulosEspecialidadComponent, VentanaFlotanteComponent, PestanasComponent],
   host: { class: 'pantalla', role: 'region', 'aria-label': 'Catálogo de la clínica' },
   template: `
-    <header class="modulo-cabecera pantalla__fijo"><div class="modulo-cabecera__texto"><p class="ceja">CONFIGURACIÓN</p><h1>Catálogo de la clínica</h1><p>Sedes, consultorios, servicios y profesionales disponibles para su sesión.</p></div><img class="modulo-cabecera__imagen" src="/images/catalogo-clinica.png" alt="" aria-hidden="true" loading="lazy" /></header>
+    <header class="modulo-cabecera pantalla__fijo"><div class="modulo-cabecera__texto"><p class="ceja">CONFIGURACIÓN</p><h1>Catálogo de la clínica</h1><p>Sedes, consultorios, servicios y profesionales disponibles para su sesión.</p></div><img class="modulo-cabecera__imagen" src="/images/catalogo-clinica.webp" alt="" aria-hidden="true" loading="lazy" /></header>
     @if (error()) { <div class="aviso-carga pantalla__fijo"><p class="aviso error" role="alert">{{ error() }}</p><button (click)="cargar()" class="boton">Reintentar</button></div> }
     @if (mensaje()) { <p class="aviso exito pantalla__fijo" role="status">{{ mensaje() }}</p> }
     @if (cargando()) { <p class="pantalla__fijo" role="status">Cargando catálogo…</p> }

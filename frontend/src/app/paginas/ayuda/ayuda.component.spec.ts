@@ -22,7 +22,7 @@ const RECEPCION: Manual = {
   titulo: 'Manual de Recepción',
   introduccion: 'Recepción es la puerta de entrada de la clínica.',
   responsabilidades: ['Que cada cita quede reservada.'],
-  limites: ['No lee historia clínica.'],
+  limites: ['No registra contenido clínico.'],
   secciones: [
     {
       clave: 'recepcion.reservar',
@@ -94,7 +94,7 @@ describe('AyudaComponent', () => {
     const raiz = fixture.nativeElement as HTMLElement;
     expect(raiz.querySelector('[role="tablist"]')).toBeNull();
     expect(raiz.querySelector('h2')?.textContent).toContain('Manual de Recepción');
-    expect(texto()).toContain('No lee historia clínica.');
+    expect(texto()).toContain('No registra contenido clínico.');
     expect(raiz.querySelectorAll('.ayuda__tarea')).toHaveLength(2);
     // La primera tarea viene abierta: el manual se lee sin un clic de más.
     expect(raiz.querySelector('.ayuda__tarea details')?.hasAttribute('open')).toBe(true);
@@ -164,5 +164,64 @@ describe('AyudaComponent', () => {
     fixture.detectChanges();
     responder([RECEPCION]);
     expect(texto()).toContain('Manual de Recepción');
+  });
+  it('expande y contrae las tareas sin salir del manual', () => {
+    responder([RECEPCION]);
+    fixture.componentInstance['alternarTodas'](); fixture.detectChanges();
+    expect(fixture.nativeElement.querySelectorAll('details[open]')).toHaveLength(2);
+    expect(texto()).toContain('Contraer todas');
+    fixture.componentInstance['alternarTodas'](); fixture.detectChanges();
+    expect(fixture.nativeElement.querySelectorAll('details[open]')).toHaveLength(0);
+    expect(texto()).toContain('Expandir todas');
+  });
+  it('filtrar abre coincidencias y limpiar devuelve el foco al buscador', () => {
+    responder([RECEPCION]);
+    const campo: HTMLInputElement = fixture.nativeElement.querySelector('input[type="search"]');
+    campo.value = 'METODO'; campo.dispatchEvent(new Event('input')); fixture.detectChanges();
+    expect(texto()).toContain('Mostrando 1 de 2 tareas');
+    expect(fixture.nativeElement.querySelector('details').open).toBe(true);
+    const limpiar = [...fixture.nativeElement.querySelectorAll('button')].find((b: unknown) => (b as HTMLElement).textContent?.includes('Limpiar búsqueda')) as HTMLButtonElement;
+    limpiar.click(); fixture.detectChanges();
+    expect(campo.value).toBe('');
+    expect(document.activeElement).toBe(campo);
+    expect(texto()).toContain('Mostrando 2 de 2 tareas');
+  });
+  it('la apertura masiva afecta solo a las tareas visibles', () => {
+    responder([RECEPCION]);
+    fixture.componentInstance['filtrar']('comprobantes'); fixture.detectChanges();
+    fixture.componentInstance['alternarTodas'](); fixture.detectChanges();
+    expect(fixture.componentInstance['abiertas']().has('recepcion.reservar')).toBe(true);
+    expect(fixture.componentInstance['abiertas']().has('recepcion.cobros')).toBe(false);
+  });
+  it('la apertura individual actualiza el control de todas las tareas', () => {
+    responder([RECEPCION]);
+    const segunda: HTMLDetailsElement = fixture.nativeElement.querySelectorAll('details')[1];
+    segunda.open = true; segunda.dispatchEvent(new Event('toggle')); fixture.detectChanges();
+    expect(texto()).toContain('Contraer todas');
+    segunda.open = false; segunda.dispatchEvent(new Event('toggle')); fixture.detectChanges();
+    expect(texto()).toContain('Expandir todas');
+  });
+  it('cambiar de rol descarta el filtro, la apertura y los eventos del anterior', () => {
+    responder([RECEPCION, PROPIO]);
+    const anterior: HTMLDetailsElement = fixture.nativeElement.querySelector('details');
+    fixture.componentInstance['filtrar']('abonos'); fixture.componentInstance['elegir'](1); fixture.detectChanges();
+    anterior.dispatchEvent(new Event('toggle')); fixture.detectChanges();
+    expect(fixture.componentInstance['abiertas']().size).toBe(0);
+    expect(fixture.componentInstance['filtro']()).toBe('');
+    expect(fixture.nativeElement.querySelector('.ayuda__identidad img').getAttribute('src')).toBe('/images/acceso-icono-seguridad.webp');
+    expect(texto()).not.toContain('Registrar abonos');
+    fixture.componentInstance['elegir'](0); fixture.detectChanges();
+    expect(fixture.nativeElement.querySelectorAll('details[open]')).toHaveLength(1);
+  });
+  it('cambiar manuales conserva la lista textual y no emite NG0956', () => {
+    const advertencias = vi.spyOn(console, 'warn');
+    try {
+      responder([RECEPCION, PROPIO]);
+      const elemento = fixture.nativeElement.querySelector('.ayuda__limites li');
+      fixture.componentInstance['elegir'](1); fixture.detectChanges();
+      expect(fixture.nativeElement.querySelector('.ayuda__limites li')).toBe(elemento);
+      expect(elemento.textContent).toBe('No registra pagos.');
+      expect(advertencias.mock.calls.some(args => args.some(a => String(a).includes('NG0956')))).toBe(false);
+    } finally { advertencias.mockRestore(); }
   });
 });

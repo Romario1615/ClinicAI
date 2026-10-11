@@ -28,7 +28,7 @@ import { IconoComponent } from '../../compartido/icono.component';
       <p class="tarjeta" role="status">Cargando avisos…</p>
     } @else if (avisos().length === 0) {
       <section class="tarjeta seguridad__vacio">
-        <img src="/images/notificaciones-vacias.png" alt="" aria-hidden="true" width="96" height="100" />
+        <img src="/images/notificaciones-vacias.webp" alt="" aria-hidden="true" width="96" height="100" />
         <div><h2>Sin avisos pendientes</h2><p>Los accesos temporales que se soliciten aparecerán aquí para revisión administrativa.</p></div>
       </section>
     } @else {

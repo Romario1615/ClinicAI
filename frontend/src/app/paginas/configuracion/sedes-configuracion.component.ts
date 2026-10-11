@@ -20,7 +20,7 @@ import { CatalogoService, type DatosSede, type SedeGestion } from '../../nucleo/
         <h2 id="sedes-titulo">Sedes y datos de reserva</h2>
         <p>Actualiza la información de las sedes habilitadas dentro de tu ámbito.</p>
       </div>
-      <img src="/images/sedes-red-clinicas.jpg" alt="" aria-hidden="true" fetchpriority="low" />
+      <img src="/images/sedes-red-clinicas.webp" alt="" aria-hidden="true" fetchpriority="low" />
     </section>
 
     @if (aviso()) { <p class="mensaje mensaje--bien" role="status">{{ aviso() }}</p> }

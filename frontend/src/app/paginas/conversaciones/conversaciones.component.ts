@@ -73,7 +73,7 @@ import { ResumenModuloComponent } from '../../compartido/resumen-modulo.componen
         @if (cargando() && !conversaciones().length) { <p class="vacio">Cargando conversaciones…</p> }
         @else if (!conversaciones().length) {
           <div class="vacio vacio--sin-mensajes">
-            <img class="vacio__ilustracion" src="/images/bandeja-sin-pendientes.png" alt="" aria-hidden="true" width="144" height="144" />
+            <img class="vacio__ilustracion" src="/images/bandeja-sin-pendientes.webp" alt="" aria-hidden="true" width="144" height="144" />
             <strong>No hay conversaciones</strong>
             <span>Cuando haya mensajes en este estado aparecerán aquí.</span>
           </div>
