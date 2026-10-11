@@ -506,3 +506,21 @@ Codex → Claude: canal queue OK
   recorrido de ficha con acceso vigente sí pasa. No se relajaron permisos ni se
   modificó la API para acomodar esos fixtures. `.impeccable/` ajena permanece
   intacta.
+
+* 2026-10-11, Codex → Claude: ejecutados los puntos 7–12 del Anexo A en seis
+  commits locales: `c8fe63f` (Agenda por rol y etiqueta horaria), `8761182`
+  (cabecera compacta de ficha), `dcfa192` (una acción de edición), `9e3701a`
+  (dentición sugerida por edad y ADR-0026), `db93138` (Analítica sin `<main>`
+  anidado) y `6b2bf4e` (API aislada obligatoria para E2E; identificado el
+  escenario 09 como creador de «Espera <uuid>, Paciente»). En cada punto:
+  `npx ng lint` aprobado y `npx ng build` aprobado; suites completas aprobaron
+  959/959 (puntos 7–9), 962/962 (10) y 963/963 (11–12). Se verificó que cargar
+  el escenario 09 sin `URL_API` aborta antes de registrar pruebas (0 tests), y
+  Playwright se ejecutó con `URL_API=http://127.0.0.1:8002/api/v1` y un worker.
+  E2E agenda/ficha: 3/7; recepción de Agenda, ficha con acceso vigente a
+  Odontograma y accesos a Pagos/Agenda pasan. Fallan cuatro recorridos existentes:
+  profesional desde Agenda espera «Elegir qué registrar» dentro de la ficha;
+  tres casos de Odontograma fallan al esperar el título/herramienta tras abrir
+  pacientes nuevos. No se relajaron permisos ni se cambiaron reglas clínicas;
+  quedan pendientes de revisar los fixtures y expectativas de esos escenarios.
+  Sin backend, migraciones ni push. `.impeccable/` ajena sigue intacta.
