@@ -339,6 +339,7 @@ interface Columna {
     .tiempo {
       display: grid;
       grid-template-columns: 56px repeat(var(--columnas), minmax(var(--ancho-min, 140px), 1fr));
+      grid-template-rows: max-content auto;
       align-content: start;
       overflow: auto;
       overscroll-behavior: contain;
