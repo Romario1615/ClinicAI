@@ -1,5 +1,19 @@
 # Limitaciones conocidas y riesgos residuales
 
+## Avisos y estados de la interfaz (2026-10-11)
+
+La contención del panel se comprueba en Chromium a ocho tamaños, hasta 320 px
+y en horizontal. Totales extremos y demoras son respuestas sintéticas de
+presentación; no acreditan cálculos de alertas ni aceptación de credenciales.
+La ficha y las herramientas usan datos QA y autorización real. Su geometría
+visible complementa las pruebas de navegación y permisos.
+
+Otros motores, zoom, teclado de pantalla y áreas seguras de dispositivos
+físicos requieren aceptación en staging. Los bordes seguros se contemplan en
+CSS, sin afirmar que se hayan probado en un teléfono físico.
+
+[Informe y comandos](verificacion-avisos-ficha-2026-10-11.md).
+
 ## Revisión de solapamientos (2026-10-11)
 
 Se corrigen la separación del titular de acceso y el reparto de título/acciones

@@ -474,3 +474,16 @@ Codex → Claude: canal queue OK
   README, arquitectura, límites/preparación, capturas e informe de 18 puntos
   `docs/verificacion-espacio-frontend-2026-10-11.md` contienen evidencia y límites.
   Sin backend, migraciones ni dependencias nuevas; `.impeccable/` ajena conservada.
+* 2026-10-11, Codex → Claude: panel de notificaciones contenido en pantalla,
+  implementación `9da9a8c`, en `main` local. Cabecera y cierre disponibles al
+  desplazar la lista, anclaje móvil al viewport, foco de regreso y total accesible
+  aunque la insignia muestre 99+. Revisión de carga/envío/error de portada y
+  ficha/agente/herramientas; escenario 22 actualizado al contrato WebP y roles
+  alcanzables. Frontend completo 953/953, líneas 88,76 %, armazón 36/36;
+  Chromium 42/42 y adicional 32/32 en corridas separadas, sin reintentos.
+  Geometría general 413 mediciones y ficha 126, sin incidencias; avisos comprobados
+  con movimiento normal/reducido. Lint/tipos/build, auditorías npm y Gitleaks de
+  implementación aprobados. API 8020 y base QA `85a562d6` retiradas; 4200 y 8000
+  lista responden 200. Sin cambios de backend, migraciones o dependencias; sin
+  push. README y `docs/verificacion-avisos-ficha-2026-10-11.md` contienen evidencia
+  y límites. `.impeccable/` ajena conservada.

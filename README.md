@@ -1,5 +1,27 @@
 # ClinicAI — Plataforma de gestión clínica
 
+## Avisos dentro de la pantalla y revisión de la ficha (2026-10-11)
+
+La campana abre un panel de vidrio que conserva todos sus bordes dentro de la
+pantalla. En alturas pequeñas desplaza la lista; el cierre y el acceso al Panel
+siguen disponibles. **Cerrar notificaciones** y Escape devuelven el foco a la
+campana. La insignia muestra **99+** cuando hace falta, con el total completo
+en su descripción accesible y en la cabecera del panel.
+
+Se comprueban también la portada durante carga, ingreso pendiente y error largo,
+y la ficha con el agente y el selector de herramientas abiertos. Se conserva
+la foto original en WebP y la consulta clínica según rol y especialidad.
+
+[Pruebas, capturas y alcance](docs/verificacion-avisos-ficha-2026-10-11.md).
+
+Frontend completo **953/953**, cobertura de líneas **88,76 %**; armazón dirigido
+**36/36**. Chromium **42/42** y **32/32** en dos corridas, sin reintentos.
+La revisión general repite **413 mediciones** sin cruces visibles; añade estados
+del acceso, ficha/agente/herramientas y avisos con movimiento normal/reducido.
+Lint, tipos Angular, build, auditorías npm y Gitleaks de implementación aprobados.
+Implementación `9da9a8c`, local en `main`, sin push. Entorno QA retirado;
+acceso 4200 y API 8000 lista responden 200.
+
 ## Separación de elementos en la portada y revisión del frontend (2026-10-11)
 
 El titular del inicio de sesión separa **Más tiempo para cuidar** y **IA para

@@ -1,5 +1,20 @@
 # Estado de preparación para producción
 
+## Panel de avisos y revisión de ficha (2026-10-11)
+
+Desplegar el frontend completo. En staging comprobar la campana con el volumen
+habitual de avisos, el desplazamiento interno, todos los destinos, cierre y
+foco por teclado, móvil horizontal y zoom. La portada debe conservar su foto
+durante carga y error. Revisar ficha/agente/herramientas con los permisos y
+especialidades efectivamente asignados.
+
+El cambio no requiere migraciones, dependencias, claves ni contratos de API
+nuevos. Revertir el paquete frontend restaura la presentación anterior y no
+requiere restaurar datos. La evidencia del bloque no sustituye la aceptación
+de canales externos ni acredita preparación global del producto.
+
+[Verificación y límites](verificacion-avisos-ficha-2026-10-11.md).
+
 ## Separación de elementos en el frontend (2026-10-11)
 
 Desplegar el paquete frontend completo con sus recursos existentes. Comprobar

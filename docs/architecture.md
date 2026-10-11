@@ -1,5 +1,24 @@
 # Arquitectura
 
+## Contención del panel de notificaciones (2026-10-11)
+
+El panel de `AppComponent` distribuye cabecera, lista y enlace final en una
+rejilla con fila central `minmax(0, 1fr)`. La lista tiene desplazamiento propio
+y el alto máximo usa `dvh`. En móvil el panel se fija al borde del viewport;
+en escritorio conserva el anclaje a la campana. El cierre explícito devuelve
+el foco; los enlaces conservan su navegación y el cierre habitual.
+
+El total de `PendientesService` se presenta completo en el panel y en la
+descripción accesible de la campana. Solo su insignia visible se abrevia a 99+.
+Las consultas y los filtros de ámbito continúan en sus servicios existentes.
+
+El detector E2E de espacios admite una raíz explícita para paneles ARIA e incluye
+enlaces con destino entre los controles. Los escenarios 39–41 revisan avisos,
+estados de portada y ficha/agente/herramientas; sus dobles HTTP se limitan a
+extremos de presentación y demoras declaradas.
+
+[Evidencia](verificacion-avisos-ficha-2026-10-11.md).
+
 ## Espacio en portada y cabeceras (2026-10-11)
 
 `AccesoComponent` usa dos bloques de texto para su titular, con interlínea y
