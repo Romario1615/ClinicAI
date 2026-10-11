@@ -8,7 +8,6 @@ import { catchError } from 'rxjs';
 import { CONFIGURACION } from '../../nucleo/servicios/configuracion';
 import { CatalogoService } from '../../nucleo/servicios/catalogo.service';
 import { traducirFallo } from '../../nucleo/servicios/api.service';
-import { FondoIAComponent } from '../../compartido/fondo-ia.component';
 import { IconoComponent, type NombreIcono } from '../../compartido/icono.component';
 import { VentanaFlotanteComponent } from '../../compartido/ventana-flotante.component';
 import { type AnaliticaDashboard, type KpiAnalitico, grupoIndicador, GRUPOS_INDICADORES } from './analitica.modelos';
@@ -21,7 +20,7 @@ type TipoAnalisis = 'descriptivo' | 'predictivo' | 'prescriptivo';
   host: { class: 'pantalla' },
   standalone: true,
   imports: [FormsModule, RouterLink, DatePipe, DecimalPipe, GraficoKpiComponent,
-    FondoIAComponent, IconoComponent, VentanaFlotanteComponent],
+    IconoComponent, VentanaFlotanteComponent],
   templateUrl: './analitica.component.html',
   styleUrl: './analitica.component.scss',
 })

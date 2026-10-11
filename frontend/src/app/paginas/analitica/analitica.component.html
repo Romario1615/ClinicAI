@@ -1,12 +1,10 @@
 <main class="analitica">
   <header class="analitica__hero pantalla__fijo">
-    <app-fondo-ia [oscuro]="true" />
     <div class="analitica__identidad">
-      <span class="analitica__emblema"><app-icono nombre="analisis-ia" [tamano]="28" /></span>
       <div>
         <p class="analitica__ceja">ANALÍTICA IA <span>· APRENDIZAJE LOCAL</span></p>
-        <h1>Tu clínica, con perspectiva</h1>
-        <p class="analitica__intro">Actividad, previsiones y próximos pasos con los datos de tu ámbito.</p>
+        <h1>Actividad y previsiones de tu clínica</h1>
+        <p class="analitica__intro">Indicadores y próximos pasos, calculados con los datos de tu ámbito.</p>
       </div>
     </div>
     <dl class="analitica__resumen" aria-label="Resumen del análisis">
@@ -132,6 +130,6 @@
       <label>Horizonte<select name="horizonte" [(ngModel)]="horizonte"><option [ngValue]="7">7 días</option><option [ngValue]="14">14 días</option><option [ngValue]="30">30 días</option></select></label>
       <label>Sede<select name="sede" [(ngModel)]="sede"><option value="">Mi ámbito completo</option>@for(s of sedes(); track s.id){<option [value]="s.id">{{s.nombre}}</option>}</select></label>
     </form>
-    <div pie><button type="button" class="boton" (click)="mostrarFiltros.set(false)">Cerrar filtros</button><button type="submit" form="filtros-analitica-movil" class="boton boton--principal">Actualizar análisis</button></div>
+    <div pie><button type="button" class="boton" (click)="mostrarFiltros.set(false)">Cerrar filtros</button><button type="submit" form="filtros-analitica-movil" class="boton boton--principal" [disabled]="ocupado()">{{ocupado() ? 'Analizando…' : 'Actualizar análisis'}}</button></div>
   </app-ventana-flotante>
 }
