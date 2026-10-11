@@ -57,6 +57,7 @@ describe('AppComponent', () => {
     let sesion: SesionService;
     let cantidadAvisosTratamiento: WritableSignal<number>;
     let cantidadCobrosVencidos: WritableSignal<number>;
+    let cargandoAvisos: WritableSignal<boolean>;
 
     beforeEach(async () => {
         const tareas = signal<readonly never[]>([]);
@@ -65,7 +66,7 @@ describe('AppComponent', () => {
         const avisosEmergencia = signal(0);
         cantidadAvisosTratamiento = signal(0);
         cantidadCobrosVencidos = signal(0);
-        const cargando = signal(false);
+        cargandoAvisos = signal(false);
         const cuenta = computed(() => tareas().length);
         const notificaciones = computed(() => cuenta() + alertas().length + conversaciones() + cantidadAvisosTratamiento() + avisosEmergencia() + cantidadCobrosVencidos());
         const pendientesFalsos = {
@@ -79,7 +80,7 @@ describe('AppComponent', () => {
             avisosTratamientoPendientes: cantidadAvisosTratamiento,
             avisosEmergenciaPendientes: avisosEmergencia,
             cargosVencidosPendientes: cantidadCobrosVencidos,
-            cargando,
+            cargando: cargandoAvisos,
             cuenta,
             notificaciones,
         } as unknown as PendientesService;
@@ -579,6 +580,67 @@ describe('AppComponent', () => {
 
         expect(fixture.nativeElement.querySelector('#panel-notificaciones')).toBeNull();
         expect(document.activeElement).toBe(campana);
+    });
+
+    it('el cierre de notificaciones devuelve el foco sin cambiar de sección', () => {
+        iniciar(['agenda.leer']);
+        const campana = fixture.nativeElement.querySelector('.campana') as HTMLButtonElement;
+        const router = TestBed.inject(Router);
+        vi.spyOn(router, 'navigate').mockResolvedValue(true);
+        campana.click();
+        fixture.detectChanges();
+        const cerrar = fixture.nativeElement.querySelector('[aria-label="Cerrar notificaciones"]') as HTMLButtonElement;
+        cerrar.focus();
+        cerrar.click();
+        fixture.detectChanges();
+        expect(fixture.nativeElement.querySelector('#panel-notificaciones')).toBeNull();
+        expect(campana.getAttribute('aria-expanded')).toBe('false');
+        expect(document.activeElement).toBe(campana);
+        expect(router.navigate).not.toHaveBeenCalled();
+    });
+
+    it('la lista de avisos mantiene cabecera y enlace final fuera del marco desplazable', () => {
+        iniciar(['pago.leer']);
+        cantidadCobrosVencidos.set(4);
+        (fixture.nativeElement.querySelector('.campana') as HTMLButtonElement).click();
+        fixture.detectChanges();
+        const panel = fixture.nativeElement.querySelector('#panel-notificaciones') as HTMLElement;
+        const contenido = panel.querySelector('.notificaciones__contenido')!;
+        expect(contenido.querySelector('.notificaciones__item')?.textContent).toContain('4 cargo(s)');
+        expect(contenido.querySelector('header')).toBeNull();
+        expect(contenido.querySelector('.notificaciones__todo')).toBeNull();
+        expect(panel.querySelector('.notificaciones__todo')?.getAttribute('href')).toBe('/panel');
+    });
+
+    it('durante la carga conserva el cierre y no anuncia un vacío definitivo', () => {
+        iniciar(['agenda.leer']);
+        cargandoAvisos.set(true);
+        (fixture.nativeElement.querySelector('.campana') as HTMLButtonElement).click();
+        fixture.detectChanges();
+        const panel = fixture.nativeElement.querySelector('#panel-notificaciones') as HTMLElement;
+        expect(panel.textContent).toContain('Actualizando avisos…');
+        expect(panel.textContent).not.toContain('Todo al día');
+        expect(panel.querySelector('[aria-label="Cerrar notificaciones"]')).not.toBeNull();
+        cargandoAvisos.set(false);
+        fixture.detectChanges();
+        expect(panel.textContent).toContain('Todo al día');
+    });
+
+    it('la insignia compacta conserva el total de avisos en la descripción accesible', () => {
+        iniciar(['pago.leer']);
+        cantidadCobrosVencidos.set(12345);
+        fixture.detectChanges();
+        const campana = fixture.nativeElement.querySelector('.campana') as HTMLButtonElement;
+        const cuenta = fixture.nativeElement.querySelector('#cuenta-notificaciones') as HTMLElement;
+        expect(campana.getAttribute('aria-describedby')).toBe(cuenta.id);
+        expect(cuenta.textContent).toBe('99+');
+        expect(cuenta.getAttribute('aria-label')).toBe('12345 avisos pendientes');
+        campana.click();
+        fixture.detectChanges();
+        expect(fixture.nativeElement.querySelector('#panel-notificaciones header span').textContent).toBe('12345');
+        cantidadCobrosVencidos.set(0);
+        fixture.detectChanges();
+        expect(campana.getAttribute('aria-describedby')).toBeNull();
     });
 
     it('en pantalla estrecha el cajón deja inerte el contenido y Escape devuelve el foco al botón', () => {

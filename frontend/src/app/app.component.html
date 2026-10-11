@@ -31,13 +31,18 @@
       }
 
       <div class="cabecera__notificaciones">
-        <button type="button" class="boton boton--plano campana" (click)="alternarNotificaciones()" [attr.aria-expanded]="notificacionesAbiertas()" aria-controls="panel-notificaciones" aria-haspopup="dialog" aria-label="Notificaciones de seguimiento">
+        <button type="button" class="boton boton--plano campana" (click)="alternarNotificaciones()" [attr.aria-expanded]="notificacionesAbiertas()" [attr.aria-describedby]="pendientes.notificaciones() > 0 ? 'cuenta-notificaciones' : null" aria-controls="panel-notificaciones" aria-haspopup="dialog" aria-label="Notificaciones de seguimiento">
           <app-icono nombre="notificaciones" [tamano]="19" />
-          @if (pendientes.notificaciones() > 0) { <span class="campana__cuenta">{{ pendientes.notificaciones() }}</span> }
+          @if (pendientes.notificaciones() > 0) { <span id="cuenta-notificaciones" class="campana__cuenta" [attr.aria-label]="pendientes.notificaciones() + ' avisos pendientes'">{{ pendientes.notificaciones() > 99 ? '99+' : pendientes.notificaciones() }}</span> }
         </button>
         @if (notificacionesAbiertas()) {
           <section id="panel-notificaciones" class="notificaciones" role="dialog" aria-modal="false" aria-labelledby="titulo-notificaciones" data-aparecer>
-            <header><strong id="titulo-notificaciones">Seguimiento de hoy</strong><span>{{ pendientes.notificaciones() }}</span></header>
+            <header>
+              <strong id="titulo-notificaciones">Seguimiento de hoy</strong>
+              <span>{{ pendientes.notificaciones() }}</span>
+              <button type="button" class="boton boton--plano notificaciones__cerrar" aria-label="Cerrar notificaciones" (click)="cerrarNotificacionesConFoco()"><app-icono nombre="cerrar" [tamano]="18" /></button>
+            </header>
+            <div class="notificaciones__contenido">
             @if (pendientes.cargando()) { <p class="notificaciones__vacio">Actualizando avisos…</p> }
             @else if (pendientes.tareas().length) {
               @for (tarea of pendientes.tareas(); track tarea.clase) {
@@ -83,6 +88,7 @@
                 <p><strong>Todo al día</strong><span>No hay tareas ni alertas pendientes.</span></p>
               </div>
             }
+            </div>
             <a class="notificaciones__todo" routerLink="/panel" (click)="cerrarNotificaciones()">Ver seguimiento en el panel</a>
           </section>
         }

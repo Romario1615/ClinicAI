@@ -27,15 +27,15 @@ export function esperaDeConsultas(page: Page): () => Promise<void> {
 }
 
 /** Compara solo píxeles visibles: respeta recortes, elipsis y ventanas nativas. */
-export async function solapesVisibles(page: Page): Promise<string[]> {
-  return page.evaluate(() => {
+export async function solapesVisibles(page: Page, selector?: string): Promise<string[]> {
+  return page.evaluate(selector => {
     type Caja = { left: number; right: number; top: number; bottom: number };
     const dialogo = [...document.querySelectorAll('dialog[open]')].at(-1);
-    const raiz = dialogo ?? document.querySelector('main')!;
+    const raiz = selector ? document.querySelector(selector)! : dialogo ?? document.querySelector('main')!;
     const cabecera = document.querySelector('.cabecera');
     // Tras desplazar una página móvil, el contenido pasa por debajo de su
     // cabecera fija. Ese tramo queda fuera del área de trabajo visible.
-    const bordeSuperior = !dialogo && scrollY > 0 && cabecera
+    const bordeSuperior = !selector && !dialogo && scrollY > 0 && cabecera
       && /^(sticky|fixed)$/.test(getComputedStyle(cabecera).position)
       ? cabecera.getBoundingClientRect().bottom : 0;
     const recortar = (caja: Caja, padre: Caja): Caja => ({
@@ -63,8 +63,8 @@ export async function solapesVisibles(page: Page): Promise<string[]> {
       const texto = (e.getAttribute('aria-label') ?? e.textContent ?? '').trim().replace(/\s+/g, ' ').slice(0, 85);
       return `${e.tagName.toLowerCase()}.${clase} ${texto}`;
     };
-    const nodos = [...raiz.querySelectorAll('button,input,select,textarea,a.boton')];
-    if (!dialogo) nodos.push(...document.querySelectorAll('.cabecera button,.cabecera input,.cabecera a'));
+    const nodos = [...raiz.querySelectorAll('button,input,select,textarea,a[href]')];
+    if (!selector && !dialogo) nodos.push(...document.querySelectorAll('.cabecera button,.cabecera input,.cabecera a'));
     const controles = nodos.flatMap(e => {
       const caja = visible(e, e.getBoundingClientRect());
       return caja ? [{ e, caja }] : [];
@@ -105,5 +105,5 @@ export async function solapesVisibles(page: Page): Promise<string[]> {
       }
     }
     return [...new Set(errores)];
-  });
+  }, selector);
 }

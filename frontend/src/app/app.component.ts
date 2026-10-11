@@ -433,6 +433,11 @@ export class AppComponent {
     this.notificacionesAbiertas.set(false);
   }
 
+  protected cerrarNotificacionesConFoco(): void {
+    this.cerrarNotificaciones();
+    this.elemento.nativeElement.querySelector<HTMLElement>('.campana')?.focus();
+  }
+
   /**
    * Escape cierra cualquier panel flotante del armazón, esté abierto el menú o
    * las notificaciones. Si el foco estaba dentro del panel, vuelve al botón que

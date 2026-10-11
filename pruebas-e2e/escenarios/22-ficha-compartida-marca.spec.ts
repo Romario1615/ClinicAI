@@ -2,30 +2,53 @@ import { randomUUID } from 'node:crypto';
 import AxeBuilder from '@axe-core/playwright';
 import { test, expect } from '../apoyo/prueba';
 import { acceder, irA, type Rol } from '../apoyo/sesion';
+import { esperaDeConsultas } from '../apoyo/espacio';
 
 const API = process.env.URL_API ?? 'http://127.0.0.1:8000/api/v1';
 
-test('logo destacado, celeste turquesa y fondo conservado con seis roles visibles', async ({ page }) => {
+test('logo destacado, celeste turquesa y foto original con seis roles alcanzables', async ({ page }, info) => {
+  const esperar = esperaDeConsultas(page);
+  await page.emulateMedia({ reducedMotion: 'reduce' });
   await page.goto('/acceso');
   await expect(page.getByRole('heading', { name: 'Elige un rol' })).toBeVisible();
   for (const tamano of [{width:1440,height:900},{width:1280,height:600},{width:1024,height:768},{width:768,height:1024},{width:390,height:844},{width:320,height:568}]) {
     await page.setViewportSize(tamano);
+    await expect(page.locator('.acceso')).toHaveCSS('height', `${tamano.height}px`);
+    await esperar();
     const medidas = await page.locator('.acceso').evaluate(elemento => {
       const nombre = elemento.querySelector('.marca__nombre')!;
       const img = elemento.querySelector<HTMLImageElement>('.marca__simbolo')!;
       return { nombre:parseFloat(getComputedStyle(nombre).fontSize), logo:img.complete && img.naturalWidth > 0,
-        roles:[...elemento.querySelectorAll('.acceso__rol')].every(e => {const r=e.getBoundingClientRect();return r.top>=0 && r.bottom<=innerHeight+1 && r.left>=0 && r.right<=innerWidth+1;}),
         sinDesborde:document.documentElement.scrollWidth<=innerWidth+1,
-        fondo:getComputedStyle(elemento.querySelector('.acceso__marca')!).backgroundImage,
+        fondo:elemento.querySelector<HTMLImageElement>('.acceso__foto')!.currentSrc,
         acento:getComputedStyle(document.documentElement).getPropertyValue('--acento').trim()};
     });
     expect(medidas.logo).toBe(true);expect(medidas.nombre).toBeGreaterThanOrEqual(32);
-    expect(medidas.roles, JSON.stringify(tamano)).toBe(true);expect(medidas.sinDesborde).toBe(true);
-    expect(medidas.fondo).toContain('/images/acceso-equipo.png');expect(medidas.acento).toBe('#086c7f');
+    expect(medidas.sinDesborde).toBe(true);
+    expect(medidas.fondo).toMatch(/\/images\/acceso-equipo(?:-900)?\.webp$/);
+    expect(medidas.acento).toBe('#086c7f');
+    await expect(page.locator('.acceso__foto').first()).toHaveCSS('opacity', '1');
+    const roles = page.locator('.acceso__rol');
+    await expect(roles).toHaveCount(6);
+    // La tarjeta tiene desplazamiento propio: cada rol debe ser alcanzable,
+    // con texto e icono contenidos, aunque no quepan los seis a la vez.
+    for (const rol of await roles.all()) {
+      await rol.scrollIntoViewIfNeeded();
+      expect(await rol.evaluate(e => {
+        const r = e.getBoundingClientRect();
+        const texto = e.querySelector('.acceso__rol-texto')!.getBoundingClientRect();
+        const icono = e.querySelector('.acceso__rol-icono')!.getBoundingClientRect();
+        return r.top >= -1 && r.bottom <= innerHeight + 1 && r.left >= 0 && r.right <= innerWidth + 1
+          && r.width >= 44 && r.height >= 44 && texto.right <= r.right + 1 && texto.bottom <= r.bottom + 1
+          && (icono.right <= texto.left + 1 || icono.bottom <= texto.top + 1);
+      }), `${JSON.stringify(tamano)}: ${await rol.textContent()}`).toBe(true);
+    }
+    await page.locator('.acceso__tarjeta').evaluate(e => { e.scrollTop = 0; });
   }
   await page.setViewportSize({width:1440,height:900});
+  await esperar();
   expect((await new AxeBuilder({page}).withTags(['wcag2a','wcag2aa','wcag21aa','wcag22aa']).analyze()).violations).toEqual([]);
-  await page.screenshot({path:'../tmp/qa-20261007/portada-clinicai-turquesa.png'});
+  await page.screenshot({path:info.outputPath('portada-clinicai-turquesa.png')});
 });
 
 test('todos los roles consultan las herramientas de un paciente recién creado', async ({ page, request }) => {
