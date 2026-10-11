@@ -57,6 +57,15 @@ export interface SedeGestion {
   readonly minutos_antelacion_minima: number;
 }
 
+export interface DenticionPorEdadClinica {
+  readonly edad_mixta: number;
+  readonly edad_permanente: number;
+}
+
+export interface CambioDenticionPorEdad extends DenticionPorEdadClinica {
+  readonly motivo: string;
+}
+
 export type DatosSede = Omit<SedeGestion, 'id'>;
 
 @Injectable({ providedIn: 'root' })
@@ -119,6 +128,14 @@ export class CatalogoService {
 
   especialidadesGestion(): Observable<readonly Especialidad[]> {
     return this.http.get<readonly Especialidad[]>(this.url('/catalogo/especialidades/gestion'));
+  }
+
+  denticionPorEdad(): Observable<DenticionPorEdadClinica> {
+    return this.http.get<DenticionPorEdadClinica>(this.url('/historia/denticion-por-edad'));
+  }
+
+  guardarDenticionPorEdad(datos: CambioDenticionPorEdad): Observable<DenticionPorEdadClinica> {
+    return this.http.put<DenticionPorEdadClinica>(this.url('/catalogo/denticion-por-edad'), datos);
   }
 
   crearEspecialidad(datos: Pick<Especialidad, 'nombre' | 'codigo' | 'descripcion'>): Observable<Especialidad> {

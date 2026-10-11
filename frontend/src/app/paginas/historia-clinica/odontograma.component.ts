@@ -17,12 +17,14 @@ import { EspecialidadHistoriaService } from '../../nucleo/servicios/especialidad
 import { Component, computed, effect, inject, input, signal, viewChild, ChangeDetectionStrategy } from '@angular/core';
 import { DatePipe, NgTemplateOutlet } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { catchError, forkJoin, of } from 'rxjs';
 
 import { ApiService, FalloApi } from '../../nucleo/servicios/api.service';
 import type {
   CaraOdontologica,
   ContenidoOdontograma,
   Denticion,
+  EdadesDenticion,
   EstadoPiezaOdontograma,
   HallazgoCara,
   HallazgoPieza,
@@ -55,9 +57,14 @@ import { FotosRegistroService } from '../../nucleo/servicios/fotos-registro.serv
 export type Herramienta = 'SELECCIONAR' | 'BORRAR' | HallazgoCara | HallazgoPieza;
 
 /** Valor inicial de presentación; no sustituye la dentición guardada. */
-export function denticionSugeridaPorEdad(edad: number | null): Denticion {
-  if (edad !== null && edad < 6) return 'TEMPORAL';
-  if (edad !== null && edad <= 12) return 'MIXTA';
+const EDADES_DENTICION_POR_OMISION: EdadesDenticion = { edad_mixta: 6, edad_permanente: 13 };
+
+export function denticionSugeridaPorEdad(
+  edad: number | null,
+  cortes: EdadesDenticion = EDADES_DENTICION_POR_OMISION,
+): Denticion {
+  if (edad !== null && edad < cortes.edad_mixta) return 'TEMPORAL';
+  if (edad !== null && edad < cortes.edad_permanente) return 'MIXTA';
   return 'PERMANENTE';
 }
 
@@ -172,13 +179,16 @@ export class OdontogramaComponent {
     this.falloCarga.set(false);
     this.error.set(null);
     this.aviso.set('');
-    this.api.versionesOdontograma(pacienteId).subscribe({
-      next: (versiones) => {
+    forkJoin({
+      versiones: this.api.versionesOdontograma(pacienteId),
+      cortes: this.api.edadesDenticion().pipe(catchError(() => of(EDADES_DENTICION_POR_OMISION))),
+    }).subscribe({
+      next: ({ versiones, cortes }) => {
         this.versiones.set(versiones);
         const vigente = versiones.find((version) => version.vigente) ?? null;
         this.actual.set(vigente);
         this.nivelSensibilidad.set(vigente?.nivel_sensibilidad ?? 'N2');
-        this.denticion.set(vigente?.denticion ?? denticionSugeridaPorEdad(this.edadPaciente()));
+        this.denticion.set(vigente?.denticion ?? denticionSugeridaPorEdad(this.edadPaciente(), cortes));
         this.borrador.set(vigente ? this.clonarPiezas(vigente.piezas) : {});
         this.cargando.set(false);
       },

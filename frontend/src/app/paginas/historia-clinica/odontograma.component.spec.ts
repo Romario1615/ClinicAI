@@ -7,7 +7,7 @@ import { TestBed, type ComponentFixture } from '@angular/core/testing';
 import { HttpTestingController } from '@angular/common/http/testing';
 
 import { denticionSugeridaPorEdad, OdontogramaComponent } from './odontograma.component';
-import type { Odontograma } from '../../nucleo/servicios/api.service';
+import type { EdadesDenticion, Odontograma } from '../../nucleo/servicios/api.service';
 import { BASE, PROVEEDORES_PRUEBA, iniciarSesionCon } from '../../nucleo/pruebas/sesion-sintetica';
 
 function version(numero: number, vigente: boolean): Odontograma {
@@ -33,7 +33,12 @@ describe('OdontogramaComponent', () => {
     let c: any;
     const VERSIONES = `${BASE}/odontologia/pacientes/pac-1/odontograma/versiones`;
 
-    function montar(permisos: readonly string[], versiones: readonly Odontograma[], edad: number | null = null): void {
+    function montar(
+        permisos: readonly string[],
+        versiones: readonly Odontograma[],
+        edad: number | null = null,
+        cortes: EdadesDenticion | 'error' = { edad_mixta: 6, edad_permanente: 13 },
+    ): void {
         iniciarSesionCon(permisos);
         fixture = TestBed.createComponent(OdontogramaComponent);
         c = fixture.componentInstance;
@@ -41,6 +46,9 @@ describe('OdontogramaComponent', () => {
         fixture.componentRef.setInput('edadPaciente', edad);
         fixture.detectChanges();
         http.expectOne({ method: 'GET', url: VERSIONES }).flush(versiones);
+        const solicitudEdades = http.expectOne({ method: 'GET', url: `${BASE}/historia/denticion-por-edad` });
+        if (cortes === 'error') solicitudEdades.flush({ mensaje: 'Sin permiso en prueba.' }, { status: 403, statusText: 'Forbidden' });
+        else solicitudEdades.flush(cortes);
         fixture.detectChanges();
     }
 
@@ -52,10 +60,13 @@ describe('OdontogramaComponent', () => {
     afterEach(() => http.verify());
 
     it('sugiere dentición temporal antes de 6, mixta de 6 a 12 y permanente desde 13', () => {
-        expect([5, 6, 12, 13].map(denticionSugeridaPorEdad)).toEqual([
+        expect([5, 6, 12, 13].map((edad) => denticionSugeridaPorEdad(edad))).toEqual([
             'TEMPORAL', 'MIXTA', 'MIXTA', 'PERMANENTE',
         ]);
         expect(denticionSugeridaPorEdad(null)).toBe('PERMANENTE');
+        expect(denticionSugeridaPorEdad(7, { edad_mixta: 8, edad_permanente: 14 })).toBe('TEMPORAL');
+        expect(denticionSugeridaPorEdad(8, { edad_mixta: 8, edad_permanente: 14 })).toBe('MIXTA');
+        expect(denticionSugeridaPorEdad(14, { edad_mixta: 8, edad_permanente: 14 })).toBe('PERMANENTE');
     });
 
     it('usa la edad como valor inicial, pero conserva la dentición guardada', () => {
@@ -67,6 +78,16 @@ describe('OdontogramaComponent', () => {
     it('la versión guardada prevalece sobre la propuesta por edad', () => {
         montar(['odontograma.leer', 'odontograma.escribir'], [version(1, true)], 5);
         expect(c.denticion()).toBe('PERMANENTE');
+    });
+
+    it('usa los cortes de la clínica al proponer el primer odontograma', () => {
+        montar(['odontograma.leer', 'odontograma.escribir'], [], 7, { edad_mixta: 8, edad_permanente: 14 });
+        expect(c.denticion()).toBe('TEMPORAL');
+    });
+
+    it('usa los cortes predeterminados 6 y 13 si falla la consulta de configuración', () => {
+        montar(['odontograma.leer', 'odontograma.escribir'], [], 6, 'error');
+        expect(c.denticion()).toBe('MIXTA');
     });
 
     it('crea la primera versión sin motivo', () => {
@@ -93,6 +114,7 @@ describe('OdontogramaComponent', () => {
         });
         alta.flush(version(1, true));
         http.expectOne({ method: 'GET', url: VERSIONES }).flush([version(1, true)]);
+        http.expectOne(`${BASE}/historia/denticion-por-edad`).flush({ edad_mixta: 6, edad_permanente: 13 });
         expect(c.aviso()).toContain('nueva versión');
     });
 
@@ -104,6 +126,7 @@ describe('OdontogramaComponent', () => {
         expect(alta.request.body.nivel_sensibilidad).toBe('N3');
         alta.flush({ ...version(1, true), nivel_sensibilidad: 'N3' });
         http.expectOne({ method: 'GET', url: VERSIONES }).flush([{ ...version(1, true), nivel_sensibilidad: 'N3' }]);
+        http.expectOne(`${BASE}/historia/denticion-por-edad`).flush({ edad_mixta: 6, edad_permanente: 13 });
     });
 
     it('exige motivo para una versión nueva y muestra el conflicto 409', () => {
@@ -150,6 +173,7 @@ describe('OdontogramaComponent', () => {
         fixture.componentRef.setInput('pacienteId', 'pac-1');
         fixture.detectChanges();
         http.expectOne(VERSIONES).flush({ codigo: 'X', mensaje: 'Sin relacion' }, { status: 403, statusText: 'F' });
+        expect(http.expectOne(`${BASE}/historia/denticion-por-edad`).cancelled).toBe(true);
         expect(c.errorTexto()).toContain('Sin relacion');
     });
 
@@ -178,6 +202,7 @@ describe('OdontogramaComponent', () => {
         const alta = http.expectOne({ method: 'POST', url: `${BASE}/odontologia/pacientes/pac-1/odontograma` });
         alta.flush(version(1, true));
         http.expectOne({ method: 'GET', url: VERSIONES }).flush([version(1, true)]);
+        http.expectOne(`${BASE}/historia/denticion-por-edad`).flush({ edad_mixta: 6, edad_permanente: 13 });
         expect(c.guardadoAbierto()).toBe(false);
     });
 
@@ -206,6 +231,7 @@ describe('OdontogramaComponent', () => {
         expect(c.operacionFotos.guardado).toBe(true);
         c.cerrarGuardado();
         http.expectOne({ method: 'GET', url: VERSIONES }).flush([version(1, true)]);
+        http.expectOne(`${BASE}/historia/denticion-por-edad`).flush({ edad_mixta: 6, edad_permanente: 13 });
         expect(c.actual().version).toBe(1);
         expect(c.operacionFotos.guardado).toBe(false);
         expect(c.aviso()).toContain('versión se conserva');
@@ -236,6 +262,7 @@ describe('OdontogramaComponent interactivo', () => {
         fixture.componentRef.setInput('pacienteId', 'pac-1');
         fixture.detectChanges();
         http.expectOne({ method: 'GET', url: VERSIONES }).flush([version(1, true)]);
+        http.expectOne(`${BASE}/historia/denticion-por-edad`).flush({ edad_mixta: 6, edad_permanente: 13 });
         http.expectOne(`${BASE}/odontologia/pacientes/pac-1/planes-tratamiento`).flush([]);
         fixture.detectChanges();
     });
@@ -349,5 +376,6 @@ describe('OdontogramaComponent interactivo', () => {
         expect(nueva.request.body.piezas['18']).toBeUndefined();
         nueva.flush(version(2, true));
         http.expectOne({ method: 'GET', url: VERSIONES }).flush([version(2, true), version(1, false)]);
+        http.expectOne(`${BASE}/historia/denticion-por-edad`).flush({ edad_mixta: 6, edad_permanente: 13 });
     });
 });

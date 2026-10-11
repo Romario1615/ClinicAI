@@ -68,6 +68,19 @@ const TIPOS: readonly { readonly valor: TipoConsultorio; readonly etiqueta: stri
         </section>
         <div class="panel-catalogo desplazable" role="tabpanel" tabindex="0" id="catalogo-panel-modulos" aria-labelledby="catalogo-pestana-modulos" [hidden]="vistaActiva() !== 'modulos'">
           <app-modulos-especialidad />
+          <section class="gestion denticion-clinica" aria-labelledby="titulo-denticion-clinica">
+            <div class="seccion-cabecera"><div><p class="ceja">ODONTOGRAMA</p><h2 id="titulo-denticion-clinica">Dentición propuesta por edad</h2><p>Configure la propuesta para el primer odontograma de cada paciente.</p></div></div>
+            @if (cargandoDenticion()) { <p role="status">Cargando los límites de edad…</p> }
+            @if (errorDenticion()) { <p class="aviso error" role="alert">{{ errorDenticion() }}</p> }
+            @if (mensajeDenticion()) { <p class="aviso exito" role="status">{{ mensajeDenticion() }}</p> }
+            <form class="formulario-modal" (ngSubmit)="guardarDenticionPorEdad()">
+              <label class="campo"><span>Edad de inicio de dentición mixta</span><input type="number" min="1" max="20" step="1" [ngModel]="cortesDenticion().edad_mixta" (ngModelChange)="cambiarEdadMixta($event)" name="edad-mixta" required /></label>
+              <label class="campo"><span>Edad de inicio de dentición permanente</span><input type="number" min="2" max="21" step="1" [ngModel]="cortesDenticion().edad_permanente" (ngModelChange)="cambiarEdadPermanente($event)" name="edad-permanente" required /></label>
+              <label class="campo campo--completo"><span>Motivo del cambio</span><textarea name="motivo-denticion" [(ngModel)]="motivoDenticion" minlength="5" maxlength="300" rows="2" required></textarea></label>
+              @if (!cortesValidos()) { <p class="ayuda campo--completo">La edad mixta debe ser un entero entre 1 y 20, menor que la edad permanente (2–21).</p> }
+              <div class="acciones campo--completo"><button class="boton boton--principal" type="submit" [disabled]="cargandoDenticion() || guardandoDenticion() || !!errorDenticion() || !denticionModificada() || !cortesValidos() || motivoDenticion.trim().length < 5">{{ guardandoDenticion() ? 'Guardando…' : 'Guardar cambios' }}</button></div>
+            </form>
+          </section>
         </div>
       }
 
@@ -169,6 +182,23 @@ export class CatalogoComponent {
   protected readonly puedeGestionarEspecialidades = signal(this.sesion.tienePermiso('especialidad.gestionar'));
   protected readonly puedeGestionarServicios = signal(this.sesion.tienePermiso('servicio.gestionar'));
   protected readonly puedeCargarFotos = computed(() => this.sesion.tienePermiso('imagen_clinica.cargar'));
+  protected readonly cortesDenticion = signal({ edad_mixta: 6, edad_permanente: 13 });
+  private readonly cortesDenticionOriginales = signal({ edad_mixta: 6, edad_permanente: 13 });
+  protected readonly cargandoDenticion = signal(false);
+  protected readonly guardandoDenticion = signal(false);
+  protected readonly errorDenticion = signal('');
+  protected readonly mensajeDenticion = signal('');
+  protected motivoDenticion = '';
+  protected readonly cortesValidos = computed(() => {
+    const { edad_mixta, edad_permanente } = this.cortesDenticion();
+    return Number.isInteger(edad_mixta) && edad_mixta >= 1 && edad_mixta <= 20 &&
+      Number.isInteger(edad_permanente) && edad_permanente >= 2 && edad_permanente <= 21 && edad_mixta < edad_permanente;
+  });
+  protected readonly denticionModificada = computed(() => {
+    const actual = this.cortesDenticion();
+    const original = this.cortesDenticionOriginales();
+    return actual.edad_mixta !== original.edad_mixta || actual.edad_permanente !== original.edad_permanente;
+  });
   protected readonly sedes = signal<readonly Sede[]>([]);
   protected readonly especialidades = signal<readonly Especialidad[]>([]);
   protected readonly especialidadesGestion = signal<readonly Especialidad[]>([]);
@@ -210,7 +240,56 @@ export class CatalogoComponent {
     this.vistas().some((opcion) => opcion.clave === this.vista()) ? this.vista() : 'sedes',
   );
 
-  constructor() { this.cargar(); }
+  constructor() {
+    this.cargar();
+    if (this.puedeGestionarEspecialidades()) this.cargarDenticionPorEdad();
+  }
+
+  protected cambiarEdadMixta(valor: number | string): void {
+    this.cortesDenticion.update((actual) => ({ ...actual, edad_mixta: Number(valor) }));
+  }
+
+  protected cambiarEdadPermanente(valor: number | string): void {
+    this.cortesDenticion.update((actual) => ({ ...actual, edad_permanente: Number(valor) }));
+  }
+
+  private cargarDenticionPorEdad(): void {
+    this.cargandoDenticion.set(true);
+    this.errorDenticion.set('');
+    this.catalogo.denticionPorEdad().subscribe({
+      next: (cortes) => {
+        this.cortesDenticion.set(cortes);
+        this.cortesDenticionOriginales.set(cortes);
+        this.cargandoDenticion.set(false);
+      },
+      error: (fallo: unknown) => {
+        this.cargandoDenticion.set(false);
+        this.errorDenticion.set(this.mensajeError(fallo, 'No se pudieron cargar los límites vigentes. No se guardarán valores predeterminados.'));
+      },
+    });
+  }
+
+  protected guardarDenticionPorEdad(): void {
+    if (this.guardandoDenticion() || this.cargandoDenticion() || this.errorDenticion() || !this.denticionModificada() || !this.cortesValidos()) return;
+    const motivo = this.motivoDenticion.trim();
+    if (motivo.length < 5 || motivo.length > 300) return;
+    this.guardandoDenticion.set(true);
+    this.errorDenticion.set('');
+    this.mensajeDenticion.set('');
+    this.catalogo.guardarDenticionPorEdad({ ...this.cortesDenticion(), motivo }).subscribe({
+      next: (cortes) => {
+        this.cortesDenticion.set(cortes);
+        this.cortesDenticionOriginales.set(cortes);
+        this.motivoDenticion = '';
+        this.mensajeDenticion.set('Límites de dentición guardados y auditados.');
+        this.guardandoDenticion.set(false);
+      },
+      error: (fallo: unknown) => {
+        this.errorDenticion.set(this.mensajeError(fallo, 'No se pudieron guardar los límites de dentición.'));
+        this.guardandoDenticion.set(false);
+      },
+    });
+  }
 
   protected cargar(): void {
     this.error.set(''); this.cargando.set(true);

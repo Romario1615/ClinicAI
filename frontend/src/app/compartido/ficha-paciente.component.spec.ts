@@ -288,7 +288,7 @@ describe('FichaPacienteComponent con permisos clínicos', () => {
 
     afterEach(() => {
         http.match((p) => p.url.endsWith('/resumen-clinico')).forEach((p) => p.flush({ codigo: 'X', mensaje: 'x' }, { status: 403, statusText: 'F' }));
-        http.match((p) => p.url.endsWith('/odontograma/versiones') || p.url.endsWith('/planes-tratamiento')).forEach((p) => p.flush([]));
+        http.match((p) => p.url.endsWith('/odontograma/versiones') || p.url.endsWith('/planes-tratamiento') || p.url.endsWith('/historia/denticion-por-edad')).forEach((p) => p.request.url.endsWith('/historia/denticion-por-edad') ? p.flush({ edad_mixta: 6, edad_permanente: 13 }) : p.flush([]));
         http.verify();
     });
 
@@ -434,7 +434,7 @@ describe('FichaPacienteComponent con pestaña inicial solicitada', () => {
 
     afterEach(() => {
         fixture.destroy();
-        http.match((p) => p.url.endsWith('/odontograma/versiones') || p.url.endsWith('/planes-tratamiento')).forEach((p) => p.flush([]));
+        http.match((p) => p.url.endsWith('/odontograma/versiones') || p.url.endsWith('/planes-tratamiento') || p.url.endsWith('/historia/denticion-por-edad')).forEach((p) => p.request.url.endsWith('/historia/denticion-por-edad') ? p.flush({ edad_mixta: 6, edad_permanente: 13 }) : p.flush([]));
         http.verify();
     });
 

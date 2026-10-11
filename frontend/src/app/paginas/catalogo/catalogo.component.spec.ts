@@ -90,6 +90,8 @@ describe('CatalogoComponent', () => {
             sedes: vi.fn().mockName("CatalogoService.sedes"),
             especialidades: vi.fn().mockName("CatalogoService.especialidades"),
             especialidadesGestion: vi.fn().mockName("CatalogoService.especialidadesGestion"),
+            denticionPorEdad: vi.fn().mockName("CatalogoService.denticionPorEdad"),
+            guardarDenticionPorEdad: vi.fn().mockName("CatalogoService.guardarDenticionPorEdad"),
             crearEspecialidad: vi.fn().mockName("CatalogoService.crearEspecialidad"),
             actualizarEspecialidad: vi.fn().mockName("CatalogoService.actualizarEspecialidad"),
             cambiarEstadoEspecialidad: vi.fn().mockName("CatalogoService.cambiarEstadoEspecialidad"),
@@ -108,6 +110,8 @@ describe('CatalogoComponent', () => {
         catalogo.sedes.mockReturnValue(of([SEDE]));
         catalogo.especialidades.mockReturnValue(of([]));
         catalogo.especialidadesGestion.mockReturnValue(of([]));
+        catalogo.denticionPorEdad.mockReturnValue(of({ edad_mixta: 6, edad_permanente: 13 }));
+        catalogo.guardarDenticionPorEdad.mockReturnValue(of({ edad_mixta: 7, edad_permanente: 13 }));
         catalogo.crearEspecialidad.mockReturnValue(of(ESPECIALIDAD));
         catalogo.actualizarEspecialidad.mockReturnValue(of(ESPECIALIDAD));
         catalogo.cambiarEstadoEspecialidad.mockReturnValue(of({ ...ESPECIALIDAD, activa: false }));
@@ -271,6 +275,7 @@ describe('CatalogoComponent', () => {
 
     it('no muestra acciones de administración sin el permiso de sede', () => {
         sesion.tienePermiso.mockReturnValue(false);
+        catalogo.denticionPorEdad.mockClear();
         fixture.destroy();
         fixture = TestBed.createComponent(CatalogoComponent);
         fixture.detectChanges();
@@ -287,6 +292,59 @@ describe('CatalogoComponent', () => {
         expect(pestanas).toEqual(['catalogo-pestana-sedes', 'catalogo-pestana-servicios', 'catalogo-pestana-profesionales']);
         expect((fixture.nativeElement as HTMLElement).textContent).not.toContain('Editar');
         expect((fixture.nativeElement as HTMLElement).textContent).not.toContain('Nuevo servicio');
+        expect(catalogo.denticionPorEdad).not.toHaveBeenCalled();
+    });
+
+    it('guarda los cortes configurables solo cuando cambiaron y con motivo', () => {
+        const c = fixture.componentInstance as unknown as {
+            cortesDenticion(): { edad_mixta: number; edad_permanente: number };
+            cambiarEdadMixta(valor: number): void;
+            guardarDenticionPorEdad(): void;
+            motivoDenticion: string;
+            denticionModificada(): boolean;
+            mensajeDenticion(): string;
+        };
+        expect(c.cortesDenticion()).toEqual({ edad_mixta: 6, edad_permanente: 13 });
+        expect(c.denticionModificada()).toBe(false);
+        c.guardarDenticionPorEdad();
+        expect(catalogo.guardarDenticionPorEdad).not.toHaveBeenCalled();
+        c.cambiarEdadMixta(7);
+        c.motivoDenticion = 'Ajuste por protocolo odontopediátrico';
+        c.guardarDenticionPorEdad();
+        expect(catalogo.guardarDenticionPorEdad).toHaveBeenCalledWith({
+            edad_mixta: 7, edad_permanente: 13, motivo: 'Ajuste por protocolo odontopediátrico',
+        });
+        expect(c.cortesDenticion()).toEqual({ edad_mixta: 7, edad_permanente: 13 });
+        expect(c.mensajeDenticion()).toContain('guardados y auditados');
+        expect(c.denticionModificada()).toBe(false);
+    });
+
+    it('rechaza límites inválidos y no permite guardar si no cargó la configuración vigente', () => {
+        const c = fixture.componentInstance as unknown as {
+            cambiarEdadMixta(valor: number): void; guardarDenticionPorEdad(): void;
+            cortesValidos(): boolean;
+        };
+        c.cambiarEdadMixta(13);
+        expect(c.cortesValidos()).toBe(false);
+        c.guardarDenticionPorEdad();
+        expect(catalogo.guardarDenticionPorEdad).not.toHaveBeenCalled();
+    });
+
+    it('muestra el fallo de lectura y no permite sobrescribir la configuración vigente', () => {
+        catalogo.denticionPorEdad.mockReturnValue(throwError(() => new Error('Lectura denegada.')));
+        const c = fixture.componentInstance as unknown as {
+            cargarDenticionPorEdad(): void;
+            errorDenticion(): string;
+            cambiarEdadMixta(valor: number): void;
+            motivoDenticion: string;
+            guardarDenticionPorEdad(): void;
+        };
+        c.cargarDenticionPorEdad();
+        expect(c.errorDenticion()).toContain('No se pudieron cargar los límites vigentes.');
+        c.cambiarEdadMixta(7);
+        c.motivoDenticion = 'Motivo sintético de prueba';
+        c.guardarDenticionPorEdad();
+        expect(catalogo.guardarDenticionPorEdad).not.toHaveBeenCalled();
     });
 
     it('oculta la captura de fotos si falta imagen_clinica.cargar', () => {

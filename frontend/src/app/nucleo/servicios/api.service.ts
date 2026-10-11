@@ -621,6 +621,12 @@ export interface ContenidoOdontograma {
   readonly piezas: Readonly<Record<string, EstadoPiezaOdontograma>>;
 }
 
+/** Cortes de edad configurados por clínica para la dentición inicial. */
+export interface EdadesDenticion {
+  readonly edad_mixta: number;
+  readonly edad_permanente: number;
+}
+
 export type EstadoPlanTratamiento = 'BORRADOR' | 'PROPUESTO' | 'ACEPTADO' | 'COMPLETADO' | 'CANCELADO';
 export type EstadoProcedimientoPlan = 'PENDIENTE' | 'COMPLETADO' | 'CANCELADO';
 
@@ -1299,6 +1305,10 @@ export class ApiService {
     return this.get<readonly Odontograma[]>(
       `/odontologia/pacientes/${pacienteId}/odontograma/versiones`,
     );
+  }
+
+  edadesDenticion(): Observable<EdadesDenticion> {
+    return this.get<EdadesDenticion>('/historia/denticion-por-edad');
   }
 
   crearOdontograma(
