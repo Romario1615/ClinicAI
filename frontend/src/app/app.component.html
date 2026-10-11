@@ -146,43 +146,82 @@
       </div>
 
       <p class="navegacion__grupo">Secciones</p>
-      <ul class="navegacion__lista">
-        @for (enlace of enlaces(); track enlace.ruta) {
-          <li>
-            @let cantidadInsignia = enlace.ruta === '/conversaciones' ? pendientes.conversacionesPendientes() : enlace.ruta === '/seguridad' ? pendientes.avisosEmergenciaPendientes() : pendientes.cuenta();
-            <a
-              [routerLink]="enlace.ruta"
-              routerLinkActive="navegacion__enlace--activo"
-              ariaCurrentWhenActive="page"
-              class="navegacion__enlace"
-              (click)="cerrarMenu()"
+      <div class="navegacion__categorias">
+        @for (categoria of categorias(); track categoria.id) {
+          @let abierta = categoriaAbierta() === categoria.id;
+          @let cantidadCategoria = pendientesCategoria(categoria.enlaces);
+          <section class="navegacion__categoria" [class.navegacion__categoria--actual]="categoriaActiva() === categoria.id">
+            <h2 class="navegacion__titulo">
+              <button
+                type="button"
+                class="navegacion__desplegar"
+                [id]="'categoria-' + categoria.id"
+                [attr.aria-expanded]="abierta"
+                [attr.aria-controls]="'secciones-' + categoria.id"
+                (click)="alternarCategoria(categoria.id)"
+              >
+                <app-icono [nombre]="categoria.icono" [tamano]="18" />
+                <span class="navegacion__etiqueta">{{ categoria.etiqueta }}</span>
+                @if (categoriaActiva() === categoria.id) {
+                  <span class="solo-lectores"> · Contiene la sección actual</span>
+                }
+                @if (!abierta && cantidadCategoria > 0) {
+                  <span class="navegacion__pendientes numerico" [attr.aria-label]="cantidadCategoria + ' pendientes'">{{ cantidadCategoria }}</span>
+                }
+                <app-icono nombre="siguiente" [tamano]="14" class="navegacion__flecha" />
+              </button>
+            </h2>
+            <ul
+              class="navegacion__lista"
+              [id]="'secciones-' + categoria.id"
+              [attr.aria-labelledby]="'categoria-' + categoria.id"
+              [hidden]="!abierta"
             >
-              <span class="navegacion__texto">
-                <app-icono [nombre]="enlace.icono" [tamano]="19" />
-                {{ enlace.etiqueta }}
-              </span>
-              @if (enlace.llevaInsignia && cantidadInsignia > 0) {
-                <!-- El número, no un punto: «3» dice cuánto trabajo hay; un
-                     punto solo dice que hay algo. -->
-                <span
-                  class="navegacion__pendientes numerico"
-                  [attr.aria-label]="cantidadInsignia + (enlace.ruta === '/conversaciones' ? ' conversaciones pendientes' : enlace.ruta === '/seguridad' ? ' avisos de seguridad pendientes' : ' tareas con plazo')"
-                >
-                  {{ cantidadInsignia }}
-                </span>
+              @for (enlace of categoria.enlaces; track enlace.ruta) {
+                @let cantidadInsignia = cantidadPendientes(enlace);
+                <li>
+                  <a
+                    [routerLink]="enlace.ruta"
+                    routerLinkActive="navegacion__enlace--activo"
+                    ariaCurrentWhenActive="page"
+                    class="navegacion__enlace"
+                    (click)="cerrarMenu()"
+                  >
+                    <span class="navegacion__texto">
+                      <app-icono [nombre]="enlace.icono" [tamano]="17" />
+                      {{ enlace.etiqueta }}
+                    </span>
+                    @if (cantidadInsignia > 0) {
+                      <span
+                        class="navegacion__pendientes numerico"
+                        [attr.aria-label]="cantidadInsignia + (enlace.ruta === '/conversaciones' ? ' conversaciones pendientes' : enlace.ruta === '/seguridad' ? ' avisos de seguridad pendientes' : ' tareas con plazo')"
+                      >{{ cantidadInsignia }}</span>
+                    }
+                    @if (enlace.demostracion) {
+                      <span class="navegacion__demo" title="Sección con datos de demostración">demo</span>
+                    }
+                  </a>
+                </li>
               }
-              @if (enlace.demostracion) {
-                <!-- Marca visible en la propia navegación: quien entra sabe
-                     antes de pulsar que esa sección todavía no está
-                     conectada al sistema real. -->
-                <span class="navegacion__demo" title="Sección con datos de demostración">
-                  demo
-                </span>
-              }
-            </a>
-          </li>
+            </ul>
+          </section>
         }
-      </ul>
+      </div>
+
+      @if (enlaceAyuda(); as ayuda) {
+        <a
+          class="navegacion__enlace navegacion__ayuda"
+          [routerLink]="ayuda.ruta"
+          routerLinkActive="navegacion__enlace--activo"
+          ariaCurrentWhenActive="page"
+          (click)="cerrarMenu()"
+        >
+          <span class="navegacion__texto">
+            <app-icono [nombre]="ayuda.icono" [tamano]="19" />
+            {{ ayuda.etiqueta }}
+          </span>
+        </a>
+      }
 
       <p class="navegacion__pie">
         <app-icono nombre="escudo" [tamano]="16" />

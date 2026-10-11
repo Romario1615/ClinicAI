@@ -170,7 +170,7 @@
   flex-direction: column;
   height: calc(100vh - 2 * var(--hueco-armazon));
   margin: var(--hueco-armazon) 0 var(--hueco-armazon) var(--hueco-armazon);
-  overflow-y: auto;
+  overflow: hidden;
   padding: var(--espacio-4) var(--espacio-3);
   /* Vidrio oscuro de marca, al 92 %: deja intuir la aurora por los cantos
    * sin que el texto secundario baje de 5:1. */
@@ -192,6 +192,7 @@
 }
 
 .navegacion__marca {
+  flex-shrink: 0;
   display: flex;
   align-items: center;
   gap: var(--espacio-3);
@@ -199,6 +200,7 @@
 }
 
 .navegacion__grupo {
+  flex-shrink: 0;
   margin: 0 0 var(--espacio-2);
   padding: 0 var(--espacio-3);
   font-size: 0.7rem;
@@ -208,13 +210,101 @@
   color: var(--marca-tenue);
 }
 
+.navegacion__categorias {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: rgb(255 255 255 / 18%) transparent;
+  padding: 2px;
+}
+
+.navegacion__categoria + .navegacion__categoria {
+  margin-top: var(--espacio-2);
+}
+
+.navegacion__titulo {
+  margin: 0;
+  font-size: inherit;
+}
+
+.navegacion__desplegar {
+  display: flex;
+  align-items: center;
+  gap: var(--espacio-2);
+  width: 100%;
+  min-height: var(--toque-minimo);
+  padding: var(--espacio-2);
+  border: 1px solid transparent;
+  border-radius: 12px;
+  background: transparent;
+  color: var(--marca-texto);
+  font: inherit;
+  font-size: 0.81rem;
+  font-weight: 650;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color 160ms ease, border-color 160ms ease;
+}
+
+.navegacion__etiqueta {
+  flex: 1;
+  min-width: 0;
+}
+
+.navegacion__desplegar > app-icono {
+  flex-shrink: 0;
+  color: var(--marca-tenue);
+}
+
+.navegacion__desplegar:hover,
+.navegacion__desplegar[aria-expanded='true'] {
+  background: rgb(255 255 255 / 6%);
+}
+
+.navegacion__categoria--actual .navegacion__desplegar {
+  border-color: rgb(255 255 255 / 12%);
+  color: var(--marca-brillo);
+}
+
+.navegacion__categoria--actual .navegacion__desplegar > app-icono {
+  color: inherit;
+}
+
+.navegacion__desplegar:focus-visible {
+  outline: 2px solid var(--marca-brillo);
+  outline-offset: 1px;
+}
+
+.navegacion__flecha {
+  transition: transform 160ms ease;
+}
+
+.navegacion__desplegar[aria-expanded='true'] .navegacion__flecha {
+  transform: rotate(90deg);
+}
+
 .navegacion__lista {
   list-style: none;
-  margin: 0;
   padding: 0;
   display: flex;
   flex-direction: column;
   gap: 2px;
+  margin: var(--espacio-1) 0 0 var(--espacio-3);
+  padding-left: var(--espacio-1);
+  border-left: 1px solid rgb(255 255 255 / 12%);
+}
+
+/* display:flex no debe anular el atributo nativo hidden ni dejar enlaces
+ * de una categoría cerrada en el recorrido del teclado. */
+.navegacion__lista[hidden] {
+  display: none;
+}
+
+.navegacion__ayuda {
+  flex-shrink: 0;
+  margin-top: var(--espacio-3);
 }
 
 .navegacion__enlace {
@@ -231,7 +321,7 @@
   color: var(--marca-texto);
   text-decoration: none;
   font-weight: 550;
-  font-size: 0.95rem;
+  font-size: 0.85rem;
   transition: background-color 160ms ease, color 160ms ease, border-color 160ms ease;
 }
 
@@ -251,7 +341,7 @@
 .navegacion__texto {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: var(--espacio-2);
   min-width: 0;
 }
 
@@ -311,11 +401,13 @@
 }
 
 .navegacion__pie {
+  flex-shrink: 0;
   display: flex;
   align-items: center;
   gap: var(--espacio-2);
-  margin: auto 0 0;
-  padding: var(--espacio-5) var(--espacio-3) var(--espacio-2);
+  margin: var(--espacio-2) 0 0;
+  padding: var(--espacio-3) var(--espacio-3) var(--espacio-2);
+  border-top: 1px solid rgb(255 255 255 / 10%);
   font-size: 0.78rem;
   color: var(--marca-tenue);
 }

@@ -9,13 +9,13 @@
  */
 import { provideHttpClient, withXhr } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
-import { computed, signal, type WritableSignal } from '@angular/core';
+import { Component, computed, signal, type WritableSignal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { Router, provideRouter } from '@angular/router';
 
 import { AppComponent } from './app.component';
 import { AutenticacionService } from './nucleo/servicios/autenticacion.service';
-import { CONFIGURACION, CONFIGURACION_POR_DEFECTO, } from './nucleo/servicios/configuracion';
+import { CONFIGURACION, CONFIGURACION_POR_DEFECTO, PERMISOS } from './nucleo/servicios/configuracion';
 import { SesionService } from './nucleo/servicios/sesion.service';
 import { PendientesService } from './nucleo/servicios/pendientes.service';
 import type { Identidad } from './nucleo/modelos/dominio';
@@ -48,6 +48,9 @@ function identidadCon(permisos: readonly string[]): Identidad {
         ultimo_acceso_en: null,
     };
 }
+
+@Component({ template: '' })
+class PaginaPruebaComponent {}
 
 describe('AppComponent', () => {
     let fixture: ComponentFixture<AppComponent>;
@@ -143,6 +146,133 @@ describe('AppComponent', () => {
         expect(enlaces.some((texto) => texto.includes('Agenda'))).toBe(true);
         expect(enlaces.some((texto) => texto.includes('Pacientes'))).toBe(false);
         expect(enlaces.some((texto) => texto.includes('Historia'))).toBe(false);
+    });
+
+    function iniciar(permisos: readonly string[]): void {
+        sesion.establecerTokens({
+            token_acceso: 't', token_refresco: 'r', tipo_token: 'Bearer',
+            expira_en: new Date().toISOString(), requiere_segundo_factor: false,
+        });
+        sesion.establecerIdentidad(identidadCon(permisos));
+        fixture.detectChanges();
+    }
+
+    it('sin permisos adicionales solo ofrece Resumen y Ayuda, sin categorías vacías', () => {
+        iniciar([]);
+        const botones = fixture.nativeElement.querySelectorAll('.navegacion__desplegar') as NodeListOf<HTMLButtonElement>;
+        expect([...botones].map((boton) => boton.textContent?.trim())).toEqual(['Resumen']);
+        expect(botones[0].getAttribute('aria-expanded')).toBe('true');
+        expect(fixture.nativeElement.querySelector('.navegacion__ayuda').getAttribute('href')).toBe('/ayuda');
+    });
+
+    it('abre una sola categoría y permite cerrarla sin perder sus enlaces autorizados', () => {
+        iniciar(['agenda.leer', 'pago.leer']);
+        const raiz = fixture.nativeElement as HTMLElement;
+        const clinica = raiz.querySelector<HTMLButtonElement>('#categoria-clinica')!;
+        const finanzas = raiz.querySelector<HTMLButtonElement>('#categoria-finanzas')!;
+        clinica.click();
+        fixture.detectChanges();
+        expect(raiz.querySelector('#categoria-resumen')?.getAttribute('aria-expanded')).toBe('false');
+        expect(clinica.getAttribute('aria-expanded')).toBe('true');
+        expect(raiz.querySelector('#secciones-clinica')?.hasAttribute('hidden')).toBe(false);
+        expect(clinica.getAttribute('aria-controls')).toBe('secciones-clinica');
+        expect(raiz.querySelector('#secciones-clinica')?.getAttribute('aria-labelledby')).toBe('categoria-clinica');
+        finanzas.click();
+        fixture.detectChanges();
+        expect(clinica.getAttribute('aria-expanded')).toBe('false');
+        expect(raiz.querySelector('#secciones-clinica')?.hasAttribute('hidden')).toBe(true);
+        expect(raiz.querySelector('#secciones-clinica a[href="/agenda"]')).not.toBeNull();
+        finanzas.click();
+        fixture.detectChanges();
+        expect(raiz.querySelectorAll('.navegacion__desplegar[aria-expanded="true"]')).toHaveLength(0);
+        expect(raiz.querySelector('.navegacion__ayuda')?.closest('[hidden]')).toBeNull();
+    });
+
+    it('cada sección autorizada pertenece a una sola categoría o al acceso de Ayuda', () => {
+        TestBed.inject(HttpTestingController).expectOne(`${CONFIGURACION_POR_DEFECTO.urlApi}/autenticacion/accesos-locales`)
+            .flush({ habilitado: true, roles: [] });
+        const permisos = [...Object.values(PERMISOS), 'pago.leer'];
+        iniciar(permisos);
+        sesion.establecerIdentidad({ ...identidadCon(permisos), roles: ['superadministrador'] });
+        fixture.detectChanges();
+        const raiz = fixture.nativeElement as HTMLElement;
+        const enlaces = [...raiz.querySelectorAll('nav a')].map((enlace) => enlace.getAttribute('href'));
+        expect(enlaces).toHaveLength(23);
+        expect(new Set(enlaces).size).toBe(enlaces.length);
+        expect(raiz.querySelectorAll('.navegacion__categoria')).toHaveLength(5);
+        expect(raiz.querySelector('#secciones-administracion a[href="/plataforma/clinicas"]')).not.toBeNull();
+        expect(raiz.querySelector('#secciones-ia a[href="/agente-demo"]')).not.toBeNull();
+        expect(raiz.querySelector('#secciones-clinica a[href="/historia-clinica"]')).not.toBeNull();
+    });
+
+    it('un acceso directo con parámetros y una ruta anidada revelan la categoría actual', async () => {
+        const router = TestBed.inject(Router);
+        router.resetConfig([
+            { path: 'pagos', component: PaginaPruebaComponent },
+            { path: 'pacientes/:id', component: PaginaPruebaComponent },
+        ]);
+        iniciar(['agenda.leer', 'pago.leer', PERMISOS.pacienteLeer]);
+        await router.navigateByUrl('/pagos?paciente=prueba#detalle');
+        fixture.detectChanges();
+        expect(fixture.nativeElement.querySelector('#categoria-finanzas').getAttribute('aria-expanded')).toBe('true');
+        expect(fixture.nativeElement.querySelector('#categoria-finanzas').textContent).toContain('Contiene la sección actual');
+        await router.navigateByUrl('/pacientes/paciente-sintetico');
+        fixture.detectChanges();
+        expect(fixture.nativeElement.querySelector('#categoria-clinica').getAttribute('aria-expanded')).toBe('true');
+        expect(fixture.nativeElement.querySelector('#categoria-finanzas').getAttribute('aria-expanded')).toBe('false');
+    });
+
+    it('no confunde una ruta de nombre parecido con una sección del menú', async () => {
+        const router = TestBed.inject(Router);
+        router.resetConfig([{ path: 'pagos-externos', component: PaginaPruebaComponent }]);
+        iniciar(['pago.leer']);
+        await router.navigateByUrl('/pagos-externos');
+        fixture.detectChanges();
+        expect(fixture.nativeElement.querySelector('.navegacion__categoria--actual')).toBeNull();
+        expect(fixture.nativeElement.querySelector('#categoria-resumen').getAttribute('aria-expanded')).toBe('true');
+    });
+
+    it('Ayuda sigue accesible con todas las categorías cerradas y cierra el cajón', async () => {
+        const router = TestBed.inject(Router);
+        router.resetConfig([{ path: 'ayuda', component: PaginaPruebaComponent }]);
+        iniciar(['agenda.leer']);
+        (fixture.nativeElement.querySelector('.cabecera__menu') as HTMLButtonElement).click();
+        fixture.detectChanges();
+        (fixture.nativeElement.querySelector('.navegacion__ayuda') as HTMLAnchorElement).click();
+        await fixture.whenStable();
+        fixture.detectChanges();
+        expect(fixture.nativeElement.querySelector('.navegacion--abierta')).toBeNull();
+        expect(fixture.nativeElement.querySelectorAll('.navegacion__desplegar[aria-expanded="true"]')).toHaveLength(0);
+        expect(fixture.nativeElement.querySelector('.navegacion__ayuda').getAttribute('aria-current')).toBe('page');
+    });
+
+    it('al cambiar los permisos desaparece la categoría que ya no corresponde y se restablece la apertura', () => {
+        iniciar(['pago.leer']);
+        (fixture.nativeElement.querySelector('#categoria-finanzas') as HTMLButtonElement).click();
+        fixture.detectChanges();
+        sesion.establecerIdentidad(identidadCon([]));
+        fixture.detectChanges();
+        expect(fixture.nativeElement.querySelector('#categoria-finanzas')).toBeNull();
+        expect(fixture.nativeElement.querySelector('nav a[href="/pagos"]')).toBeNull();
+        expect(fixture.nativeElement.querySelector('#categoria-resumen').getAttribute('aria-expanded')).toBe('true');
+    });
+
+    it('los pendientes de enlaces autorizados se ven en su categoría cerrada y se actualizan sin abrirla', () => {
+        iniciar([PERMISOS.conversacionLeer]);
+        const conversaciones = TestBed.inject(PendientesService).conversacionesPendientes as WritableSignal<number>;
+        const emergencias = TestBed.inject(PendientesService).avisosEmergenciaPendientes as WritableSignal<number>;
+        conversaciones.set(3);
+        emergencias.set(8);
+        fixture.detectChanges();
+        const raiz = fixture.nativeElement as HTMLElement;
+        const categoria = raiz.querySelector('#categoria-ia')!;
+        expect(categoria.querySelector('.navegacion__pendientes')?.textContent?.trim()).toBe('3');
+        expect(categoria.getAttribute('aria-expanded')).toBe('false');
+        expect(raiz.querySelector('#categoria-administracion')).toBeNull();
+        conversaciones.set(0);
+        fixture.detectChanges();
+        expect(categoria.querySelector('.navegacion__pendientes')).toBeNull();
+        expect(categoria.getAttribute('aria-expanded')).toBe('false');
     });
 
     it('no anuncia como demostracion ninguna seccion que ya usa datos reales', () => {

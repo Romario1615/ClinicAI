@@ -245,13 +245,14 @@ test.describe('Accesibilidad WCAG 2.2 AA', () => {
       // asentada (tras sus animaciones de entrada): 30 s no alcanzan.
       test.setTimeout(120_000);
       await acceder(page, rol);
-      const enlaces = page.getByRole('navigation', { name: 'Secciones' }).getByRole('link');
+      const enlaces = page.getByRole('navigation', { name: 'Secciones' }).getByRole('link', { includeHidden: true });
 
       for (const enlace of await enlaces.all()) {
         const destino = await enlace.getAttribute('href');
         expect(destino, 'Cada sección visible debe tener una ruta').toBeTruthy();
         rutasAuditadas.add(destino!);
-        await enlace.click();
+        const etiqueta = (await enlace.locator('.navegacion__texto').textContent())!.trim();
+        await irA(page, etiqueta);
         await expect(page).toHaveURL(new RegExp(`${destino?.replaceAll('/', '\\/')}$`));
         await expect(page.locator('main h1').first()).toBeVisible();
         await exigirSinIncidencias(page);

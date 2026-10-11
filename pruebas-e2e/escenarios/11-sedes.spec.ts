@@ -1,11 +1,10 @@
 /** Administración local de información operativa de sedes. */
 import { expect, test } from '../apoyo/prueba';
-import { acceder } from '../apoyo/sesion';
+import { acceder, irA } from '../apoyo/sesion';
 
 test('administración edita y conserva los datos de la sede en Configuración', async ({ page }) => {
   await acceder(page, 'administradora');
-  await page.getByRole('navigation', { name: 'Secciones' })
-    .getByRole('link', { name: 'Configuración' }).click();
+  await irA(page, 'Configuración');
   await page.getByRole('button', { name: 'Sedes' }).click();
   await expect(page.getByRole('heading', { name: 'Sedes y datos de reserva' })).toBeVisible();
 

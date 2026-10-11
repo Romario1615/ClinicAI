@@ -12,7 +12,9 @@
  */
 import { DOCUMENT } from '@angular/common';
 import { Component, DestroyRef, computed, effect, inject, signal, ChangeDetectionStrategy, ElementRef } from '@angular/core';
-import { Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
+import { toSignal } from '@angular/core/rxjs-interop';
+import { NavigationEnd, Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
+import { filter, map } from 'rxjs';
 
 import { BuscadorGlobalComponent } from './compartido/buscador-global.component';
 import { FotoPersonaComponent } from './compartido/foto-persona.component';
@@ -28,7 +30,10 @@ import { SesionService } from './nucleo/servicios/sesion.service';
 import { ModoLocalService } from './nucleo/servicios/modo-local.service';
 import { especialidadDelRol } from './nucleo/utilidades/especialidad-rol';
 
+type CategoriaSecciones = 'resumen' | 'clinica' | 'ia' | 'finanzas' | 'administracion';
+
 interface EnlaceNavegacion {
+  readonly categoria: CategoriaSecciones | 'ayuda';
   readonly ruta: string;
   readonly etiqueta: string;
   readonly icono: NombreIcono;
@@ -48,11 +53,20 @@ interface EnlaceNavegacion {
   readonly soloLocal?: boolean;
 }
 
+const CATEGORIAS: readonly { id: CategoriaSecciones; etiqueta: string; icono: NombreIcono }[] = [
+  { id: 'resumen', etiqueta: 'Resumen', icono: 'panel' },
+  { id: 'clinica', etiqueta: 'Atención clínica', icono: 'historia' },
+  { id: 'ia', etiqueta: 'Comunicación e IA', icono: 'red-ia' },
+  { id: 'finanzas', etiqueta: 'Finanzas', icono: 'pagos' },
+  { id: 'administracion', etiqueta: 'Administración', icono: 'configuracion' },
+];
+
 const NAVEGACION: readonly EnlaceNavegacion[] = [
-  { ruta: '/panel', etiqueta: 'Panel', icono: 'panel', permisos: [], demostracion: false },
-  { ruta: '/analitica', etiqueta: 'Analítica IA', icono: 'panel', permisos: [PERMISOS.metricasLeer], demostracion: false },
-  { ruta: '/plataforma/clinicas', etiqueta: 'Clínicas', icono: 'configuracion', permisos: [], rol: 'superadministrador', demostracion: false },
+  { categoria: 'resumen', ruta: '/panel', etiqueta: 'Panel', icono: 'panel', permisos: [], demostracion: false },
+  { categoria: 'resumen', ruta: '/analitica', etiqueta: 'Analítica IA', icono: 'panel', permisos: [PERMISOS.metricasLeer], demostracion: false },
+  { categoria: 'administracion', ruta: '/plataforma/clinicas', etiqueta: 'Clínicas', icono: 'configuracion', permisos: [], rol: 'superadministrador', demostracion: false },
   {
+    categoria: 'administracion',
     ruta: '/usuarios',
     etiqueta: 'Usuarios y roles',
     icono: 'roles',
@@ -60,6 +74,7 @@ const NAVEGACION: readonly EnlaceNavegacion[] = [
     demostracion: false,
   },
   {
+    categoria: 'clinica',
     ruta: '/agenda',
     etiqueta: 'Agenda',
     icono: 'agenda',
@@ -67,6 +82,7 @@ const NAVEGACION: readonly EnlaceNavegacion[] = [
     demostracion: false,
   },
   {
+    categoria: 'clinica',
     ruta: '/pacientes',
     etiqueta: 'Pacientes',
     icono: 'pacientes',
@@ -74,6 +90,7 @@ const NAVEGACION: readonly EnlaceNavegacion[] = [
     demostracion: false,
   },
   {
+    categoria: 'clinica',
     ruta: '/lista-espera',
     etiqueta: 'Lista de espera',
     icono: 'espera',
@@ -82,6 +99,7 @@ const NAVEGACION: readonly EnlaceNavegacion[] = [
     demostracion: false,
   },
   {
+    categoria: 'clinica',
     ruta: '/historia-clinica',
     etiqueta: 'Historia clínica',
     icono: 'historia',
@@ -89,6 +107,7 @@ const NAVEGACION: readonly EnlaceNavegacion[] = [
     demostracion: false,
   },
   {
+    categoria: 'clinica',
     ruta: '/medicamentos',
     etiqueta: 'Medicamentos',
     icono: 'medicamentos',
@@ -96,6 +115,7 @@ const NAVEGACION: readonly EnlaceNavegacion[] = [
     demostracion: false,
   },
   {
+    categoria: 'ia',
     ruta: '/conocimiento',
     etiqueta: 'Conocimiento',
     icono: 'conocimiento',
@@ -103,6 +123,7 @@ const NAVEGACION: readonly EnlaceNavegacion[] = [
     demostracion: false,
   },
   {
+    categoria: 'administracion',
     ruta: '/delegaciones',
     etiqueta: 'Delegaciones de firma',
     icono: 'escudo',
@@ -110,6 +131,7 @@ const NAVEGACION: readonly EnlaceNavegacion[] = [
     demostracion: false,
   },
   {
+    categoria: 'administracion',
     ruta: '/equipo',
     etiqueta: 'Equipo clínico',
     icono: 'usuarios',
@@ -117,6 +139,7 @@ const NAVEGACION: readonly EnlaceNavegacion[] = [
     demostracion: false,
   },
   {
+    categoria: 'administracion',
     ruta: '/promociones',
     etiqueta: 'Promociones',
     icono: 'megafono',
@@ -124,15 +147,17 @@ const NAVEGACION: readonly EnlaceNavegacion[] = [
     demostracion: false,
   },
   {
+    categoria: 'administracion',
     ruta: '/catalogo',
     etiqueta: 'Catálogo',
     icono: 'catalogo',
     permisos: [PERMISOS.agendaLeer],
     demostracion: false,
   },
-  { ruta: '/pagos', etiqueta: 'Pagos', icono: 'pagos', permisos: ['pago.leer'], demostracion: false },
-  { ruta: '/gastos', etiqueta: 'Gastos y caja', icono: 'gastos', permisos: [PERMISOS.gastoLeer], demostracion: false },
+  { categoria: 'finanzas', ruta: '/pagos', etiqueta: 'Pagos', icono: 'pagos', permisos: ['pago.leer'], demostracion: false },
+  { categoria: 'finanzas', ruta: '/gastos', etiqueta: 'Gastos y caja', icono: 'gastos', permisos: [PERMISOS.gastoLeer], demostracion: false },
   {
+    categoria: 'ia',
     ruta: '/conversaciones',
     etiqueta: 'Atención de mensajes',
     icono: 'agente',
@@ -141,6 +166,7 @@ const NAVEGACION: readonly EnlaceNavegacion[] = [
     demostracion: false,
   },
   {
+    categoria: 'ia',
     ruta: '/agente-demo',
     etiqueta: 'Agente demo',
     icono: 'agente',
@@ -150,6 +176,7 @@ const NAVEGACION: readonly EnlaceNavegacion[] = [
     demostracion: true,
   },
   {
+    categoria: 'administracion',
     ruta: '/seguridad',
     etiqueta: 'Seguridad clínica',
     icono: 'escudo',
@@ -158,6 +185,7 @@ const NAVEGACION: readonly EnlaceNavegacion[] = [
     demostracion: false,
   },
   {
+    categoria: 'ia',
     ruta: '/asistente',
     etiqueta: 'Asistente',
     icono: 'agente',
@@ -165,6 +193,7 @@ const NAVEGACION: readonly EnlaceNavegacion[] = [
     demostracion: false,
   },
   {
+    categoria: 'ia',
     ruta: '/automatizaciones',
     etiqueta: 'Automatizaciones',
     icono: 'chispa',
@@ -172,6 +201,7 @@ const NAVEGACION: readonly EnlaceNavegacion[] = [
     demostracion: false,
   },
   {
+    categoria: 'administracion',
     ruta: '/configuracion',
     etiqueta: 'Configuración',
     icono: 'configuracion',
@@ -179,7 +209,7 @@ const NAVEGACION: readonly EnlaceNavegacion[] = [
     demostracion: false,
   },
   // Para todos: cada persona ve el manual de sus propios roles.
-  { ruta: '/ayuda', etiqueta: 'Ayuda', icono: 'ayuda', permisos: [], demostracion: false },
+  { categoria: 'ayuda', ruta: '/ayuda', etiqueta: 'Ayuda', icono: 'ayuda', permisos: [], demostracion: false },
 ];
 
 @Component({
@@ -208,6 +238,13 @@ export class AppComponent {
   private readonly elemento = inject<ElementRef<HTMLElement>>(ElementRef);
   private readonly autenticacion = inject(AutenticacionService);
   private readonly router = inject(Router);
+  private readonly rutaActual = toSignal(
+    this.router.events.pipe(
+      filter((evento): evento is NavigationEnd => evento instanceof NavigationEnd),
+      map((evento) => evento.urlAfterRedirects.split(/[?#]/)[0]),
+    ),
+    { initialValue: this.router.url.split(/[?#]/)[0] },
+  );
   protected readonly sesion = inject(SesionService);
   private readonly modoLocal = inject(ModoLocalService);
   protected readonly pendientes = inject(PendientesService);
@@ -216,6 +253,7 @@ export class AppComponent {
   protected readonly menuAbierto = signal(false);
   protected readonly miFotoAbierta = signal(false);
   protected readonly notificacionesAbiertas = signal(false);
+  protected readonly categoriaAbierta = signal<CategoriaSecciones | null>('resumen');
   /** Pantalla estrecha: el menú es un cajón que tapa el contenido. */
   private readonly pantallaEstrecha = signal(false);
   /**
@@ -248,6 +286,16 @@ export class AppComponent {
       } else {
         this.pendientes.limpiar();
       }
+    });
+
+    // Un acceso directo, una redirección o Atrás también revela su categoría.
+    // La apertura es por sesión: no se conserva el menú de otra persona.
+    effect(() => {
+      const categorias = this.categorias();
+      const ruta = this.rutaActual();
+      this.abrirCategoria(
+        this.categoriaActiva() ?? (ruta === '/ayuda' ? null : categorias[0]?.id ?? null),
+      );
     });
 
     // Movimiento global: presión, reflejo y entrada escalonada de lo que
@@ -283,6 +331,50 @@ export class AppComponent {
         (!enlace.soloLocal || this.modoLocal.habilitado()),
     ),
   );
+
+  /** Se filtran los permisos antes de agrupar: nunca se muestran grupos vacíos. */
+  protected readonly categorias = computed(() => {
+    const enlaces = this.enlaces();
+    return CATEGORIAS.map((categoria) => ({
+      ...categoria,
+      enlaces: enlaces.filter((enlace) => enlace.categoria === categoria.id),
+    })).filter((categoria) => categoria.enlaces.length > 0);
+  });
+
+  protected readonly enlaceAyuda = computed(() => this.enlaces().find((enlace) => enlace.categoria === 'ayuda'));
+  protected readonly categoriaActiva = computed(() => {
+    const ruta = this.rutaActual();
+    return this.categorias().find((categoria) => categoria.enlaces.some((enlace) =>
+      ruta === enlace.ruta || ruta.startsWith(`${enlace.ruta}/`),
+    ))?.id ?? null;
+  });
+
+  protected alternarCategoria(id: CategoriaSecciones): void {
+    this.abrirCategoria(this.categoriaAbierta() === id ? null : id);
+  }
+
+  private abrirCategoria(id: CategoriaSecciones | null): void {
+    const raiz = this.elemento.nativeElement;
+    const activo = raiz.ownerDocument.activeElement;
+    const lista = activo instanceof Element ? activo.closest('.navegacion__lista') : null;
+    if (lista && raiz.contains(lista) && lista.id !== `secciones-${id}`) {
+      // Atrás puede cerrar la lista que conservaba el foco del último clic.
+      // Se lleva al encabezado visible antes de ocultar esos enlaces.
+      raiz.querySelector<HTMLButtonElement>(id ? `#categoria-${id}` : '#categoria-resumen')?.focus();
+    }
+    this.categoriaAbierta.set(id);
+  }
+
+  protected cantidadPendientes(enlace: EnlaceNavegacion): number {
+    if (!enlace.llevaInsignia) return 0;
+    if (enlace.ruta === '/conversaciones') return this.pendientes.conversacionesPendientes();
+    if (enlace.ruta === '/seguridad') return this.pendientes.avisosEmergenciaPendientes();
+    return this.pendientes.cuenta();
+  }
+
+  protected pendientesCategoria(enlaces: readonly EnlaceNavegacion[]): number {
+    return enlaces.reduce((total, enlace) => total + this.cantidadPendientes(enlace), 0);
+  }
 
   protected alternarMenu(): void {
     const abrir = !this.menuAbierto();

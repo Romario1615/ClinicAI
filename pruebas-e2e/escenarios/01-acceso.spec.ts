@@ -2,7 +2,7 @@
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test } from '../apoyo/prueba';
 
-import { acceder } from '../apoyo/sesion';
+import { acceder, irA } from '../apoyo/sesion';
 
 test.describe('Acceso local por roles', () => {
   test('una ruta protegida redirige al acceso y vuelve al destino', async ({ page }) => {
@@ -32,6 +32,7 @@ test.describe('Acceso local por roles', () => {
   test('recepción entra y ve la navegación de su rol', async ({ page }) => {
     await acceder(page, 'recepcion');
     const navegacion = page.getByRole('navigation', { name: 'Secciones' });
+    await navegacion.getByRole('button', { name: /^Atención clínica/ }).click();
     await expect(navegacion.getByRole('link', { name: /agenda/i })).toBeVisible();
     await expect(navegacion.getByRole('link', { name: /pacientes/i })).toBeVisible();
   });
@@ -39,8 +40,8 @@ test.describe('Acceso local por roles', () => {
   test('anuncia la sección actual en la navegación', async ({ page }) => {
     await acceder(page, 'recepcion');
     const navegacion = page.getByRole('navigation', { name: 'Secciones' });
+    await irA(page, 'Agenda');
     const agenda = navegacion.getByRole('link', { name: /agenda/i });
-    await agenda.click();
     await expect(agenda).toHaveAttribute('aria-current', 'page');
   });
 
@@ -86,15 +87,15 @@ test.describe('Acceso local por roles', () => {
 
   test('superadministración abre el portal global de clínicas', async ({ page }) => {
     await acceder(page, 'superadministrador');
+    await irA(page, 'Clínicas');
     await expect(page.getByRole('navigation', { name: 'Secciones' }).getByRole('link', { name: 'Clínicas' })).toBeVisible();
-    await page.getByRole('link', { name: 'Clínicas' }).click();
     await expect(page.getByRole('heading', { name: 'Clínicas', exact: true })).toBeVisible();
     await expect(page.getByRole('heading', { name: 'Organizaciones registradas' })).toBeVisible();
   });
 
   test('superadministración registra clínica y administrador inicial', async ({ page }) => {
     await acceder(page, 'superadministrador');
-    await page.getByRole('link', { name: 'Clínicas' }).click();
+    await irA(page, 'Clínicas');
     const sufijo = Date.now().toString();
     const nombre = `Clínica E2E [SINTETICO] ${sufijo}`;
     await page.getByRole('button', { name: 'Registrar clínica' }).first().click();

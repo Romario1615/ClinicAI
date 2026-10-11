@@ -32,5 +32,17 @@ export async function acceder(page: Page, rol: Rol): Promise<void> {
 
 /** Navega a una sección desde la barra de navegación. */
 export async function irA(page: Page, etiqueta: string | RegExp): Promise<void> {
-  await page.getByRole('navigation', { name: 'Secciones' }).getByRole('link', { name: etiqueta }).click();
+  const navegacion = page.locator('#navegacion-principal');
+  if (!await navegacion.isVisible()) {
+    await page.getByRole('button', { name: 'Alternar navegación' }).click();
+  }
+  const enlace = navegacion.getByRole('link', { name: etiqueta, includeHidden: true });
+  const categoria = navegacion.locator('.navegacion__categoria').filter({
+    has: page.getByRole('link', { name: etiqueta, includeHidden: true }),
+  });
+  if (await categoria.count()) {
+    const desplegar = categoria.locator('.navegacion__desplegar');
+    if (await desplegar.getAttribute('aria-expanded') === 'false') await desplegar.click();
+  }
+  await enlace.click();
 }

@@ -1,12 +1,11 @@
 /** Gestión de perfiles profesionales desde la interfaz conectada. */
 import { expect, test } from '../apoyo/prueba';
 
-import { acceder } from '../apoyo/sesion';
+import { acceder, irA } from '../apoyo/sesion';
 
 test('administración crea, edita y desactiva un perfil profesional', async ({ page }) => {
   await acceder(page, 'administradora');
-  await page.getByRole('navigation', { name: 'Secciones' })
-    .getByRole('link', { name: 'Equipo clínico' }).click();
+  await irA(page, 'Equipo clínico');
   await expect(page.getByRole('heading', { name: 'Equipo clínico' })).toBeVisible();
 
   const sufijo = Date.now().toString();
@@ -36,8 +35,7 @@ test('administración crea, edita y desactiva un perfil profesional', async ({ p
 
   // El perfil clínico y las credenciales son registros distintos. El
   // administrador los vincula desde Usuarios y roles.
-  await page.getByRole('navigation', { name: 'Secciones' })
-    .getByRole('link', { name: 'Usuarios y roles' }).click();
+  await irA(page, 'Usuarios y roles');
   await expect(page.getByRole('heading', { name: 'Usuarios y roles' })).toBeVisible();
   await page.getByRole('button', { name: 'Dar acceso a una persona' }).click();
   const altaAcceso = page.getByRole('dialog', { name: 'Dar acceso a una persona' });
@@ -73,8 +71,7 @@ test('administración crea, edita y desactiva un perfil profesional', async ({ p
   await expect(accesos.getByLabel('Perfil profesional')).toHaveValue(perfilId);
   await accesos.getByRole('button', { name: 'Cancelar' }).click();
 
-  await page.getByRole('navigation', { name: 'Secciones' })
-    .getByRole('link', { name: 'Equipo clínico' }).click();
+  await irA(page, 'Equipo clínico');
   await expect(page.getByRole('heading', { name: 'Equipo clínico' })).toBeVisible();
   const perfilActualizado = equipo.getByRole('article').filter({ hasText: nombre });
   await perfilActualizado.getByRole('button', { name: 'Editar' }).click();
