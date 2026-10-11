@@ -3,8 +3,9 @@ import type { APIRequestContext } from '@playwright/test';
 import { expect, test } from '../apoyo/prueba';
 import { acceder, CODIGOS_ROL, irA } from '../apoyo/sesion';
 import { seleccionarCitaEnAgenda } from '../apoyo/agenda';
+import { apiE2e } from '../apoyo/api-e2e';
 
-const API = process.env.URL_API ?? 'http://127.0.0.1:8000/api/v1';
+const API = apiE2e();
 const fecha = (iso: string) => new Intl.DateTimeFormat('en-CA', {
   timeZone: 'America/Guayaquil', year: 'numeric', month: '2-digit', day: '2-digit',
 }).format(new Date(iso));

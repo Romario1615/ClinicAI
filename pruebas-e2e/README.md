@@ -130,6 +130,13 @@ fixture `apoyo/prueba.ts` reescribe las llamadas del navegador al valor de
 `URL_API`, de modo que el frontend de desarrollo puede seguir abierto mientras
 las pruebas usan otra instancia.
 
+`URL_API` es obligatoria para toda la suite y debe apuntar a una API local con
+base exclusiva. El helper `apoyo/api-e2e.ts` detiene Playwright antes de que un
+escenario pueda sembrar datos si falta la variable, la URL no termina en
+`/api/v1`, el host no es local o el destino usa el puerto compartido `8000`.
+En particular, el escenario 09 crea pacientes sintéticos para probar la lista
+de espera; no lo ejecute contra la API de desarrollo.
+
 En una base que ya tenga pacientes, si la cuenta local profesional no ve una
 nota con versión anterior, se pueden preparar solo esos escenarios clínicos
 desde la carpeta `backend` con:
