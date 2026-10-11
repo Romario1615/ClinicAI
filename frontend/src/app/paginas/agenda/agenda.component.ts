@@ -506,7 +506,7 @@ export class AgendaComponent {
   );
 
   protected readonly citasCalendario = computed(() =>
-    this.vista() === 'dia' ? this.citasSede() : this.citasRango(),
+    this.vista() === 'dia' ? this.citas() : this.citasRango(),
   );
 
   protected readonly etiquetaPaciente = (id: string): string => this.nombrePaciente(id);

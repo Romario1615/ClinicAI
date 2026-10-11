@@ -185,6 +185,16 @@ describe('AgendaComponent · reserva y series', { timeout: 20_000 }, () => {
     expect(fixture.componentInstance['profesionalId']()).toBe(PROFESIONAL.id);
   });
 
+  it('la vista Día pasa al calendario solo las citas del profesional elegido', () => {
+    montar();
+    const propias = cita('2030-01-21T14:00:00Z');
+    const ajena = cita('2030-01-21T14:30:00Z', { id: 'cita-ajena', profesional_id: 'prof-2' });
+    fixture.componentInstance['citasSede'].set([propias, ajena]);
+    fixture.componentInstance['citas'].set([propias]);
+
+    expect(fixture.componentInstance['citasCalendario']()).toEqual([propias]);
+  });
+
   /** Responde la carga del día: sin citas y con los turnos que toquen. */
   function responderDia(quitar: readonly string[] = []): void {
     http
