@@ -61,6 +61,7 @@ describe('OdontogramaComponent', () => {
     it('usa la edad como valor inicial, pero conserva la dentición guardada', () => {
         montar(['odontograma.leer', 'odontograma.escribir'], [], 5);
         expect(c.denticion()).toBe('TEMPORAL');
+        expect(fixture.nativeElement.textContent).toContain('Propuesta por edad; puede cambiarla');
     });
 
     it('la versión guardada prevalece sobre la propuesta por edad', () => {

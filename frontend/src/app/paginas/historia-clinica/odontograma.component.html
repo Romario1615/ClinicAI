@@ -25,6 +25,7 @@
               <option value="TEMPORAL">Temporal</option>
               <option value="MIXTA">Mixta</option>
             </select>
+            <small>Propuesta por edad; puede cambiarla</small>
           } @else {
             <strong>{{ denticion() === 'PERMANENTE' ? 'Permanente' : denticion() === 'TEMPORAL' ? 'Temporal' : 'Mixta' }}</strong>
           }

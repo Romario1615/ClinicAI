@@ -56,6 +56,7 @@ test('odontograma de Historia conserva piezas legibles y controles accesibles', 
   await page.getByRole('dialog', { name: 'Herramientas del paciente', exact: true }).getByRole('button', { name: /^Odontograma Piezas/ }).click();
   const odontograma = page.locator('app-odontograma');
   await expect(odontograma.getByRole('heading', { name: 'Odontograma', exact: true })).toBeVisible();
+  await expect(odontograma.getByText('Propuesta por edad; puede cambiarla')).toBeVisible();
   const dimensiones = await odontograma.locator('.diente__svg').first().boundingBox();
   await page.screenshot({ path: test.info().outputPath('odontograma-escritorio.png') });
   expect(dimensiones!.width, 'las piezas deben conservar al menos 44 px en escritorio').toBeGreaterThanOrEqual(44);
