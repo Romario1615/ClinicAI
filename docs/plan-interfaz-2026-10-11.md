@@ -161,3 +161,32 @@ y base recién sembrada (no reutilices una API con datos antiguos).
     `04-clinico:276` (timeout en `waitForResponse`, 90 s) y
     `28-revision-modulos:17` (timeout en `waitForResponse`, 120 s). Registro
     en `%TEMP%\e2e-completa.log`. Cerrar con la suite completa en verde.
+
+## Anexo C · Decisiones del usuario: «como el software odontológico» (2026‑10‑11)
+
+El usuario pidió resolver los pendientes como lo hace el software dental del
+mercado. Referencias consultadas: ayuda de Carestream SoftDent/Sensei,
+MacPractice, Dentally y el manual de seguridad de Open Dental.
+
+18. **Dentición por edad (confirmado).** Igual que SoftDent, Sensei, MacPractice
+    y Dentally: la dentición inicial se propone por edad **solo al crear** el
+    primer odontograma; después la cambia el profesional a mano. Se mantiene lo
+    hecho en `9e3701a` (< 6 temporal, 6–12 mixta, ≥ 13 permanente). Añadir un
+    texto breve junto al selector: «Propuesta por edad; puede cambiarla».
+19. **Permisos por perfil, administrados por la clínica.** Como los grupos de
+    usuarios de Open Dental: los permisos se asignan por rol y solo
+    Administración de clínica (y Superadministrador) los edita, en
+    Usuarios/Seguridad. En la interfaz **se ocultan** los botones de acciones
+    que el rol no puede ejecutar (según los permisos del principal ya
+    cargados); el backend sigue rechazando con 403 como control real. Si algo
+    no puede ocultarse (p. ej. depende del registro), mostrar el motivo en
+    lugar de un error genérico.
+20. **Cambios de configuración con «Guardar» explícito.** Como las ventanas de
+    configuración con Aceptar/Guardar: en Conocimiento, quitar una regla de
+    permiso modifica el borrador y se persiste al pulsar «Guardar cambios».
+    Añadir aviso de cambios sin guardar al cerrar o salir y deshabilitar
+    «Guardar» si no hay cambios.
+
+Verificación: la del plan; pruebas unitarias de ocultación por permiso para al
+menos Agenda, Pacientes, Catálogo, Conocimiento y Usuarios, y E2E por rol con
+la API aislada (8031).
