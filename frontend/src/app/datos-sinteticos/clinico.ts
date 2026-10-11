@@ -198,7 +198,7 @@ export const LISTA_ESPERA: readonly EntradaListaEspera[] = [
   {
     id: 'espera-1',
     paciente_id: 'pac-3',
-    especialidad_id: 'esp-medicina-general',
+    especialidad_id: 'esp-odontologia-general',
     sede_id: 'sede-centro',
     prioridad: 'ALTA',
     desde: dias(-5),
@@ -207,7 +207,7 @@ export const LISTA_ESPERA: readonly EntradaListaEspera[] = [
   {
     id: 'espera-2',
     paciente_id: 'pac-4',
-    especialidad_id: 'esp-fisioterapia',
+    especialidad_id: 'esp-ortodoncia',
     sede_id: 'sede-centro',
     prioridad: 'NORMAL',
     desde: dias(-3),
@@ -216,7 +216,7 @@ export const LISTA_ESPERA: readonly EntradaListaEspera[] = [
   {
     id: 'espera-3',
     paciente_id: 'pac-5',
-    especialidad_id: 'esp-nutricion',
+    especialidad_id: 'esp-estetica-facial',
     sede_id: 'sede-norte',
     prioridad: 'NORMAL',
     desde: dias(-1),
