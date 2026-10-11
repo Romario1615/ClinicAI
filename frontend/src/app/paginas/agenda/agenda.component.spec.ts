@@ -120,6 +120,7 @@ describe('AgendaComponent · reserva y series', { timeout: 20_000 }, () => {
     profesionalId: string | null = PROFESIONAL.id,
     usarFiltrosReserva = true,
     permisos: readonly string[] = ['cita.crear', 'agenda.leer'],
+    identidadInicial = true,
   ): void {
     vi.spyOn(window, 'confirm').mockReturnValue(true);
     TestBed.configureTestingModule({
@@ -148,11 +149,15 @@ describe('AgendaComponent · reserva y series', { timeout: 20_000 }, () => {
       ],
     });
     iniciarSesionCon(permisos);
-    TestBed.inject(SesionService).establecerIdentidad({
-      ...identidadCon(permisos),
-      roles,
-      profesional_id: profesionalId,
-    });
+    if (identidadInicial) {
+      TestBed.inject(SesionService).establecerIdentidad({
+        ...identidadCon(permisos),
+        roles,
+        profesional_id: profesionalId,
+      });
+    } else {
+      TestBed.inject(SesionService).limpiar();
+    }
     http = TestBed.inject(HttpTestingController);
     fixture = TestBed.createComponent(AgendaComponent);
     if (usarFiltrosReserva) {
@@ -191,6 +196,26 @@ describe('AgendaComponent · reserva y series', { timeout: 20_000 }, () => {
     montar({}, ['profesional'], PROFESIONAL.id, false);
     expect(fixture.componentInstance['servicioId']()).toBe('');
     expect(fixture.componentInstance['profesionalId']()).toBe(PROFESIONAL.id);
+  });
+
+  it('acota al profesional cuando la identidad llega después que el catálogo', () => {
+    montar({}, ['profesional'], PROFESIONAL.id, false, ['agenda.leer'], false);
+    expect(fixture.componentInstance['profesionalId']()).toBe('');
+
+    TestBed.inject(SesionService).establecerIdentidad({
+      ...identidadCon(['agenda.leer']),
+      roles: ['profesional'],
+      profesional_id: PROFESIONAL.id,
+    });
+    fixture.detectChanges();
+
+    expect(fixture.componentInstance['profesionalId']()).toBe(PROFESIONAL.id);
+    expect(fixture.componentInstance['especialidadId']()).toBe(ESPECIALIDAD.id);
+    http.match((peticion) => peticion.url === `${BASE}/agenda/citas`).forEach((peticion) => {
+      peticion.flush({ elementos: [], total: 0, limite: 200, desplazamiento: 0 });
+    });
+    const proxima = http.match((peticion) => peticion.url === `${BASE}/agenda/citas`);
+    proxima.forEach((peticion) => peticion.flush({ elementos: [], total: 0, limite: 200, desplazamiento: 0 }));
   });
 
   it('oculta las acciones de cita cuando el principal solo puede consultar la agenda', () => {

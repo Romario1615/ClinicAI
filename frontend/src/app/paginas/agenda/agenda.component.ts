@@ -31,6 +31,7 @@ import {
   ElementRef,
   afterRenderEffect,
   computed,
+  effect,
   inject,
   signal,
   viewChild,
@@ -585,6 +586,17 @@ export class AgendaComponent {
         lista.scrollTop = this.posicionLista.arriba;
       }
     });
+    effect(() => {
+      const identidad = this.sesion.identidad();
+      if (this.cargandoCatalogo() || !identidad || this.citaSolicitada) return;
+      const propio = identidad.roles.includes('profesional') ? identidad.profesional_id : null;
+      const profesional = propio && this.profesionales().find((item) => item.id === propio);
+      if (profesional && this.profesionalId() !== profesional.id) {
+        this.profesionalId.set(profesional.id);
+        this.especialidadId.set(profesional.especialidad_id);
+        this.cargarAgenda();
+      }
+    });
     this.recargar
       .pipe(
         switchMap(() => this.peticionDelDia()),
@@ -724,8 +736,8 @@ export class AgendaComponent {
         this.pacientes.set(datos.pacientes.elementos);
         this.incluirPacienteSugerido();
 
-        // La vista inicial enseña el equipo completo. Solo un profesional
-        // queda acotado a su propia agenda; servicio se elige al buscar huecos.
+        // La vista inicial enseña el equipo completo. El efecto de identidad
+        // aplica el filtro propio cuando la sesión ya está disponible.
         const primeraSede = datos.sedes[0];
         if (primeraSede) {
           this.sedeId.set(primeraSede.id);
@@ -733,14 +745,11 @@ export class AgendaComponent {
         }
         const identidad = this.sesion.identidad();
         const propio = identidad?.roles.includes('profesional') ? identidad.profesional_id : null;
-        if (propio) {
-          const profesional = datos.profesionales.find((item) => item.id === propio);
-          if (profesional) {
-            this.profesionalId.set(profesional.id);
-            this.especialidadId.set(profesional.especialidad_id);
-          }
+        const profesional = propio && datos.profesionales.find((item) => item.id === propio);
+        if (profesional) {
+          this.profesionalId.set(profesional.id);
+          this.especialidadId.set(profesional.especialidad_id);
         }
-
         this.cargandoCatalogo.set(false);
         this.cargarAgenda();
         if (this.citaSolicitada) this.cargarCitaContexto(this.citaSolicitada);
