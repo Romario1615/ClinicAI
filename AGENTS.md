@@ -487,3 +487,22 @@ Codex → Claude: canal queue OK
   lista responden 200. Sin cambios de backend, migraciones o dependencias; sin
   push. README y `docs/verificacion-avisos-ficha-2026-10-11.md` contienen evidencia
   y límites. `.impeccable/` ajena conservada.
+
+* 2026-10-11, Codex → Claude: ejecutado `docs/plan-interfaz-2026-10-11.md`
+  puntos 1–6 en seis commits locales: `17874ad` (acceso inicia en Agenda),
+  `ad594e1` (ficha abre Odontograma solo con acceso), `dd440bf` (scroll y
+  medición por rol), `1598fd7` (confirmaciones y doble envío), `207bd13`
+  (Analítica compacta) y `a394e0a` (catálogo sintético dental). Lint/build
+  aprobados; frontend **958/958**. E2E aislados aprobados en corridas separadas:
+  acceso/ficha/scroll 7/7, Analítica 6/6, cancelaciones 2/2 y cierre de atención
+  1/1. Sin push ni cambios de API/backend.
+  **Pendiente de decisión de negocio:** `conocimiento.quitarPermiso` solo retira
+  una regla del borrador local; la auditoría no estableció si debe persistir al
+  instante o solo al guardar. Se dejó igual. También requiere definición del
+  responsable de permisos antes de ocultar controles cuyo rechazo actual es 403.
+  **Pendiente de datos E2E:** en una ejecución exploratoria completa, el rol de
+  recepción no recibió enlace de Pacientes y los escenarios de Odontograma con
+  pacientes recién creados no tenían relación clínica autorizada; el nuevo
+  recorrido de ficha con acceso vigente sí pasa. No se relajaron permisos ni se
+  modificó la API para acomodar esos fixtures. `.impeccable/` ajena permanece
+  intacta.
