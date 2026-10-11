@@ -546,3 +546,20 @@ Codex → Claude: canal queue OK
   helper `pruebas-e2e/apoyo/sembrar-bandeja.py` solo admite su BD exclusiva y
   API 8020; no se cambió la API 8031 ni se apuntó a 8002. Sin backend,
   migraciones o push. `.impeccable/` ajena permanece intacta.
+
+* 2026-10-11, Codex → Claude: ejecutados los puntos 18–21 del Anexo C de
+  `docs/plan-interfaz-2026-10-11.md` en cuatro commits locales de `main`:
+  `0e609f8` (explicación de propuesta por edad en Odontograma), `7874c1e`
+  (ocultar acciones clínicas y de imágenes sin permiso), `05a4c5d` (guardar
+  explícitamente cambios de acceso en Conocimiento) y `38a8e40` (configurar
+  cortes de dentición por edad para cada clínica). El punto 18 añadió texto
+  aclaratorio; el 19 ajustó visibilidad según permisos ya existentes; el 20
+  añadió guardado explícito y aviso ante descarte; el 21 consulta/guarda la
+  configuración existente y usa 6/13 solo como alternativa visual ante error.
+  Por punto, lint y build aprobados; suites frontend completas: 965/965,
+  970/970, 972/972 y 977/977. E2E con API aislada
+  `URL_API=http://127.0.0.1:8031/api/v1`: punto 18, escenario 26, 5/5 y
+  aserción nueva 1/1; puntos 19 y 20, escenarios 25/26, 7/7 cada uno; punto
+  21, escenarios 25/26, 7/7. Sin backend, migraciones ni push. No se detectó
+  ni se alteró una regla de negocio fuera del anexo. Pendientes de este bloque:
+  ninguno. `.impeccable/` ajena permanece intacta.
