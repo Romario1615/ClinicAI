@@ -79,3 +79,43 @@ Con el inventario de Haiku, módulo por módulo:
 `cd frontend; npx ng lint; npx ng test --no-watch --no-coverage; npx ng build`
 y, para 1–3, los E2E afectados con la API aislada (`pruebas-e2e/README.md`).
 Al terminar, nota «Codex → Claude» en AGENTS.md con hashes y pendientes.
+
+## Anexo A · Revisión de Claude tras los puntos 1–6 (2026‑10‑11)
+
+Verificado por Claude en navegador (1440 × 900): los seis roles entran en
+`/agenda`; 21 rutas de administración sin desplazamiento de página; la ficha
+abre en Odontograma con Periodoncia disponible. Analítica mostraba 0 citas por
+la semilla (corregido en `b43f473`). Quedan estos fallos de lógica:
+
+7. **Agenda por rol.** Hoy preselecciona el primer servicio y el primer
+   profesional (`agenda.component.ts` ~680‑697), así que recepción y
+   administración ven la columna de una sola persona. Regla: el rol
+   profesional abre en **su propia** agenda; los demás abren con
+   Especialidad y Profesional en «Todos» (vista de todo el equipo del día).
+   El servicio solo hace falta para buscar huecos o reservar: no debe
+   filtrar la vista inicial. En vista Día la etiqueta de la primera hora
+   queda tapada por la cabecera de columnas («10:00» cortado): corregir.
+8. **Ficha: el odontograma debe verse.** La cabecera (apoyo/agente,
+   «Revisando como», «Herramientas del paciente», dos filas de pestañas)
+   deja ~380 px al odontograma y la arcada inferior queda bajo el pliegue a
+   1440 × 900. Compactar: una sola fila de pestañas desplazable o agrupada,
+   «Revisando como» y «Herramientas» en una franja, de modo que las dos
+   arcadas permanentes quepan sin desplazar a 1440 × 900.
+9. **Dos botones de edición.** «Editar datos del paciente» (columna izquierda)
+   y «Editar ficha» (pie) confunden. Dejar uno con verbo claro, o renombrar
+   según lo que realmente edita cada uno.
+10. **Dentición por edad (presentación).** A una paciente de 5 años el selector
+    abre en «Permanente». Cuando el paciente **no tiene odontograma guardado**,
+    proponer por edad: < 6 años temporal, 6–12 mixta, ≥ 13 permanente; si hay
+    registro, respetar el guardado. El profesional siempre puede cambiarlo.
+    Es un valor por omisión de la plantilla, no un dato clínico; documentarlo
+    en el ADR del odontograma.
+11. **Accesibilidad Analítica.** `analitica.component.html` usa `<main>`
+    dentro del `<main id="contenido">` del armazón: cambiar a `<section>` o
+    `<div>` con `aria-labelledby`.
+12. **Datos de prueba en la base de desarrollo.** Existe un paciente
+    «Espera 1b2e1cf6-7, Paciente» creado por una prueba E2E contra la API de
+    desarrollo. Revisar qué escenario no usa la API aislada y corregirlo
+    (no borrar datos a mano).
+
+Verificación: la misma del plan, más E2E de agenda y ficha con la API aislada.
