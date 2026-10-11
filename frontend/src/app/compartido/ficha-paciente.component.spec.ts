@@ -288,6 +288,7 @@ describe('FichaPacienteComponent con permisos clínicos', () => {
 
     afterEach(() => {
         http.match((p) => p.url.endsWith('/resumen-clinico')).forEach((p) => p.flush({ codigo: 'X', mensaje: 'x' }, { status: 403, statusText: 'F' }));
+        http.match((p) => p.url.endsWith('/odontograma/versiones') || p.url.endsWith('/planes-tratamiento')).forEach((p) => p.flush([]));
         http.verify();
     });
 
@@ -296,7 +297,8 @@ describe('FichaPacienteComponent con permisos clínicos', () => {
             clave: string;
         }) => p.clave);
         expect(claves).toEqual(['resumen', 'citas', 'contacto', 'atencion', 'historia', 'odontograma', 'periodoncia', 'documentos', 'planes']);
-        expect((fixture.nativeElement as HTMLElement).textContent).toContain('Herramientas de su especialidad');
+        expect(c.pestana()).toBe('odontograma');
+        expect((fixture.nativeElement as HTMLElement).textContent).toContain('Odontograma');
         expect((fixture.nativeElement as HTMLElement).textContent).not.toContain('su rol no los alcanza');
 
         c.elegir('historia');
@@ -408,5 +410,35 @@ describe('FichaPacienteComponent con permisos clínicos', () => {
             .flush({ codigo: 'X', mensaje: 'Sin acceso a recetas' }, { status: 403, statusText: 'F' });
         expect(c.avisoClinico()).toBe('Sin acceso a recetas');
         expect(c.cargandoClinico()).toBe(false);
+    });
+});
+
+describe('FichaPacienteComponent con pestaña inicial solicitada', () => {
+    let fixture: ComponentFixture<FichaPacienteComponent>;
+    let http: HttpTestingController;
+
+    beforeEach(() => {
+        TestBed.configureTestingModule({ imports: [FichaPacienteComponent], providers: PROVEEDORES_PRUEBA });
+        http = TestBed.inject(HttpTestingController);
+        iniciarSesionCon(['historia_clinica.leer', 'odontograma.leer']);
+        fixture = TestBed.createComponent(FichaPacienteComponent);
+        fixture.componentRef.setInput('pacienteId', 'pac-1');
+        fixture.componentRef.setInput('pestanaInicial', 'resumen');
+        fixture.detectChanges();
+        http.expectOne(`${BASE}/pacientes/pac-1/foto-perfil`).flush(null);
+        http.expectOne(`${BASE}/pacientes/pac-1`).flush(detalle());
+        http.expectOne((r) => r.url === `${BASE}/agenda/citas`).flush({ elementos: [], total: 0, limite: 50, desplazamiento: 0 });
+        http.expectOne(`${BASE}/pacientes/pac-1/acceso-clinico`).flush({ acceso_clinico: true });
+        fixture.detectChanges();
+    });
+
+    afterEach(() => {
+        fixture.destroy();
+        http.match((p) => p.url.endsWith('/odontograma/versiones') || p.url.endsWith('/planes-tratamiento')).forEach((p) => p.flush([]));
+        http.verify();
+    });
+
+    it('respeta una pestaña disponible pedida explícitamente', () => {
+        expect(fixture.componentInstance['pestana']()).toBe('resumen');
     });
 });

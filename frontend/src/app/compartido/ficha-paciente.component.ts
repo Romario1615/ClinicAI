@@ -33,7 +33,7 @@ import { HerramientasPacienteComponent, type HerramientaHistoria } from './herra
  * esta ficha la abre personal con permiso, y comprobar el documento en el
  * mostrador es precisamente cómo se verifica una identidad.
  */
-import { Component, computed, inject, input, type OnInit, output, signal, viewChild, ElementRef, ChangeDetectionStrategy } from '@angular/core';
+import { Component, computed, effect, inject, input, type OnInit, output, signal, viewChild, ElementRef, ChangeDetectionStrategy } from '@angular/core';
 import { Router } from '@angular/router';
 
 import {
@@ -864,6 +864,7 @@ export class FichaPacienteComponent implements OnInit {
 
   readonly pacienteId = input.required<string>();
   readonly citaInicial = input<string | null>(null);
+  readonly pestanaInicial = input<Pestana | null>(null);
   readonly elegirRegistroInicial = input(false);
   protected readonly citaElegidaId = signal<string | null | undefined>(undefined);
   protected readonly citaParaAtencion = computed(() => this.citaElegidaId() === undefined ? this.citaInicial() : this.citaElegidaId() ?? null);
@@ -883,6 +884,25 @@ export class FichaPacienteComponent implements OnInit {
   /** Zona de presentación de la sede, nunca la del equipo. */
   readonly zona = input('America/Guayaquil');
   readonly cerrar = output<void>();
+
+  private readonly accesoClinicoConsultado = signal(false);
+  private pestanaInicialResuelta = false;
+
+  constructor() {
+    effect(() => {
+      if (this.pestanaInicialResuelta || !this.especialidades.cargada() || !this.accesoClinicoConsultado()) return;
+      const solicitada = this.pestanaInicial();
+      if (solicitada) {
+        this.pestana.set(this.pestanas().some(tab => tab.clave === solicitada) ? solicitada : 'resumen');
+      } else if (this.citaInicial()) {
+        this.pestana.set('atencion');
+      } else {
+        this.pestana.set(this.accesoClinico() === true && this.pestanas().some(tab => tab.clave === 'odontograma') ? 'odontograma' : 'resumen');
+      }
+      this.pestanaInicialResuelta = true;
+      if (this.pestana() === 'historia' && !this.clinicoCargado) this.cargarClinico();
+    });
+  }
 
   protected readonly puedeLeerHistoria = computed(() =>
     this.sesion.tienePermiso(PERMISOS.historiaLeer),
@@ -1092,7 +1112,6 @@ export class FichaPacienteComponent implements OnInit {
    * destruye y se vuelve a crear al cambiar de paciente.
    */
   ngOnInit(): void {
-    if (this.citaInicial()) this.pestana.set('atencion');
     this.especialidades.cargar();
     this.cargar();
     this.consultarAccesoClinico();
@@ -1101,21 +1120,26 @@ export class FichaPacienteComponent implements OnInit {
   /** Pregunta una vez si se pueden pedir los datos clínicos (200 sí/no, nunca 404 en cadena). */
   private consultarAccesoClinico(): void {
     const clinicos = ['historia_clinica.leer', 'odontograma.leer', 'plan_tratamiento.leer', 'imagen_clinica.leer'];
-    if (!this.sesion.tieneAlgunPermiso(...clinicos)) return;
+    if (!this.sesion.tieneAlgunPermiso(...clinicos)) {
+      this.accesoClinicoConsultado.set(true);
+      return;
+    }
     this.consultandoAcceso.set(true);
     this.operaciones
       .leer<{ acceso_clinico: boolean }>(`/pacientes/${this.pacienteId()}/acceso-clinico`)
       .subscribe({
-        next: (r) => this.accesoClinico.set(r.acceso_clinico),
+        next: (r) => {
+          this.accesoClinico.set(r.acceso_clinico);
+          this.accesoClinicoConsultado.set(true);
+          this.consultandoAcceso.set(false);
+        },
         // Si no se puede saber, se intenta como antes y cada pestaña explica su fallo.
-        error: () => this.accesoClinico.set(null),
-        complete: () => this.trasConsultarAcceso(),
+        error: () => {
+          this.accesoClinico.set(null);
+          this.accesoClinicoConsultado.set(true);
+          this.consultandoAcceso.set(false);
+        },
       });
-  }
-
-  private trasConsultarAcceso(): void {
-    this.consultandoAcceso.set(false);
-    if (this.pestana() === 'historia' && !this.clinicoCargado) this.cargarClinico();
   }
 
   /** Otra especialidad: las notas se vuelven a pedir y las pestañas cambian. */

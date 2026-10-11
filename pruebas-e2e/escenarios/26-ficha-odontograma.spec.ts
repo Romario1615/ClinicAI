@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { test, expect } from '../apoyo/prueba';
 import { acceder, irA } from '../apoyo/sesion';
+import { pacienteConVersionAnterior } from '../apoyo/datos';
 import type { APIRequestContext, Page } from '@playwright/test';
 
 const API = process.env.URL_API ?? 'http://127.0.0.1:8000/api/v1';
@@ -60,6 +61,16 @@ test('odontograma de Historia conserva piezas legibles y controles accesibles', 
   expect(dimensiones!.width, 'las piezas deben conservar al menos 44 px en escritorio').toBeGreaterThanOrEqual(44);
   await expect(odontograma.locator('.diente')).toHaveCount(32);
   expect(await page.evaluate(() => document.documentElement.scrollHeight <= innerHeight + 2)).toBe(true);
+});
+
+test('la ficha abre el Odontograma cuando el profesional tiene acceso clínico', async ({ page, request }) => {
+  test.setTimeout(90_000);
+  const paciente = await pacienteConVersionAnterior(request);
+  await acceder(page, 'profesional');
+  await abrirFicha(page, paciente.numero_documento ?? '');
+  const pestaña = page.getByRole('tab', { name: 'Odontograma', exact: true });
+  await expect(pestaña).toHaveAttribute('aria-selected', 'true');
+  await expect(page.locator('app-ficha-paciente app-odontograma')).toBeVisible();
 });
 
 test('la ficha registra hallazgos y notas por pieza, versiona y permite consulta sin edición', async ({ page, request }) => {
