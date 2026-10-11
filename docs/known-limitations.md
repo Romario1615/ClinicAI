@@ -1,5 +1,18 @@
 # Limitaciones conocidas y riesgos residuales
 
+## Inicio de sesión y WebP (2026-10-11)
+
+La portada conserva fotografías e identidad existentes y añade exportaciones
+WebP. La compresión de fotos es con pérdida; los originales están conservados.
+La revisión automatizada de este bloque usa Chromium, datos sintéticos y una
+base exclusiva. Firefox, WebKit y dispositivos físicos requieren aceptación en
+staging. En alturas pequeñas y a 320 px los accesos desplazan dentro de la tarjeta;
+no se ocultan roles para hacer caber la página. El acceso temporal por rol sigue
+dependiendo del modo local del servidor. La prueba visual de contraseña/segundo
+factor utiliza respuestas HTTP simuladas y no certifica una autenticación real.
+
+[Informe y evidencia](verificacion-acceso-webp-2026-10-11.md).
+
 ## Búsqueda de secciones (2026-10-10)
 
 El buscador filtra nombres de módulos y categorías autorizadas; no busca

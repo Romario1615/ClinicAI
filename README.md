@@ -1,5 +1,28 @@
 # ClinicAI — Plataforma de gestión clínica
 
+## Inicio de sesión renovado y recursos WebP (2026-10-11)
+
+La portada conserva la fotografía original del equipo y destaca el nombre
+**ClinicAI**, con celeste/turquesa, vidrio claro, red de IA y tarjetas por rol.
+Los textos e iconos tienen más espacio; en móvil pequeño las tarjetas usan una
+columna y el contenido desplaza dentro del panel, manteniendo todos los accesos.
+
+Se integran **19 archivos WebP reales**: ocho versiones de fotografías, símbolo
+transparente de ClinicAI y diez iconos. Las cuatro fotos grandes pesan **84,7 %
+menos**; PNG/JPG y SVG originales conservados. Se mantienen rol, especialidad,
+permisos y el modo de autenticación configurado por el servidor.
+
+[Recursos y regeneración](docs/recursos-visuales.md).
+[Informe de verificación](docs/verificacion-acceso-webp-2026-10-11.md).
+[Vista de escritorio](docs/imagenes/acceso-webp-escritorio-2026-10-11.png).
+[Vista móvil](docs/imagenes/acceso-webp-movil-2026-10-11.png).
+
+Regresión de componentes **15/15** y Chromium **29/29** sin reintentos, incluyendo
+ocho tamaños y comprobaciones de accesibilidad. Frontend completo **929/929**,
+**88,70 %** de cobertura de líneas; lint, tipos, build y auditorías npm aprobados.
+Implementación `a008394`, local en `main`, sin push. Sin migraciones, backend,
+dependencias o APIs externas nuevas.
+
 ## Buscar una sección (2026-10-10)
 
 El menú incluye **Buscar sección**. Abre una ventana con los módulos disponibles

@@ -1,5 +1,15 @@
 # Arquitectura
 
+## Presentación del acceso y WebP (2026-10-11)
+
+`AccesoComponent` mantiene el contrato de autenticación existente y entrega a
+`MarcaComponent` la opción `webp` solo en portada. Las fotografías usan `srcset`
+con sus anchos reales; iconos y fondos son recursos públicos decorativos sin
+datos de pacientes. El exportador local de Chromium deriva WebP desde originales
+conservados y trazados propios; no participa en ejecución ni usa APIs externas.
+La portada ocupa `100dvh` y su tarjeta desplaza internamente cuando necesita
+más espacio. Rol, especialidad y modo de ingreso siguen viniendo del servidor.
+
 ## Buscador de secciones (2026-10-10)
 
 `AppComponent` entrega a `BuscadorSeccionesComponent` los mismos enlaces ya

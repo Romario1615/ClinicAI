@@ -1,5 +1,18 @@
 # Estado de preparación para producción
 
+## Portada WebP (2026-10-11)
+
+Desplegar el frontend completo con sus 19 imágenes WebP. No requiere cambios
+de base, contratos de API, permisos, claves ni dependencias. La configuración
+del servidor continúa determinando el acceso local o por credenciales. En
+staging verificar ambos modos, rol/especialidad, mensajes de error, MFA, teclado,
+zoom, movimiento reducido y alturas pequeñas en los navegadores de destino.
+El rollback restaura el paquete frontend anterior, incluidos sus recursos.
+Este cambio visual no acredita preparación global para producción.
+
+[Recursos y regeneración](recursos-visuales.md).
+[Verificación del bloque](verificacion-acceso-webp-2026-10-11.md).
+
 ## Buscador de secciones (2026-10-10)
 
 Cambio compatible del frontend: utiliza la matriz de navegación vigente y no

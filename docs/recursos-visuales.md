@@ -1,5 +1,47 @@
 # Recursos visuales
 
+## Portada y acceso en WebP (2026-10-11)
+
+El inicio conserva la fotografía original del equipo, ahora como
+`acceso-equipo.webp`, y las otras tres fotografías de su secuencia. Los PNG/JPG
+originales permanecen disponibles. Cada foto tiene una variante de hasta 1920 px
+y otra de 900 px; `srcset` usa sus dimensiones reales. El primer fondo recibe
+prioridad alta. El fundido se detiene con movimiento reducido, mostrando el equipo.
+
+Los **19 WebP** están en `frontend/public/images/`:
+
+| Archivos | Cantidad | Uso |
+|---|---:|---|
+| `acceso-equipo`, `panel-seguimiento-clinicai`, `acceso-clinica-recepcion`, `panel-clinicai-dental-network-v1`, con `.webp` y `-900.webp` | 8 | Fotografías adaptables |
+| `clinicai-simbolo.webp` | 1 | Símbolo transparente de 192 × 192 px en la portada |
+| `acceso-icono-{superadministrador,administradora,recepcion,asistente,auditor,profesional}.webp` | 6 | Accesos por rol |
+| `acceso-icono-{agenda,agente,conocimiento,seguridad}.webp` | 4 | Capacidades y aviso de sesión |
+
+Los diez pictogramas tienen fondo transparente y 96 × 96 px. Se rasterizan desde
+trazados propios, con el acento `#086c7f`; el símbolo deriva del PNG de identidad
+existente. No se genera un logo distinto ni se cambia el contenido de las fotos.
+El nombre permanece como texto de interfaz. `app-marca` permite `webp`; las demás
+marcas conservan el SVG predeterminado. Las imágenes decorativas llevan `alt=""`.
+
+Las cuatro fotos grandes pasan de **2.276.873 a 347.910 bytes**, un **84,7 % menos**.
+Ese cálculo compara los archivos, no el tiempo de carga de la aplicación.
+
+### Regenerar estas exportaciones
+
+Desde la raíz, con las dependencias existentes de `pruebas-e2e` y Chromium:
+
+```powershell
+$env:PLAYWRIGHT_BROWSERS_PATH='D:/playwright-browsers'
+node infra/scripts/exportar-acceso-webp.mjs
+```
+
+El script utiliza Canvas de Chromium para codificar WebP; verifica la cabecera
+RIFF/WEBP y escribe únicamente los nombres anteriores. No requiere API, claves,
+dependencias nuevas ni modificaciones de los originales. La ruta de navegadores
+se puede omitir si Playwright está instalado en su ubicación predeterminada.
+
+[Diseño, pruebas y límites](verificacion-acceso-webp-2026-10-11.md).
+
 ## Logo propio de ClinicAI (2026-10-09)
 
 La C representa ClinicAI; la cruz central representa cuidado y los tres nodos
@@ -60,7 +102,8 @@ La paleta común usa acento `#086c7f`, fondos claros celestes y vidrio oscuro
 `#0e2935`. Las partículas y la red existente toman estos colores. Se mantiene
 el color semántico de errores y alertas, las preferencias de movimiento reducido
 y los controles de contraste. Los nuevos PNG se reservan a exportación e iconos;
-la marca que se pinta en la interfaz continúa usando el símbolo SVG ligero.
+la marca usa el símbolo SVG ligero por defecto, con WebP explícito en la portada
+desde 2026-10-11.
 
 La acción principal limita el brillo a 6 %: el blanco sobre el acento aclarado
 conserva una relación calculada de 5,36:1. La portada se revisa con axe y seis
