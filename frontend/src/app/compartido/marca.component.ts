@@ -12,7 +12,7 @@ import { Component, input, ChangeDetectionStrategy } from '@angular/core';
       role="img"
       aria-label="ClinicAI · Gestión clínica con inteligencia artificial"
     >
-      <img class="marca__simbolo" src="/images/clinicai-simbolo.svg" alt="" width="96" height="96" decoding="async" />
+      <img class="marca__simbolo" [src]="webp() ? '/images/clinicai-simbolo.webp' : '/images/clinicai-simbolo.svg'" alt="" width="96" height="96" decoding="async" />
       <span class="marca__texto" aria-hidden="true">
         <span class="marca__nombre">Clinic<span class="marca__ai">AI</span></span>
         @if (!compacta()) {
@@ -51,4 +51,5 @@ export class MarcaComponent {
   readonly compacta = input(false);
   readonly fondoClaro = input(false);
   readonly destacada = input(false);
+  readonly webp = input(false);
 }

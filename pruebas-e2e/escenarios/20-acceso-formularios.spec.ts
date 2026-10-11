@@ -49,7 +49,7 @@ test('conserva y carga la imagen original de acceso en seis tamaños', async ({ 
   await page.goto('/acceso');
   await expect(page.getByRole('heading', { name: 'Elige un rol' })).toBeVisible();
   const fondo = page.locator('.acceso__marca');
-  expect(await fondo.evaluate(e => getComputedStyle(e).backgroundImage)).toContain('/images/acceso-equipo.png');
+  await expect(fondo.locator('.acceso__foto').first()).toHaveAttribute('src', '/images/acceso-equipo.webp');
   const imagen = await request.get('/images/acceso-equipo.png');
   expect(imagen.ok()).toBeTruthy();expect(imagen.headers()['content-type']).toContain('image/png');
   expect(await page.evaluate(async () => {

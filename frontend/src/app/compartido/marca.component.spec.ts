@@ -49,4 +49,12 @@ describe('MarcaComponent · identidad ClinicAI', () => {
     f.detectChanges();
     expect(f.nativeElement.querySelector('.marca__descriptor')?.textContent).toBe('Gestión clínica con IA');
   });
+  it('permite el símbolo WebP en portada sin cambiar el resto de marcas', () => {
+    const f = TestBed.createComponent(MarcaComponent);
+    f.componentRef.setInput('webp', true); f.detectChanges();
+    expect(f.nativeElement.querySelector('img').getAttribute('src')).toBe('/images/clinicai-simbolo.webp');
+    expect(f.nativeElement.querySelector('.marca').getAttribute('aria-label')).toContain('ClinicAI');
+    f.componentRef.setInput('webp', false); f.detectChanges();
+    expect(f.nativeElement.querySelector('img').getAttribute('src')).toBe('/images/clinicai-simbolo.svg');
+  });
 });

@@ -38,10 +38,10 @@ import { especialidadDelRol } from '../../nucleo/utilidades/especialidad-rol';
 
 /** Fotos de la portada: se funden una tras otra, cada una `SEGUNDOS_POR_FOTO`. */
 const FOTOS_PORTADA = [
-  '/images/acceso-equipo.png',
-  '/images/panel-seguimiento-clinicai.jpg',
-  '/images/acceso-clinica-recepcion.jpg',
-  '/images/panel-clinicai-dental-network-v1.jpg',
+  { nombre: 'acceso-equipo', ancho: 1881, alto: 836 },
+  { nombre: 'panel-seguimiento-clinicai', ancho: 1536, alto: 1024 },
+  { nombre: 'acceso-clinica-recepcion', ancho: 1672, alto: 941 },
+  { nombre: 'panel-clinicai-dental-network-v1', ancho: 1672, alto: 941 },
 ] as const;
 const SEGUNDOS_POR_FOTO = 7;
 /** Adelanto del fundido: la primera foto ya se ve completa al cargar. */
@@ -185,6 +185,11 @@ export class AccesoComponent implements OnInit {
     return rol.codigo === 'profesional' && this.especialidadLocal
       ? this.especialidadesLocales().find(e => e.id === this.especialidadLocal)?.nombre
       : rol.especialidad;
+  }
+
+  protected iconoRol(codigo: string): string {
+    const conocidos = ['recepcion', 'profesional', 'asistente', 'auditor', 'administradora', 'superadministrador'];
+    return `/images/acceso-icono-${conocidos.includes(codigo) ? codigo : 'seguridad'}.webp`;
   }
 
   /** Cada foto entra cuando sale la anterior; todas comparten el mismo ciclo. */
