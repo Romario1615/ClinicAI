@@ -455,9 +455,9 @@
               type="button"
               class="boton boton--principal"
               (click)="guardarPermisos()"
-              [disabled]="guardandoPermisos()"
+              [disabled]="guardandoPermisos() || cargandoPermisos() || !permisosModificados()"
             >
-              {{ guardandoPermisos() ? 'Guardando...' : 'Guardar accesos' }}
+              {{ guardandoPermisos() ? 'Guardando...' : 'Guardar cambios' }}
             </button>
           </footer>
         }

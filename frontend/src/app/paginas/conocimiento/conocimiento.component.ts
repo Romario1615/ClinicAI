@@ -37,7 +37,7 @@ import { FotosRegistroComponent } from '../../compartido/fotos-registro.componen
  * documento marcado se hace en `RevisionRiesgoComponent`, que muestra el texto
  * antes de dejar marcarlo como revisado.
  */
-import { Component, computed, inject, signal, ChangeDetectionStrategy } from '@angular/core';
+import { Component, computed, HostListener, inject, signal, ChangeDetectionStrategy } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { forkJoin } from 'rxjs';
 
@@ -212,6 +212,10 @@ export class ConocimientoComponent {
   /** Explicación del flujo en ventana, para pantallas sin alto para la tira. */
   protected readonly flujoAbierto = signal(false);
   protected readonly permisosDocumento = signal<readonly PermisoDocumento[]>([]);
+  private readonly permisosOriginales = signal<readonly PermisoDocumento[]>([]);
+  protected readonly permisosModificados = computed(
+    () => this.documentoPermisos() !== null && this.firmaPermisos(this.permisosDocumento()) !== this.firmaPermisos(this.permisosOriginales()),
+  );
   protected readonly opcionesPermisos = signal<OpcionesPermisosDocumento | null>(null);
   protected readonly cargandoPermisos = signal(false);
   protected readonly guardandoPermisos = signal(false);
@@ -358,11 +362,13 @@ export class ConocimientoComponent {
 
   protected gestionarPermisos(documento: Documento): void {
     if (this.documentoPermisos() === documento.id) {
-      this.documentoPermisos.set(null);
-      this.errorPermisos.set(null);
+      this.cerrarPermisos();
       return;
     }
+    if (this.permisosModificados() && !this.confirmarSalida()) return;
     this.documentoPermisos.set(documento.id);
+    this.permisosDocumento.set([]);
+    this.permisosOriginales.set([]);
     this.cargandoPermisos.set(true);
     this.errorPermisos.set(null);
     forkJoin({
@@ -372,6 +378,7 @@ export class ConocimientoComponent {
       next: ({ opciones, permisos }) => {
         this.opcionesPermisos.set(opciones);
         this.permisosDocumento.set([...permisos.permisos]);
+        this.permisosOriginales.set([...permisos.permisos]);
         this.cargandoPermisos.set(false);
         this.principalNuevo = '';
       },
@@ -384,9 +391,27 @@ export class ConocimientoComponent {
 
   /** Cierra la ventana de accesos; a mitad del guardado no, para no perder el resultado. */
   protected cerrarPermisos(): void {
-    if (this.guardandoPermisos()) return;
+    if (this.guardandoPermisos() || !this.confirmarSalida()) return;
     this.documentoPermisos.set(null);
     this.errorPermisos.set(null);
+  }
+
+  /** Confirmación que comparte el cierre de ventana y la salida de la ruta. */
+  confirmarSalida(): boolean {
+    return !this.permisosModificados() || globalThis.confirm('Hay cambios de acceso sin guardar. ¿Desea salir sin guardarlos?');
+  }
+
+  @HostListener('window:beforeunload', ['$event'])
+  protected avisarAntesDeCerrar(evento: BeforeUnloadEvent): void {
+    if (!this.permisosModificados()) return;
+    evento.preventDefault();
+    evento.returnValue = '';
+  }
+
+  private firmaPermisos(permisos: readonly PermisoDocumento[]): string {
+    return JSON.stringify([...permisos].sort((a, b) =>
+      `${a.principal_tipo}:${a.principal_id}`.localeCompare(`${b.principal_tipo}:${b.principal_id}`),
+    ));
   }
 
   protected opcionesTipo(tipo = this.tipoPrincipalNuevo) {
@@ -453,7 +478,7 @@ export class ConocimientoComponent {
 
   protected guardarPermisos(): void {
     const documentoId = this.documentoPermisos();
-    if (!documentoId || this.guardandoPermisos()) return;
+    if (!documentoId || this.guardandoPermisos() || !this.permisosModificados()) return;
     if (
       this.permisosDocumento().length === 0 &&
       !globalThis.confirm(
@@ -467,6 +492,7 @@ export class ConocimientoComponent {
     this.api.reemplazarPermisosDocumento(documentoId, this.permisosDocumento()).subscribe({
       next: (respuesta) => {
         this.permisosDocumento.set([...respuesta.permisos]);
+        this.permisosOriginales.set([...respuesta.permisos]);
         this.guardandoPermisos.set(false);
         // La ventana se cierra para que el aviso se vea: dentro del listado,
         // con el modal abierto, quedaba tapado.

@@ -21,6 +21,7 @@ import {
   guardiaSoloLocal,
   guardiaSegundoFactor,
 } from './nucleo/guardias/autenticacion.guard';
+import { confirmarSalidaConCambios } from './nucleo/guardias/cambios-sin-guardar.guard';
 import { PERMISOS } from './nucleo/servicios/configuracion';
 
 export const routes: Routes = [
@@ -137,6 +138,7 @@ export const routes: Routes = [
       guardiaSegundoFactor,
       guardiaPermiso(PERMISOS.conocimientoLeer),
     ],
+    canDeactivate: [confirmarSalidaConCambios],
     title: 'Conocimiento · ClinicAI',
     loadComponent: () =>
       import('./paginas/conocimiento/conocimiento.component').then((m) => m.ConocimientoComponent),

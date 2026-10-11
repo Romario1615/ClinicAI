@@ -342,6 +342,33 @@ describe('ConocimientoComponent', () => {
         expect(document.querySelector('dialog.capa')).toBeNull();
     });
 
+    it('avisa al cerrar cambios de acceso y permite conservar el borrador', () => {
+        TestBed.inject(SesionService).establecerIdentidad(identidadAprobadora());
+        const doc = documento('acl-borrador');
+        cargar([doc]);
+        fixture.componentInstance['gestionarPermisos'](doc);
+        http.expectOne(`${BASE}/conocimiento/permisos/opciones`).flush({ roles: [], usuarios: [], sedes: [], especialidades: [] });
+        const regla: PermisoDocumento = { principal_tipo: 'ROL', principal_id: 'rol-1', puede_leer: true, puede_usar_en_agente: false };
+        http.expectOne(`${BASE}/conocimiento/documentos/${doc.id}/permisos`).flush({ document_id: doc.id, permisos: [regla] });
+        fixture.detectChanges();
+        const guardar = Array.from((fixture.nativeElement as HTMLElement).querySelectorAll('button')).find((b) => b.textContent?.includes('Guardar cambios')) as HTMLButtonElement;
+        expect(guardar.disabled).toBe(true);
+
+        fixture.componentInstance['quitarPermiso'](regla);
+        fixture.detectChanges();
+        expect(guardar.disabled).toBe(false);
+        vi.spyOn(window, 'confirm').mockReturnValue(false);
+        fixture.componentInstance['cerrarPermisos']();
+        expect(fixture.componentInstance['documentoPermisos']()).toBe(doc.id);
+        expect(fixture.componentInstance['permisosModificados']()).toBe(true);
+        const evento = new Event('beforeunload', { cancelable: true }) as BeforeUnloadEvent;
+        fixture.componentInstance['avisarAntesDeCerrar'](evento);
+        expect(evento.defaultPrevented).toBe(true);
+        expect(fixture.componentInstance['confirmarSalida']()).toBe(false);
+        expect(fixture.componentInstance['permisosModificados']()).toBe(true);
+        http.expectNone(`${BASE}/conocimiento/documentos/${doc.id}/permisos`);
+    });
+
     it('filtrar por estado vuelve a pedir el listado con ese filtro', () => {
         cargar([documento('1')]);
 

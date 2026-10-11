@@ -8,6 +8,7 @@ import {
 import { provideRouter } from '@angular/router';
 
 import { routes } from './app.routes';
+import { confirmarSalidaConCambios } from './nucleo/guardias/cambios-sin-guardar.guard';
 import {
   guardiaAutenticacion,
   guardiaSegundoFactor,
@@ -159,6 +160,12 @@ describe('contrato de acceso de las rutas', () => {
       .map((candidata) => candidata.path ?? '')
       .filter((path) => !enMatriz.has(path) && !RUTAS_SIN_PERMISO_DE_MODULO.has(path));
     expect(sinCubrir).toEqual([]);
+  });
+
+  it('protege la salida de Conocimiento con su borrador de permisos', () => {
+    expect(ruta('/conocimiento').canDeactivate).toContain(confirmarSalidaConCambios);
+    expect(confirmarSalidaConCambios({ confirmarSalida: () => false } as never, RUTA, ESTADO, ESTADO)).toBe(false);
+    expect(confirmarSalidaConCambios({ confirmarSalida: () => true } as never, RUTA, ESTADO, ESTADO)).toBe(true);
   });
 
   it('la consola de plataforma queda reservada al superadministrador', () => {
