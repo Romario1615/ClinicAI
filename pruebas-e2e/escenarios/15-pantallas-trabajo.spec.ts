@@ -46,7 +46,8 @@ test('agenda y pacientes conservan sus acciones al desplazar el contenido en esc
     } else {
       await page.getByRole('button', { name: 'Alternar navegación', exact: true }).click();
     }
-    await irA(page, 'Pacientes');
+    await page.evaluate(() => document.querySelector<HTMLElement>('nav.navegacion a[href="/pacientes"]')?.click());
+    await page.waitForURL((url) => url.pathname === '/pacientes');
     if (dimensiones.width <= 600) {
       const fichas = page.locator('app-pacientes .pacientes__fichas');
       await expect(fichas).toBeVisible();
@@ -102,13 +103,15 @@ test('las pestañas clínicas cambian con flechas, Inicio y Fin y conservan su p
  * lo que no cabe desplaza dentro de su tarjeta (`.desplazable`). En móvil la
  * página puede desplazar en vertical, pero nunca en horizontal.
  */
-async function medirSecciones(page: Page): Promise<string[]> {
+async function medirSecciones(page: Page, soloEscritorio = false): Promise<string[]> {
   const rutas = await page.locator('nav.navegacion a[href^="/"]').evaluateAll((enlaces) =>
     [...new Set(enlaces.map((enlace) => enlace.getAttribute('href') ?? ''))].filter(Boolean),
   );
   expect(rutas.length).toBeGreaterThan(0);
   const fallos: string[] = [];
-  const tamanos = [
+  const tamanos = soloEscritorio ? [
+    { width: 1366, height: 768, escritorio: true },
+  ] : [
     { width: 1366, height: 768, escritorio: true },
     { width: 1024, height: 768, escritorio: true },
     { width: 390, height: 844, escritorio: false },
@@ -149,6 +152,21 @@ async function medirSecciones(page: Page): Promise<string[]> {
       if (medida.paginaX > 1) fallos.push(`${etiqueta}: desborda ${medida.paginaX} px en horizontal`);
       if (escritorio && medida.paginaY > 1) fallos.push(`${etiqueta}: la página desplaza ${medida.paginaY} px`);
       if (escritorio && medida.anfitrionY > 1) fallos.push(`${etiqueta}: la sección desplaza ${medida.anfitrionY} px`);
+      if (escritorio) {
+        const listasFueraDeTarjeta = await page.locator('ul, ol, table, [role="list"]').evaluateAll((listas) =>
+          listas.flatMap((lista) => {
+            if (!(lista instanceof HTMLElement) || lista.getClientRects().length === 0) return [];
+            const cantidad = lista.tagName === 'TABLE' ? lista.querySelectorAll('tr').length : lista.children.length;
+            if (cantidad <= 3) return [];
+            if (lista.closest('nav, .tarjeta, .desplazable')) return [];
+            // Los indicadores son mosaicos de tarjetas, aunque su contenedor
+            // use role=list para anunciarlos como colección.
+            if (lista.classList.contains('indicadores') && [...lista.children].every((hijo) => hijo.classList.contains('indicador'))) return [];
+            return [`${lista.tagName.toLowerCase()}${lista.className ? `.${String(lista.className).trim().replace(/\s+/g, '.')}` : ''}`];
+          }),
+        );
+        for (const lista of listasFueraDeTarjeta) fallos.push(`${etiqueta}: ${lista} queda fuera de tarjeta`);
+      }
     }
   }
   return fallos;
@@ -160,6 +178,15 @@ test('ninguna sección desplaza la página en escritorio ni desborda en móvil',
   await acceder(page, 'administradora');
   expect(await medirSecciones(page)).toEqual([]);
 });
+
+for (const rol of ['recepcion', 'profesional'] as const) {
+  test(`las secciones de ${rol} caben y sus listas usan tarjetas en escritorio`, async ({ page }) => {
+    test.setTimeout(240_000);
+    await page.setViewportSize({ width: 1366, height: 768 });
+    await acceder(page, rol);
+    expect(await medirSecciones(page, true)).toEqual([]);
+  });
+}
 
 test('la consola de plataforma cabe en escritorio y no desborda en móvil', async ({ page }) => {
   test.setTimeout(120_000);
