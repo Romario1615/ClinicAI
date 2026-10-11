@@ -158,7 +158,7 @@ describe('CalendarioAgendaComponent', () => {
     });
 
     it('dice que no hay citas', () => {
-        montar({ vista: 'dia', citas: [], proximoDiaConTurnos: '2026-10-06' });
+        montar({ vista: 'dia', citas: [], sinTurnos: true, proximoDiaConTurnos: '2026-10-06' });
         expect(c.vacio()).toBe(true);
         const elemento = fixture.nativeElement as HTMLElement;
         expect(elemento.textContent).toContain('Sin turnos de atención este día');
@@ -170,5 +170,25 @@ describe('CalendarioAgendaComponent', () => {
         c.diaElegido.subscribe((valor: string) => (fecha = valor));
         boton?.click();
         expect(fecha).toBe('2026-10-06');
+    });
+
+    it('dice que no hay citas cuando quedan turnos libres', () => {
+        montar({
+            vista: 'dia',
+            citas: [],
+            profesionalId: 'prof-1',
+            huecos: [{
+                tipo: 'hueco',
+                inicio: '2026-10-05T14:00:00Z',
+                fin: '2026-10-05T15:00:00Z',
+                turnos: [{}],
+            }],
+        });
+
+        const elemento = fixture.nativeElement as HTMLElement;
+        expect(c.vacio()).toBe(false);
+        expect(elemento.textContent).toContain('Sin citas este día');
+        expect(elemento.textContent).not.toContain('Sin turnos de atención');
+        expect(elemento.querySelector('.bloque')?.textContent).toContain('1 turno(s) para reservar');
     });
 });

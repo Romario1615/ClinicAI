@@ -284,10 +284,10 @@ interface Columna {
           </div>
         }
       </div>
-      @if (vacio()) {
+      @if (vacio() || sinCitasDia()) {
         <div class="vacio" role="status">
           @if (vista() === 'dia') {
-            <p>Sin turnos de atención este día.</p>
+            <p>{{ sinTurnos() ? 'Sin turnos de atención este día.' : 'Sin citas este día.' }}</p>
             @if (proximoDiaConTurnos()) {
               <button type="button" class="boton boton--pequeno" (click)="diaElegido.emit(proximoDiaConTurnos()!)">
                 Ir al próximo día con turnos: {{ etiquetaProximoDia() }}
@@ -551,6 +551,8 @@ export class CalendarioAgendaComponent {
   readonly citas = input<readonly Cita[]>([]);
   /** Tramos libres del profesional elegido, solo en la vista de día. */
   readonly huecos = input<readonly (FilaDia & { tipo: 'hueco' })[]>([]);
+  /** La disponibilidad se consultó y confirmó que no hay tramos libres. */
+  readonly sinTurnos = input(false);
   readonly proximoDiaConTurnos = input<string | null>(null);
   readonly profesionales = input<readonly Profesional[]>([]);
   readonly profesionalId = input('');
@@ -755,6 +757,9 @@ export class CalendarioAgendaComponent {
   });
 
   protected readonly vacio = computed(() => this.columnas().every((col) => col.bloques.length === 0));
+  protected readonly sinCitasDia = computed(() =>
+    this.vista() === 'dia' && !this.locales().some((item) => item.fecha === this.fecha()),
+  );
 
   /** Solo los estados que se ven en pantalla, en el orden de la leyenda completa. */
   protected readonly leyendaVisible = computed(() => {

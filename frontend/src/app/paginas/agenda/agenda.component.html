@@ -241,6 +241,7 @@
           [zona]="zona()"
           [citas]="citasCalendario()"
           [huecos]="huecosDia()"
+          [sinTurnos]="disponibilidad() !== null && huecosDia().length === 0"
           [proximoDiaConTurnos]="proximoDiaConTurnos()"
           [profesionales]="profesionales()"
           [profesionalId]="profesionalId()"
