@@ -211,13 +211,5 @@
   >
     <app-ficha-paciente [pacienteId]="elegido.id" [sinCabecera]="true" />
 
-    <!-- La accion va al pie de la ventana, no suelta entre el contenido. -->
-    @if (sesion.tienePermiso('paciente.editar')) {
-      <div class="acciones acciones--final" pie>
-        <button class="boton" type="button" (click)="editarPaciente(elegido)">
-          Editar ficha
-        </button>
-      </div>
-    }
   </app-ventana-flotante>
 }
