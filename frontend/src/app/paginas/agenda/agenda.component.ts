@@ -677,24 +677,21 @@ export class AgendaComponent {
         this.pacientes.set(datos.pacientes.elementos);
         this.incluirPacienteSugerido();
 
-        // Preselección con el primer valor de cada lista. Es lo que hace que
-        // la pantalla sea útil al abrirla en lugar de pedir cuatro clics
-        // antes de mostrar nada.
+        // La vista inicial enseña el equipo completo. Solo un profesional
+        // queda acotado a su propia agenda; servicio se elige al buscar huecos.
         const primeraSede = datos.sedes[0];
         if (primeraSede) {
           this.sedeId.set(primeraSede.id);
           this.fecha.set(hoyEnZona(primeraSede.zona_horaria));
         }
-        const primerServicio = datos.servicios[0];
-        if (primerServicio) {
-          this.servicioId.set(primerServicio.id);
-          this.especialidadId.set(primerServicio.especialidad_id);
-        }
-        const primerProfesional = datos.profesionales.find(
-          (profesional) => profesional.especialidad_id === primerServicio?.especialidad_id,
-        );
-        if (primerProfesional) {
-          this.profesionalId.set(primerProfesional.id);
+        const identidad = this.sesion.identidad();
+        const propio = identidad?.roles.includes('profesional') ? identidad.profesional_id : null;
+        if (propio) {
+          const profesional = datos.profesionales.find((item) => item.id === propio);
+          if (profesional) {
+            this.profesionalId.set(profesional.id);
+            this.especialidadId.set(profesional.especialidad_id);
+          }
         }
 
         this.cargandoCatalogo.set(false);

@@ -34,7 +34,8 @@ import type {
   Servicio,
   TurnoDisponible,
 } from '../../nucleo/modelos/dominio';
-import { BASE, PROVEEDORES_PRUEBA, iniciarSesionCon } from '../../nucleo/pruebas/sesion-sintetica';
+import { BASE, PROVEEDORES_PRUEBA, identidadCon, iniciarSesionCon } from '../../nucleo/pruebas/sesion-sintetica';
+import { SesionService } from '../../nucleo/servicios/sesion.service';
 
 const SEDE: Sede = { id: 'sede-1', nombre: 'Sede Norte [SINTETICO]', direccion: null, zona_horaria: 'America/Guayaquil' };
 const ESPECIALIDAD: Especialidad = { id: 'esp-1', nombre: 'Odontología' };
@@ -113,7 +114,12 @@ describe('AgendaComponent · reserva y series', { timeout: 20_000 }, () => {
   let http: HttpTestingController;
   let turnos: TurnoDisponible[] = [];
 
-  function montar(consulta: Record<string, string> = { paciente: PACIENTE.id }): void {
+  function montar(
+    consulta: Record<string, string> = { paciente: PACIENTE.id },
+    roles: readonly string[] = ['profesional'],
+    profesionalId: string | null = PROFESIONAL.id,
+    usarFiltrosReserva = true,
+  ): void {
     vi.spyOn(window, 'confirm').mockReturnValue(true);
     TestBed.configureTestingModule({
       imports: [AgendaComponent],
@@ -141,14 +147,43 @@ describe('AgendaComponent · reserva y series', { timeout: 20_000 }, () => {
       ],
     });
     iniciarSesionCon(['cita.crear', 'agenda.leer']);
+    TestBed.inject(SesionService).establecerIdentidad({
+      ...identidadCon(['cita.crear', 'agenda.leer']),
+      roles,
+      profesional_id: profesionalId,
+    });
     http = TestBed.inject(HttpTestingController);
     fixture = TestBed.createComponent(AgendaComponent);
+    if (usarFiltrosReserva) {
+      fixture.componentInstance['servicioId'].set(SERVICIO.id);
+      fixture.componentInstance['especialidadId'].set(SERVICIO.especialidad_id);
+      if (roles.includes('profesional')) fixture.componentInstance['profesionalId'].set(profesionalId ?? '');
+    }
     fixture.detectChanges();
     http
       .expectOne((p) => p.url === `${BASE}/pacientes/`)
       .flush({ elementos: [PACIENTE], total: 1, limite: 100, desplazamiento: 0, termino_ignorado: false });
-    responderDia();
+    if (fixture.componentInstance['servicioId']()) {
+      responderDia();
+    } else {
+      http
+        .expectOne((p) => p.method === 'GET' && p.url === `${BASE}/agenda/citas`)
+        .flush({ elementos: [], total: 0, limite: 200, desplazamiento: 0 });
+      fixture.detectChanges();
+    }
   }
+
+  it('abre el equipo completo para administración y la agenda propia para profesionales', () => {
+    montar({}, ['administrador_clinica'], null, false);
+    expect(fixture.componentInstance['servicioId']()).toBe('');
+    expect(fixture.componentInstance['especialidadId']()).toBe('');
+    expect(fixture.componentInstance['profesionalId']()).toBe('');
+    fixture.destroy();
+    TestBed.resetTestingModule();
+    montar({}, ['profesional'], PROFESIONAL.id, false);
+    expect(fixture.componentInstance['servicioId']()).toBe('');
+    expect(fixture.componentInstance['profesionalId']()).toBe(PROFESIONAL.id);
+  });
 
   /** Responde la carga del día: sin citas y con los turnos que toquen. */
   function responderDia(quitar: readonly string[] = []): void {

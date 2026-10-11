@@ -638,7 +638,10 @@ export class CalendarioAgendaComponent {
       if (tapada.length === 0) break;
       arriba = Math.max(0, Math.min(...tapada.map((b) => b.arriba)) - 1);
     }
-    return arriba;
+    // La cabecera pegada tapa la primera etiqueta cuando coincide con el
+    // borde superior del marco. Deja una hora adicional por encima para que
+    // la hora de interés (por ejemplo, 10:00) quede entera a la vista.
+    return Math.max(0, arriba - ALTO_HORA);
   }
 
   private readonly hoy = computed(() => hoyEnZona(this.zona()));
