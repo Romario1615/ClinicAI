@@ -1,5 +1,23 @@
 # Limitaciones conocidas y riesgos residuales
 
+## Revisión de solapamientos (2026-10-11)
+
+Se corrigen la separación del titular de acceso y el reparto de título/acciones
+en Conocimiento. La medición usa Chromium, fuentes locales y datos sintéticos;
+no equivale a probar toda combinación de contenido, zoom, permisos y dispositivos.
+Compara el contenido visible: las elipsis, el recorte de listas y la cabecera
+fija móvil al desplazar son deliberados. Excluye decoraciones SVG/canvas de la
+medición de texto; el gráfico de portada tiene una comprobación adicional.
+Un resultado sin cruces de rectángulos no certifica por sí solo calidad visual,
+legibilidad de cada glifo ni funcionamiento de todos los botones.
+
+La revisión incluye rutas de administración/plataforma, pestañas de siete
+módulos y once formularios flotantes. Las auditorías de roles y accesibilidad
+se documentan por separado. Otros motores, dispositivos físicos y contenido
+real autorizado requieren aceptación en staging.
+
+[Informe, comandos y capturas](verificacion-espacio-frontend-2026-10-11.md).
+
 ## Ayuda e imágenes interiores WebP (2026-10-11)
 
 Buscar, expandir y contraer operan sobre las tareas del manual autorizado.

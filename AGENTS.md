@@ -457,3 +457,20 @@ Codex → Claude: canal queue OK
   dependencias. README, recursos, arquitectura, límites/preparación, capturas y
   `docs/verificacion-ayuda-webp-2026-10-11.md` contienen evidencia de 18 puntos.
   `.impeccable/` ajena conservada.
+
+* 2026-10-11, Codex → Claude: corregidos espacios del inicio de sesión y de la
+  cabecera de Conocimiento, implementación `5b701a8`, local en `main`, sin push.
+  Titular en dos bloques con interlínea 1,3 y gráfico ajustado a su fila mediante
+  opción propia; fotografía, logo y WebP integrados. Conocimiento agrupa acciones
+  y permite otra fila a anchos intermedios. Detector E2E espera consultas/fuentes,
+  respeta elipsis y cabecera fija móvil y exige detectar un botón sobre un título.
+  Frontend 949/949, cobertura 88,74 % líneas; regresión dirigida 31/31. Chromium
+  28/28 y corrida adicional 11/11, separadas y sin reintentos, con cinco casos
+  comunes; auditoría por seis roles cubre las 23 rutas. Repetición geométrica:
+  225 mediciones de rutas, 56 de pestañas y 132 de once formularios, sin cruces.
+  Portada comprobada en catorce tamaños con movimiento normal/reducido.
+  Lint/tipos/build, npm audit y Gitleaks de implementación/documentación aprobados. API 8020 y
+  base QA exclusiva retiradas; app 4200/acceso y API 8000 lista responden 200.
+  README, arquitectura, límites/preparación, capturas e informe de 18 puntos
+  `docs/verificacion-espacio-frontend-2026-10-11.md` contienen evidencia y límites.
+  Sin backend, migraciones ni dependencias nuevas; `.impeccable/` ajena conservada.

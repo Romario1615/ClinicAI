@@ -1,5 +1,20 @@
 # Estado de preparación para producción
 
+## Separación de elementos en el frontend (2026-10-11)
+
+Desplegar el paquete frontend completo con sus recursos existentes. Comprobar
+portada, roles, teclado y estados de error a los tamaños y al zoom usados por
+la clínica. En Conocimiento revisar ambas acciones y su salto de fila; las listas
+siguen desplazando dentro de las tarjetas en escritorio. La opción de ajuste
+del gráfico se activa solo en la portada.
+
+Este bloque no necesita migraciones, claves, contratos de API ni dependencias
+nuevas. Restaurar el paquete frontend previo revierte la presentación; no requiere
+restauración de datos. La evidencia de Chromium no acredita aceptación de otros
+motores ni preparación global para producción.
+
+[Verificación y límites](verificacion-espacio-frontend-2026-10-11.md).
+
 ## Ayuda e ilustraciones interiores (2026-10-11)
 
 Desplegar el frontend completo junto con los quince nuevos WebP. Los iconos por

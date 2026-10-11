@@ -1,5 +1,30 @@
 # ClinicAI — Plataforma de gestión clínica
 
+## Separación de elementos en la portada y revisión del frontend (2026-10-11)
+
+El titular del inicio de sesión separa **Más tiempo para cuidar** y **IA para
+coordinar** en bloques con espacio propio. La ilustración se ajusta al alto de
+su fila. Se conservan la fotografía de fondo, el logo grande y los recursos WebP.
+En **Conocimiento**, el título y las acciones se distribuyen en filas cuando
+el ancho disponible no alcanza, evitando botones sobre el encabezado.
+
+La revisión comprueba textos y controles con los datos cargados, las pestañas
+de siete módulos y once formularios flotantes en varios tamaños. La portada
+se mide en catorce tamaños, con movimiento normal y reducido. La evidencia
+distingue esta revisión visual de la validación completa de las reglas de negocio.
+
+[Cambios, pruebas y límites](docs/verificacion-espacio-frontend-2026-10-11.md).
+[Portada de escritorio](docs/imagenes/portada-espacio-escritorio-2026-10-11.png).
+[Portada móvil](docs/imagenes/portada-espacio-movil-2026-10-11.png).
+
+Frontend completo **949/949**, cobertura de líneas **88,74 %**; regresión dirigida
+**31/31**. Chromium **28/28** y corrida adicional **11/11**, por separado y sin
+reintentos: seis auditorías por rol cubren las **23 rutas** y la revisión final
+registra **413 mediciones** de rutas, pestañas y formularios sin cruces visibles.
+Lint, tipos, build, auditorías npm y Gitleaks de implementación aprobados.
+Implementación `5b701a8`, local en `main`, sin push.
+Entorno QA retirado; acceso 4200 y API 8000 lista responden 200.
+
 ## Ayuda más cómoda e imágenes interiores WebP (2026-10-11)
 
 En **Ayuda** puede buscar una tarea, **Expandir todas**, **Contraer todas** y

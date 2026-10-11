@@ -1,5 +1,24 @@
 # Arquitectura
 
+## Espacio en portada y cabeceras (2026-10-11)
+
+`AccesoComponent` usa dos bloques de texto para su titular, con interlínea y
+separación explícitas. `GraficoRedComponent.ajustada` es opcional y permite que
+el SVG tome el alto asignado por la fila de portada; su `viewBox` conserva la
+proporción. El valor predeterminado mantiene el tamaño natural en otros usos.
+La cabecera de Conocimiento agrupa acciones, reserva ancho al título y permite
+el salto de fila, siguiendo el patrón pantalla de trabajo.
+
+El auxiliar E2E `apoyo/espacio.ts` espera las consultas de la ruta y las fuentes
+antes de medir. Compara rectángulos de textos y controles visibles, respetando
+recortes de desplazamiento, elipsis, cabecera móvil fija y diálogo activo.
+Una prueba sintética exige detectar una acción encima de un título y descartar
+una elipsis legítima. El escenario 38 mide también el SVG de portada frente a
+mensaje, tarjeta del agente y tarjetas inferiores, con movimiento normal/reducido.
+Es una comprobación geométrica complementaria de Axe y de las medidas de página.
+
+[Evidencia y alcance](verificacion-espacio-frontend-2026-10-11.md).
+
 ## Lectura de manuales e imágenes interiores (2026-10-11)
 
 `AyudaComponent` mantiene la respuesta autorizada de `/ayuda/manuales`: cada
