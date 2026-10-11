@@ -1,5 +1,18 @@
 # Estado de preparación para producción
 
+## Ayuda e ilustraciones interiores (2026-10-11)
+
+Desplegar el frontend completo junto con los quince nuevos WebP. Los iconos por
+rol reutilizan recursos existentes. No requiere cambios de API, base, permisos,
+claves ni dependencias. Staging debe comprobar manuales con los roles/permisos
+realmente asignados, búsqueda, vacío, controles masivos, enlaces, teclado,
+desplazamiento interno y calidad de las ilustraciones en los dispositivos objetivo.
+Restaurar el paquete frontend anterior revierte presentación y controles;
+no requiere restaurar datos. El bloque no acredita preparación global del producto.
+
+[Recursos](recursos-visuales.md).
+[Verificación](verificacion-ayuda-webp-2026-10-11.md).
+
 ## Portada WebP (2026-10-11)
 
 Desplegar el frontend completo con sus 19 imágenes WebP. No requiere cambios

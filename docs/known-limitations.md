@@ -1,5 +1,23 @@
 # Limitaciones conocidas y riesgos residuales
 
+## Ayuda e imágenes interiores WebP (2026-10-11)
+
+Buscar, expandir y contraer operan sobre las tareas del manual autorizado.
+La búsqueda normaliza tildes y mayúsculas, sin sinónimos; no consulta historias
+clínicas. Aperturas y filtro no se persisten entre sesiones ni al cambiar de
+manual. En escritorio desplazan las columnas; en móvil se permite desplazamiento
+vertical de página. Cada rol conserva su documentación propia del servidor.
+
+Las quince ilustraciones decorativas usan compresión con pérdida y tamaños
+limitados; sus originales permanecen disponibles. La reducción medida compara
+bytes de estos archivos, sin acreditar tiempos de carga ni eficacia de IA.
+La aceptación automática utiliza Chromium y datos sintéticos; lectores de
+pantalla físicos, otros motores y dispositivos requieren revisión en staging.
+El contrato visual de varios manuales se prueba con una respuesta sintética;
+los seis roles base se consultan también en la API real de QA.
+
+[Informe y alcance](verificacion-ayuda-webp-2026-10-11.md).
+
 ## Inicio de sesión y WebP (2026-10-11)
 
 La portada conserva fotografías e identidad existentes y añade exportaciones

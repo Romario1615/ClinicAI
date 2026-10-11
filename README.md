@@ -1,5 +1,30 @@
 # ClinicAI — Plataforma de gestión clínica
 
+## Ayuda más cómoda e imágenes interiores WebP (2026-10-11)
+
+En **Ayuda** puede buscar una tarea, **Expandir todas**, **Contraer todas** y
+**Limpiar búsqueda**. Las coincidencias se abren para leer sus pasos; el contador
+indica cuántas tareas aparecen. Cada rol conserva su manual independiente y
+sus enlaces autorizados. Los controles, textos e insignias disponen de más espacio.
+
+Se integran **15 WebP** en cabeceras y estados vacíos de los módulos: **94,1 %
+menos bytes** por compresión y reducción de tamaño, con originales conservados.
+Ayuda identifica el rol con los iconos WebP del acceso. El aviso NG0956 al cambiar
+manuales queda corregido.
+
+[Recursos y regeneración](docs/recursos-visuales.md).
+[Pruebas y alcance](docs/verificacion-ayuda-webp-2026-10-11.md).
+[Escritorio](docs/imagenes/ayuda-webp-escritorio-2026-10-11.png).
+[Móvil](docs/imagenes/ayuda-webp-movil-2026-10-11.png).
+
+Frontend completo **944/944**, cobertura de líneas **88,74 %**; regresión dirigida
+**30/30**. Chromium **28/28** sin reintentos: Ayuda por seis roles, sus controles,
+teclado, seis tamaños, portada, categorías y distribución de todas las secciones.
+Auditoría adicional por seis roles **6/6**, en otra corrida, cubriendo en conjunto
+las 23 rutas del menú. Lint, tipos, build, auditorías npm y Gitleaks aprobados.
+Implementación `a0e1b8c`, local en `main`, sin push. Entorno de QA retirado;
+app 4200/API 8000 responden 200. Sin cambios backend, migraciones ni dependencias nuevas.
+
 ## Inicio de sesión renovado y recursos WebP (2026-10-11)
 
 La portada conserva la fotografía original del equipo y destaca el nombre

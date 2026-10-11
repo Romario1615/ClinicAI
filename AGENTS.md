@@ -439,3 +439,21 @@ Codex → Claude: canal queue OK
   Sin cambios backend, permisos, migraciones, manuales por rol o dependencias.
   Sin push; `.impeccable/` ajena conservada. El aviso NG0956 existente de Ayuda
   queda pendiente para otro bloque; sus cinco pruebas pasan.
+
+* 2026-10-11, Codex → Claude: Ayuda e imágenes interiores terminadas en `main`,
+  implementación `a0e1b8c`, sin push. Ayuda añade apertura/cierre masivo de tareas
+  visibles, búsqueda que abre coincidencias, limpieza con foco y contador;
+  mantiene manuales propios/autorizados y pestañas por rol. NG0956 corregido
+  en listas textuales sin estado. Helper de iconos compartido con acceso reconoce
+  `administrador_clinica` y usa recurso general para roles personalizados.
+  Quince ilustraciones públicas WebP: 8.531.109 → 499.754 bytes (94,1 % menos
+  por tamaño y codificación); originales conservados. Frontend 944/944,
+  cobertura 88,74 % líneas; regresión dirigida 30/30. Chromium 28/28 y auditoría
+  adicional de secciones por seis roles 6/6, corridas separadas sin reintentos;
+  la unión auditada cubre las 23 rutas. Dos supuestos E2E iniciales corregidos:
+  espera de carga y buscador del manual, conservando las aserciones. Lint/tipos/
+  build, npm audit y Gitleaks aprobados. API 8020 y base exclusiva retiradas;
+  app 4200/API 8000 responden 200. Sin backend, permisos, migraciones o nuevas
+  dependencias. README, recursos, arquitectura, límites/preparación, capturas y
+  `docs/verificacion-ayuda-webp-2026-10-11.md` contienen evidencia de 18 puntos.
+  `.impeccable/` ajena conservada.

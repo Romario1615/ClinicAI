@@ -1,5 +1,24 @@
 # Arquitectura
 
+## Lectura de manuales e imágenes interiores (2026-10-11)
+
+`AyudaComponent` mantiene la respuesta autorizada de `/ayuda/manuales`: cada
+rol conserva su manual y sus tareas. El filtro y las claves de tareas abiertas
+viven en señales locales; buscar abre las coincidencias y el control masivo
+afecta solo a las visibles. Cambiar de manual limpia el filtro y abre su primera
+tarea; los eventos pendientes de otro manual se descartan. Las listas de texto
+sin estado se siguen por posición, evitando NG0956 al sustituir un límite.
+
+`rutaIconoRol` comparte entre acceso y Ayuda una lista cerrada de recursos WebP;
+`administrador_clinica` usa el icono de administración y los roles personalizados
+usan el de seguridad. No construye rutas arbitrarias desde códigos del servidor.
+Quince ilustraciones interiores se exportan desde originales públicos mediante
+Chromium local. Las plantillas usan los derivados WebP; no se transforman fotos
+clínicas, imágenes anatómicas ni recursos de instalación de la aplicación.
+
+[Recursos y regeneración](recursos-visuales.md).
+[Evidencia del bloque](verificacion-ayuda-webp-2026-10-11.md).
+
 ## Presentación del acceso y WebP (2026-10-11)
 
 `AccesoComponent` mantiene el contrato de autenticación existente y entrega a

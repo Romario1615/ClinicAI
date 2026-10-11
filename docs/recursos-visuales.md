@@ -1,5 +1,43 @@
 # Recursos visuales
 
+## Ilustraciones interiores en WebP (2026-10-11)
+
+Quince imágenes decorativas ya existentes pasan a WebP en las pantallas y estados
+vacíos. Se conservan sus originales PNG/JPG; no se modifican fotografías clínicas,
+mapas anatómicos ni SVG. La exportación limita el ancho sin ampliar la fuente y
+preserva su proporción y transparencia. Calidad de codificación: 0,88.
+
+| Archivos `.webp` en `frontend/public/images/` | Tamaño máximo de ancho | Uso |
+|---|---:|---|
+| `notificaciones-vacias` | 320 px | Campana sin pendientes |
+| `agenda-turnos`, `busqueda-pacientes` | 640 px | Agenda, acceso de emergencia y pacientes |
+| `pagos-administrativos`, `catalogo-clinica`, `medicacion-seguimiento`, `lista-espera`, `bandeja-sin-pendientes` | 480 px | Estados vacíos de sus módulos |
+| `integraciones-clinicai-banner` | 1200 px | Integraciones |
+| `campanas-pacientes`, `equipo-clinica-colaboracion`, `sedes-red-clinicas`, `usuarios-roles-acceso`, `conocimiento-evidencia`, `historia-clinica-integral` | 1400 px | Cabeceras de módulos |
+
+Total original **8.531.109 bytes**; derivados **499.754 bytes**, **94,1 % menos**,
+por compresión y reducción de tamaño. No es una medición del tiempo de carga.
+Se suman a los 19 WebP del acceso: **34 recursos WebP** en este bloque acumulado.
+
+Ayuda reutiliza los pictogramas transparentes del acceso para identificar cada
+rol. El código `administrador_clinica` corresponde a `acceso-icono-administradora`;
+un rol personalizado recibe `acceso-icono-seguridad`. El texto del rol continúa
+siendo la información accesible, sin depender del icono.
+
+### Regenerar los recursos interiores
+
+```powershell
+$env:PLAYWRIGHT_BROWSERS_PATH='D:/playwright-browsers'
+node infra/scripts/exportar-interfaz-webp.mjs
+```
+
+Requiere las dependencias existentes de `pruebas-e2e` y Chromium. Escribe solo
+los quince nombres indicados y verifica RIFF/WEBP; no usa APIs externas.
+Los apartados históricos de este documento describen la generación original
+en PNG/JPG; las plantillas actuales de esos quince recursos consumen WebP.
+
+[Verificación y alcance](verificacion-ayuda-webp-2026-10-11.md).
+
 ## Portada y acceso en WebP (2026-10-11)
 
 El inicio conserva la fotografía original del equipo, ahora como
