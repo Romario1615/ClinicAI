@@ -12,6 +12,7 @@ describe('AnamnesisConfiguracionComponent', () => {
     let http: HttpTestingController;
 
     beforeEach(() => {
+        vi.spyOn(window, 'confirm').mockReturnValue(true);
         TestBed.configureTestingModule({
             imports: [AnamnesisConfiguracionComponent],
             providers: [

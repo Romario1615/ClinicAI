@@ -617,22 +617,22 @@
 
         <div class="panel__acciones">
           @if (accionesDe(cita).confirmar) {
-            <button type="button" class="boton boton--principal" (click)="confirmarCita(cita)">
-              Confirmar
+            <button type="button" class="boton boton--principal" [disabled]="procesandoAccionCita()" (click)="confirmarCita(cita)">
+              Confirmar cita
             </button>
           }
           @if (accionesDe(cita).registrarLlegada) {
-            <button type="button" class="boton boton--principal" (click)="registrarLlegada(cita)">
+            <button type="button" class="boton boton--principal" [disabled]="procesandoAccionCita()" (click)="registrarLlegada(cita)">
               Registrar llegada
             </button>
           }
           @if (accionesDe(cita).iniciarAtencion) {
-            <button type="button" class="boton boton--principal" (click)="iniciarAtencion(cita)">
+            <button type="button" class="boton boton--principal" [disabled]="procesandoAccionCita()" (click)="iniciarAtencion(cita)">
               Iniciar atención
             </button>
           }
           @if (accionesDe(cita).completar) {
-            <button type="button" class="boton boton--principal" (click)="completarCita(cita)">
+            <button type="button" class="boton boton--principal" [disabled]="procesandoAccionCita()" (click)="completarCita(cita)">
               Marcar como atendida
             </button>
           }
@@ -650,8 +650,8 @@
                 </button>
               }
               @if (accionesDe(cita).inasistencia) {
-                <button type="button" class="boton" (click)="marcarInasistencia(cita)">
-                  No asistió
+                <button type="button" class="boton" [disabled]="procesandoAccionCita()" (click)="marcarInasistencia(cita)">
+                  Registrar inasistencia
                 </button>
               }
             </div>
@@ -660,7 +660,7 @@
             <!-- Lo irreversible va separado y abajo: no se pulsa por inercia. -->
             <div class="detalle-cita__cancelar">
               <button type="button" class="boton boton--peligro" (click)="pedirCancelacion(cita)">
-                Cancelar la cita
+                Solicitar cancelación
               </button>
               <p class="campo__ayuda">
                 Se le pedirá un motivo: es lo que permite explicar después por qué no se
@@ -931,10 +931,10 @@
         <button
           type="button"
           class="boton boton--peligro"
-          [disabled]="motivoCancelacion.trim().length < 3"
+          [disabled]="cancelandoCita() || motivoCancelacion.trim().length < 3"
           (click)="confirmarCancelacion()"
         >
-          Cancelar la cita
+          {{ cancelandoCita() ? 'Cancelando…' : 'Confirmar cancelación' }}
         </button>
       </div>
     </app-ventana-flotante>

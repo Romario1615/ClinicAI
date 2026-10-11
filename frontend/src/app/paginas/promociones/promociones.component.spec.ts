@@ -67,6 +67,7 @@ describe('PromocionesComponent', () => {
     }
 
     beforeEach(() => {
+        vi.spyOn(window, 'confirm').mockReturnValue(true);
         TestBed.configureTestingModule({ imports: [PromocionesComponent], providers: PROVEEDORES_PRUEBA });
         http = TestBed.inject(HttpTestingController);
     });

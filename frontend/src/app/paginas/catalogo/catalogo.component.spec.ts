@@ -85,6 +85,7 @@ describe('CatalogoComponent', () => {
     });
 
     beforeEach(() => {
+        vi.spyOn(window, 'confirm').mockReturnValue(true);
         catalogo = {
             sedes: vi.fn().mockName("CatalogoService.sedes"),
             especialidades: vi.fn().mockName("CatalogoService.especialidades"),

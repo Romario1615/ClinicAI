@@ -167,13 +167,13 @@ test('recepción anota, ofrece y resuelve un turno de la lista de espera', async
     const nombreCita = `${agenda.paciente.nombre} ${agenda.paciente.apellido}`;
     await seleccionarCitaEnAgenda(page, nombreCita);
     const panel = page.getByRole('dialog', { name: nombreCita, exact: true });
-    await panel.getByRole('button', { name: 'Cancelar la cita' }).click();
+    await panel.getByRole('button', { name: 'Solicitar cancelación' }).click();
     await page.getByLabel('Motivo de la cancelación').fill('Turno liberado para lista de espera sintetica');
     const cancelacion = page.waitForResponse(
       (respuesta) => respuesta.url().includes(`/agenda/citas/${cita.id}/cancelacion`) &&
         respuesta.request().method() === 'POST',
     );
-    await page.getByRole('button', { name: 'Cancelar la cita', exact: true }).last().click();
+    await page.getByRole('button', { name: 'Confirmar cancelación', exact: true }).click();
     expect((await cancelacion).status()).toBe(200);
     await expect(page.getByRole('status').filter({ hasText: 'Cita cancelada' })).toBeVisible();
 

@@ -35,6 +35,7 @@ describe('DelegacionesComponent', () => {
     });
 
     beforeEach(() => {
+        vi.spyOn(window, 'confirm').mockReturnValue(true);
         TestBed.configureTestingModule({ imports: [DelegacionesComponent], providers: PROVEEDORES_PRUEBA });
         http = TestBed.inject(HttpTestingController);
         fixture = TestBed.createComponent(DelegacionesComponent);

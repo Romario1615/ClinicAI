@@ -114,6 +114,7 @@ describe('AgendaComponent · reserva y series', { timeout: 20_000 }, () => {
   let turnos: TurnoDisponible[] = [];
 
   function montar(consulta: Record<string, string> = { paciente: PACIENTE.id }): void {
+    vi.spyOn(window, 'confirm').mockReturnValue(true);
     TestBed.configureTestingModule({
       imports: [AgendaComponent],
       providers: [

@@ -40,7 +40,7 @@ import { NgTemplateOutlet } from '@angular/common';
 import { ActivatedRoute } from '@angular/router';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormsModule } from '@angular/forms';
-import { Subject, catchError, forkJoin, map, of, switchMap, type Observable } from 'rxjs';
+import { Subject, catchError, finalize, forkJoin, map, of, switchMap, type Observable } from 'rxjs';
 
 import {
   CargandoComponent,
@@ -320,6 +320,8 @@ export class AgendaComponent {
    */
   private claveIdempotencia = '';
   protected readonly reservando = signal(false);
+  protected readonly procesandoAccionCita = signal(false);
+  protected readonly cancelandoCita = signal(false);
   protected readonly errorReserva = signal<FalloApi | null>(null);
   protected readonly mensajeExito = signal('');
 
@@ -1362,7 +1364,9 @@ export class AgendaComponent {
       return;
     }
 
-    this.api.cancelarCita(cita.id, motivo).subscribe({
+    if (this.cancelandoCita()) return;
+    this.cancelandoCita.set(true);
+    this.api.cancelarCita(cita.id, motivo).pipe(finalize(() => this.cancelandoCita.set(false))).subscribe({
       next: () => {
         this.descartarCancelacion();
         this.mensajeExito.set('Cita cancelada.');
@@ -1392,10 +1396,12 @@ export class AgendaComponent {
   }
 
   protected completarCita(cita: Cita): void {
+    if (!window.confirm(`¿Marcar como atendida la cita de ${this.nombrePaciente(cita.paciente_id)}? Esta acción cerrará su atención.`)) return;
     this.ejecutar(() => this.api.completarCita(cita.id), 'Cita marcada como atendida.');
   }
 
   protected marcarInasistencia(cita: Cita): void {
+    if (!window.confirm(`¿Registrar que ${this.nombrePaciente(cita.paciente_id)} no asistió? La inasistencia quedará en su historial de citas.`)) return;
     this.ejecutar(
       () => this.api.marcarInasistencia(cita.id),
       'Registrada la inasistencia del paciente.',
@@ -1417,8 +1423,10 @@ export class AgendaComponent {
   }
 
   private ejecutar(accion: () => ReturnType<ApiService['confirmarCita']>, exito: string): void {
+    if (this.procesandoAccionCita()) return;
+    this.procesandoAccionCita.set(true);
     this.errorAgenda.set(null);
-    accion().subscribe({
+    accion().pipe(finalize(() => this.procesandoAccionCita.set(false))).subscribe({
       next: () => {
         this.mensajeExito.set(exito);
         this.cargarAgenda();

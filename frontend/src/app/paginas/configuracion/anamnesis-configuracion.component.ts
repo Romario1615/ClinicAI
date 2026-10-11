@@ -273,6 +273,7 @@ export class AnamnesisConfiguracionComponent implements OnInit {
     if (this.guardando()) return;
     const id = this.idEditando();
     if (!id) return;
+    if (!window.confirm('Publicar esta versión la dejará disponible para nuevas capturas de anamnesis. ¿Continuar?')) return;
     this.guardando.set(true);
     this.error.set('');
     this.operaciones.analizar<PlantillaAnamnesis>(`/historia/anamnesis/plantillas/${id}/publicacion`).subscribe({

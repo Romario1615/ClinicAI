@@ -270,6 +270,8 @@ export class CatalogoComponent {
 
   protected cambiarEstado(sala: Consultorio): void {
     if (this.guardando()) return;
+    const accion = sala.activo ? 'desactivar' : 'activar';
+    if (!window.confirm(`¿${accion === 'desactivar' ? 'Desactivar' : 'Activar'} el consultorio «${sala.nombre}»? ${sala.activo ? 'Dejará de estar disponible para nuevas citas.' : 'Volverá a estar disponible para nuevas citas.'}`)) return;
     this.guardando.set(true);
     this.error.set(''); this.mensaje.set('');
     this.catalogo.cambiarEstadoConsultorio(sala.id, !sala.activo).subscribe({
@@ -329,6 +331,7 @@ export class CatalogoComponent {
 
   protected cambiarEstadoEspecialidad(item: Especialidad): void {
     if (this.guardando()) return;
+    if (!window.confirm(`¿${item.activa ? 'Desactivar' : 'Activar'} la especialidad «${item.nombre}»? ${item.activa ? 'Sus servicios dejarán de ofrecerse para nuevas citas.' : 'Volverá a estar disponible en el catálogo.'}`)) return;
     this.guardando.set(true);
     this.error.set(''); this.mensaje.set('');
     this.catalogo.cambiarEstadoEspecialidad(item.id, !item.activa).subscribe({
@@ -391,6 +394,7 @@ export class CatalogoComponent {
 
   protected cambiarEstadoServicio(item: ServicioGestion): void {
     if (this.guardando()) return;
+    if (!window.confirm(`¿${item.activo ? 'Desactivar' : 'Activar'} el servicio «${item.nombre}»? ${item.activo ? 'Dejará de ofrecerse para nuevas citas.' : 'Volverá a estar disponible en el catálogo.'}`)) return;
     this.guardando.set(true);
     this.error.set(''); this.mensaje.set('');
     this.catalogo.cambiarEstadoServicio(item.id, !item.activo).subscribe({

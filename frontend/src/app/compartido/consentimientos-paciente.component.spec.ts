@@ -36,6 +36,7 @@ describe('ConsentimientosPacienteComponent', () => {
     }
 
     beforeEach(() => {
+        vi.spyOn(window, 'confirm').mockReturnValue(true);
         TestBed.configureTestingModule({
             imports: [ConsentimientosPacienteComponent],
             providers: PROVEEDORES_PRUEBA,

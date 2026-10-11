@@ -144,6 +144,7 @@ export class ConsentimientosPacienteComponent {
   }
 
   protected revocar(tipo: string): void {
+    if (!window.confirm('Registrar la baja detendrá el uso futuro de este consentimiento. El historial de aceptación se conservará. ¿Continuar?')) return;
     this.ocupado.set(true);
     this.api.revocarConsentimiento(this.pacienteId(), tipo).subscribe({
       next: (estado) => this.terminar(estado),

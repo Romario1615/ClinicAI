@@ -350,10 +350,10 @@ test('la agenda permite reprogramar y cancelar una cita', async ({ page, request
     // a elegir la fila evita cancelar otra cita del mismo paciente.
     await page.getByLabel('Fecha', { exact: true }).fill(fecha(cambiada.inicio));
     await seleccionarCitaEnAgenda(page, nombre);
-    await panel.getByRole('button', { name: 'Cancelar la cita' }).click();
+    await panel.getByRole('button', { name: 'Solicitar cancelación' }).click();
     const confirmacion = page.getByRole('dialog');
     await confirmacion.getByLabel('Motivo de la cancelación').fill('Cierre de prueba sintetica E2E');
-    await confirmacion.getByRole('button', { name: 'Cancelar la cita' }).click();
+    await confirmacion.getByRole('button', { name: 'Confirmar cancelación' }).click();
     await expect(page.getByRole('status').filter({ hasText: 'Cita cancelada' })).toBeVisible();
     expect((await datos.leer(`/agenda/citas/${cita.id}`)).estado).toBe('CANCELLED');
   } finally {
@@ -443,6 +443,7 @@ test('recepción registra la llegada y asistencia clínica mide la espera y cier
 
     // La agenda cierra el panel al recargar después de guardar una transición.
     await seleccionarCitaEnAgenda(page, nombre);
+    page.once('dialog', dialog => dialog.accept());
     await panel.getByRole('button', { name: 'Marcar como atendida' }).click();
     await expect(page.getByRole('status').filter({ hasText: 'Cita marcada como atendida' })).toBeVisible();
     const completada = await datos.leer(`/agenda/citas/${cita.id}`);

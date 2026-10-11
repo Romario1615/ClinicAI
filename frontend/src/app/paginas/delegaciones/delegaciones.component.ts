@@ -252,6 +252,7 @@ export class DelegacionesComponent {
   }
 
   protected revocar(delegacion: DelegacionFirma): void {
+    if (!window.confirm('Revocar esta delegación impedirá que la otra persona firme en su nombre desde ahora. ¿Continuar?')) return;
     this.api.revocarDelegacion(delegacion.id).subscribe({
       next: (actualizada) => {
         this.delegaciones.update((lista) => lista.map((d) => (d.id === actualizada.id ? actualizada : d)));

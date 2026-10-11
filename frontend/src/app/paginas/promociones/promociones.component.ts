@@ -250,6 +250,10 @@ export class PromocionesComponent {
     const campana = this.seleccionada();
     if (!campana) return;
     const programada = this.programadaPara ? new Date(this.programadaPara).toISOString() : null;
+    const confirmacion = programada
+      ? `¿Programar el envío de «${campana.nombre}»? Se encolarán mensajes para las personas con consentimiento vigente.`
+      : `¿Enviar ahora «${campana.nombre}»? Se encolarán mensajes para las personas con consentimiento vigente.`;
+    if (!window.confirm(confirmacion)) return;
     this.ejecutar(this.api.enviarCampana(campana.id, programada), (actualizada) =>
       `${actualizada.encolados} mensaje(s) en cola de envío` +
       (actualizada.omitidos ? `; ${actualizada.omitidos} omitido(s) por consentimiento.` : '.'),
