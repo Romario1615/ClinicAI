@@ -11,6 +11,19 @@ import { MovimientoService } from '../nucleo/movimiento/movimiento.service';
 import { GraficoRedComponent } from './grafico-red.component';
 
 describe('GraficoRedComponent', () => {
+  it('el ajuste al contenedor es opcional y conserva el viewBox', () => {
+    const fixture = TestBed.createComponent(GraficoRedComponent);
+    fixture.detectChanges();
+    const anfitrion: HTMLElement = fixture.nativeElement;
+    expect(anfitrion.classList.contains('ajustada')).toBe(false);
+    fixture.componentRef.setInput('ajustada', true);
+    fixture.detectChanges();
+    expect(anfitrion.classList.contains('ajustada')).toBe(true);
+    expect(anfitrion.querySelector('svg')?.getAttribute('viewBox')).toBe('0 0 400 300');
+    fixture.componentRef.setInput('ajustada', false);
+    fixture.detectChanges();
+    expect(anfitrion.classList.contains('ajustada')).toBe(false);
+  });
   it('se pinta completo, oculto a los lectores de pantalla, sin animar', async () => {
     const fixture = TestBed.createComponent(GraficoRedComponent);
     fixture.detectChanges();

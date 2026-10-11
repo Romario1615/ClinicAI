@@ -12,11 +12,11 @@
 .acceso__mensaje { position:relative; max-width:38rem; }
 .acceso__ceja { display:flex; align-items:center; gap:.55rem; margin:0 0 1rem; font-size:.67rem; font-weight:750; letter-spacing:.1em; color:#b9eff8; }
 .acceso__destello { width:8px; height:8px; border-radius:50%; background:#86e2e1; box-shadow:0 0 0 5px rgb(134 226 225 / 13%); }
-.acceso__titular { margin:0; color:#fff; font-size:clamp(2.6rem,4vw,4.5rem); font-weight:750; line-height:1.12; letter-spacing:-.055em; }
-.acceso__titular > span { color:#a7f0e9; }
+.acceso__titular { display:grid; gap:.25em; margin:0; color:#fff; font-size:clamp(2.6rem,4vw,4.5rem); font-weight:750; line-height:1.3; letter-spacing:-.045em; }
+.acceso__titular-ia { color:#a7f0e9; }
 .acceso__descripcion { max-width:31rem; margin:1rem 0 0; color:#e1f1f3; font-size:.94rem; line-height:1.75; }
 .acceso__ecosistema { position:relative; display:flex; align-items:center; flex:1 1 0; min-height:0; gap:1rem; }
-.acceso__grafico { flex:0 1 45%; width:45%; max-width:260px; max-height:100%; }
+.acceso__grafico { flex:0 1 45%; align-self:stretch; width:45%; max-width:260px; min-width:0; min-height:0; }
 .acceso__agente { display:flex; align-items:center; gap:.85rem; flex:1; padding:1rem; border:1px solid rgb(185 239 248 / 23%); border-radius:18px; background:rgb(8 37 46 / 80%); box-shadow:0 12px 32px rgb(0 0 0 / 12%); }
 .acceso__agente img { flex:0 0 40px; width:40px; height:40px; padding:7px; border-radius:12px; background:#ddf7f6; }
 .acceso__agente strong { display:block; font-size:.8rem; line-height:1.6; }
@@ -92,7 +92,6 @@ code { font-family:var(--fuente-mono); }
   .acceso__logo { --marca-tamano-simbolo:48px; --marca-tamano-nombre:2.5rem; }
   .acceso__titular { font-size:1.7rem; letter-spacing:-.045em; }
   .acceso__titular br { display:none; }
-  .acceso__titular > span { display:block; }
   .acceso__mensaje .acceso__ceja,.acceso__ecosistema,.acceso__pie-marca,.acceso__descripcion { display:none; }
   .acceso__formulario { padding:1rem 1.25rem; }
   .acceso__bienvenida { display:none; }

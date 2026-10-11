@@ -18,12 +18,15 @@
 
     <div class="acceso__mensaje">
       <p class="acceso__ceja"><span class="acceso__destello" aria-hidden="true"></span> TU EQUIPO. TU CLÍNICA. TU AGENTE.</p>
-      <p class="acceso__titular">Más tiempo <br />para cuidar.<br /> <span>IA para coordinar.</span></p>
+      <p class="acceso__titular">
+        <span class="acceso__titular-principal">Más tiempo <br />para cuidar.</span>
+        <span class="acceso__titular-ia">IA para coordinar.</span>
+      </p>
       <p class="acceso__descripcion">Un agente para coordinar citas, atender mensajes y consultar el conocimiento aprobado de tu clínica.</p>
     </div>
 
     <div class="acceso__ecosistema">
-      <app-grafico-red class="acceso__grafico" tono="oscuro" />
+      <app-grafico-red class="acceso__grafico" tono="oscuro" [ajustada]="true" />
       <div class="acceso__agente">
         <img src="/images/acceso-icono-agente.webp" width="48" height="48" alt="" decoding="async" />
         <div><strong>Un agente, un equipo conectado</strong><p>Citas, mensajes y conocimiento en un mismo lugar.</p></div>

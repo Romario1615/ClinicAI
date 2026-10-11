@@ -140,6 +140,29 @@ describe('ConocimientoComponent', () => {
         expect(texto()).toContain('Documento 1');
     });
 
+    it('agrupa las acciones aparte del título y conserva la explicación del flujo', () => {
+        cargar();
+        const acciones = fixture.nativeElement.querySelector('.portada__acciones') as HTMLElement;
+        expect(acciones.querySelector('h1')).toBeNull();
+        const flujo = acciones.querySelector('.portada__flujo') as HTMLButtonElement;
+        expect(flujo.textContent).toContain('Cómo llega un documento');
+        expect(acciones.querySelector('.portada__accion')).toBeNull();
+        flujo.click(); fixture.detectChanges();
+        expect(fixture.componentInstance['flujoAbierto']()).toBe(true);
+    });
+
+    it('mantiene cargar documento dentro de las acciones solo con su permiso', () => {
+        const identidad = identidadAprobadora();
+        TestBed.inject(SesionService).establecerIdentidad({
+            ...identidad,
+            permisos: [...identidad.permisos, 'conocimiento.cargar'],
+        });
+        cargar();
+        const acciones = fixture.nativeElement.querySelector('.portada__acciones') as HTMLElement;
+        expect(acciones.querySelectorAll('button')).toHaveLength(2);
+        expect(acciones.querySelector('.portada__accion')?.textContent).toContain('Cargar documento');
+    });
+
     describe('cuando no hay fuente aprobada', () => {
         it('muestra el mensaje del backend y NO pinta resultados parecidos', () => {
             cargar([documento('1')]);

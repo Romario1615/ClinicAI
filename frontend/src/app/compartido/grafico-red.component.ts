@@ -85,6 +85,7 @@ const PARTICULAS: readonly { x: number; y: number; r: number }[] = [
 @Component({
   selector: 'app-grafico-red',
   standalone: true,
+  host: { '[class.ajustada]': 'ajustada()' },
   template: `
     <svg
       class="red"
@@ -164,6 +165,16 @@ const PARTICULAS: readonly { x: number; y: number; r: number }[] = [
       --red-icono: var(--acento);
       --red-borde: rgb(8 108 127 / 28%);
       --red-particula: #86e2e1;
+    }
+
+    /* Portadas de alto acotado: el viewBox conserva la proporción y todo
+       el dibujo cabe en la fila que le asigna su contenedor. */
+    :host(.ajustada) {
+      min-height: 0;
+    }
+
+    :host(.ajustada) .red {
+      height: 100%;
     }
 
     .red--oscura {
@@ -263,6 +274,7 @@ export class GraficoRedComponent {
 
   /** `claro` sobre vidrio claro; `oscuro` sobre el panel de marca. */
   readonly tono = input<'claro' | 'oscuro'>('claro');
+  readonly ajustada = input(false);
 
   protected readonly nodos = construirNodos();
   protected readonly particulas = PARTICULAS;

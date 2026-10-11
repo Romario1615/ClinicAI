@@ -7,15 +7,17 @@
       puede responder, y solo cuando el documento está aprobado.
     </p>
   </div>
-  <button type="button" class="boton portada__flujo" (click)="flujoAbierto.set(true)" aria-haspopup="dialog">
-    ¿Cómo llega un documento al agente?
-  </button>
-  @if (puedeCargar()) {
-    <button type="button" class="boton boton--principal portada__accion" (click)="abrirCarga()">
-      <app-icono nombre="subir" [tamano]="18" />
-      Cargar documento
+  <div class="portada__acciones">
+    <button type="button" class="boton portada__flujo" (click)="flujoAbierto.set(true)" aria-haspopup="dialog">
+      ¿Cómo llega un documento al agente?
     </button>
-  }
+    @if (puedeCargar()) {
+      <button type="button" class="boton boton--principal portada__accion" (click)="abrirCarga()">
+        <app-icono nombre="subir" [tamano]="18" />
+        Cargar documento
+      </button>
+    }
+  </div>
 </header>
 
 <app-resumen-modulo class="pantalla__fijo" modulo="conocimiento" />

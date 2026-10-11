@@ -56,6 +56,17 @@ describe('AccesoComponent · especialidades locales', () => {
     expect(fondos.every(img => img.alt === '' && img.getAttribute('src')?.endsWith('.webp'))).toBe(true);
     expect(fondos[0].getAttribute('fetchpriority')).toBe('high');
   });
+  it('separa el mensaje principal del bloque de inteligencia artificial', () => {
+    const f = montar();
+    const titular: HTMLElement = f.nativeElement.querySelector('.acceso__titular');
+    expect(titular.children).toHaveLength(2);
+    expect(titular.querySelector('.acceso__titular-principal')?.textContent).toContain('para cuidar.');
+    expect(titular.querySelector('.acceso__titular-ia')?.textContent).toBe('IA para coordinar.');
+  });
+  it('ajusta la ilustración al alto reservado en la portada', () => {
+    const f = montar();
+    expect(f.nativeElement.querySelector('.acceso__grafico').classList.contains('ajustada')).toBe(true);
+  });
   it('cada rol conserva su etiqueta y recibe un icono WebP decorativo', () => {
     const f = montar();
     const imagenes = [...f.nativeElement.querySelectorAll('.acceso__rol-icono img')] as HTMLImageElement[];
