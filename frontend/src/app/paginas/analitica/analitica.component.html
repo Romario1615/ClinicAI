@@ -1,9 +1,9 @@
-<main class="analitica">
+<section class="analitica" aria-labelledby="titulo-analitica">
   <header class="analitica__hero pantalla__fijo">
     <div class="analitica__identidad">
       <div>
         <p class="analitica__ceja">ANALÍTICA IA <span>· APRENDIZAJE LOCAL</span></p>
-        <h1>Actividad y previsiones de tu clínica</h1>
+        <h1 id="titulo-analitica">Actividad y previsiones de tu clínica</h1>
         <p class="analitica__intro">Indicadores y próximos pasos, calculados con los datos de tu ámbito.</p>
       </div>
     </div>
@@ -94,7 +94,7 @@
       }
     </div>
   </section>
-</main>
+</section>
 
 @if(detalle(); as k){
   <app-ventana-flotante [titulo]="k.nombre" ceja="DATOS Y METODOLOGÍA" forma="centrada" [anchoMaximo]="960" (cerrar)="detalle.set(null)">

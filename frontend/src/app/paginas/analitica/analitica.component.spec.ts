@@ -62,6 +62,12 @@ describe('AnaliticaComponent',()=>{
   let http:HttpTestingController;
   function montar(){const f=TestBed.createComponent(AnaliticaComponent);f.detectChanges();http.expectOne(`${BASE}/catalogo/sedes`).flush([]);http.expectOne(r=>r.url===`${BASE}/dashboard/analitica`).flush(datos);f.detectChanges();return f;}
   beforeEach(()=>{TestBed.configureTestingModule({imports:[AnaliticaComponent],providers:PROVEEDORES_PRUEBA});http=TestBed.inject(HttpTestingController);});afterEach(()=>http.verify());
+  it('usa una sección etiquetada dentro del main del armazón',()=>{
+    const f=montar();const section=f.nativeElement.querySelector('section.analitica');
+    expect(f.nativeElement.querySelector('main')).toBeNull();
+    expect(section.getAttribute('aria-labelledby')).toBe('titulo-analitica');
+    expect(section.querySelector('#titulo-analitica')?.tagName).toBe('H1');
+  });
   it('describe valores, explica la evaluación y ofrece revisión humana',()=>{
     const f=montar();
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
