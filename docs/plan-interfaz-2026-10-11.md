@@ -119,3 +119,29 @@ la semilla (corregido en `b43f473`). Quedan estos fallos de lógica:
     (no borrar datos a mano).
 
 Verificación: la misma del plan, más E2E de agenda y ficha con la API aislada.
+
+## Anexo B · Segunda revisión de Claude (2026‑10‑11)
+
+Comprobado tras `c8fe63f`…`6b2bf4e`: la ficha muestra las dos arcadas a
+1440 × 900, la dentición temporal se propone a los 5 años, queda una sola
+acción de edición y Analítica ya no anida `<main>`. E2E 25, 26 y 30 pasan
+11/11 con API aislada recién sembrada (los 4 fallos anotados venían de una API
+en 8002 con datos antiguos). Quedan en Agenda, vista Día:
+
+13. **Filtro y columnas coherentes.** Con «Profesional = Abril Manuel» (rol
+    profesional, lunes 12‑10) se dibujan además columnas de otros tres
+    profesionales con nombres de pacientes. Si hay un profesional elegido, la
+    vista Día muestra solo su columna; con «Todos», una columna por
+    profesional con turno ese día. No cambies qué datos devuelve la API: si el
+    rol profesional recibe citas ajenas, anótalo en AGENTS.md para Claude.
+14. **Pie consistente.** El pie dice «0 citas · 0 min reservados · sin huecos
+    libres» con dos citas visibles. Debe contar lo que la rejilla muestra.
+15. **Primera hora visible.** La etiqueta de la primera hora («08:00») sigue
+    tapada por la cabecera de columnas: la rejilla debe empezar debajo.
+16. **Día sin turnos.** Con «Todos» en domingo aparece una rejilla vacía con
+    las horas a la derecha y sin columnas. Mostrar un estado vacío claro
+    («Sin turnos de atención este día») con acceso al próximo día con
+    turnos, y las horas siempre a la izquierda.
+
+Verificación: la del plan, más E2E 25, 26, 30 y los de agenda con API aislada
+y base recién sembrada (no reutilices una API con datos antiguos).
