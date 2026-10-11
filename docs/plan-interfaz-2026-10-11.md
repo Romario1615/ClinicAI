@@ -145,3 +145,19 @@ en 8002 con datos antiguos). Quedan en Agenda, vista Día:
 
 Verificación: la del plan, más E2E 25, 26, 30 y los de agenda con API aislada
 y base recién sembrada (no reutilices una API con datos antiguos).
+17. **Regresión E2E completa.** Suite completa con API aislada recién sembrada
+    (8031, `--workers=1`): 156 aprobadas, 15 fallidas, 1 omitida (29,1 min).
+    Casi todas esperan el comportamiento anterior y deben actualizarse a lo
+    pedido por el usuario (acceso en Agenda, ficha en Odontograma, Analítica
+    compacta), sin relajar lo que verifican:
+    `01-acceso:32` y `02-autorizacion:19` (enlaces del menú no visibles: el
+    grupo abierto ahora es «Atención clínica»; abrir el grupo antes de buscar),
+    `03-pacientes:59` (ir a la pestaña Resumen antes de buscar «Datos
+    personales»), `14-accesibilidad:50`, `16-panel-demografia:5`,
+    `29-panel-contexto:5` (navegar al Panel en vez de suponerlo),
+    `18-periodontograma-analitica-agente:124` (título nuevo de Analítica),
+    `19-ficha-agente-diseno:8` (correo ya no en `.ficha__datos dd`),
+    `33-menu-categorias:9` ×4 y `:39`. Investigar como posible defecto real
+    `04-clinico:276` (timeout en `waitForResponse`, 90 s) y
+    `28-revision-modulos:17` (timeout en `waitForResponse`, 120 s). Registro
+    en `%TEMP%\e2e-completa.log`. Cerrar con la suite completa en verde.
