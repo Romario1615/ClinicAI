@@ -37,6 +37,11 @@ de lectura administrativa documentada en ADR-0022 y la lectura entre áreas.
 - El alta prepara secciones vacías mediante las rutas existentes. No se
   inventan registros para representar disponibilidad ni se confunde falta
   de medición con cero.
+- Si el paciente no tiene odontograma guardado, la plantilla propone dentición
+  temporal antes de los 6 años, mixta de 6 a 12 y permanente desde los 13.
+  Es una sugerencia de presentación basada en la edad disponible, no un dato
+  clínico persistido; el profesional puede cambiarla antes de guardar. Si ya
+  existe una versión, se respeta la dentición guardada.
 - N3 y Formulario 033 siguen exigiendo `historia_clinica.leer_sensible`.
   La consulta compartida no concede ese permiso. El agente IA no recibe esta
   capacidad ni acceso a nuevas operaciones clínicas.

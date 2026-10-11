@@ -6,7 +6,7 @@
 import { TestBed, type ComponentFixture } from '@angular/core/testing';
 import { HttpTestingController } from '@angular/common/http/testing';
 
-import { OdontogramaComponent } from './odontograma.component';
+import { denticionSugeridaPorEdad, OdontogramaComponent } from './odontograma.component';
 import type { Odontograma } from '../../nucleo/servicios/api.service';
 import { BASE, PROVEEDORES_PRUEBA, iniciarSesionCon } from '../../nucleo/pruebas/sesion-sintetica';
 
@@ -33,11 +33,12 @@ describe('OdontogramaComponent', () => {
     let c: any;
     const VERSIONES = `${BASE}/odontologia/pacientes/pac-1/odontograma/versiones`;
 
-    function montar(permisos: readonly string[], versiones: readonly Odontograma[]): void {
+    function montar(permisos: readonly string[], versiones: readonly Odontograma[], edad: number | null = null): void {
         iniciarSesionCon(permisos);
         fixture = TestBed.createComponent(OdontogramaComponent);
         c = fixture.componentInstance;
         fixture.componentRef.setInput('pacienteId', 'pac-1');
+        fixture.componentRef.setInput('edadPaciente', edad);
         fixture.detectChanges();
         http.expectOne({ method: 'GET', url: VERSIONES }).flush(versiones);
         fixture.detectChanges();
@@ -49,6 +50,23 @@ describe('OdontogramaComponent', () => {
     });
 
     afterEach(() => http.verify());
+
+    it('sugiere dentición temporal antes de 6, mixta de 6 a 12 y permanente desde 13', () => {
+        expect([5, 6, 12, 13].map(denticionSugeridaPorEdad)).toEqual([
+            'TEMPORAL', 'MIXTA', 'MIXTA', 'PERMANENTE',
+        ]);
+        expect(denticionSugeridaPorEdad(null)).toBe('PERMANENTE');
+    });
+
+    it('usa la edad como valor inicial, pero conserva la dentición guardada', () => {
+        montar(['odontograma.leer', 'odontograma.escribir'], [], 5);
+        expect(c.denticion()).toBe('TEMPORAL');
+    });
+
+    it('la versión guardada prevalece sobre la propuesta por edad', () => {
+        montar(['odontograma.leer', 'odontograma.escribir'], [version(1, true)], 5);
+        expect(c.denticion()).toBe('PERMANENTE');
+    });
 
     it('crea la primera versión sin motivo', () => {
         montar(['odontograma.leer', 'odontograma.escribir'], []);

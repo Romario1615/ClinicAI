@@ -419,7 +419,7 @@ const DETALLE_CLINICO: Partial<Record<Pestana, string>> = {
               }
 
               @case ('odontograma') {
-                <app-odontograma [pacienteId]="pacienteId()" />
+                <app-odontograma [pacienteId]="pacienteId()" [edadPaciente]="edadAnios()" />
               }
 
               @case ('planes') {
@@ -1032,13 +1032,20 @@ export class FichaPacienteComponent implements OnInit {
     );
   });
 
-  protected readonly edad = computed(() => {
+  protected readonly edadAnios = computed<number | null>(() => {
     const nacimiento = this.paciente()?.fecha_nacimiento;
-    if (!nacimiento) {
-      return '';
-    }
-    const anos = Math.floor((Date.now() - Date.parse(nacimiento)) / 31_557_600_000);
-    return anos >= 0 && anos < 130 ? `${anos} años` : '';
+    if (!nacimiento) return null;
+    const [anio, mes, dia] = nacimiento.slice(0, 10).split('-').map(Number);
+    if (!anio || !mes || !dia) return null;
+    const hoy = new Date();
+    let edad = hoy.getFullYear() - anio;
+    if (hoy.getMonth() + 1 < mes || (hoy.getMonth() + 1 === mes && hoy.getDate() < dia)) edad--;
+    return edad >= 0 && edad < 130 ? edad : null;
+  });
+
+  protected readonly edad = computed(() => {
+    const edad = this.edadAnios();
+    return edad === null ? '' : `${edad} años`;
   });
 
   /** La primera cita futura que todavía cuenta. */

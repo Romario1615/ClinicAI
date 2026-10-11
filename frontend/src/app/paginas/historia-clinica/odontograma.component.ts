@@ -54,6 +54,13 @@ import { FotosRegistroService } from '../../nucleo/servicios/fotos-registro.serv
 /** Herramienta activa de la paleta. */
 export type Herramienta = 'SELECCIONAR' | 'BORRAR' | HallazgoCara | HallazgoPieza;
 
+/** Valor inicial de presentación; no sustituye la dentición guardada. */
+export function denticionSugeridaPorEdad(edad: number | null): Denticion {
+  if (edad !== null && edad < 6) return 'TEMPORAL';
+  if (edad !== null && edad <= 12) return 'MIXTA';
+  return 'PERMANENTE';
+}
+
 /** Regiones del dibujo de 40×40: cuatro trapecios y el cuadrado central. */
 const REGIONES: readonly { region: Region; puntos: string }[] = [
   { region: 'arriba', puntos: '0,0 40,0 28,12 12,12' },
@@ -85,6 +92,7 @@ const ES_HALLAZGO_PIEZA = new Set<string>(HALLAZGOS_PIEZA.map((h) => h.codigo));
 })
 export class OdontogramaComponent {
   readonly pacienteId = input.required<string>();
+  readonly edadPaciente = input<number | null>(null);
 
   private readonly api = inject(ApiService);
   private readonly sesion = inject(SesionService);
@@ -170,7 +178,7 @@ export class OdontogramaComponent {
         const vigente = versiones.find((version) => version.vigente) ?? null;
         this.actual.set(vigente);
         this.nivelSensibilidad.set(vigente?.nivel_sensibilidad ?? 'N2');
-        this.denticion.set(vigente?.denticion ?? 'PERMANENTE');
+        this.denticion.set(vigente?.denticion ?? denticionSugeridaPorEdad(this.edadPaciente()));
         this.borrador.set(vigente ? this.clonarPiezas(vigente.piezas) : {});
         this.cargando.set(false);
       },
