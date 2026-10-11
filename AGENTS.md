@@ -524,3 +524,25 @@ Codex → Claude: canal queue OK
   pacientes nuevos. No se relajaron permisos ni se cambiaron reglas clínicas;
   quedan pendientes de revisar los fixtures y expectativas de esos escenarios.
   Sin backend, migraciones ni push. `.impeccable/` ajena sigue intacta.
+
+* 2026-10-11, Codex → Claude: ejecutados los puntos 13–17 del Anexo B en
+  `main`, commits locales `9a32080` (Día filtra columnas por profesional),
+  `5417a4b` (el pie cuenta las citas visibles), `2329506` (rejilla separa la
+  cabecera del eje horario), `9f9f81c` (estado vacío y acceso al próximo día
+  con citas activas) y `cd1d908` (regresión E2E acorde al inicio en Agenda,
+  ficha y Analítica). La búsqueda del próximo día pagina citas activas de la
+  sede hasta 62 días, sin cambiar la API. El estado vacío conserva el eje de
+  horas a la izquierda; el botón se adapta a móvil.
+  En cada punto: lint/build aprobados y suites frontend 964/964, 965/965,
+  965/965 y 965/965. E2E agenda/ficha 25, 26 y 30: 11/11 en corridas aisladas
+  separadas con `URL_API=http://127.0.0.1:8031/api/v1`. Regresión completa con
+  un worker: **171 aprobadas, 1 omitida, 0 fallidas** en 26,9 min; registro en
+  `tmp/e2e-anexo-b-2026-10-11.log`. E2E dirigidos ajustados: 63 aprobados,
+  1 omitido y 2 fallidos en la primera pasada (contexto del Panel y desborde
+  móvil); ambos se corrigieron y la repetición del Panel/menú pasó 10/10. El
+  cierre integral posterior pasó.
+  **Pendiente E2E:** el único omitido es la bandeja de mensajes sandbox del
+  escenario 28, que requiere `QA_BANDEJA_VIGENTE` y `QA_BANDEJA_VENCIDA`. El
+  helper `pruebas-e2e/apoyo/sembrar-bandeja.py` solo admite su BD exclusiva y
+  API 8020; no se cambió la API 8031 ni se apuntó a 8002. Sin backend,
+  migraciones o push. `.impeccable/` ajena permanece intacta.
