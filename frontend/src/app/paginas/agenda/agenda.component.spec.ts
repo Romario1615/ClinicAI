@@ -181,9 +181,12 @@ describe('AgendaComponent · reserva y series', { timeout: 20_000 }, () => {
   }
 
   function responderBusquedaProximoDia(): void {
-    http
-      .expectOne((p) => p.method === 'GET' && p.url === `${BASE}/agenda/citas`)
-      .flush({ elementos: [], total: 0, limite: 200, desplazamiento: 0 });
+    const peticion = http.expectOne((p) => p.method === 'GET' && p.url === `${BASE}/agenda/citas`);
+    expect(peticion.request.params.getAll('estado')).toEqual([
+      'PENDING', 'HELD', 'CONFIRMED', 'RESCHEDULED', 'COMPLETED', 'NO_SHOW',
+    ]);
+    expect(peticion.request.params.getAll('estado')).not.toContain('CANCELLED');
+    peticion.flush({ elementos: [], total: 0, limite: 200, desplazamiento: 0 });
   }
 
   it('abre el equipo completo para administración y la agenda propia para profesionales', () => {
@@ -216,6 +219,42 @@ describe('AgendaComponent · reserva y series', { timeout: 20_000 }, () => {
     });
     const proxima = http.match((peticion) => peticion.url === `${BASE}/agenda/citas`);
     proxima.forEach((peticion) => peticion.flush({ elementos: [], total: 0, limite: 200, desplazamiento: 0 }));
+  });
+
+  it('limita a diez páginas la búsqueda y filtra las canceladas en la consulta', () => {
+    montar({}, ['administrador_clinica'], null, false);
+    fixture.componentInstance['buscarProximoDiaConTurnos']();
+
+    let desplazamiento = 0;
+    for (let numeroPagina = 0; numeroPagina < 10; numeroPagina++) {
+      const peticion = http.expectOne((p) => p.method === 'GET' && p.url === `${BASE}/agenda/citas`);
+      expect(peticion.request.params.getAll('estado')).toEqual([
+        'PENDING', 'HELD', 'CONFIRMED', 'RESCHEDULED', 'COMPLETED', 'NO_SHOW',
+      ]);
+      expect(peticion.request.params.get('desplazamiento')).toBe(String(desplazamiento));
+      peticion.flush({
+        elementos: Array.from({ length: 200 }, (_, indice) => cita(
+          '2030-01-21T14:00:00Z',
+          { id: `cancelada-${desplazamiento + indice}`, estado: 'CANCELLED' },
+        )),
+        total: 3000,
+        limite: 200,
+        desplazamiento,
+      });
+      desplazamiento += 200;
+    }
+
+    expect(http.match((p) => p.method === 'GET' && p.url === `${BASE}/agenda/citas`)).toHaveLength(0);
+  });
+
+  it('cancela la petición del próximo día al destruir la Agenda', () => {
+    montar({}, ['administrador_clinica'], null, false);
+    fixture.componentInstance['buscarProximoDiaConTurnos']();
+    const peticion = http.expectOne((p) => p.method === 'GET' && p.url === `${BASE}/agenda/citas`);
+
+    fixture.destroy();
+
+    expect(peticion.cancelled).toBe(true);
   });
 
   it('oculta las acciones de cita cuando el principal solo puede consultar la agenda', () => {

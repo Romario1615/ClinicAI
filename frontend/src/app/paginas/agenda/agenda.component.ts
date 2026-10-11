@@ -184,6 +184,8 @@ export const MAXIMO_CITAS_SERIE: Readonly<Record<FrecuenciaSerieCitas, number>> 
   QUINCENAL: 27,
   MENSUAL: 13,
 };
+const PAGINA_BUSQUEDA_PROXIMO_DIA = 200;
+const MAXIMO_PAGINAS_PROXIMO_DIA = 10;
 
 /**
  * Ancho de ventana a partir del cual lo pendiente cabe en una columna fija a
@@ -245,6 +247,7 @@ export class AgendaComponent {
    * reserva: el hueco lo sigue eligiendo quien agenda.
    */
   private readonly ruta = inject(ActivatedRoute);
+  private readonly destroyRef = inject(DestroyRef);
   private citaSolicitada = this.ruta.snapshot.queryParamMap.get('cita');
   private solicitudCitaContexto = 0;
   protected readonly pacienteSugerido = signal<string | null>(
@@ -689,11 +692,14 @@ export class AgendaComponent {
       hasta,
       sede_id: this.sedeId(),
       profesional_id: this.profesionalId() || undefined,
-      limite: 200,
+      estado: ['PENDING', 'HELD', 'CONFIRMED', 'RESCHEDULED', 'COMPLETED', 'NO_SHOW'],
+      limite: PAGINA_BUSQUEDA_PROXIMO_DIA,
     };
 
     const cargarPagina = (desplazamiento: number): void => {
-      this.api.citas({ ...filtro, desplazamiento }).subscribe({
+      this.api.citas({ ...filtro, desplazamiento }).pipe(
+        takeUntilDestroyed(this.destroyRef),
+      ).subscribe({
         next: (pagina) => {
           if (solicitud !== this.solicitudProximoDia) return;
           const primera = pagina.elementos.find((cita) => cita.estado !== 'CANCELLED');
@@ -702,7 +708,11 @@ export class AgendaComponent {
               timeZone: this.zona(), year: 'numeric', month: '2-digit', day: '2-digit',
             }).format(new Date(primera.inicio));
             this.proximoDiaConTurnos.set(fecha);
-          } else if (pagina.elementos.length > 0 && desplazamiento + pagina.elementos.length < pagina.total) {
+          } else if (
+            pagina.elementos.length > 0 &&
+            desplazamiento + pagina.elementos.length < pagina.total &&
+            desplazamiento / PAGINA_BUSQUEDA_PROXIMO_DIA + 1 < MAXIMO_PAGINAS_PROXIMO_DIA
+          ) {
             cargarPagina(desplazamiento + pagina.elementos.length);
           }
         },
