@@ -44,6 +44,12 @@ export async function solapesVisibles(page: Page, selector?: string): Promise<st
       top: Math.max(caja.top, padre.top),
       bottom: Math.min(caja.bottom, padre.bottom),
     });
+    // Cabeceras fijas dentro de un contenedor desplazable (p. ej. las columnas
+    // de la Agenda): lo que se desplaza por debajo de ellas no se ve.
+    const fijas = [...raiz.querySelectorAll('*')].filter(e => {
+      const estilo = getComputedStyle(e);
+      return estilo.position === 'sticky' && estilo.top !== 'auto';
+    });
     const visible = (elemento: Element, caja: Caja): Caja | null => {
       if (!elemento.checkVisibility({ checkOpacity: true, checkVisibilityCSS: true })) return null;
       let rect = recortar(caja, { left: 0, right: innerWidth, top: 0, bottom: innerHeight });
@@ -52,6 +58,12 @@ export async function solapesVisibles(page: Page, selector?: string): Promise<st
         const estilo = getComputedStyle(padre);
         if (/(auto|scroll|hidden|clip)/.test(`${estilo.overflowX} ${estilo.overflowY}`)) {
           rect = recortar(rect, padre.getBoundingClientRect());
+          for (const fija of fijas) {
+            if (!padre.contains(fija) || fija.contains(elemento)) continue;
+            const borde = fija.getBoundingClientRect();
+            const horizontal = Math.min(borde.right, rect.right) - Math.max(borde.left, rect.left) > 2;
+            if (horizontal && borde.top <= rect.top + 1 && borde.bottom > rect.top) rect.top = borde.bottom;
+          }
         }
       }
       return rect.right - rect.left > 3 && rect.bottom - rect.top > 3 ? rect : null;

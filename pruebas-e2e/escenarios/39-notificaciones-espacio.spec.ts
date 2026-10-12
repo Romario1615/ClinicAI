@@ -20,6 +20,16 @@ async function cantidades(page: Page, cantidad: number): Promise<void> {
     }
     await route.fulfill({ json: { elementos: [], total: cantidad, limite: 1, desplazamiento: 0 } });
   });
+  // Fuentes reales que otros escenarios llenan (p. ej. el 42 deja ofertas de
+  // lista de espera): se vacían para que la cuenta dependa solo de lo simulado.
+  await page.route(u => u.pathname.endsWith('/api/v1/lista-espera/'), async route => {
+    if (route.request().method() !== 'GET') { await route.fallback(); return; }
+    await route.fulfill({ json: { elementos: [], total: 0, limite: 50, desplazamiento: 0 } });
+  });
+  await page.route(u => u.pathname.endsWith('/api/v1/historia/adherencia/alertas'), async route => {
+    if (route.request().method() !== 'GET') { await route.fallback(); return; }
+    await route.fulfill({ json: [] });
+  });
 }
 
 for (const movimiento of ['reduce', 'no-preference'] as const) {
