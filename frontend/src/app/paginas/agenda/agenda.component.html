@@ -208,7 +208,12 @@
     </p>
   }
   @if (mensajeExito()) {
-    <p class="exito pantalla__fijo" role="status">{{ mensajeExito() }}</p>
+    <div class="exito pantalla__fijo" role="status">
+      {{ mensajeExito() }}
+      @if (continuarFicha()) {
+        <button type="button" class="boton boton--pequeno" (click)="abrirFichaTrasAtencion()">Continuar en ficha</button>
+      }
+    </div>
   }
   @if (errorAgenda(); as fallo) {
     <app-error
@@ -559,7 +564,7 @@
         </p>
         <p class="panel__subtitulo">{{ nombreConsultorio(cita.consultorio_id) }}</p>
         <button type="button" class="boton boton--pequeno detalle-cita__ficha" (click)="abrirFicha(cita.paciente_id, cita.id)">
-          Ver ficha del paciente
+          {{ cita.estado === 'COMPLETED' ? 'Continuar en ficha' : 'Ver ficha del paciente' }}
         </button>
         @if (sesion.tieneAlgunPermiso('historia_clinica.leer', 'receta.leer')) {
           <button type="button" class="boton boton--principal boton--pequeno detalle-cita__ficha" (click)="abrirFicha(cita.paciente_id, cita.id, true)">
@@ -695,25 +700,52 @@
         <fieldset [disabled]="reservando() || operacionFotos.guardado">
         <div class="reserva__contexto">
           <p class="reserva__fecha">{{ fechaDia() }}</p>
-          @if (reservaDelDia()) {
+          @if (reservaDelDia() && !seleccionIncompleta()) {
             <p class="panel__titular numerico">
               {{ hueco.turnos.length }} {{ hueco.turnos.length === 1 ? 'hora libre' : 'horas libres' }} este día
             </p>
-          } @else {
+          } @else if (!reservaDelDia()) {
             <p class="panel__titular numerico">
               {{ duracionHueco(hueco) }} libre desde las {{ hora(hueco.inicio) }}
             </p>
           }
-          <p class="panel__subtitulo">
-            {{ nombreServicio(servicioId()) }} con {{ nombreProfesional(profesionalId()) }}
-          </p>
+          @if (!seleccionIncompleta()) {
+            <p class="panel__subtitulo">{{ nombreServicio(servicioId()) }} con {{ nombreProfesional(profesionalId()) }}</p>
+          }
         </div>
+
+        @if (seleccionIncompleta()) {
+          <div class="selector-sala">
+            <label class="campo">
+              <span class="campo__etiqueta">Servicio <span class="obligatorio">*</span></span>
+              <select class="campo__control" name="servicio-reserva" [ngModel]="servicioId()" (ngModelChange)="elegirServicioReserva($event)">
+                <option value="">Seleccione un servicio</option>
+                @for (servicio of serviciosReserva(); track servicio.id) {
+                  <option [value]="servicio.id">{{ servicio.nombre }} ({{ servicio.duracion_minutos }} min)</option>
+                }
+              </select>
+            </label>
+            <label class="campo">
+              <span class="campo__etiqueta">Profesional <span class="obligatorio">*</span></span>
+              <select class="campo__control" name="profesional-reserva" [ngModel]="profesionalId()" (ngModelChange)="elegirProfesionalReserva($event)">
+                <option value="">Seleccione un profesional</option>
+                @for (profesional of profesionalesReserva(); track profesional.id) {
+                  <option [value]="profesional.id">{{ profesional.nombre }} {{ profesional.apellido }}</option>
+                }
+              </select>
+            </label>
+          </div>
+        }
 
         <fieldset class="arranques">
           <legend class="campo__etiqueta">Hora de inicio</legend>
           @if (hueco.turnos.length === 0) {
-            <!-- Tras un choque puede no quedar ninguna hora en el tramo. -->
-            <p class="campo__ayuda">Ya no quedan horas libres aquí. Cierre y elija otro hueco u otro día.</p>
+            @if (seleccionIncompleta()) {
+              <p class="campo__ayuda">Elija servicio y profesional para consultar las horas disponibles.</p>
+            } @else {
+              <!-- Tras un choque puede no quedar ninguna hora en el tramo. -->
+              <p class="campo__ayuda">Ya no quedan horas libres aquí. Cierre y elija otro hueco u otro día.</p>
+            }
           }
           <div class="arranques__lista">
             @for (turno of hueco.turnos; track turno.inicio) {

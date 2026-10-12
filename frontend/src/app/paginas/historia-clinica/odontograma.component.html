@@ -298,7 +298,7 @@
     @if (puedeEditar() && (!actual() || actual()?.vigente)) {
       <div class="odontograma__guardar">
         <p>@if (cambiadas().size) { <strong>{{ cambiadas().size }} pieza(s) con cambios sin guardar</strong> } @else { {{ actual() ? 'La versión vigente se conserva al guardar una nueva.' : 'Pinte los hallazgos y cree la primera versión.' }} }</p>
-        <button class="boton boton--principal" type="button" [disabled]="guardando()" (click)="abrirGuardado()">{{ actual() ? 'Guardar nueva versión' : 'Crear odontograma' }}</button>
+        <button class="boton boton--principal" type="button" [disabled]="guardando()" (click)="abrirGuardado()">{{ actual() ? 'Guardar nueva versión' : 'Guardar odontograma' }}</button>
       </div>
     } @else if (!puedeEditar()) {
       <p class="odontograma__lectura">Su rol puede consultar el odontograma, pero no modificarlo.</p>

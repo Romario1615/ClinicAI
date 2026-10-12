@@ -264,6 +264,7 @@ export class AgendaComponent {
   protected readonly servicios = signal<readonly Servicio[]>([]);
   protected readonly profesionales = signal<readonly Profesional[]>([]);
   protected readonly pacientes = signal<readonly Paciente[]>([]);
+  private readonly pacientesConsultados = new Set<string>();
   protected readonly consultorios = signal<readonly Consultorio[]>([]);
 
   // --- Selección ---
@@ -331,6 +332,7 @@ export class AgendaComponent {
   protected readonly cancelandoCita = signal(false);
   protected readonly errorReserva = signal<FalloApi | null>(null);
   protected readonly mensajeExito = signal('');
+  protected readonly continuarFicha = signal<{ pacienteId: string; citaId: string } | null>(null);
 
   // --- Cancelación ---
   protected readonly citaACancelar = signal<Cita | null>(null);
@@ -524,6 +526,32 @@ export class AgendaComponent {
     () => !this.sedeId() || !this.servicioId() || !this.profesionalId(),
   );
 
+  protected serviciosReserva(): readonly Servicio[] {
+    const especialidad = this.profesionales().find((p) => p.id === this.profesionalId())?.especialidad_id;
+    return this.servicios().filter((servicio) => !especialidad || servicio.especialidad_id === especialidad);
+  }
+
+  protected profesionalesReserva(): readonly Profesional[] {
+    const especialidad = this.servicios().find((s) => s.id === this.servicioId())?.especialidad_id;
+    return this.profesionales().filter((profesional) => !especialidad || profesional.especialidad_id === especialidad);
+  }
+
+  protected elegirServicioReserva(id: string): void {
+    this.servicioId.set(id);
+    const servicio = this.servicios().find((item) => item.id === id);
+    const profesional = this.profesionales().find((item) => item.id === this.profesionalId());
+    if (profesional && servicio && profesional.especialidad_id !== servicio.especialidad_id) this.profesionalId.set('');
+    this.recargarDatos();
+  }
+
+  protected elegirProfesionalReserva(id: string): void {
+    this.profesionalId.set(id);
+    const profesional = this.profesionales().find((item) => item.id === id);
+    const servicio = this.servicios().find((item) => item.id === this.servicioId());
+    if (servicio && profesional && servicio.especialidad_id !== profesional.especialidad_id) this.servicioId.set('');
+    this.recargarDatos();
+  }
+
   /** Turnos ofrecibles del dia. Vacio mientras no haya consulta hecha. */
   protected readonly turnos = computed(() => this.disponibilidad()?.turnos ?? []);
 
@@ -612,6 +640,7 @@ export class AgendaComponent {
           return;
         }
         this.citasSede.set(resultado.citas);
+        this.cargarPacientesDeCitas(resultado.citas);
         const profesional = this.profesionalId();
         this.citas.set(
           profesional
@@ -789,6 +818,20 @@ export class AgendaComponent {
         if (solicitud === this.solicitudCitaContexto) this.errorAgenda.set(this.aFallo(fallo));
       },
     });
+  }
+
+  /** Completa los nombres de la jornada respetando el ámbito que aplica la API. */
+  private cargarPacientesDeCitas(citas: readonly Cita[]): void {
+    for (const id of new Set(citas.map((cita) => cita.paciente_id))) {
+      if (this.pacientesConsultados.has(id) || this.pacientes().some((paciente) => paciente.id === id)) continue;
+      this.pacientesConsultados.add(id);
+      this.api.paciente(id).subscribe({
+        next: (paciente) => this.pacientes.update((lista) => lista.some((item) => item.id === id) ? lista : [paciente, ...lista]),
+        // Si el principal no puede leer la ficha, la cita sigue mostrándose sin
+        // exponer datos fuera del ámbito autorizado.
+        error: () => undefined,
+      });
+    }
   }
 
   /** Cambio de día, de filtro o tras una acción: se cierra lo abierto y se recarga. */
@@ -987,9 +1030,10 @@ export class AgendaComponent {
       return;
     }
     if (this.seleccionIncompleta()) {
-      this.avisoAgenda.set(
-        'Elija servicio y profesional en los filtros para ver las horas libres y reservar.',
-      );
+      this.avisoAgenda.set('');
+      this.reservaDelDia.set(true);
+      this.turnoElegido.set(null);
+      this.huecoElegido.set({ tipo: 'hueco', inicio: '', fin: '', turnos: [] });
       return;
     }
     const huecos = this.huecosDia();
@@ -1029,6 +1073,18 @@ export class AgendaComponent {
   private ajustarReservaAbierta(): void {
     const hueco = this.huecoElegido();
     if (!hueco) {
+      return;
+    }
+    if (this.reservaDelDia()) {
+      const turnos = this.turnos();
+      this.huecoElegido.set({
+        ...hueco,
+        inicio: turnos[0]?.inicio ?? '',
+        fin: turnos.at(-1)?.fin_bloque ?? '',
+        turnos,
+      });
+      const elegido = this.turnoElegido();
+      if (elegido && !turnos.some((turno) => turno.inicio === elegido.inicio)) this.turnoElegido.set(null);
       return;
     }
     const libres = new Set(this.turnos().map((turno) => turno.inicio));
@@ -1460,7 +1516,9 @@ export class AgendaComponent {
 
   protected completarCita(cita: Cita): void {
     if (!window.confirm(`¿Marcar como atendida la cita de ${this.nombrePaciente(cita.paciente_id)}? Esta acción cerrará su atención.`)) return;
-    this.ejecutar(() => this.api.completarCita(cita.id), 'Cita marcada como atendida.');
+    this.ejecutar(() => this.api.completarCita(cita.id), 'Cita marcada como atendida.', () => {
+      this.continuarFicha.set({ pacienteId: cita.paciente_id, citaId: cita.id });
+    });
   }
 
   protected marcarInasistencia(cita: Cita): void {
@@ -1485,17 +1543,24 @@ export class AgendaComponent {
     return Math.max(0, Math.floor((fin.getTime() - new Date(cita.llegada_en).getTime()) / 60_000));
   }
 
-  private ejecutar(accion: () => ReturnType<ApiService['confirmarCita']>, exito: string): void {
+  private ejecutar(accion: () => ReturnType<ApiService['confirmarCita']>, exito: string, alCompletar?: () => void): void {
     if (this.procesandoAccionCita()) return;
+    this.continuarFicha.set(null);
     this.procesandoAccionCita.set(true);
     this.errorAgenda.set(null);
     accion().pipe(finalize(() => this.procesandoAccionCita.set(false))).subscribe({
       next: () => {
+        alCompletar?.();
         this.mensajeExito.set(exito);
         this.cargarAgenda();
       },
       error: (fallo: unknown) => this.errorAgenda.set(this.aFallo(fallo)),
     });
+  }
+
+  protected abrirFichaTrasAtencion(): void {
+    const contexto = this.continuarFicha();
+    if (contexto) this.abrirFicha(contexto.pacienteId, contexto.citaId);
   }
 
   /** Acciones posibles sobre una cita, según su estado. */

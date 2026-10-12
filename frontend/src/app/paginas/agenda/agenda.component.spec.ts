@@ -363,6 +363,18 @@ describe('AgendaComponent · reserva y series', { timeout: 20_000 }, () => {
     fixture.detectChanges();
   }
 
+  it('abre Nueva cita desde Todos y pide servicio y profesional dentro de la ventana', async () => {
+    montar({}, ['administrador_clinica'], null, false);
+    await abrirNuevaCita();
+    http.expectOne((p) => p.url === `${BASE}/pacientes/` && p.params.get('limite') === '25')
+      .flush({ elementos: [PACIENTE], total: 1, limite: 25, desplazamiento: 0 });
+    fixture.detectChanges();
+
+    expect(dialogo()).not.toBeNull();
+    expect(dialogo()!.querySelector('select[name="servicio-reserva"]')).not.toBeNull();
+    expect(dialogo()!.querySelector('select[name="profesional-reserva"]')).not.toBeNull();
+  });
+
   /** Marca «Repetir esta cita» y elige frecuencia y cantidad desde el DOM. */
   async function repetir(frecuencia: string, cantidad: number): Promise<void> {
     const ventana = dialogo()!;
@@ -394,6 +406,7 @@ describe('AgendaComponent · reserva y series', { timeout: 20_000 }, () => {
     // El calendario pide la foto de cada profesional; aquí no se prueba.
     http.match((p) => p.url.endsWith('/foto')).forEach((p) => p.flush(null, { status: 404, statusText: 'Not Found' }));
     http.verify();
+    TestBed.resetTestingModule();
   });
 
   it('envía la serie a su ruta con frecuencia, cantidad y clave de idempotencia', async () => {
