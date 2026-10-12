@@ -231,6 +231,12 @@ describe('PlanesTratamientoComponent', () => {
         c.precio = '-1';
         c.agregarProcedimiento();
         expect(avisoProcedimiento()).toContain('importe');
+        c.precio = '';
+        c.agregarProcedimiento();
+        expect(avisoProcedimiento()).toContain('12 dígitos');
+        c.precio = '12345678901';
+        c.agregarProcedimiento();
+        expect(avisoProcedimiento()).toContain('12 dígitos');
         // Y nada de eso se pinta fuera de la ventana.
         expect(
             Array.from((fixture.nativeElement as HTMLElement).querySelectorAll('[role="alert"]')).every(
@@ -308,6 +314,14 @@ describe('PlanesTratamientoComponent', () => {
         http.expectNone(RUTA, 'No debe crear el borrador sin servicio elegido');
         c.cambiarServicioHallazgo(0, 'srv-1');
         expect(c.filasOdontograma()[0].precio).toBe('85.50');
+        c.cambiarPrecioHallazgo(0, '');
+        c.guardarBorrador();
+        expect(c.errorProcedimiento()).toContain('Cada precio');
+        http.expectNone(RUTA, 'No debe enviar un precio vacío por fila');
+        c.cambiarPrecioHallazgo(0, '12345678901');
+        c.guardarBorrador();
+        expect(c.errorProcedimiento()).toContain('12 dígitos');
+        http.expectNone(RUTA, 'No debe enviar más de 12 dígitos por fila');
         c.cambiarPrecioHallazgo(0, '-1');
         c.guardarBorrador();
         expect(c.errorProcedimiento()).toContain('Cada precio');

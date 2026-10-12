@@ -257,8 +257,8 @@ export class PlanesTratamientoComponent {
       this.errorProcedimiento.set('Describe el procedimiento con al menos 3 caracteres.');
       return;
     }
-    if (!Number.isFinite(importe) || importe < 0) {
-      this.errorProcedimiento.set('El precio debe ser un importe válido igual o mayor que cero.');
+    if (!this.precioValido(this.precio)) {
+      this.errorProcedimiento.set('El precio debe ser un importe válido, de hasta 12 dígitos e igual o mayor que cero.');
       return;
     }
     if (pieza !== null && (!Number.isInteger(pieza) || pieza < 11 || pieza > 85)) {
@@ -288,6 +288,13 @@ export class PlanesTratamientoComponent {
     this.errorProcedimiento.set('');
   }
 
+  private precioValido(valor: string): boolean {
+    const texto = valor.trim();
+    if (!/^-?\d+(?:\.\d{1,2})?$/.test(texto)) return false;
+    const importe = Number(texto);
+    return Number.isFinite(importe) && importe >= 0 && importe <= 9_999_999_999.99;
+  }
+
   protected quitarProcedimiento(indice: number): void {
     this.procedimientos.update((lista) =>
       lista
@@ -313,8 +320,8 @@ export class PlanesTratamientoComponent {
         this.errorProcedimiento.set('Cada descripción debe tener entre 3 y 300 caracteres.');
         return;
       }
-      if (filas.some((fila) => !Number.isFinite(Number(fila.precio)) || Number(fila.precio) < 0)) {
-        this.errorProcedimiento.set('Cada precio debe ser un importe válido igual o mayor que cero.');
+      if (filas.some((fila) => !this.precioValido(fila.precio))) {
+        this.errorProcedimiento.set('Cada precio debe ser un importe válido, de hasta 12 dígitos e igual o mayor que cero.');
         return;
       }
     }
