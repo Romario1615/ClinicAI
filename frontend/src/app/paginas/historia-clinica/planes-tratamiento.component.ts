@@ -1,4 +1,4 @@
-import { Component, computed, effect, inject, input, output, signal, ChangeDetectionStrategy } from '@angular/core';
+import { Component, computed, effect, inject, input, output, signal, untracked, ChangeDetectionStrategy } from '@angular/core';
 import { DatePipe } from '@angular/common';
 import { FotosClinicasComponent } from '../../compartido/fotos-clinicas.component';
 import { VentanaFlotanteComponent } from '../../compartido/ventana-flotante.component';
@@ -167,11 +167,14 @@ export class PlanesTratamientoComponent {
     effect(() => this.cargar(this.pacienteId()));
     effect(() => {
       const solicitud = this.solicitudOdontograma();
-      if (solicitud && this.puedeEditar()) this.precargarOdontograma(solicitud);
+      if (solicitud && this.puedeEditar()) untracked(() => this.precargarOdontograma(solicitud));
     });
   }
 
   private precargarOdontograma(solicitud: SolicitudPlanOdontograma): void {
+    if (this.mostrarFormulario() && (
+      this.procedimientos().length > 0 || this.filasOdontograma().some((fila) => fila.incluido)
+    )) return;
     this.reiniciarFormulario();
     this.desdeOdontograma.set(true);
     this.titulo = `Plan desde odontograma · versión ${solicitud.version}`;

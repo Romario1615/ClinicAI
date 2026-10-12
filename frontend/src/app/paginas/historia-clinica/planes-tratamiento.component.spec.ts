@@ -294,6 +294,15 @@ describe('PlanesTratamientoComponent', () => {
         expect((fixture.nativeElement as HTMLElement).querySelector('dialog[open]')?.textContent).toContain('Seleccionar todos');
 
         c.incluirHallazgo(0, true);
+        c.cambiarDescripcionHallazgo(0, 'Descripción revisada por el profesional');
+        fixture.componentRef.setInput('solicitudOdontograma', {
+            version: 4,
+            procedimientos: [{ pieza: 26, caras: 'O', descripcion: 'Pieza 26 · caries oclusal' }],
+        });
+        fixture.detectChanges();
+        expect(c.titulo).toBe('Plan desde odontograma · versión 3');
+        expect(c.filasOdontograma()[0]).toMatchObject({ pieza: 16, incluido: true, descripcion: 'Descripción revisada por el profesional' });
+
         c.guardarBorrador();
         expect(c.errorProcedimiento()).toContain('Elige un servicio');
         http.expectNone(RUTA, 'No debe crear el borrador sin servicio elegido');
