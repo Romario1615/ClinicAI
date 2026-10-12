@@ -1,4 +1,4 @@
-# ADR-0027 · Cargo por tarifa al completar la atención
+# ADR-0030 · Cargo por tarifa al completar la atención
 
 Fecha: 2026-10-11 · Estado: aceptada
 

@@ -1460,7 +1460,7 @@ class ServicioAgenda:
         genera el cargo con el precio del arancel. Solo si el servicio tiene
         precio y la cita aún no tiene cargo: un total ya pactado o abonado no
         se toca. Recepción lo ajusta (descuento, convenio) con
-        `PATCH /pagos/cargos/{id}/total`. Ver ADR-0027.
+        `PATCH /pagos/cargos/{id}/total`. Ver ADR-0030.
         """
         precio = (
             await self._sesion.execute(

@@ -1573,7 +1573,7 @@ class TestCargoAlCompletar:
     """Al completar la atención queda el cobro pendiente con la tarifa del servicio.
 
     Como en el software odontológico: el procedimiento realizado genera el cargo
-    con el arancel; recepción solo cobra o ajusta el total (ADR-0027).
+    con el arancel; recepción solo cobra o ajusta el total (ADR-0030).
     """
 
     async def _cargos(self, sesion: AsyncSession, cita_id: uuid.UUID) -> list[CargoPago]:
