@@ -61,6 +61,12 @@
     }
   </header>
 
+  @if (puedePlanificar() && versionVigente() && hallazgosVersionActual() > 0) {
+    <button class="boton boton--principal" type="button" (click)="abrirPlanificacion()">
+      Planificar tratamiento desde versión {{ versionVigente()!.version }}
+    </button>
+  }
+
   @if (cargando()) {
     <p class="odontograma__estado" role="status">Cargando el odontograma…</p>
   } @else if (!listo()) {

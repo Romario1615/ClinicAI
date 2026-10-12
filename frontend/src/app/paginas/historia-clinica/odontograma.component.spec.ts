@@ -5,6 +5,7 @@
  */
 import { TestBed, type ComponentFixture } from '@angular/core/testing';
 import { HttpTestingController } from '@angular/common/http/testing';
+import { EspecialidadHistoriaService } from '../../nucleo/servicios/especialidad-historia.service';
 
 import { denticionSugeridaPorEdad, OdontogramaComponent } from './odontograma.component';
 import type { EdadesDenticion, Odontograma } from '../../nucleo/servicios/api.service';
@@ -78,6 +79,22 @@ describe('OdontogramaComponent', () => {
     it('la versión guardada prevalece sobre la propuesta por edad', () => {
         montar(['odontograma.leer', 'odontograma.escribir'], [version(1, true)], 5);
         expect(c.denticion()).toBe('PERMANENTE');
+    });
+
+    it('ofrece planificar solo con permiso y módulo activo, y transmite los hallazgos vigentes', () => {
+        TestBed.inject(EspecialidadHistoriaService).disponibles.set([
+            { id: 'esp-1', nombre: 'Odontología', modulos: ['odontograma', 'planes'], propia: true },
+        ]);
+        montar(['odontograma.leer', 'plan_tratamiento.escribir'], [version(2, true)]);
+        const emitir = vi.fn();
+        c.planificar.subscribe(emitir);
+        const boton = (fixture.nativeElement as HTMLElement).querySelector<HTMLButtonElement>('button.boton--principal');
+        expect(boton?.textContent).toContain('Planificar tratamiento desde versión 2');
+        boton?.click();
+        expect(emitir).toHaveBeenCalledWith({
+            version: 2,
+            procedimientos: [{ pieza: 36, caras: 'O', descripcion: 'Pieza 36 · caries oclusal o incisal' }],
+        });
     });
 
     it('usa los cortes de la clínica al proponer el primer odontograma', () => {

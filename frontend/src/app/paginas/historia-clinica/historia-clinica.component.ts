@@ -64,6 +64,7 @@ import { GaleriaImagenesComponent } from '../../compartido/galeria-imagenes.comp
 import { NotaEditorComponent } from './nota-editor.component';
 import { RecetaEditorComponent } from './receta-editor.component';
 import { OdontogramaComponent } from './odontograma.component';
+import type { SolicitudPlanOdontograma } from './odontograma.component';
 import { PlanesTratamientoComponent } from './planes-tratamiento.component';
 import { Formulario033Component } from './formulario-033.component';
 import { PestanasComponent, type OpcionPestana } from '../../compartido/pestanas.component';
@@ -245,7 +246,7 @@ export class HistoriaClinicaComponent implements OnInit {
     ),
   );
   protected readonly puedeEditarPlanes = computed(() =>
-    this.sesion.tienePermiso(PERMISOS.planTratamientoEscribir) && this.especialidades.puedeRegistrar(),
+    this.sesion.tienePermiso(PERMISOS.planTratamientoEscribir) && this.especialidades.puedeRegistrar('planes'),
   );
 
   protected readonly puedeEscribirNotas = computed(() =>
@@ -260,6 +261,12 @@ export class HistoriaClinicaComponent implements OnInit {
 
   /** Pestaña visible. Solo se ofrecen las que el rol puede leer. */
   protected readonly pestana = signal<Pestana>('evolucion');
+  protected readonly solicitudPlanOdontograma = signal<SolicitudPlanOdontograma | null>(null);
+  protected abrirPlanDesdeOdontograma(solicitud: SolicitudPlanOdontograma): void {
+    if (!this.puedeEditarPlanes() || !this.pestanas().some((tab) => tab.clave === 'planes')) return;
+    this.solicitudPlanOdontograma.set(solicitud);
+    this.pestana.set('planes');
+  }
   protected readonly pestanas = computed(() => {
     // Primero lo clínico común a toda especialidad (evolución, recetas,
     // indicaciones); después los módulos propios de la especialidad. Si en una

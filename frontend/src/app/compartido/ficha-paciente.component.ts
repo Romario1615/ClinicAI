@@ -52,6 +52,7 @@ import {
 import { SelectorEspecialidadComponent } from './selector-especialidad.component';
 import { RecorridoPacienteComponent } from './recorrido-paciente.component';
 import { OdontogramaComponent } from '../paginas/historia-clinica/odontograma.component';
+import type { SolicitudPlanOdontograma } from '../paginas/historia-clinica/odontograma.component';
 import { PlanesTratamientoComponent } from '../paginas/historia-clinica/planes-tratamiento.component';
 import { ResumenClinicoComponent } from '../paginas/historia-clinica/resumen-clinico.component';
 import { ConsentimientosPacienteComponent } from './consentimientos-paciente.component';
@@ -419,7 +420,7 @@ const DETALLE_CLINICO: Partial<Record<Pestana, string>> = {
               }
 
               @case ('odontograma') {
-                <app-odontograma [pacienteId]="pacienteId()" [edadPaciente]="edadAnios()" />
+                <app-odontograma [pacienteId]="pacienteId()" [edadPaciente]="edadAnios()" (planificar)="abrirPlanDesdeOdontograma($event)" />
               }
 
               @case ('planes') {
@@ -427,6 +428,7 @@ const DETALLE_CLINICO: Partial<Record<Pestana, string>> = {
                   [pacienteId]="pacienteId()"
                   [nombrePaciente]="nombre()"
                   [puedeEditar]="puedeEditarPlanes()"
+                  [solicitudOdontograma]="solicitudPlanOdontograma()"
                 />
               }
 
@@ -925,6 +927,12 @@ export class FichaPacienteComponent implements OnInit {
   protected readonly puedeEditarPlanes = computed(() =>
     this.sesion.tienePermiso(PERMISOS.planTratamientoEscribir) && this.especialidades.puedeRegistrar('planes'),
   );
+  protected readonly solicitudPlanOdontograma = signal<SolicitudPlanOdontograma | null>(null);
+  protected abrirPlanDesdeOdontograma(solicitud: SolicitudPlanOdontograma): void {
+    if (!this.puedeEditarPlanes() || !this.pestanas().some((tab) => tab.clave === 'planes')) return;
+    this.solicitudPlanOdontograma.set(solicitud);
+    this.pestana.set('planes');
+  }
 
   /** Cada pestaña clínica aparece solo si el rol tiene el permiso que el backend exige. */
   protected readonly pestanas = computed(() => {

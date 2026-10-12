@@ -10,6 +10,7 @@ import { TestBed, type ComponentFixture } from '@angular/core/testing';
 import { HttpTestingController } from '@angular/common/http/testing';
 import { Router } from '@angular/router';
 import { SesionService } from '../../nucleo/servicios/sesion.service';
+import { EspecialidadHistoriaService } from '../../nucleo/servicios/especialidad-historia.service';
 
 import { PlanesTratamientoComponent } from './planes-tratamiento.component';
 import type { PlanTratamiento, ProcedimientoPlan } from '../../nucleo/servicios/api.service';
@@ -250,6 +251,43 @@ describe('PlanesTratamientoComponent', () => {
         expect(c.planes().length).toBe(1);
         expect(c.exito()).toContain('Borrador guardado');
         expect((fixture.nativeElement as HTMLElement).querySelector('dialog[open]')).toBeNull();
+    });
+
+    it('abre desde los hallazgos sin seleccionarlos y exige que el profesional elija el servicio', () => {
+        iniciarSesionCon(['plan_tratamiento.escribir']);
+        TestBed.inject(EspecialidadHistoriaService).disponibles.set([
+            { id: 'esp-1', nombre: 'Odontología', modulos: ['odontograma', 'planes'], propia: true },
+        ]);
+        montar([]);
+        fixture.componentRef.setInput('solicitudOdontograma', {
+            version: 3,
+            procedimientos: [{ pieza: 16, caras: 'O', descripcion: 'Pieza 16 · caries oclusal' }],
+        });
+        fixture.detectChanges();
+        http.expectOne(`${BASE}/catalogo/servicios?especialidad_id=esp-1`).flush([
+            { id: 'srv-1', especialidad_id: 'esp-1', nombre: 'Restauración', precio: 85.5, duracion_minutos: 30, minutos_preparacion: 0, activo: true },
+        ]);
+        fixture.detectChanges();
+        expect(c.titulo).toBe('Plan desde odontograma · versión 3');
+        expect(c.filasOdontograma()[0].incluido).toBe(false);
+        expect((fixture.nativeElement as HTMLElement).querySelector('dialog[open]')?.textContent).toContain('Seleccionar todos');
+
+        c.incluirHallazgo(0, true);
+        c.guardarBorrador();
+        expect(c.errorProcedimiento()).toContain('Elige un servicio');
+        http.expectNone(RUTA, 'No debe crear el borrador sin servicio elegido');
+        c.cambiarServicioHallazgo(0, 'srv-1');
+        expect(c.filasOdontograma()[0].precio).toBe('85.50');
+        c.cambiarPrecioHallazgo(0, '90');
+        c.guardarBorrador();
+        const alta = http.expectOne(RUTA);
+        expect(alta.request.body.titulo).toBe('Plan desde odontograma · versión 3');
+        expect(alta.request.body.procedimientos).toEqual([
+            { fase: 1, orden: 1, pieza: 16, caras: 'O', servicio_id: 'srv-1', descripcion: 'Pieza 16 · caries oclusal', precio: '90.00' },
+        ]);
+        alta.flush(plan({ titulo: 'Plan desde odontograma · versión 3' }));
+        fixture.detectChanges();
+        expect(c.planes()).toHaveLength(1);
     });
 
     it('propone un borrador', () => {

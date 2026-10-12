@@ -201,7 +201,7 @@
           <div class="desplazable" tabindex="0" role="region" aria-label="Documentos del paciente"><app-registros-paciente [pacienteId]="paciente()!.id" [citaId]="citaContexto()" [sedeId]="sedeContexto()" /></div>
         }
         @case ('odontograma') {
-          <app-odontograma class="llena" [pacienteId]="paciente()!.id" />
+          <app-odontograma class="llena" [pacienteId]="paciente()!.id" (planificar)="abrirPlanDesdeOdontograma($event)" />
         }
         @case ('formulario033') {
           <app-formulario-033
@@ -228,6 +228,7 @@
             [pacienteId]="paciente()!.id"
             [nombrePaciente]="paciente()!.nombre + ' ' + paciente()!.apellido"
             [puedeEditar]="puedeEditarPlanes()"
+            [solicitudOdontograma]="solicitudPlanOdontograma()"
           />
         }
         @case ('evolucion') {

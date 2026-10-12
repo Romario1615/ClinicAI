@@ -14,7 +14,7 @@ import { EspecialidadHistoriaService } from '../../nucleo/servicios/especialidad
  * inmutables en la base de datos; una versión antigua se consulta en solo
  * lectura.
  */
-import { Component, computed, effect, inject, input, signal, viewChild, ChangeDetectionStrategy } from '@angular/core';
+import { Component, computed, effect, inject, input, output, signal, viewChild, ChangeDetectionStrategy } from '@angular/core';
 import { DatePipe, NgTemplateOutlet } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { catchError, forkJoin, of } from 'rxjs';
@@ -55,6 +55,11 @@ import { FotosRegistroService } from '../../nucleo/servicios/fotos-registro.serv
 
 /** Herramienta activa de la paleta. */
 export type Herramienta = 'SELECCIONAR' | 'BORRAR' | HallazgoCara | HallazgoPieza;
+
+export interface SolicitudPlanOdontograma {
+  readonly version: number;
+  readonly procedimientos: readonly { readonly pieza: number; readonly caras: string | null; readonly descripcion: string }[];
+}
 
 /** Valor inicial de presentación; no sustituye la dentición guardada. */
 const EDADES_DENTICION_POR_OMISION: EdadesDenticion = { edad_mixta: 6, edad_permanente: 13 };
@@ -100,6 +105,7 @@ const ES_HALLAZGO_PIEZA = new Set<string>(HALLAZGOS_PIEZA.map((h) => h.codigo));
 export class OdontogramaComponent {
   readonly pacienteId = input.required<string>();
   readonly edadPaciente = input<number | null>(null);
+  readonly planificar = output<SolicitudPlanOdontograma>();
 
   private readonly api = inject(ApiService);
   private readonly sesion = inject(SesionService);
@@ -111,6 +117,9 @@ export class OdontogramaComponent {
   protected readonly puedeCargarFotos = this.sesion.tienePermiso(PERMISOS.imagenClinicaCargar);
 
   protected readonly puedeEditar = computed(() => this.sesion.tienePermiso(PERMISOS.odontogramaEscribir) && this.especialidades.puedeRegistrar('odontograma'));
+  protected readonly puedePlanificar = computed(() =>
+    this.sesion.tienePermiso(PERMISOS.planTratamientoEscribir) && this.especialidades.puedeRegistrar('planes'),
+  );
   protected readonly puedeLeerSensible = this.sesion.tienePermiso(PERMISOS.historiaLeerSensible);
   private readonly puedeVerPlanes = this.sesion.tienePermiso(PERMISOS.planTratamientoLeer);
   protected readonly denticion = signal<Denticion>('PERMANENTE');
@@ -152,6 +161,13 @@ export class OdontogramaComponent {
   protected readonly puedeGuardar = computed(
     () => this.puedeEditar() && !this.guardando() && (this.actual()?.vigente ?? true),
   );
+  protected readonly hallazgosVersionActual = computed(() => {
+    const vigente = this.versionVigente();
+    return vigente ? Object.values(vigente.piezas).filter((estado) =>
+      Boolean(estado.pieza) || Object.keys(estado.caras).length > 0,
+    ).length : 0;
+  });
+  protected readonly versionVigente = computed(() => this.versiones().find((version) => version.vigente) ?? null);
   protected readonly estadoSeleccionado = computed(() => {
     const codigo = this.seleccionada();
     return codigo === null ? PIEZA_VACIA : (this.borrador()[String(codigo)] ?? PIEZA_VACIA);
@@ -233,6 +249,29 @@ export class OdontogramaComponent {
 
   protected elegirHerramienta(herramienta: Herramienta): void {
     this.herramienta.set(herramienta);
+  }
+
+  protected abrirPlanificacion(): void {
+    const vigente = this.versiones().find((version) => version.vigente);
+    if (!vigente || !this.puedePlanificar()) return;
+    const procedimientos = Object.entries(vigente.piezas)
+      .filter(([, estado]) => Boolean(estado.pieza) || Object.keys(estado.caras).length > 0)
+      .map(([pieza, estado]) => ({
+        pieza: Number(pieza),
+        caras: Object.keys(estado.caras).join('') || null,
+        descripcion: `Pieza ${pieza} · ${this.descripcionHallazgo(estado)}`,
+      }));
+    if (procedimientos.length) this.planificar.emit({ version: vigente.version, procedimientos });
+  }
+
+  private descripcionHallazgo(estado: EstadoPiezaOdontograma): string {
+    const detalles = Object.entries(estado.caras).map(([codigo, hallazgo]) => {
+      const cara = CARAS.find((opcion) => opcion.codigo === codigo)?.nombre?.toLowerCase() ?? codigo;
+      return `${nombreHallazgoCara(hallazgo).toLowerCase()} ${cara}`;
+    });
+    const pieza = HALLAZGOS_PIEZA.find((opcion) => opcion.codigo === estado.pieza)?.nombre.toLowerCase();
+    if (pieza) detalles.unshift(pieza);
+    return detalles.join(' y ') || describirEstado(estado).toLowerCase();
   }
 
   /**

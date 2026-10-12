@@ -14,6 +14,9 @@ import type { Sede } from '../../nucleo/modelos/dominio';
 import { ApiService } from '../../nucleo/servicios/api.service';
 import { RegistrosPacienteService, guardarPdf } from '../../nucleo/servicios/registros-paciente.service';
 import { CatalogoService, type ClinicaCatalogo } from '../../nucleo/servicios/catalogo.service';
+import type { Servicio } from '../../nucleo/modelos/dominio';
+import { EspecialidadHistoriaService } from '../../nucleo/servicios/especialidad-historia.service';
+import type { SolicitudPlanOdontograma } from './odontograma.component';
 import type {
   HallazgoResultante,
   PlantillaPlan,
@@ -70,12 +73,14 @@ export class PlanesTratamientoComponent {
   readonly sedeContexto = input<string | null>(null);
   private claveDocumento = crypto.randomUUID();
   private readonly catalogo = inject(CatalogoService);
+  private readonly especialidades = inject(EspecialidadHistoriaService);
   private readonly router = inject(Router);
   private readonly sesion = inject(SesionService);
 
   readonly pacienteId = input.required<string>();
   readonly nombrePaciente = input.required<string>();
   readonly puedeEditar = input(false);
+  readonly solicitudOdontograma = input<SolicitudPlanOdontograma | null>(null);
   protected readonly puedeLeerSensible = computed(() =>
     this.sesion.tienePermiso(PERMISOS.historiaLeerSensible),
   );
@@ -102,6 +107,20 @@ export class PlanesTratamientoComponent {
   } | null>(null);
   protected readonly mostrarFormulario = signal(false);
   protected readonly procedimientos = signal<readonly ProcedimientoPlanNuevo[]>([]);
+  protected readonly serviciosOdontograma = signal<readonly Servicio[]>([]);
+  protected readonly filasOdontograma = signal<readonly (SolicitudPlanOdontograma['procedimientos'][number] & {
+    readonly incluido: boolean;
+    readonly servicio_id: string;
+    readonly precio: string;
+  })[]>([]);
+  protected readonly desdeOdontograma = signal(false);
+  protected readonly procedimientosTotales = computed(() => [
+    ...this.filasOdontograma().filter((fila) => fila.incluido).map((fila, indice) => ({
+      fase: 1, orden: indice + 1, pieza: fila.pieza, caras: fila.caras,
+      servicio_id: fila.servicio_id || null, descripcion: fila.descripcion.trim(), precio: fila.precio,
+    })),
+    ...this.procedimientos(),
+  ]);
   protected readonly hoyIso = new Date().toISOString();
   protected readonly total = computed(() =>
     this.procedimientos().reduce((suma, item) => suma + Number(item.precio), 0),
@@ -134,6 +153,61 @@ export class PlanesTratamientoComponent {
 
   constructor() {
     effect(() => this.cargar(this.pacienteId()));
+    effect(() => {
+      const solicitud = this.solicitudOdontograma();
+      if (solicitud && this.puedeEditar()) this.precargarOdontograma(solicitud);
+    });
+  }
+
+  private precargarOdontograma(solicitud: SolicitudPlanOdontograma): void {
+    this.reiniciarFormulario();
+    this.desdeOdontograma.set(true);
+    this.titulo = `Plan desde odontograma · versión ${solicitud.version}`;
+    this.filasOdontograma.set(solicitud.procedimientos.map((fila) => ({
+      ...fila, incluido: false, servicio_id: '', precio: '0.00',
+    })));
+    const especialidadId = this.especialidades.elegida()?.id;
+    if (especialidadId) {
+      this.catalogo.servicios(especialidadId).subscribe({
+        next: (servicios) => this.serviciosOdontograma.set(servicios.filter((servicio) => servicio.activo !== false)),
+        error: (fallo) => this.error.set(this.mensaje(fallo)),
+      });
+    }
+    this.mostrarFormulario.set(true);
+  }
+
+  protected seleccionarTodosHallazgos(): void {
+    this.filasOdontograma.update((filas) => filas.map((fila) => ({ ...fila, incluido: true })));
+  }
+
+  protected incluirHallazgo(indice: number, incluido: boolean): void {
+    this.filasOdontograma.update((filas) => filas.map((fila, posicion) =>
+      posicion === indice ? { ...fila, incluido } : fila,
+    ));
+  }
+
+  protected cambiarServicioHallazgo(indice: number, servicioId: string): void {
+    const servicio = this.serviciosOdontograma().find((item) => item.id === servicioId);
+    this.filasOdontograma.update((filas) => filas.map((fila, posicion) => posicion === indice
+      ? { ...fila, servicio_id: servicioId, precio: servicio?.precio == null ? fila.precio : Number(servicio.precio).toFixed(2) }
+      : fila,
+    ));
+  }
+
+  protected cambiarPrecioHallazgo(indice: number, precio: string): void {
+    this.filasOdontograma.update((filas) => filas.map((fila, posicion) =>
+      posicion === indice ? { ...fila, precio } : fila,
+    ));
+  }
+
+  protected cambiarDescripcionHallazgo(indice: number, descripcion: string): void {
+    this.filasOdontograma.update((filas) => filas.map((fila, posicion) =>
+      posicion === indice ? { ...fila, descripcion } : fila,
+    ));
+  }
+
+  protected cantidadHallazgosIncluidos(): number {
+    return this.filasOdontograma().filter((fila) => fila.incluido).length;
   }
 
   protected cargar(pacienteId: string): void {
@@ -213,13 +287,31 @@ export class PlanesTratamientoComponent {
   }
 
   protected guardarBorrador(): void {
-    if (this.guardando() || !this.procedimientos().length) return;
+    if (this.guardando() || !this.procedimientosTotales().length) return;
+    if (this.desdeOdontograma()) {
+      const filas = this.filasOdontograma().filter((fila) => fila.incluido);
+      if (filas.some((fila) => !fila.servicio_id)) {
+        this.errorProcedimiento.set('Elige un servicio del catálogo para cada hallazgo seleccionado.');
+        return;
+      }
+      if (filas.some((fila) => fila.descripcion.trim().length < 3 || fila.descripcion.trim().length > 300)) {
+        this.errorProcedimiento.set('Cada descripción debe tener entre 3 y 300 caracteres.');
+        return;
+      }
+      if (filas.some((fila) => !Number.isFinite(Number(fila.precio)) || Number(fila.precio) < 0)) {
+        this.errorProcedimiento.set('Cada precio debe ser un importe válido igual o mayor que cero.');
+        return;
+      }
+    }
     const datos: PlanTratamientoNuevo = {
       titulo: this.titulo.trim(),
       moneda: 'USD',
       observaciones: this.observaciones.trim() || null,
       nivel_sensibilidad: this.nivelSensibilidad,
-      procedimientos: this.procedimientos(),
+      procedimientos: this.procedimientosTotales().map((item) => ({
+        ...item,
+        precio: Number(item.precio).toFixed(2),
+      })),
     };
     this.guardando.set(true);
     this.error.set('');
@@ -511,6 +603,8 @@ export class PlanesTratamientoComponent {
     this.observaciones = '';
     this.nivelSensibilidad = 'N2';
     this.procedimientos.set([]);
+    this.filasOdontograma.set([]);
+    this.desdeOdontograma.set(false);
     this.descripcionProcedimiento = '';
     this.pieza = '';
     this.caras = '';

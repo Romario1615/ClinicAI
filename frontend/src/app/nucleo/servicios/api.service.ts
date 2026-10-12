@@ -690,6 +690,7 @@ export interface ProcedimientoPlanNuevo {
   readonly orden: number;
   readonly pieza: number | null;
   readonly caras: string | null;
+  readonly servicio_id?: string | null;
   readonly descripcion: string;
   readonly precio: string;
 }

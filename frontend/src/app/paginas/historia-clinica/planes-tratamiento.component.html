@@ -42,6 +42,40 @@
     >
       <form id="formulario-plan" class="editor-plan" (ngSubmit)="guardarBorrador()">
       <p class="campo__ayuda">El borrador no se envía al paciente ni se incorpora a su odontograma.</p>
+      @if (desdeOdontograma()) {
+        <section class="procedimiento-editor" aria-labelledby="hallazgos-plan-titulo">
+          <div class="plan__cabecera">
+            <div><h4 id="hallazgos-plan-titulo">Hallazgos de la versión guardada</h4><p>Selecciona los que quieras incluir. La aplicación no asigna un tratamiento.</p></div>
+            <button class="boton" type="button" (click)="seleccionarTodosHallazgos()">Seleccionar todos</button>
+          </div>
+          @for (fila of filasOdontograma(); track $index; let i = $index) {
+            <fieldset class="fila-hallazgo-plan">
+              <legend class="visualmente-oculto">Hallazgo de la pieza {{ fila.pieza }}</legend>
+              <label class="campo fila-hallazgo-plan__seleccion">
+                <input type="checkbox" [checked]="fila.incluido" (change)="incluirHallazgo(i, $any($event.target).checked)" />
+                <span>Pieza {{ fila.pieza }}{{ fila.caras ? ' · ' + fila.caras : '' }} · {{ fila.descripcion }}</span>
+              </label>
+              <label class="campo">
+                <span class="campo__etiqueta">Servicio del catálogo</span>
+                <select class="campo__control" [value]="fila.servicio_id" [disabled]="!fila.incluido" (change)="cambiarServicioHallazgo(i, $any($event.target).value)">
+                  <option value="">Elige el procedimiento</option>
+                  @for (servicio of serviciosOdontograma(); track servicio.id) {
+                    <option [value]="servicio.id">{{ servicio.nombre }}</option>
+                  }
+                </select>
+              </label>
+              <label class="campo">
+                <span class="campo__etiqueta">Descripción editable</span>
+                <input class="campo__control" [value]="fila.descripcion" [disabled]="!fila.incluido" maxlength="300" (input)="cambiarDescripcionHallazgo(i, $any($event.target).value)" />
+              </label>
+              <label class="campo">
+                <span class="campo__etiqueta">Precio (USD)</span>
+                <input class="campo__control" type="number" min="0" step="0.01" [value]="fila.precio" [disabled]="!fila.incluido" (input)="cambiarPrecioHallazgo(i, $any($event.target).value)" />
+              </label>
+            </fieldset>
+          }
+        </section>
+      }
       @if (plantillas()?.length) {
         <label class="campo">
           <span class="campo__etiqueta">Partir de una plantilla (opcional)</span>
@@ -103,11 +137,11 @@
         }
       </div>
 
-      @if (procedimientos().length) {
+      @if (procedimientosTotales().length) {
         <div class="procedimientos-pendientes">
           <h4>Procedimientos del borrador</h4>
           <ol>
-            @for (item of procedimientos(); track $index; let i = $index) {
+            @for (item of procedimientosTotales(); track $index; let i = $index) {
               <li>
                 <span>
                   Fase {{ item.fase }} · {{ item.descripcion }}
@@ -115,9 +149,9 @@
                   @if (item.caras) { · Caras {{ item.caras }} }
                   · {{ dinero(item.precio) }}
                 </span>
-                <button class="boton boton--plano" type="button" (click)="quitarProcedimiento(i)">
-                  Quitar
-                </button>
+                @if (i >= cantidadHallazgosIncluidos()) {
+                  <button class="boton boton--plano" type="button" (click)="quitarProcedimiento(i - cantidadHallazgosIncluidos())">Quitar</button>
+                }
               </li>
             }
           </ol>
@@ -153,7 +187,7 @@
             Guardar como plantilla
           </button>
         }
-        <button class="boton boton--principal" type="submit" form="formulario-plan" [disabled]="guardando() || !procedimientos().length">
+        <button class="boton boton--principal" type="submit" form="formulario-plan" [disabled]="guardando() || !procedimientosTotales().length">
           {{ guardando() ? 'Guardando…' : 'Guardar borrador' }}
         </button>
       </div>
