@@ -32,6 +32,7 @@ from app.modulos.agenda.modelos import Cita, CitaHistorial, EstadoCita, OrigenCi
 from app.modulos.agenda.repositorio import RepositorioAgenda
 from app.modulos.agenda.servicios import ServicioAgenda, SolicitudReserva
 from app.modulos.outbox.modelos import Recordatorio
+from app.modulos.pagos.modelos import CargoPago
 from app.nucleo.auditoria import AccionAuditada
 from app.nucleo.autorizacion import Ambito, Principal, TipoActor, principal_sistema
 from app.nucleo.errores import (
@@ -1566,3 +1567,68 @@ async def _solicitud_en_horario_disponible(
         key=lambda disponible: abs(disponible.inicio.astimezone(zona) - objetivo),
     )
     return replace(solicitud, inicio=turno.inicio)
+
+
+class TestCargoAlCompletar:
+    """Al completar la atención queda el cobro pendiente con la tarifa del servicio.
+
+    Como en el software odontológico: el procedimiento realizado genera el cargo
+    con el arancel; recepción solo cobra o ajusta el total (ADR-0027).
+    """
+
+    async def _cargos(self, sesion: AsyncSession, cita_id: uuid.UUID) -> list[CargoPago]:
+        filas = await sesion.execute(sa.select(CargoPago).where(CargoPago.cita_id == cita_id))
+        return list(filas.scalars())
+
+    async def test_crea_el_cargo_con_el_precio_del_servicio(
+        self, sesion, servicio_agenda, solicitud, principal_recepcion
+    ) -> None:
+        await sesion.execute(
+            sa.update(Servicio).where(Servicio.id == solicitud.servicio_id).values(precio=45)
+        )
+        creada = await servicio_agenda.crear_cita_confirmada(
+            solicitud, principal=principal_recepcion
+        )
+        resultado = await servicio_agenda.completar_cita(
+            creada.cita.id, principal=principal_recepcion
+        )
+        cargos = await self._cargos(sesion, creada.cita.id)
+        assert len(cargos) == 1
+        assert cargos[0].total_acordado == 45
+        assert cargos[0].origen == "PACTADO"
+        assert AccionAuditada.CARGO_PAGO_CREADO in {e.accion for e in resultado.auditoria}
+
+    async def test_no_toca_un_cargo_ya_pactado(
+        self, sesion, servicio_agenda, solicitud, principal_recepcion
+    ) -> None:
+        await sesion.execute(
+            sa.update(Servicio).where(Servicio.id == solicitud.servicio_id).values(precio=45)
+        )
+        creada = await servicio_agenda.crear_cita_confirmada(
+            solicitud, principal=principal_recepcion
+        )
+        sesion.add(
+            CargoPago(
+                clinica_id=creada.cita.clinica_id,
+                cita_id=creada.cita.id,
+                total_acordado=30,
+                moneda="USD",
+                origen="PACTADO",
+            )
+        )
+        await sesion.flush()
+        await servicio_agenda.completar_cita(creada.cita.id, principal=principal_recepcion)
+        cargos = await self._cargos(sesion, creada.cita.id)
+        assert [c.total_acordado for c in cargos] == [30]
+
+    async def test_sin_precio_no_inventa_un_cargo(
+        self, sesion, servicio_agenda, solicitud, principal_recepcion
+    ) -> None:
+        await sesion.execute(
+            sa.update(Servicio).where(Servicio.id == solicitud.servicio_id).values(precio=None)
+        )
+        creada = await servicio_agenda.crear_cita_confirmada(
+            solicitud, principal=principal_recepcion
+        )
+        await servicio_agenda.completar_cita(creada.cita.id, principal=principal_recepcion)
+        assert await self._cargos(sesion, creada.cita.id) == []

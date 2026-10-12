@@ -31,7 +31,7 @@ from itertools import pairwise
 from typing import Final
 from zoneinfo import ZoneInfo
 
-from sqlalchemy import text
+from sqlalchemy import select, text
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -63,8 +63,10 @@ from app.modulos.agenda.modelos import (
 )
 from app.modulos.agenda.repositorio import RepositorioAgenda, rango_de_dias
 from app.modulos.lista_espera.servicios import ServicioListaEspera
+from app.modulos.organizacion.modelos import Servicio
 from app.modulos.outbox.modelos import TipoMensajeOutbox
 from app.modulos.pacientes.modelos import RelacionAsistencial
+from app.modulos.pagos.modelos import CargoPago
 from app.nucleo.auditoria import (
     AccionAuditada,
     EntradaAuditoria,
@@ -1442,8 +1444,62 @@ class ServicioAgenda:
             paciente_id=cita.paciente_id,
             estado_anterior=estado_anterior,
         )
+        cargo = (
+            await self._cargo_por_tarifa(cita, principal, ahora)
+            if nuevo_estado is EstadoCita.COMPLETED
+            else None
+        )
+        return ResultadoOperacion(cita, (entrada,) if cargo is None else (entrada, cargo))
 
-        return ResultadoOperacion(cita, (entrada,))
+    async def _cargo_por_tarifa(
+        self, cita: Cita, principal: Principal, ahora: datetime
+    ) -> EntradaAuditoria | None:
+        """Deja el cobro pendiente para recepción con la tarifa del servicio.
+
+        Como en el software odontológico (Open Dental), completar la atención
+        genera el cargo con el precio del arancel. Solo si el servicio tiene
+        precio y la cita aún no tiene cargo: un total ya pactado o abonado no
+        se toca. Recepción lo ajusta (descuento, convenio) con
+        `PATCH /pagos/cargos/{id}/total`. Ver ADR-0027.
+        """
+        precio = (
+            await self._sesion.execute(
+                select(Servicio.precio).where(Servicio.id == cita.servicio_id)
+            )
+        ).scalar_one_or_none()
+        if precio is None or precio <= 0:
+            return None
+        existente = (
+            await self._sesion.execute(select(CargoPago.id).where(CargoPago.cita_id == cita.id))
+        ).scalar_one_or_none()
+        if existente is not None:
+            return None
+        cargo = CargoPago(
+            clinica_id=cita.clinica_id,
+            cita_id=cita.id,
+            total_acordado=precio,
+            moneda="USD",
+            origen="PACTADO",
+            creado_por=principal.actor_id,
+        )
+        self._sesion.add(cargo)
+        try:
+            await self._sesion.flush()
+        except SQLAlchemyError as exc:
+            await self._sesion.rollback()
+            raise traducir_o_propagar(exc) from exc
+        return construir_entrada(
+            accion=AccionAuditada.CARGO_PAGO_CREADO,
+            principal=principal,
+            ahora=ahora,
+            entidad_tipo="cargo_pago",
+            entidad_id=cargo.id,
+            sede_id=cita.sede_id,
+            paciente_id=cita.paciente_id,
+            cita_id=str(cita.id),
+            total_acordado=str(precio),
+            origen_total="TARIFA_SERVICIO",
+        )
 
     # ==================================================================
     #  Expiracion de bloqueos temporales
