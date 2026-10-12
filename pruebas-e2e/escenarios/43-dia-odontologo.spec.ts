@@ -29,6 +29,7 @@ async function prepararDia(request: APIRequestContext) {
   const serviciosRespuesta = await request.get(`${API}/catalogo/servicios`, { headers: headersProfesional });
   expect(serviciosRespuesta.ok()).toBe(true);
   const servicios = (await serviciosRespuesta.json()).filter((s: { especialidad_id: string }) => s.especialidad_id === profesional.especialidad_id);
+  let servicioElegido: { id: string; nombre: string; precio: number | null } | null = null;
 
   const ahora = new Date();
   const desde = new Date(ahora.getTime() + 60_000);
@@ -44,6 +45,7 @@ async function prepararDia(request: APIRequestContext) {
       const candidato = turnos.find((t: { inicio: string }) => new Date(t.inicio).getTime() > Date.now());
       if (candidato) {
         turno = { inicio: candidato.inicio, sede_id, servicio_id: servicio.id };
+        servicioElegido = servicio;
         break busqueda;
       }
     }
@@ -68,7 +70,7 @@ async function prepararDia(request: APIRequestContext) {
   // al profesional; la transición de inicio ocurre durante el recorrido UI.
   const llegada = await request.post(`${API}/agenda/citas/${cita.id}/llegada`, { headers: headersAdmin });
   expect(llegada.status()).toBe(200);
-  return { paciente, cita, profesional, documento };
+  return { paciente, cita, profesional, documento, servicio: servicioElegido! };
 }
 
 async function captura(page: Page, numero: number) {
@@ -187,37 +189,48 @@ test('recorrido de un día de clínica como odontólogo: agenda, ficha, registro
     .getByRole('button', { name: 'Ver ficha del paciente', exact: true }).click();
   await expect(page.locator('app-ficha-paciente')).toBeVisible();
 
-  // 6. Borrador de plan con procedimientos, piezas FDI, fase y presupuesto estimado.
-  await seccionesFicha.getByRole('tab', { name: 'Plan de tratamiento', exact: true }).click();
+  // 6. Desde la versión guardada, seleccionar el hallazgo y elegir el servicio.
+  await seccionesFicha.getByRole('tab', { name: 'Odontograma', exact: true }).click();
+  const odontogramaFicha = ficha.locator('app-odontograma');
+  const planificar = odontogramaFicha.getByRole('button', { name: 'Planificar tratamiento desde versión 1', exact: true });
+  await expect(planificar).toBeVisible();
+  const esperaServicios = page.waitForResponse(r => r.request().method() === 'GET' && r.url().includes('/catalogo/servicios?especialidad_id='));
+  await planificar.click();
+  await seccionesFicha.getByRole('tab', { name: 'Plan de tratamiento', exact: true }).waitFor({ state: 'visible' });
   const planes = ficha.locator('app-planes-tratamiento');
-  await planes.getByRole('button', { name: 'Crear borrador', exact: true }).click();
   const editorPlan = page.getByRole('dialog', { name: 'Crear borrador de tratamiento', exact: true });
-  await editorPlan.getByLabel('Título del plan').fill('Plan odontológico sintético');
-  await editorPlan.getByLabel('Descripción').fill('Restauración de caries oclusal');
-  await editorPlan.getByLabel('Fase').fill('1');
-  await editorPlan.getByLabel('Pieza FDI (opcional)').fill('16');
-  await editorPlan.getByLabel('Caras FDI').fill('O');
-  await editorPlan.getByLabel('Precio (USD)').fill('85');
-  await editorPlan.getByRole('button', { name: 'Añadir al plan', exact: true }).click();
-  await editorPlan.getByLabel('Descripción').fill('Revisión de obturación existente');
-  await editorPlan.getByLabel('Fase').fill('2');
-  await editorPlan.getByLabel('Pieza FDI (opcional)').fill('26');
-  await editorPlan.getByLabel('Caras FDI').fill('O');
-  await editorPlan.getByLabel('Precio (USD)').fill('0');
-  await editorPlan.getByRole('button', { name: 'Añadir al plan', exact: true }).click();
+  const filaHallazgo = editorPlan.locator('fieldset.fila-hallazgo-plan').filter({ hasText: 'Pieza 16' });
+  await expect(filaHallazgo).toContainText('Pieza 16 · caries oclusal o incisal');
+  await expect(filaHallazgo.getByRole('checkbox')).not.toBeChecked();
+  await expect(filaHallazgo.getByLabel('Descripción editable')).toHaveValue('Pieza 16 · caries oclusal o incisal');
+  await filaHallazgo.getByRole('checkbox').check();
+  await filaHallazgo.getByLabel('Servicio del catálogo').selectOption(datos.servicio.id);
+  await esperaServicios;
+  await expect(filaHallazgo.getByLabel('Precio (USD)')).toHaveValue(Number(datos.servicio.precio ?? 0).toFixed(2));
   await captura(page, 6);
+  const respuestaPlan = page.waitForResponse(r => r.request().method() === 'POST' && r.url().endsWith(`/odontologia/pacientes/${datos.paciente.id}/planes-tratamiento`));
   await editorPlan.getByRole('button', { name: 'Guardar borrador', exact: true }).click();
-  await expect(planes).toContainText('Plan odontológico sintético');
-  if (!(await planes.getByRole('button', { name: /presupuesto/i }).count())) {
-    hallazgos.push('El plan queda como borrador y no ofrece presupuesto/cotización hasta pasos posteriores de propuesta/aceptación; el total no se entrega directamente a recepción.');
-  }
-  hallazgos.push('No hay acción para convertir directamente los hallazgos del odontograma en procedimientos del plan; pieza y caras se vuelven a capturar manualmente.');
+  const guardadoPlan = await respuestaPlan;
+  expect(guardadoPlan.status()).toBe(201);
+  const planCreado = await guardadoPlan.json();
+  expect(planCreado.titulo).toBe('Plan desde odontograma · versión 1');
+  expect(planCreado.procedimientos).toHaveLength(1);
+  expect(planCreado.procedimientos[0]).toMatchObject({ pieza: 16, caras: 'O', servicio_id: datos.servicio.id, precio: Number(datos.servicio.precio ?? 0).toFixed(2) });
+  await expect(planes).toContainText('Presupuesto estimado. El documento para firma se genera al proponer el plan.');
+  await expect(planes).toContainText('1 procedimiento(s) presupuestado(s)');
+  await expect(planes).toContainText('Total:');
+  await expect(planes.getByRole('button', { name: 'Proponer al paciente', exact: true })).toBeVisible();
+  await captura(page, 7);
+  await seccionesFicha.getByRole('tab', { name: 'Odontograma', exact: true }).click();
+  const odontogramaActualizado = ficha.locator('app-odontograma');
+  await expect(odontogramaActualizado.getByRole('button', { name: /Pieza 16:.*Planificado/ })).toBeVisible();
+  await expect(odontogramaActualizado.locator('.leyenda')).toContainText('Planificado');
 
   // 7. Cerrar la cita desde Agenda tras completar los registros.
   await ficha.getByRole('button', { name: `Cerrar ${nombre}`, exact: true }).click();
   await expect(page.locator('app-ficha-paciente')).toHaveCount(0);
   await expect(detalle).toBeVisible();
-  await captura(page, 7);
+  await captura(page, 8);
   const completar = detalle.getByRole('button', { name: 'Marcar como atendida', exact: true });
   if (await completar.isVisible().catch(() => false)) {
     page.once('dialog', dialog => dialog.accept());
@@ -237,7 +250,7 @@ test('recorrido de un día de clínica como odontólogo: agenda, ficha, registro
   expect(pagosRespuesta.ok()).toBe(true);
   const cargos = (await pagosRespuesta.json()).elementos as Array<{ cita_id: string; total_acordado: string | null }>;
   const cargo = cargos.find(item => item.cita_id === datos.cita.id);
-  await captura(page, 8);
+  await captura(page, 9);
   if (!cargo) {
     hallazgos.push('La cita atendida no genera ni deja un cargo pendiente asociado: recepción no tiene importe/estado que cobrar; el borrador del plan tampoco crea el cargo.');
     test.info().annotations.push({ type: 'hallazgo', description: 'Paso 8: no se encontró cargo de la cita para recepción; se documenta como brecha del recorrido.' });
@@ -274,7 +287,7 @@ test('recorrido de un día de clínica como odontólogo: agenda, ficha, registro
     if (!(await page.locator('app-ficha-paciente').count())) {
       hallazgos.push('No fue posible volver a abrir la ficha por Pacientes ni desde la cita completada; la carga de radiografía quedó bloqueada en este recorrido.');
       test.info().annotations.push({ type: 'fixme', description: 'Paso 9 no alcanzable en la interfaz: no hay acceso a la ficha tras completar la cita; evidencia en 09-paso.png.' });
-      await captura(page, 9);
+      await captura(page, 10);
       guardarHallazgos();
       test.info().annotations.push({ type: 'hallazgos', description: hallazgos.join('\n') });
       return;
@@ -304,7 +317,7 @@ test('recorrido de un día de clínica como odontólogo: agenda, ficha, registro
   await expect(galeria.locator('.galeria__exito')).toContainText(/Imagen cargada/i);
   const tarjetaRadiografia = galeria.locator('.galeria__tarjeta').filter({ hasText: 'Radiografía sintética generada para recorrido E2E' });
   await expect(tarjetaRadiografia.locator('img')).toBeVisible();
-  await captura(page, 9);
+  await captura(page, 10);
 
   const medidas = await page.evaluate(() => ({ ancho: document.documentElement.scrollWidth, alto: document.documentElement.scrollHeight,
     viewportAncho: innerWidth, viewportAlto: innerHeight }));

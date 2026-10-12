@@ -299,7 +299,16 @@ describe('PlanesTratamientoComponent', () => {
         http.expectNone(RUTA, 'No debe crear el borrador sin servicio elegido');
         c.cambiarServicioHallazgo(0, 'srv-1');
         expect(c.filasOdontograma()[0].precio).toBe('85.50');
+        c.cambiarPrecioHallazgo(0, '-1');
+        c.guardarBorrador();
+        expect(c.errorProcedimiento()).toContain('Cada precio');
+        http.expectNone(RUTA, 'No debe enviar un precio inválido por fila');
         c.cambiarPrecioHallazgo(0, '90');
+        c.cambiarDescripcionHallazgo(0, 'x');
+        c.guardarBorrador();
+        expect(c.errorProcedimiento()).toContain('Cada descripción');
+        http.expectNone(RUTA, 'No debe enviar una descripción inválida por fila');
+        c.cambiarDescripcionHallazgo(0, 'Pieza 16 · caries oclusal');
         c.guardarBorrador();
         const alta = http.expectOne(RUTA);
         expect(alta.request.body.titulo).toBe('Plan desde odontograma · versión 3');
