@@ -271,3 +271,47 @@ hallazgos del odontograma con presupuesto del borrador.
 
 Verificación: la del plan; E2E 42 y 43 en verde con API 8031 (reiniciar
 antes: el backend cambió en `cb4338d`), más la suite completa al final.
+
+## Anexo G · Plan de tratamiento y presupuesto desde el odontograma (2026‑10‑12)
+
+Petición del usuario: «como el software odontológico». En Open Dental y
+similares, el dentista planifica procedimientos sobre la pieza y la superficie
+en la propia carta dental; el plan muestra el presupuesto en todo momento; las
+piezas con tratamiento planificado se distinguen de lo ya realizado.
+
+El backend ya lo soporta (sin cambios): `POST /pacientes/{id}/planes-tratamiento`
+con `procedimientos[]` (`fase`, `pieza` FDI, `caras`, `servicio_id`,
+`descripcion`, `precio`), `.../propuesta`, `.../aceptacion`,
+`/historia/planes/{id}/presupuesto-documento` (solo PROPUESTO/ACEPTADO) y
+`/procedimientos/{id}/completado` con `hallazgo_resultante`.
+
+**Regla clínica (CLAUDE.md §1.5):** la app **no** decide el tratamiento. No hay
+correspondencia automática hallazgo → procedimiento: el profesional elige el
+servicio de cada fila. La app solo prellena pieza, caras y una descripción con
+el hallazgo.
+
+38. **«Planificar tratamiento» en el Odontograma** (ficha e Historia), visible
+    con `plan_tratamiento.escribir` y el módulo `planes` activo, cuando hay una
+    versión guardada con hallazgos. Abre una ventana con los hallazgos de la
+    versión vigente (pieza FDI, caras, hallazgo), **sin marcar** por omisión y
+    con «Seleccionar todos». Por cada uno: pieza y caras prellenadas,
+    descripción editable («Pieza 16 · caries oclusal»), selector de servicio
+    (catálogo de la especialidad del profesional), precio tomado de
+    `servicio.precio` y editable, y fase (1 por omisión). Se puede añadir una
+    fila sin pieza (p. ej. profilaxis). Guardar crea un plan BORRADOR titulado
+    «Plan desde odontograma · versión N». Guardado explícito, botón inactivo
+    mientras envía, error del backend visible.
+39. **Presupuesto vivo.** En la vista del plan (también BORRADOR): subtotal por
+    fase, total y número de procedimientos, en la moneda del plan. En
+    BORRADOR, texto: «Presupuesto estimado. El documento para firma se genera
+    al proponer el plan.» y acción «Proponer al paciente», que después ofrece
+    «Generar presupuesto para firma» (endpoint existente).
+40. **Planificado frente a realizado en la carta.** En el Odontograma, marcar
+    las piezas con procedimientos PENDIENTE de planes BORRADOR/PROPUESTO/
+    ACEPTADO (indicador «Planificado», con leyenda y texto accesible), distinto
+    de los hallazgos registrados. Solo lectura: no cambia el odontograma.
+41. **Pruebas.** Unitarias del flujo (selección, prellenado, precio desde el
+    servicio, validación por fila, ocultación sin permiso) y ampliar el E2E 43
+    para planificar desde los hallazgos registrados y ver el presupuesto.
+
+Verificación: la del plan; E2E 26, 43 y suite completa con API 8031.
