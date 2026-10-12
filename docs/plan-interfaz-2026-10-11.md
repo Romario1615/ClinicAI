@@ -230,3 +230,44 @@ Sin fugas de datos ni pruebas relajadas. Correcciones:
 28. Resuelto por Claude en backend: `GET /historia/denticion-por-edad` acepta
     también `especialidad.gestionar`, así Catálogo carga los cortes sin
     `odontograma.leer`.
+
+## Anexo F · Prueba de uso real (2026‑10‑12)
+
+Informes: `tmp/recorrido-odontologo.md` (Codex, 1/1, `bd7102b`) y
+`tmp/recorrido-recepcion.md` (Haiku, **incompleto**: pasos 4–8 sin ejecutar).
+Resuelto por Claude: cargo con tarifa al completar (ADR-0030, `cb4338d`).
+**Regla:** cada hallazgo se confirma con evidencia (captura, respuesta HTTP o
+código) antes de corregirlo; si no se reproduce, se anota como descartado.
+
+29. **Terminar el recorrido de recepción.** Tomar
+    `pruebas-e2e/escenarios/42-dia-recepcion.spec.ts` (sin confirmar, de Haiku)
+    y dejarlo corriendo de principio a fin: alta, cita, confirmar, llegada,
+    búsqueda superior por cédula, cobro (ahora con cargo por tarifa tras la
+    atención), lista de espera, reprogramar y cancelar con motivo.
+30. **Nueva cita sin horas.** Haiku vio «No quedan horas libres» en «Nueva
+    cita» mientras la rejilla mostraba huecos «Libre» (posible efecto de no
+    preseleccionar servicio en «Todos», `c8fe63f`). Si se confirma: pedir
+    servicio/profesional dentro de la ventana o tomarlos del hueco elegido.
+31. **Bloques de cita con «Paciente» genérico** en la rejilla: mostrar el
+    nombre a quien tenga permiso de verlo.
+32. **Etiquetas accesibles**: WhatsApp, Correo y «Buscar paciente» sin
+    `<label>` asociado.
+33. **Odontólogo – nota sin cita** (alta): la nota SOAP se guardó con
+    `cita_id` vacío al pasar a «Historia completa». Crear la nota desde la
+    ficha con la cita en contexto, o propagar `cita_id`.
+34. **Odontólogo – búsqueda tras atender** (alta): la búsqueda exacta del
+    paciente atendido devolvió «Sin coincidencias» al profesional. Confirmar
+    si es el ámbito (relación asistencial) o un defecto de búsqueda; si es
+    regla de ámbito, anotarlo para Claude en AGENTS.md y no cambiar permisos.
+35. **Ficha desde la cita**: abre en «Atención y documentos»; para un
+    odontólogo con Odontograma, abrir en Odontograma conservando la cita.
+36. **Verbos**: «Crear odontograma» → «Guardar odontograma» y mostrar la
+    versión; tras «Marcar atendida», acción «Continuar en ficha».
+37. **Cobro**: si «Registrar un abono» exige campos redundantes cuando ya hay
+    cargo por tarifa, prellenar total y saldo.
+
+Pendiente de producto (no implementar aún): plan de tratamiento desde los
+hallazgos del odontograma con presupuesto del borrador.
+
+Verificación: la del plan; E2E 42 y 43 en verde con API 8031 (reiniciar
+antes: el backend cambió en `cb4338d`), más la suite completa al final.
