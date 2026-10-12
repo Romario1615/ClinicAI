@@ -1,12 +1,12 @@
 import { randomUUID } from 'node:crypto';
-import { mkdirSync } from 'node:fs';
+import { mkdirSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import type { APIRequestContext, Page } from '@playwright/test';
 import { expect, test } from '../apoyo/prueba';
 import { acceder, irA } from '../apoyo/sesion';
 
 const API = process.env.URL_API ?? 'http://127.0.0.1:8000/api/v1';
-const carpetaCapturas = resolve(process.cwd(), 'test-results/dia-odontologo');
+const carpetaCapturas = resolve(process.cwd(), '..', 'tmp/e2e-anexo-f/dia-odontologo');
 test.use({ actionTimeout: 15_000 });
 const fechaLocal = (fecha: Date) => new Intl.DateTimeFormat('en-CA', {
   timeZone: 'America/Guayaquil', year: 'numeric', month: '2-digit', day: '2-digit',
@@ -88,6 +88,7 @@ test('recorrido de un día de clínica como odontólogo: agenda, ficha, registro
   page.on('console', mensaje => { if (mensaje.type() === 'error') erroresConsola.push(mensaje.text()); });
   page.on('pageerror', error => erroresConsola.push(error.message));
   const hallazgos: string[] = [];
+  const guardarHallazgos = () => writeFileSync(resolve(carpetaCapturas, 'hallazgos.json'), JSON.stringify(hallazgos, null, 2), 'utf8');
   const nombre = `${datos.paciente.nombre} ${datos.paciente.apellido}`;
   await page.setViewportSize({ width: 1440, height: 900 });
 
@@ -119,9 +120,7 @@ test('recorrido de un día de clínica como odontólogo: agenda, ficha, registro
   await detalle.getByRole('button', { name: 'Ver ficha del paciente', exact: true }).click();
   await expect(page.locator('app-ficha-paciente')).toBeVisible();
   const pestanaOdontograma = seccionesFicha.getByRole('tab', { name: 'Odontograma', exact: true });
-  if (await pestanaOdontograma.getAttribute('aria-selected') !== 'true') {
-    hallazgos.push('La ficha abierta desde una cita no entra directamente al Odontograma: prioriza Atención y documentos; hace falta cambiar de pestaña.');
-  }
+  await expect(pestanaOdontograma).toHaveAttribute('aria-selected', 'true');
   await captura(page, 2);
 
   // 3. Hallazgos FDI y obturación en dos piezas y guardado de una versión.
@@ -132,15 +131,13 @@ test('recorrido de un día de clínica como odontólogo: agenda, ficha, registro
   await odonto.locator('[data-pieza="16"] [data-region="centro"]').click();
   await odonto.getByRole('button', { name: 'Obturación de resina', exact: true }).click();
   await odonto.locator('[data-pieza="26"] [data-region="centro"]').click();
-  await odonto.getByRole('button', { name: 'Crear odontograma', exact: true }).click();
+  await odonto.getByRole('button', { name: 'Guardar odontograma', exact: true }).click();
   const revision = page.getByRole('dialog', { name: 'Guardar odontograma', exact: true });
   await expect(revision).toBeVisible();
   await revision.getByRole('button', { name: 'Guardar odontograma', exact: true }).click();
   await expect(odonto).toContainText('Versión 1');
   await captura(page, 3);
-  if (await odonto.getByRole('button', { name: 'Guardar nueva versión', exact: true }).count()) {
-    hallazgos.push('El primer guardado se denomina «Crear odontograma»; el verbo no comunica que se está firmando/guardando una versión clínica.');
-  }
+  await expect(odonto.getByRole('button', { name: 'Guardar nueva versión', exact: true })).toBeVisible();
 
   // 4. Índice de placa como control periodontal.
   await seccionesFicha.getByRole('tab', { name: 'Periodoncia', exact: true }).click();
@@ -175,9 +172,7 @@ test('recorrido de un día de clínica como odontólogo: agenda, ficha, registro
   const guardadoNota = await respuestaNota;
   expect(guardadoNota.status()).toBe(201);
   const nota = await guardadoNota.json();
-  if (nota.cita_id !== datos.cita.id) {
-    hallazgos.push(`La nota SOAP se guardó sin vincularse a la cita (cita_id=${nota.cita_id ?? 'vacío'}); abrir la historia completa perdió el contexto de la atención.`);
-  }
+  expect(nota.cita_id).toBe(datos.cita.id);
 
   // La historia completa abandona la ficha superpuesta; volver a Agenda añade
   // pasos y obliga a reabrir al paciente antes de preparar el plan.
@@ -228,6 +223,8 @@ test('recorrido de un día de clínica como odontólogo: agenda, ficha, registro
     page.once('dialog', dialog => dialog.accept());
     await completar.click();
     await expect(page.getByRole('status').filter({ hasText: 'Cita marcada como atendida' })).toBeVisible();
+    await page.getByRole('button', { name: 'Continuar en ficha', exact: true }).click();
+    await expect(page.locator('app-ficha-paciente')).toBeVisible();
   } else {
     hallazgos.push('Al volver a la cita no se ofrece «Marcar como atendida»; no se pudo cerrar la atención desde el contexto abierto.');
     test.info().annotations.push({ type: 'hallazgo', description: 'Paso 7: la acción para marcar la cita atendida no estuvo disponible en el detalle.' });
@@ -278,6 +275,7 @@ test('recorrido de un día de clínica como odontólogo: agenda, ficha, registro
       hallazgos.push('No fue posible volver a abrir la ficha por Pacientes ni desde la cita completada; la carga de radiografía quedó bloqueada en este recorrido.');
       test.info().annotations.push({ type: 'fixme', description: 'Paso 9 no alcanzable en la interfaz: no hay acceso a la ficha tras completar la cita; evidencia en 09-paso.png.' });
       await captura(page, 9);
+      guardarHallazgos();
       test.info().annotations.push({ type: 'hallazgos', description: hallazgos.join('\n') });
       return;
     }
@@ -314,5 +312,6 @@ test('recorrido de un día de clínica como odontólogo: agenda, ficha, registro
     hallazgos.push(`Desplazamiento de página en escritorio después del recorrido: documento ${medidas.ancho}×${medidas.alto}, viewport ${medidas.viewportAncho}×${medidas.viewportAlto}.`);
   }
   if (erroresConsola.length) hallazgos.push(`Errores de consola durante el recorrido: ${erroresConsola.join(' | ')}`);
+  guardarHallazgos();
   test.info().annotations.push({ type: 'hallazgos', description: hallazgos.length ? hallazgos.join('\n') : 'No se detectaron incoherencias capturadas por las comprobaciones del escenario.' });
 });

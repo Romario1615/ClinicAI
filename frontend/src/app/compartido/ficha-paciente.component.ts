@@ -907,7 +907,7 @@ export class FichaPacienteComponent implements OnInit {
       if (solicitada) {
         this.pestana.set(this.pestanas().some(tab => tab.clave === solicitada) ? solicitada : 'resumen');
       } else if (this.citaInicial()) {
-        this.pestana.set('atencion');
+        this.pestana.set(this.pestanas().some(tab => tab.clave === 'odontograma') ? 'odontograma' : 'atencion');
       } else {
         this.pestana.set(this.accesoClinico() === true && this.pestanas().some(tab => tab.clave === 'odontograma') ? 'odontograma' : 'resumen');
       }
@@ -1270,7 +1270,7 @@ export class FichaPacienteComponent implements OnInit {
 
   protected abrirHistoria(): void {
     void this.router.navigate(['/historia-clinica'], {
-      queryParams: { paciente: this.pacienteId() },
+      queryParams: { paciente: this.pacienteId(), citaContexto: this.citaParaAtencion() ?? undefined },
     });
     this.cerrar.emit();
   }

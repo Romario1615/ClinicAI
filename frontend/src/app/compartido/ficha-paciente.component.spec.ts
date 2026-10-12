@@ -322,11 +322,12 @@ describe('FichaPacienteComponent con permisos clínicos', () => {
         c.elegir('resumen');
         c.elegir('historia');
 
+        fixture.componentRef.setInput('citaInicial', 'cita-contexto');
         const navegar = vi.spyOn(TestBed.inject(Router), 'navigate').mockResolvedValue(true);
         let cerrado = false;
         c.cerrar.subscribe(() => (cerrado = true));
         c.abrirHistoria();
-        expect(navegar).toHaveBeenCalledWith(['/historia-clinica'], { queryParams: { paciente: 'pac-1' } });
+        expect(navegar).toHaveBeenCalledWith(['/historia-clinica'], { queryParams: { paciente: 'pac-1', citaContexto: 'cita-contexto' } });
         expect(cerrado).toBe(true);
     });
 
