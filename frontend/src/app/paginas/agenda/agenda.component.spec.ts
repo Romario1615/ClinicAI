@@ -247,6 +247,35 @@ describe('AgendaComponent · reserva y series', { timeout: 20_000 }, () => {
     expect(http.match((p) => p.method === 'GET' && p.url === `${BASE}/agenda/citas`)).toHaveLength(0);
   });
 
+  it('pide los nombres de las citas en una sola petición con los ids distintos', () => {
+    montar({}, ['profesional'], PROFESIONAL.id, true, ['cita.crear', 'agenda.leer', 'paciente.leer_administrativo']);
+    const agenda = fixture.componentInstance;
+    agenda['cargarPacientesDeCitas']([
+      cita('2030-01-21T14:00:00Z', { paciente_id: 'pac-2' }),
+      cita('2030-01-21T14:30:00Z', { paciente_id: 'pac-2' }),
+      cita('2030-01-21T15:00:00Z', { paciente_id: 'pac-3' }),
+    ]);
+
+    const peticion = http.expectOne((p) => p.url === `${BASE}/pacientes/nombres`);
+    expect(peticion.request.method).toBe('GET');
+    expect(peticion.request.params.getAll('ids')).toEqual(['pac-2', 'pac-3']);
+    peticion.flush([
+      { id: 'pac-2', nombre: 'Ana', apellido: 'Sintetica' },
+      { id: 'pac-3', nombre: 'Luis', apellido: 'Sintetico' },
+    ]);
+
+    expect(agenda['nombrePaciente']('pac-2')).toBe('Ana Sintetica');
+    expect(agenda['nombrePaciente']('pac-3')).toBe('Luis Sintetico');
+  });
+
+  it('sin paciente.leer_administrativo no pide nombres de pacientes', () => {
+    montar();
+    fixture.componentInstance['cargarPacientesDeCitas']([cita('2030-01-21T14:00:00Z', { paciente_id: 'pac-2' })]);
+
+    http.expectNone((p) => p.url === `${BASE}/pacientes/nombres`);
+    expect(fixture.componentInstance['nombrePaciente']('pac-2')).toBe('Paciente');
+  });
+
   it('cancela la petición del próximo día al destruir la Agenda', () => {
     montar({}, ['administrador_clinica'], null, false);
     fixture.componentInstance['buscarProximoDiaConTurnos']();

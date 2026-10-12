@@ -68,6 +68,7 @@ import {
   ApiService,
   FalloApi,
   type FrecuenciaSerieCitas,
+  type NombrePaciente,
 } from '../../nucleo/servicios/api.service';
 import { CatalogoService } from '../../nucleo/servicios/catalogo.service';
 import { PERMISOS } from '../../nucleo/servicios/configuracion';
@@ -115,6 +116,9 @@ import {
 type CargaDelDia =
   | { readonly citas: readonly Cita[]; readonly disponibilidad: Disponibilidad | null }
   | { readonly fallo: FalloApi };
+
+/** Límite de ids por petición de nombres, igual que en el backend. */
+const TAMANO_LOTE_NOMBRES = 200;
 
 /**
  * Estados que cuentan como sala ocupada en la interfaz.
@@ -265,6 +269,8 @@ export class AgendaComponent {
   protected readonly profesionales = signal<readonly Profesional[]>([]);
   protected readonly pacientes = signal<readonly Paciente[]>([]);
   private readonly pacientesConsultados = new Set<string>();
+  /** Nombres de pacientes de citas que no están en `pacientes`, por id. */
+  protected readonly nombresCargados = signal<ReadonlyMap<string, NombrePaciente>>(new Map());
   protected readonly consultorios = signal<readonly Consultorio[]>([]);
 
   // --- Selección ---
@@ -820,15 +826,28 @@ export class AgendaComponent {
     });
   }
 
-  /** Completa los nombres de la jornada respetando el ámbito que aplica la API. */
+  /**
+   * Completa los nombres de la jornada respetando el ámbito que aplica la API.
+   *
+   * Pide solo los ids aún no conocidos, en lotes de hasta 200 (límite del
+   * backend). Sin `paciente.leer_administrativo` no se llama: la cita se
+   * muestra con el rótulo genérico «Paciente».
+   */
   private cargarPacientesDeCitas(citas: readonly Cita[]): void {
-    for (const id of new Set(citas.map((cita) => cita.paciente_id))) {
-      if (this.pacientesConsultados.has(id) || this.pacientes().some((paciente) => paciente.id === id)) continue;
-      this.pacientesConsultados.add(id);
-      this.api.paciente(id).subscribe({
-        next: (paciente) => this.pacientes.update((lista) => lista.some((item) => item.id === id) ? lista : [paciente, ...lista]),
-        // Si el principal no puede leer la ficha, la cita sigue mostrándose sin
-        // exponer datos fuera del ámbito autorizado.
+    if (!this.sesion.tienePermiso(PERMISOS.pacienteLeer)) return;
+    const pendientes = [...new Set(citas.map((cita) => cita.paciente_id))].filter(
+      (id) => !this.pacientesConsultados.has(id) && !this.pacientes().some((paciente) => paciente.id === id),
+    );
+    for (let inicio = 0; inicio < pendientes.length; inicio += TAMANO_LOTE_NOMBRES) {
+      const lote = pendientes.slice(inicio, inicio + TAMANO_LOTE_NOMBRES);
+      lote.forEach((id) => this.pacientesConsultados.add(id));
+      this.api.nombresPacientes(lote).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
+        next: (nombres) => this.nombresCargados.update((mapa) => {
+          const siguiente = new Map(mapa);
+          for (const nombre of nombres) siguiente.set(nombre.id, nombre);
+          return siguiente;
+        }),
+        // Si la petición falla, las citas siguen mostrándose con el rótulo genérico.
         error: () => undefined,
       });
     }
@@ -1337,7 +1356,9 @@ export class AgendaComponent {
 
   protected nombrePaciente(id: string): string {
     const paciente = this.pacientes().find((p) => p.id === id);
-    return paciente ? `${paciente.nombre} ${paciente.apellido}` : 'Paciente';
+    if (paciente) return `${paciente.nombre} ${paciente.apellido}`;
+    const nombre = this.nombresCargados().get(id);
+    return nombre ? `${nombre.nombre} ${nombre.apellido}` : 'Paciente';
   }
 
   protected nombreProfesional(id: string): string {

@@ -266,6 +266,13 @@ export interface PacienteDetalle extends Paciente {
   readonly activo: boolean;
 }
 
+/** Solo el nombre visible de un paciente, para rotular citas sin pedir su ficha. */
+export interface NombrePaciente {
+  readonly id: string;
+  readonly nombre: string;
+  readonly apellido: string;
+}
+
 export interface DatosReserva {
   readonly paciente_id: string;
   readonly profesional_id: string;
@@ -1096,6 +1103,17 @@ export class ApiService {
 
   paciente(id: string): Observable<PacienteDetalle> {
     return this.get<PacienteDetalle>(`/pacientes/${id}`);
+  }
+
+  /**
+   * Nombres de varios pacientes en una sola petición (máximo 200 ids).
+   *
+   * Los ids fuera de ámbito se omiten en la respuesta sin error: quien pide
+   * no recibe datos de pacientes que no le corresponden.
+   */
+  nombresPacientes(ids: readonly string[]): Observable<readonly NombrePaciente[]> {
+    // `aParametros` repite la clave `ids` para cada elemento del array.
+    return this.get<readonly NombrePaciente[]>('/pacientes/nombres', { ids: [...ids] });
   }
 
   imagenesClinicas(
