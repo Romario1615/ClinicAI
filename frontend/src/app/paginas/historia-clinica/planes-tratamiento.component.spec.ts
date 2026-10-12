@@ -320,6 +320,35 @@ describe('PlanesTratamientoComponent', () => {
         expect(c.planes()).toHaveLength(1);
     });
 
+    it('numera juntas por fase las filas del odontograma y las manuales, y suma en centavos', () => {
+        iniciarSesionCon(['plan_tratamiento.escribir']);
+        TestBed.inject(EspecialidadHistoriaService).disponibles.set([
+            { id: 'esp-1', nombre: 'Odontología', modulos: ['odontograma', 'planes'], propia: true },
+        ]);
+        montar([]);
+        fixture.componentRef.setInput('solicitudOdontograma', {
+            version: 1,
+            procedimientos: [{ pieza: 16, caras: 'O', descripcion: 'Pieza 16 · caries oclusal' }],
+        });
+        fixture.detectChanges();
+        http.expectOne(`${BASE}/catalogo/servicios?especialidad_id=esp-1`).flush([
+            { id: 'srv-1', especialidad_id: 'esp-1', nombre: 'Restauración', precio: 0.1, duracion_minutos: 30, minutos_preparacion: 0, activo: true },
+        ]);
+        fixture.detectChanges();
+        c.incluirHallazgo(0, true);
+        c.cambiarServicioHallazgo(0, 'srv-1');
+        c.fase = 1;
+        c.descripcionProcedimiento = 'Profilaxis sintética';
+        c.precio = '0.20';
+        c.agregarProcedimiento();
+        expect(c.total()).toBe(0.3);
+        c.guardarBorrador();
+        const alta = http.expectOne(RUTA);
+        expect(alta.request.body.procedimientos.map((p: { fase: number; orden: number }) => [p.fase, p.orden]))
+            .toEqual([[1, 1], [1, 2]]);
+        alta.flush(plan());
+    });
+
     it('propone un borrador', () => {
         montar([plan()]);
         c.proponer(plan());

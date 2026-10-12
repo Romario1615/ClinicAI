@@ -114,16 +114,27 @@ export class PlanesTratamientoComponent {
     readonly precio: string;
   })[]>([]);
   protected readonly desdeOdontograma = signal(false);
-  protected readonly procedimientosTotales = computed(() => [
-    ...this.filasOdontograma().filter((fila) => fila.incluido).map((fila, indice) => ({
-      fase: 1, orden: indice + 1, pieza: fila.pieza, caras: fila.caras,
-      servicio_id: fila.servicio_id || null, descripcion: fila.descripcion.trim(), precio: fila.precio,
-    })),
-    ...this.procedimientos(),
-  ]);
+  // Filas del odontograma y manuales se numeran juntas por fase: el backend
+  // rechaza (422) un `(fase, orden)` repetido en el mismo plan.
+  protected readonly procedimientosTotales = computed(() => {
+    const mezcla = [
+      ...this.filasOdontograma().filter((fila) => fila.incluido).map((fila) => ({
+        fase: 1, orden: 0, pieza: fila.pieza, caras: fila.caras,
+        servicio_id: fila.servicio_id || null, descripcion: fila.descripcion.trim(), precio: fila.precio,
+      })),
+      ...this.procedimientos(),
+    ];
+    const porFase = new Map<number, number>();
+    return mezcla.map((item) => {
+      const orden = (porFase.get(item.fase) ?? 0) + 1;
+      porFase.set(item.fase, orden);
+      return { ...item, orden };
+    });
+  });
   protected readonly hoyIso = new Date().toISOString();
+  // En centavos para no arrastrar errores de coma flotante (0.1 + 0.2).
   protected readonly total = computed(() =>
-    this.procedimientos().reduce((suma, item) => suma + Number(item.precio), 0),
+    this.procedimientosTotales().reduce((suma, item) => suma + Math.round(Number(item.precio) * 100), 0) / 100,
   );
 
   /** Formulario de accion abierto (aceptar, completar, cancelar). */
