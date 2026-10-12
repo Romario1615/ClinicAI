@@ -614,8 +614,8 @@ export class PlanesTratamientoComponent {
     this.errorProcedimiento.set('');
   }
 
-  protected dinero(valor: string): string {
-    return new Intl.NumberFormat('es-EC', { style: 'currency', currency: 'USD' }).format(Number(valor));
+  protected dinero(valor: string, moneda = 'USD'): string {
+    return new Intl.NumberFormat('es-EC', { style: 'currency', currency: moneda }).format(Number(valor));
   }
 
   protected fechaMinimaControl(): string {
@@ -626,9 +626,23 @@ export class PlanesTratamientoComponent {
   }
 
   protected totalPlan(plan: PlanTratamiento): string {
-    return plan.procedimientos
-      .reduce((suma, item) => suma + Number(item.precio), 0)
-      .toFixed(2);
+    return this.totalPorCentavos(this.procedimientosPresupuesto(plan));
+  }
+
+  protected procedimientosPorFase(plan: PlanTratamiento): readonly number[] {
+    return [...new Set(this.procedimientosPresupuesto(plan).map((item) => item.fase))].sort((a, b) => a - b);
+  }
+
+  protected subtotalFase(plan: PlanTratamiento, fase: number): string {
+    return this.totalPorCentavos(this.procedimientosPresupuesto(plan).filter((item) => item.fase === fase));
+  }
+
+  protected cantidadProcedimientos(plan: PlanTratamiento): number {
+    return this.procedimientosPresupuesto(plan).length;
+  }
+
+  private totalPorCentavos(procedimientos: readonly ProcedimientoPlan[]): string {
+    return (procedimientos.reduce((suma, item) => suma + Math.round(Number(item.precio) * 100), 0) / 100).toFixed(2);
   }
 
   protected procedimientosPresupuesto(plan: PlanTratamiento): readonly ProcedimientoPlan[] {

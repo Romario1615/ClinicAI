@@ -213,15 +213,25 @@
               <h3>{{ plan.titulo }}</h3>
               @if (plan.nivel_sensibilidad === 'N3') { <span class="sensibilidad sensibilidad--n3">N3 · Clínico sensible</span> }
             </div>
-            <strong>{{ dinero(totalPlan(plan)) }}</strong>
+            <strong>{{ dinero(totalPlan(plan), plan.moneda) }}</strong>
           </header>
+          <section class="presupuesto-vivo" [attr.aria-label]="'Presupuesto del plan ' + plan.titulo">
+            @if (plan.estado === 'BORRADOR') {
+              <p>Presupuesto estimado. El documento para firma se genera al proponer el plan.</p>
+            }
+            <p>{{ cantidadProcedimientos(plan) }} procedimiento(s) presupuestado(s)</p>
+            @for (fase of procedimientosPorFase(plan); track fase) {
+              <span>Fase {{ fase }}: {{ dinero(subtotalFase(plan, fase), plan.moneda) }}</span>
+            }
+            <strong>Total: {{ dinero(totalPlan(plan), plan.moneda) }}</strong>
+          </section>
           @if(puedeVerFotos()){<app-fotos-registro tipo="plan" [registroId]="plan.id" />}
           <ol class="plan__procedimientos">
             @for (item of plan.procedimientos; track item.id) {
               <li [class.procedimiento--cerrado]="item.estado !== 'PENDIENTE'">
                 <span>Fase {{ item.fase }} · {{ item.descripcion }}</span>
                 @if (item.pieza) { <span>Pieza {{ item.pieza }}{{ item.caras ? ' · ' + item.caras : '' }}</span> }
-                <strong>{{ dinero(item.precio) }}</strong>
+                <strong>{{ dinero(item.precio, plan.moneda) }}</strong>
                 <span class="procedimiento__estado" [attr.data-estado]="item.estado">
                   {{ etiquetaEstado(item.estado) }}
                   @if (item.motivo_cancelacion) { · {{ item.motivo_cancelacion }} }
@@ -279,7 +289,7 @@
               [disabled]="presupuestoCargando()"
               (click)="prepararPresupuesto(plan)"
             >
-              {{ presupuestoCargando() ? 'Preparando presupuesto…' : 'Ver e imprimir presupuesto' }}
+              {{ presupuestoCargando() ? 'Preparando presupuesto…' : 'Generar presupuesto para firma' }}
             </button>
           }
           @if (plan.observaciones) {

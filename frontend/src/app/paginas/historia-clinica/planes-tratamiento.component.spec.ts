@@ -96,6 +96,27 @@ describe('PlanesTratamientoComponent', () => {
         expect(c.totalPresupuesto(p)).toBe('0.30');
     });
 
+    it('muestra en el borrador el conteo, los subtotales por fase y el total en la moneda del plan', () => {
+        const borrador = plan({
+            moneda: 'USD',
+            procedimientos: [
+                procedimiento({ precio: '85.10' }),
+                procedimiento({ id: 'proc-2', fase: 2, precio: '14.90' }),
+                procedimiento({ id: 'proc-3', fase: 2, precio: '500.00', estado: 'CANCELADO' }),
+            ],
+        });
+        montar([borrador]);
+        expect(c.cantidadProcedimientos(borrador)).toBe(2);
+        expect(c.procedimientosPorFase(borrador)).toEqual([1, 2]);
+        expect(c.subtotalFase(borrador, 1)).toBe('85.10');
+        expect(c.subtotalFase(borrador, 2)).toBe('14.90');
+        expect(c.totalPlan(borrador)).toBe('100.00');
+        expect(texto()).toContain('Presupuesto estimado. El documento para firma se genera al proponer el plan.');
+        expect((fixture.nativeElement as HTMLElement).querySelector('.presupuesto-vivo')?.textContent).toContain(c.dinero('100.00', 'USD'));
+        expect((fixture.nativeElement as HTMLElement).querySelector('.plan__cabecera')?.textContent).toContain(c.dinero('100.00', 'USD'));
+        expect(Array.from((fixture.nativeElement as HTMLElement).querySelectorAll('button')).some((boton) => boton.textContent?.includes('Proponer al paciente'))).toBe(true);
+    });
+
     it('exige elegir sede entre varias autorizadas y conserva la ventana durante el PDF', () => {
         iniciarSesionCon(['historia_clinica.escribir']);
         const sesion = TestBed.inject(SesionService);

@@ -158,6 +158,21 @@ p {
   overflow-wrap: anywhere;
 }
 
+.presupuesto-vivo {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--espacio-2) var(--espacio-4);
+  padding: var(--espacio-2) var(--espacio-3);
+  border-left: 3px solid var(--acento);
+  border-radius: var(--radio-pequeno);
+  background: var(--superficie-hundida);
+  font-size: .88rem;
+}
+.presupuesto-vivo p { margin: 0; }
+.presupuesto-vivo p:first-child { flex-basis: 100%; color: var(--texto-suave); }
+.presupuesto-vivo > strong { margin-left: auto; }
+
 .plan__cabecera .ceja {
   margin-bottom: var(--espacio-1);
   color: var(--texto-tenue);
