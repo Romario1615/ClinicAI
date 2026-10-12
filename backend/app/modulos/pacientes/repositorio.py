@@ -27,6 +27,7 @@ permitiria enumerar cedulas probando prefijos.
 from __future__ import annotations
 
 import uuid
+from collections.abc import Sequence
 from typing import Any
 
 from sqlalchemy import Select, func, literal_column, select
@@ -62,6 +63,18 @@ class RepositorioPacientes:
         consulta = select(Paciente).where(Paciente.id == paciente_id, Paciente.anulado_en.is_(None))
         consulta = self._acotar(consulta, principal)
         return (await self._sesion.execute(consulta)).scalar_one_or_none()
+
+    async def nombres(self, ids: Sequence[uuid.UUID], principal: Principal) -> list[Paciente]:
+        """Pacientes de la lista que caen dentro del ámbito; los demás se omiten.
+
+        Omitir y no fallar: igual que `obtener`, no se confirma si un
+        identificador ajeno existe.
+        """
+        if not ids:
+            return []
+        consulta = select(Paciente).where(Paciente.id.in_(ids), Paciente.anulado_en.is_(None))
+        consulta = self._acotar(consulta, principal)
+        return list((await self._sesion.execute(consulta)).scalars())
 
     async def buscar(
         self,

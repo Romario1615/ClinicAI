@@ -29,6 +29,7 @@ from fastapi import APIRouter, Depends, Header, Path, Query, Request, Response
 from app.modulos.pacientes.esquemas import (
     DatosPaciente,
     InicioAtencionProfesional,
+    NombrePaciente,
     PaginaPacientes,
     RespuestaPaciente,
     RespuestaPacienteDetalle,
@@ -169,6 +170,33 @@ async def buscar_pacientes(
             and len(termino.strip()) < LONGITUD_MINIMA_BUSQUEDA
         ),
     )
+
+
+MAXIMO_NOMBRES = 200
+
+
+@enrutador.get(
+    "/nombres",
+    response_model=list[NombrePaciente],
+    summary="Nombres de varios pacientes para rotular la agenda",
+)
+async def nombres_pacientes(
+    principal: PuedeLeerPacientes,
+    repo: RepoPacientes,
+    ids: Annotated[list[uuid.UUID], Query(min_length=1, max_length=MAXIMO_NOMBRES)],
+) -> list[NombrePaciente]:
+    """Una sola consulta en lugar de pedir la ficha de cada paciente de la jornada.
+
+    Devuelve nombre y apellido, como el listado (`GET /pacientes/`), sin
+    documento ni contacto. Al igual que el listado, no audita cada fila: la
+    ficha completa (`GET /pacientes/{id}`) sí deja constancia. Los
+    identificadores fuera del ámbito se omiten sin error.
+    """
+    unicos = list(dict.fromkeys(ids))
+    return [
+        NombrePaciente(id=p.id, nombre=p.nombre, apellido=p.apellido)
+        for p in await repo.nombres(unicos, principal)
+    ]
 
 
 @enrutador.get(

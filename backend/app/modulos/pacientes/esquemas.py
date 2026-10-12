@@ -101,3 +101,11 @@ __all__ = [
     "RespuestaPaciente",
     "RespuestaPacienteDetalle",
 ]
+
+
+class NombrePaciente(BaseModel):
+    """Solo lo necesario para rotular una cita en la agenda."""
+
+    id: uuid.UUID
+    nombre: str
+    apellido: str

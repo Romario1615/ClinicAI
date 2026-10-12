@@ -315,3 +315,9 @@ el hallazgo.
     para planificar desde los hallazgos registrados y ver el presupuesto.
 
 Verificación: la del plan; E2E 26, 43 y suite completa con API 8031.
+42. **Nombres de la agenda por lotes** (backend listo, Claude): la Agenda pide
+    `GET /pacientes/{id}` por cada paciente de la jornada (N peticiones y N
+    auditorías `paciente.consultado`). Sustituir por una sola
+    `GET /api/v1/pacientes/nombres?ids=…&ids=…` (máx. 200; mismo permiso
+    `paciente.leer_administrativo`; omite los de fuera del ámbito; si falla,
+    rótulo genérico «Paciente» como hoy).
