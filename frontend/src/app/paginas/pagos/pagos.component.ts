@@ -638,6 +638,7 @@ export class PagosComponent {
     const consulta = ++this.consultaCargo;
     this.cargoSeleccionado.set(null);
     this.totalAcordado = null;
+    this.importe = null;
     if (!citaId || !this.sesion.tienePermiso('pago.leer')) return;
     this.api.leer<Pagina<CargoPago>>('/pagos/cargos/', { cita_id: citaId, limite: 1 }).subscribe({
       next: (resultado) => {
@@ -647,6 +648,9 @@ export class PagosComponent {
         this.fechaVencimiento = cargo?.fecha_vencimiento ?? '';
         if (cargo && cargo.total_acordado !== null) {
           this.totalAcordado = Number(cargo.total_acordado);
+        }
+        if (cargo?.saldo_no_asignado !== null && cargo?.saldo_no_asignado !== undefined) {
+          this.importe = Number(cargo.saldo_no_asignado);
         }
       },
       error: (fallo: FalloApi) => { if (consulta === this.consultaCargo) this.error.set(fallo.message); },

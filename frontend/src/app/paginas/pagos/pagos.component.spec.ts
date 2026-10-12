@@ -120,6 +120,17 @@ describe('PagosComponent', () => {
             .toContain('Sin fecha');
     });
 
+    it('prellena el total y el saldo disponible al elegir una cita con cargo', () => {
+        montar(['pago.leer']);
+        c.citaId = 'c1';
+        c.seleccionarCita('c1');
+        http.expectOne((r) => r.url === `${BASE}/pagos/cargos/` && r.params.get('cita_id') === 'c1')
+            .flush({ elementos: [CARGO], total: 1 });
+
+        expect(c.totalAcordado).toBe(100);
+        expect(c.importe).toBe(50);
+    });
+
     it('abre el alta de abonos en una ventana flotante y la cancela sin dejar el formulario en la lista', () => {
         montar(['pago.leer', 'pago.registrar']);
         const raiz = fixture.nativeElement as HTMLElement;
