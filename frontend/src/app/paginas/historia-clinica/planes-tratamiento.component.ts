@@ -297,8 +297,8 @@ export class PlanesTratamientoComponent {
     this.errorProcedimiento.set('');
   }
 
-  private precioValido(valor: string): boolean {
-    const texto = valor.trim();
+  private precioValido(valor: string | number): boolean {
+    const texto = String(valor ?? '').trim();
     if (!/^-?\d+(?:\.\d{1,2})?$/.test(texto)) return false;
     const importe = Number(texto);
     return Number.isFinite(importe) && importe >= 0 && importe <= 9_999_999_999.99;

@@ -221,10 +221,41 @@ test('recorrido de un día de clínica como odontólogo: agenda, ficha, registro
   await expect(planes).toContainText('Total:');
   await expect(planes.getByRole('button', { name: 'Proponer al paciente', exact: true })).toBeVisible();
   await captura(page, 7);
+  await expect(editorPlan).toHaveCount(0);
   await seccionesFicha.getByRole('tab', { name: 'Odontograma', exact: true }).click();
   const odontogramaActualizado = ficha.locator('app-odontograma');
   await expect(odontogramaActualizado.getByRole('button', { name: /Pieza 16:.*Planificado/ })).toBeVisible();
   await expect(odontogramaActualizado.locator('.leyenda')).toContainText('Planificado');
+
+  // Conservar también el recorrido de un plan manual con procedimientos en
+  // dos fases, independiente del borrador creado desde el odontograma.
+  await seccionesFicha.getByRole('tab', { name: 'Plan de tratamiento', exact: true }).click();
+  await expect(planes.getByRole('heading', { name: 'Planes de tratamiento', exact: true })).toBeVisible();
+  await planes.getByRole('button', { name: 'Crear borrador', exact: true }).click();
+  const editorManual = page.getByRole('dialog', { name: 'Crear borrador de tratamiento', exact: true });
+  const tituloManual = 'Plan manual por fases · recorrido E2E';
+  await editorManual.getByLabel('Título del plan').fill(tituloManual);
+  await editorManual.getByLabel('Descripción', { exact: true }).fill('Restauración manual de primera fase');
+  await editorManual.getByLabel('Precio (USD)').fill('40.00');
+  await editorManual.getByRole('button', { name: 'Añadir al plan', exact: true }).click({ force: true });
+  await expect(editorManual.locator('.procedimientos-pendientes li')).toHaveCount(1);
+  await editorManual.getByLabel('Descripción', { exact: true }).fill('Control manual de segunda fase');
+  await editorManual.getByLabel('Fase', { exact: true }).fill('2');
+  await editorManual.getByLabel('Precio (USD)').fill('25.00');
+  await editorManual.getByRole('button', { name: 'Añadir al plan', exact: true }).click({ force: true });
+  await expect(editorManual.locator('.procedimientos-pendientes li')).toHaveCount(2);
+  await expect(editorManual).toContainText('Fase 1 · Restauración manual de primera fase');
+  await expect(editorManual).toContainText('Fase 2 · Control manual de segunda fase');
+  const respuestaPlanManual = page.waitForResponse(r => r.request().method() === 'POST' && r.url().endsWith(`/odontologia/pacientes/${datos.paciente.id}/planes-tratamiento`));
+  await editorManual.getByRole('button', { name: 'Guardar borrador', exact: true }).click();
+  const guardadoPlanManual = await respuestaPlanManual;
+  expect(guardadoPlanManual.status()).toBe(201);
+  const planManual = await guardadoPlanManual.json();
+  expect(planManual.titulo).toBe(tituloManual);
+  expect(planManual.procedimientos.map((item: { fase: number; orden: number }) => [item.fase, item.orden])).toEqual([[1, 1], [2, 1]]);
+  const tarjetaManual = planes.locator('article.plan').filter({ hasText: tituloManual });
+  await expect(tarjetaManual.locator('.presupuesto-vivo')).toContainText('Fase 1:');
+  await expect(tarjetaManual.locator('.presupuesto-vivo')).toContainText('Fase 2:');
 
   // 7. Cerrar la cita desde Agenda tras completar los registros.
   await ficha.getByRole('button', { name: `Cerrar ${nombre}`, exact: true }).click();

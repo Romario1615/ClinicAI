@@ -244,7 +244,7 @@ describe('PlanesTratamientoComponent', () => {
             ),
         ).toBe(true);
 
-        c.precio = '85';
+        c.precio = 85;
         c.caras = 'om';
         c.agregarProcedimiento();
         expect(avisoProcedimiento()).toBeUndefined();

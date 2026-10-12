@@ -931,6 +931,7 @@ export class FichaPacienteComponent implements OnInit {
   protected readonly solicitudPlanOdontograma = signal<SolicitudPlanOdontograma | null>(null);
   protected readonly recargasPlanesOdontograma = signal(0);
   protected alCrearPlan(): void {
+    this.solicitudPlanOdontograma.set(null);
     this.recargasPlanesOdontograma.update((valor) => valor + 1);
   }
   protected abrirPlanDesdeOdontograma(solicitud: SolicitudPlanOdontograma): void {
