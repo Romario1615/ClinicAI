@@ -321,3 +321,20 @@ Verificación: la del plan; E2E 26, 43 y suite completa con API 8031.
     `GET /api/v1/pacientes/nombres?ids=…&ids=…` (máx. 200; mismo permiso
     `paciente.leer_administrativo`; omite los de fuera del ámbito; si falla,
     rótulo genérico «Paciente» como hoy).
+
+## Anexo H · Revisión de código del anexo G (Sonnet, verificada por Claude)
+
+Resuelto por Claude: orden `(fase, orden)` repetido al mezclar filas del
+odontograma y manuales (422) y total en coma flotante.
+
+43. **Marcador «Planificado» sin recargar** (`odontograma.component.ts`
+    ~195‑231): tras crear un plan, recargar los planes del odontograma.
+44. **Precarga que borra lo escrito** (`planes-tratamiento.component.ts`
+    `precargarOdontograma`): el `effect` depende de `puedeEditar()` y de un
+    objeto nuevo por clic; usar `untracked` y no reiniciar si ya hay filas
+    incluidas (o pedir confirmación).
+45. **Precio por fila**: rechazar vacío (hoy `Number('')` = 0) y más de 12
+    dígitos (`max_digits=12`).
+46. **Fase editable por fila** del odontograma (1–20), como pide el punto 38.
+47. **E2E 43**: reponer el caso de plan manual con dos fases además del
+    flujo desde el odontograma (se perdió cobertura en `417dc69`).
