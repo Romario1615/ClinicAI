@@ -10,6 +10,8 @@ import { expect, test } from '../apoyo/prueba';
 
 import { acceder, irA } from '../apoyo/sesion';
 
+const API = process.env.URL_API ?? 'http://127.0.0.1:8000/api/v1';
+
 test.describe('Pacientes', () => {
   test.beforeEach(async ({ page }) => {
     await acceder(page, 'recepcion');
@@ -26,13 +28,22 @@ test.describe('Pacientes', () => {
     await expect(page.locator('.verificacion').first()).toBeVisible();
   });
 
-  test('el ambito recorta: no se ven los 200 pacientes de la base', async ({ page }) => {
+  test('el recuento muestra el total del ambito que devuelve la API', async ({ page, request }) => {
     const recuento = await page.locator('.recuento').textContent();
     expect(recuento).toMatch(/de\s+\d+\s+pacientes/i);
-
     const total = Number(/de\s+(\d+)\s+pacientes/i.exec(recuento ?? '')?.[1] ?? '0');
     expect(total).toBeGreaterThan(0);
-    expect(total).toBeLessThan(200);
+    // El personal tiene el comodín de pacientes de SU clínica: el ámbito recorta
+    // por clínica (cubierto en pruebas de API: test_paciente_ajeno_no_se_edita,
+    // test_nombres_pacientes_api). Antes se comparaba con un 200 fijo, que
+    // dejaba de valer en cuanto las corridas E2E añadían pacientes.
+    const sesion = await request.post(`${API}/autenticacion/sesion-local`, { data: { codigo_rol: 'recepcion' } });
+    expect(sesion.ok()).toBe(true);
+    const listado = await request.get(`${API}/pacientes/?limite=1`, {
+      headers: { Authorization: `Bearer ${(await sesion.json()).token_acceso}` },
+    });
+    expect(listado.ok()).toBe(true);
+    expect(total).toBe((await listado.json()).total);
   });
 
   test('un termino demasiado corto dice que NO se busco', async ({ page }) => {
