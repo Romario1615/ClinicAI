@@ -126,6 +126,13 @@ export class OdontogramaComponent {
   protected readonly actual = signal<Odontograma | null>(null);
   protected readonly versiones = signal<readonly Odontograma[]>([]);
   protected readonly planes = signal<readonly PlanTratamiento[]>([]);
+  protected readonly piezasPlanificadas = computed(() => new Set(
+    this.planes()
+      .filter((plan) => plan.estado === 'BORRADOR' || plan.estado === 'PROPUESTO' || plan.estado === 'ACEPTADO')
+      .flatMap((plan) => plan.procedimientos
+        .filter((procedimiento) => procedimiento.estado === 'PENDIENTE' && procedimiento.pieza !== null)
+        .map((procedimiento) => procedimiento.pieza as number)),
+  ));
   protected readonly seleccionada = signal<number | null>(null);
   /** La ficha de la pieza seleccionada está abierta en su ventana. */
   protected readonly fichaPieza = signal(false);
@@ -499,6 +506,10 @@ export class OdontogramaComponent {
 
   protected tieneNota(codigo: number): boolean {
     return Boolean(this.borrador()[String(codigo)]?.nota);
+  }
+
+  protected piezaPlanificada(codigo: number): boolean {
+    return this.piezasPlanificadas().has(codigo);
   }
 
   private actualizarPieza(estado: EstadoPiezaOdontograma): void {

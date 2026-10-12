@@ -97,6 +97,17 @@ describe('OdontogramaComponent', () => {
         });
     });
 
+    it('oculta la acción de planificar si falta el permiso de escritura', () => {
+        TestBed.inject(EspecialidadHistoriaService).disponibles.set([
+            { id: 'esp-1', nombre: 'Odontología', modulos: ['odontograma', 'planes'], propia: true },
+        ]);
+        montar(['odontograma.leer', 'plan_tratamiento.leer'], [version(1, true)]);
+        http.expectOne(`${BASE}/odontologia/pacientes/pac-1/planes-tratamiento`).flush([]);
+        fixture.detectChanges();
+        expect(c.puedePlanificar()).toBe(false);
+        expect((fixture.nativeElement as HTMLElement).textContent).not.toContain('Planificar tratamiento');
+    });
+
     it('usa los cortes de la clínica al proponer el primer odontograma', () => {
         montar(['odontograma.leer', 'odontograma.escribir'], [], 7, { edad_mixta: 8, edad_permanente: 14 });
         expect(c.denticion()).toBe('TEMPORAL');
@@ -352,6 +363,24 @@ describe('OdontogramaComponent interactivo', () => {
         c.elegirHerramienta('SELECCIONAR');
         c.clicPieza(12);
         expect(c.seleccionada()).toBe(12);
+    });
+
+    it('marca como planificadas solo piezas pendientes de planes activos, en solo lectura', () => {
+        const borradorAntes = c.borrador();
+        c.planes.set([
+            { estado: 'BORRADOR', procedimientos: [{ estado: 'PENDIENTE', pieza: 16 }, { estado: 'PENDIENTE', pieza: null }] },
+            { estado: 'PROPUESTO', procedimientos: [{ estado: 'PENDIENTE', pieza: 26 }] },
+            { estado: 'ACEPTADO', procedimientos: [{ estado: 'COMPLETADO', pieza: 36 }] },
+            { estado: 'COMPLETADO', procedimientos: [{ estado: 'PENDIENTE', pieza: 46 }] },
+            { estado: 'CANCELADO', procedimientos: [{ estado: 'PENDIENTE', pieza: 56 }] },
+        ]);
+        fixture.detectChanges();
+        expect([...c.piezasPlanificadas()].sort()).toEqual([16, 26]);
+        const pieza = (fixture.nativeElement as HTMLElement).querySelector('[data-pieza="16"] .diente__numero') as HTMLButtonElement;
+        expect(pieza.getAttribute('aria-label')).toContain('Planificado');
+        expect((fixture.nativeElement as HTMLElement).querySelector('[data-pieza="16"] .diente__planificado')?.textContent).toBe('P');
+        expect((fixture.nativeElement as HTMLElement).textContent).toContain('Planificado');
+        expect(c.borrador()).toEqual(borradorAntes);
     });
 
     it('dibuja marcas y nota, deshace una pieza y guarda solo piezas con datos', () => {

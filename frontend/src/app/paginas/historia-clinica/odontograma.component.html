@@ -114,13 +114,14 @@
            [class.diente--superior]="superior"
            [class.diente--seleccionado]="seleccionada() === codigo"
            [class.diente--cambiado]="cambiadas().has(codigo)"
+           [class.diente--planificado]="piezaPlanificada(codigo)"
            [class.diente--ausente]="hallazgoDePieza(codigo) === 'AUSENTE'">
         <button class="diente__numero" type="button"
-                [attr.aria-label]="'Pieza ' + codigo + ': ' + leyendaPieza(codigo)"
+                [attr.aria-label]="'Pieza ' + codigo + ': ' + leyendaPieza(codigo) + (piezaPlanificada(codigo) ? ' · Planificado' : '')"
                 [attr.aria-pressed]="seleccionada() === codigo"
-                [attr.title]="'Pieza ' + codigo + ' · ' + leyendaPieza(codigo)"
+                [attr.title]="'Pieza ' + codigo + ' · ' + leyendaPieza(codigo) + (piezaPlanificada(codigo) ? ' · Planificado' : '')"
                 (click)="clicPieza(codigo)">
-          {{ codigo }}@if (tieneNota(codigo)) {<span class="diente__nota" aria-hidden="true">•</span>}
+          {{ codigo }}@if (tieneNota(codigo)) {<span class="diente__nota" aria-hidden="true">•</span>}@if (piezaPlanificada(codigo)) {<span class="diente__planificado" aria-hidden="true">P</span>}
         </button>
         <svg viewBox="-6 -6 52 52" [attr.aria-label]="'Superficies de la pieza ' + codigo" focusable="false" class="diente__svg">
           @for (r of regiones; track r.region) {
@@ -204,6 +205,9 @@
       }
       <span><i class="leyenda__muestra leyenda__muestra--cambiado"></i>Cambio sin guardar</span>
       <span><i class="leyenda__muestra leyenda__muestra--nota">•</i>Tiene nota</span>
+      @if (piezasPlanificadas().size) {
+        <span><i class="leyenda__muestra leyenda__muestra--planificado" aria-hidden="true">P</i>Planificado</span>
+      }
     </div>
 
     <!-- Ficha de la pieza: ventana lateral que se abre con «Seleccionar».
