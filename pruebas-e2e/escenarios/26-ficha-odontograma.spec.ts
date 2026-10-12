@@ -94,7 +94,7 @@ test('la ficha registra hallazgos y notas por pieza, versiona y permite consulta
   await expect(pieza).toBeVisible();
   await pieza.getByLabel('Nota clínica de esta pieza').fill('Hallazgo sintético registrado desde la ficha.');
   await pieza.getByRole('button', { name: 'Listo', exact: true }).click();
-  await odontograma.getByRole('button', { name: 'Crear odontograma', exact: true }).click();
+  await odontograma.getByRole('button', { name: 'Guardar odontograma', exact: true }).click();
   const revision = page.getByRole('dialog', { name: 'Guardar odontograma', exact: true });
   await expect(revision).toBeVisible();
   const alta = page.waitForResponse(r => r.request().method() === 'POST' && r.url().endsWith(`/pacientes/${paciente.id}/odontograma`));
@@ -145,7 +145,8 @@ test('odontograma de la ficha mantiene tamaño y desplazamiento interno en escri
     await page.setViewportSize(dimensiones);
     await expect(odontograma.locator('.diente')).toHaveCount(32);
     const pieza = odontograma.locator('[data-pieza="16"] .diente__svg');
-    await pieza.scrollIntoViewIfNeeded();
+    // Tras cambiar el tamaño, Angular repinta el diente: reintentar si se desconecta.
+    await expect(async () => { await pieza.scrollIntoViewIfNeeded({ timeout: 2_000 }); }).toPass({ timeout: 10_000 });
     expect((await pieza.boundingBox())!.width).toBeGreaterThanOrEqual(44);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 2)).toBe(true);
     if (dimensiones.width >= 821) expect(await page.evaluate(() => document.documentElement.scrollHeight <= innerHeight + 2)).toBe(true);
