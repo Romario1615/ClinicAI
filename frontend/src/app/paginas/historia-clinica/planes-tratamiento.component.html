@@ -72,6 +72,10 @@
                 <span class="campo__etiqueta">Precio (USD)</span>
                 <input class="campo__control" type="number" min="0" step="0.01" [value]="fila.precio" [disabled]="!fila.incluido" (input)="cambiarPrecioHallazgo(i, $any($event.target).value)" />
               </label>
+              <label class="campo">
+                <span class="campo__etiqueta">Fase (1–20)</span>
+                <input class="campo__control" type="number" min="1" max="20" step="1" [value]="fila.fase" [disabled]="!fila.incluido" (change)="cambiarFaseHallazgo(i, $any($event.target).value)" />
+              </label>
             </fieldset>
           }
         </section>

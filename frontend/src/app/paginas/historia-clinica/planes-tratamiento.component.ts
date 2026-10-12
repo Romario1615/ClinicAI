@@ -110,6 +110,7 @@ export class PlanesTratamientoComponent {
   protected readonly procedimientos = signal<readonly ProcedimientoPlanNuevo[]>([]);
   protected readonly serviciosOdontograma = signal<readonly Servicio[]>([]);
   protected readonly filasOdontograma = signal<readonly (SolicitudPlanOdontograma['procedimientos'][number] & {
+    readonly fase: number;
     readonly incluido: boolean;
     readonly servicio_id: string;
     readonly precio: string;
@@ -120,7 +121,7 @@ export class PlanesTratamientoComponent {
   protected readonly procedimientosTotales = computed(() => {
     const mezcla = [
       ...this.filasOdontograma().filter((fila) => fila.incluido).map((fila) => ({
-        fase: 1, orden: 0, pieza: fila.pieza, caras: fila.caras,
+        fase: fila.fase, orden: 0, pieza: fila.pieza, caras: fila.caras,
         servicio_id: fila.servicio_id || null, descripcion: fila.descripcion.trim(), precio: fila.precio,
       })),
       ...this.procedimientos(),
@@ -179,7 +180,7 @@ export class PlanesTratamientoComponent {
     this.desdeOdontograma.set(true);
     this.titulo = `Plan desde odontograma · versión ${solicitud.version}`;
     this.filasOdontograma.set(solicitud.procedimientos.map((fila) => ({
-      ...fila, incluido: false, servicio_id: '', precio: '0.00',
+      ...fila, fase: 1, incluido: false, servicio_id: '', precio: '0.00',
     })));
     const especialidadId = this.especialidades.elegida()?.id;
     if (especialidadId) {
@@ -212,6 +213,14 @@ export class PlanesTratamientoComponent {
   protected cambiarPrecioHallazgo(indice: number, precio: string): void {
     this.filasOdontograma.update((filas) => filas.map((fila, posicion) =>
       posicion === indice ? { ...fila, precio } : fila,
+    ));
+  }
+
+  protected cambiarFaseHallazgo(indice: number, fase: string | number): void {
+    const valor = Number(fase);
+    if (!Number.isInteger(valor) || valor < 1 || valor > 20) return;
+    this.filasOdontograma.update((filas) => filas.map((fila, posicion) =>
+      posicion === indice ? { ...fila, fase: valor } : fila,
     ));
   }
 

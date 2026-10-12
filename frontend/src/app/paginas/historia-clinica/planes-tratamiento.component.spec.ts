@@ -314,6 +314,9 @@ describe('PlanesTratamientoComponent', () => {
         http.expectNone(RUTA, 'No debe crear el borrador sin servicio elegido');
         c.cambiarServicioHallazgo(0, 'srv-1');
         expect(c.filasOdontograma()[0].precio).toBe('85.50');
+        c.cambiarFaseHallazgo(0, 2);
+        c.cambiarFaseHallazgo(0, 21);
+        expect(c.filasOdontograma()[0].fase).toBe(2);
         c.cambiarPrecioHallazgo(0, '');
         c.guardarBorrador();
         expect(c.errorProcedimiento()).toContain('Cada precio');
@@ -338,7 +341,7 @@ describe('PlanesTratamientoComponent', () => {
         const alta = http.expectOne(RUTA);
         expect(alta.request.body.titulo).toBe('Plan desde odontograma · versión 3');
         expect(alta.request.body.procedimientos).toEqual([
-            { fase: 1, orden: 1, pieza: 16, caras: 'O', servicio_id: 'srv-1', descripcion: 'Pieza 16 · caries oclusal', precio: '90.00' },
+            { fase: 2, orden: 1, pieza: 16, caras: 'O', servicio_id: 'srv-1', descripcion: 'Pieza 16 · caries oclusal', precio: '90.00' },
         ]);
         alta.flush(plan({ titulo: 'Plan desde odontograma · versión 3' }));
         fixture.detectChanges();
