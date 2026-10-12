@@ -420,7 +420,7 @@ const DETALLE_CLINICO: Partial<Record<Pestana, string>> = {
               }
 
               @case ('odontograma') {
-                <app-odontograma [pacienteId]="pacienteId()" [edadPaciente]="edadAnios()" (planificar)="abrirPlanDesdeOdontograma($event)" />
+                <app-odontograma [pacienteId]="pacienteId()" [edadPaciente]="edadAnios()" [recargaPlanes]="recargasPlanesOdontograma()" (planificar)="abrirPlanDesdeOdontograma($event)" />
               }
 
               @case ('planes') {
@@ -429,6 +429,7 @@ const DETALLE_CLINICO: Partial<Record<Pestana, string>> = {
                   [nombrePaciente]="nombre()"
                   [puedeEditar]="puedeEditarPlanes()"
                   [solicitudOdontograma]="solicitudPlanOdontograma()"
+                  (planCreado)="alCrearPlan()"
                 />
               }
 
@@ -928,6 +929,10 @@ export class FichaPacienteComponent implements OnInit {
     this.sesion.tienePermiso(PERMISOS.planTratamientoEscribir) && this.especialidades.puedeRegistrar('planes'),
   );
   protected readonly solicitudPlanOdontograma = signal<SolicitudPlanOdontograma | null>(null);
+  protected readonly recargasPlanesOdontograma = signal(0);
+  protected alCrearPlan(): void {
+    this.recargasPlanesOdontograma.update((valor) => valor + 1);
+  }
   protected abrirPlanDesdeOdontograma(solicitud: SolicitudPlanOdontograma): void {
     if (!this.puedeEditarPlanes() || !this.pestanas().some((tab) => tab.clave === 'planes')) return;
     this.solicitudPlanOdontograma.set(solicitud);

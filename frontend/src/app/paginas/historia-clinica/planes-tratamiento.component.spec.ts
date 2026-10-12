@@ -309,6 +309,8 @@ describe('PlanesTratamientoComponent', () => {
         expect(c.errorProcedimiento()).toContain('Cada descripción');
         http.expectNone(RUTA, 'No debe enviar una descripción inválida por fila');
         c.cambiarDescripcionHallazgo(0, 'Pieza 16 · caries oclusal');
+        const planCreado = vi.fn();
+        c.planCreado.subscribe(planCreado);
         c.guardarBorrador();
         const alta = http.expectOne(RUTA);
         expect(alta.request.body.titulo).toBe('Plan desde odontograma · versión 3');
@@ -318,6 +320,7 @@ describe('PlanesTratamientoComponent', () => {
         alta.flush(plan({ titulo: 'Plan desde odontograma · versión 3' }));
         fixture.detectChanges();
         expect(c.planes()).toHaveLength(1);
+        expect(planCreado).toHaveBeenCalledOnce();
     });
 
     it('numera juntas por fase las filas del odontograma y las manuales, y suma en centavos', () => {

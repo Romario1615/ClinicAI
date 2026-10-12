@@ -108,6 +108,21 @@ describe('OdontogramaComponent', () => {
         expect((fixture.nativeElement as HTMLElement).textContent).not.toContain('Planificar tratamiento');
     });
 
+    it('recarga los planes cuando se crea uno desde la ficha', () => {
+        TestBed.inject(EspecialidadHistoriaService).disponibles.set([
+            { id: 'esp-1', nombre: 'Odontología', modulos: ['odontograma', 'planes'], propia: true },
+        ]);
+        montar(['odontograma.leer', 'plan_tratamiento.leer'], [version(1, true)]);
+        http.expectOne(`${BASE}/odontologia/pacientes/pac-1/planes-tratamiento`).flush([]);
+        fixture.detectChanges();
+
+        fixture.componentRef.setInput('recargaPlanes', 1);
+        fixture.detectChanges();
+        http.expectOne(`${BASE}/odontologia/pacientes/pac-1/planes-tratamiento`).flush([]);
+        fixture.detectChanges();
+        expect(c.planes()).toEqual([]);
+    });
+
     it('usa los cortes de la clínica al proponer el primer odontograma', () => {
         montar(['odontograma.leer', 'odontograma.escribir'], [], 7, { edad_mixta: 8, edad_permanente: 14 });
         expect(c.denticion()).toBe('TEMPORAL');

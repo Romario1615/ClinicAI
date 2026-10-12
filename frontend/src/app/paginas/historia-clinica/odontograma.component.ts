@@ -104,6 +104,7 @@ const ES_HALLAZGO_PIEZA = new Set<string>(HALLAZGOS_PIEZA.map((h) => h.codigo));
 })
 export class OdontogramaComponent {
   readonly pacienteId = input.required<string>();
+  readonly recargaPlanes = input(0);
   readonly edadPaciente = input<number | null>(null);
   readonly planificar = output<SolicitudPlanOdontograma>();
 
@@ -194,6 +195,15 @@ export class OdontogramaComponent {
       const pacienteId = this.pacienteId();
       this.cargar(pacienteId);
       if (this.puedeVerPlanes) this.cargarPlanes(pacienteId);
+    });
+    let primeraLectura = true;
+    effect(() => {
+      const recarga = this.recargaPlanes();
+      if (primeraLectura) {
+        primeraLectura = false;
+        return;
+      }
+      if (recarga && this.puedeVerPlanes) this.cargarPlanes(this.pacienteId());
     });
   }
 

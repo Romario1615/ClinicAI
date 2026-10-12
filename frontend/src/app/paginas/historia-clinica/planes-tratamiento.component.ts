@@ -1,4 +1,4 @@
-import { Component, computed, effect, inject, input, signal, ChangeDetectionStrategy } from '@angular/core';
+import { Component, computed, effect, inject, input, output, signal, ChangeDetectionStrategy } from '@angular/core';
 import { DatePipe } from '@angular/common';
 import { FotosClinicasComponent } from '../../compartido/fotos-clinicas.component';
 import { VentanaFlotanteComponent } from '../../compartido/ventana-flotante.component';
@@ -81,6 +81,7 @@ export class PlanesTratamientoComponent {
   readonly nombrePaciente = input.required<string>();
   readonly puedeEditar = input(false);
   readonly solicitudOdontograma = input<SolicitudPlanOdontograma | null>(null);
+  readonly planCreado = output<void>();
   protected readonly puedeLeerSensible = computed(() =>
     this.sesion.tienePermiso(PERMISOS.historiaLeerSensible),
   );
@@ -330,6 +331,7 @@ export class PlanesTratamientoComponent {
     this.operacionFotos.guardar('plan',this.api.crearPlanTratamiento(this.pacienteId(), datos),this.fotos).subscribe({
       next: (plan) => {
         this.planes.update((planes) => [plan, ...planes]);
+        this.planCreado.emit();
         this.reiniciarFormulario();
         this.exito.set('Borrador guardado. Revísalo antes de proponerlo al paciente.');
         this.guardando.set(false);
