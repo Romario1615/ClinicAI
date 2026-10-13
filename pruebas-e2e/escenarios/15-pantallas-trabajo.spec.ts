@@ -29,11 +29,9 @@ test('agenda y pacientes conservan sus acciones al desplazar el contenido en esc
     { width: 320, height: 844 },
   ]) {
     await page.setViewportSize(dimensiones);
-    // La barra lateral está disponible en escritorio; la navegación directa
-    // conserva la sesión en memoria y evita abrir el menú móvil para cada ruta.
-    if (dimensiones.width < 821) {
-      await page.getByRole('button', { name: 'Alternar navegación', exact: true }).click();
-    }
+    // `irA` abre el menú móvil si hace falta. Abrirlo aquí además provocaba una
+    // carrera: con la suite cargada la animación seguía en curso, `irA` lo veía
+    // cerrado y volvía a pulsar, cerrándolo.
     await irA(page, 'Agenda');
     await expect(page.getByRole('button', { name: 'Nueva cita', exact: true })).toBeVisible();
     for (const vista of ['Día', 'Semana', 'Mes', 'Lista']) {
