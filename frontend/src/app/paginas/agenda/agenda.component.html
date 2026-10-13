@@ -107,7 +107,7 @@
         class="campo__control"
         name="sede"
         [ngModel]="sedeId()"
-        (ngModelChange)="sedeId.set($event); cargarAgenda()"
+        (ngModelChange)="cambiarSede($event)"
       >
         @for (sede of sedes(); track sede.id) {
           <option [value]="sede.id">{{ sede.nombre }}</option>

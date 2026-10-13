@@ -21,12 +21,13 @@
 import { TestBed, type ComponentFixture } from '@angular/core/testing';
 import { HttpTestingController } from '@angular/common/http/testing';
 import { ActivatedRoute, convertToParamMap } from '@angular/router';
-import { of } from 'rxjs';
+import { of, Subject } from 'rxjs';
 
 import { AgendaComponent, MAXIMO_CITAS_SERIE } from './agenda.component';
 import { CatalogoService } from '../../nucleo/servicios/catalogo.service';
 import type {
   Cita,
+  Consultorio,
   Especialidad,
   Paciente,
   Profesional,
@@ -208,6 +209,29 @@ describe('AgendaComponent · reserva y series', { timeout: 20_000 }, () => {
     expect(fixture.componentInstance['vistaDia']()).toBe('sillon');
     expect(guardar).toHaveBeenCalledWith('agenda.vistaDia', 'sillon');
     guardar.mockRestore();
+  });
+
+  it('vacía los consultorios al cambiar de sede y descarta la respuesta anterior', () => {
+    montar({}, ['administrador_clinica'], null, false);
+    const agenda = fixture.componentInstance;
+    const catalogo = TestBed.inject(CatalogoService);
+    const respuestaAnterior = new Subject<Consultorio[]>();
+    const salaAnterior: Consultorio = { id: 'sala-anterior', sede_id: SEDE.id, nombre: 'Sala anterior', tipo: 'CONSULTA', capacidad: 1, activo: true };
+    const salaNueva: Consultorio = { id: 'sala-nueva', sede_id: 'sede-2', nombre: 'Sala nueva', tipo: 'CONSULTA', capacidad: 1, activo: true };
+    vi.spyOn(catalogo, 'consultorios').mockImplementation((id) =>
+      id === SEDE.id ? respuestaAnterior : of([salaNueva]),
+    );
+    vi.spyOn(agenda as unknown as { cargarAgenda: () => void }, 'cargarAgenda').mockImplementation(() => undefined);
+    agenda['consultorios'].set([salaAnterior]);
+    agenda['cargarConsultorios']();
+
+    agenda['cambiarSede']('sede-2');
+    expect(agenda['consultorios']()).toEqual([]);
+    agenda['cargarConsultorios']();
+    expect(agenda['consultorios']()).toEqual([salaNueva]);
+    respuestaAnterior.next([salaAnterior]);
+    expect(agenda['consultorios']()).toEqual([salaNueva]);
+    respuestaAnterior.complete();
   });
 
   it('consulta disponibilidad con el sillón elegido y no ofrece un turno que lo solapa', () => {

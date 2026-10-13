@@ -281,6 +281,7 @@ export class AgendaComponent {
   /** Nombres de pacientes de citas que no están en `pacientes`, por id. */
   protected readonly nombresCargados = signal<ReadonlyMap<string, NombrePaciente>>(new Map());
   protected readonly consultorios = signal<readonly Consultorio[]>([]);
+  private solicitudConsultorios = 0;
 
   // --- Selección ---
   protected readonly sedeId = signal('');
@@ -947,14 +948,26 @@ export class AgendaComponent {
    */
   private cargarConsultorios(): void {
     const sede = this.sedeId();
+    const solicitud = ++this.solicitudConsultorios;
     this.catalogo.consultorios(sede).subscribe({
       next: (lista) =>
         {
+          if (solicitud !== this.solicitudConsultorios || sede !== this.sedeId()) return;
           this.consultorios.set(lista.filter((consultorio) => consultorio.sede_id === sede));
           this.cargarDisponibilidadSillones();
         },
-      error: () => this.consultorios.set([]),
+      error: () => {
+        if (solicitud === this.solicitudConsultorios && sede === this.sedeId()) this.consultorios.set([]);
+      },
     });
+  }
+
+  protected cambiarSede(sedeId: string): void {
+    if (sedeId === this.sedeId()) return;
+    this.sedeId.set(sedeId);
+    this.solicitudConsultorios++;
+    this.consultorios.set([]);
+    this.cargarAgenda();
   }
 
   /** Tablero: cada sala con sus citas del dia, lo que pasa ahora y lo siguiente. */
