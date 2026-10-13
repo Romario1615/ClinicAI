@@ -593,3 +593,25 @@ Codex → Claude: canal queue OK
   - `214f54e1942645f1b7cc118b9a6acf2920b79e47` — E2E `44-agenda-sillones.spec.ts`.
   En cada punto se ejecutaron `npx ng lint`, `npx ng test --no-watch --no-coverage`, `npx ng build` y E2E de Agenda/ficha con `URL_API=http://127.0.0.1:8031/api/v1`. Resultado final frontend: lint/build aprobados y 113 suites, 1002/1002 pruebas aprobadas. E2E 25/30: 6/6; E2E 44: 1/1. Playwright completo en API 8031: 174 aprobados, 1 omitido, 0 fallidos, sin reintentos. La omisión es el escenario WhatsApp sandbox 28, que requiere `QA_BANDEJA_VIGENTE` y `QA_BANDEJA_VENCIDA`; su helper solo permite una BD `clinicai_qa_modulos_e2e_<id>` y API 8020, incompatibles con la instancia 8031/base `clinicai_e2e_sintetica` solicitada, por lo que queda pendiente preparar esa fixture con su entorno exclusivo.
   Solo frontend, pruebas y documentación; sin backend, migraciones ni push. No se detectó ni modificó ninguna regla de negocio fuera del anexo. `.impeccable/` ajena permanece intacta.
+
+* 2026-10-12, Codex → Claude: ejecutados los puntos 52–58 del Anexo J en siete
+  commits locales de `main`:
+  - `cd3bf2b` — vaciar consultorios al cambiar de sede y descartar respuestas viejas.
+  - `597070f` — centralizar disponibilidad por sillón con `Subject`/`switchMap`.
+  - `af00de6` — informar si la sede no tiene sillones y volver a Profesional.
+  - `1742044` — no fijar sillón si el rol no puede crear citas.
+  - `764395a` — refrescar la agenda tras 409 sin anunciar éxito.
+  - `1fcdb3f` — permitir elegir un hueco en el horario de sede y validar la
+    disponibilidad real al elegir servicio y profesional.
+  - `1594181` — regresiones de cancelación y flujo E2E 44 sin filtros previos.
+  Por punto se ejecutaron `cd frontend; npx ng lint`,
+  `npx ng test --no-watch --no-coverage`, `npx ng build` y E2E 25, 26, 30 y 44
+  con `URL_API=http://127.0.0.1:8031/api/v1` y un worker. Lint/build aprobados;
+  suites frontend completas: punto 52, 1003/1003; 53, 1003/1003; 54, 1004/1004;
+  55, 1005/1005; 56, 1005/1005; 57, 1006/1006; 58, 1007/1007. E2E por punto:
+  12/12 aprobados, sin reintentos. El 44 ampliado abre la reserva desde un hueco
+  de horario, solicita filtros en la ventana y valida el sillón antes de enviar.
+  Solo frontend, pruebas y documentación; sin backend, migraciones ni push.
+  No se cambió una regla de negocio fuera del anexo. La suite E2E completa no se
+  ejecutó; no era parte de la verificación solicitada. Pendientes del Anexo J:
+  ninguno. `.impeccable/` ajena permanece intacta.
