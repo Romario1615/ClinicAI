@@ -41,7 +41,7 @@ import {
   ChangeDetectionStrategy,
 } from '@angular/core';
 
-import type { Cita, Profesional } from '../../nucleo/modelos/dominio';
+import type { Cita, Consultorio, Profesional } from '../../nucleo/modelos/dominio';
 import type { FilaDia } from '../../nucleo/utilidades/secuencia-dia';
 import { hoyEnZona, sumarDias } from '../../nucleo/utilidades/fechas';
 import { FotoPersonaComponent } from '../../compartido/foto-persona.component';
@@ -158,7 +158,17 @@ interface Columna {
   readonly subtitulo: string;
   readonly hoy: boolean;
   readonly fecha: string;
+  readonly consultorioId?: string | null;
   readonly bloques: readonly Bloque[];
+}
+
+const TIPO_CONSULTORIO: Readonly<Record<string, string>> = {
+  CONSULTA: 'Consulta', PROCEDIMIENTOS: 'Procedimientos', IMAGEN: 'Imagen', LABORATORIO: 'Laboratorio', OTRO: 'Otro',
+};
+
+function abreviarProfesional(nombre: string): string {
+  const partes = nombre.trim().split(/\s+/).filter(Boolean);
+  return partes.length > 1 ? `${partes[0]![0]}. ${partes.slice(1).join(' ')}` : nombre;
 }
 
 @Component({
@@ -166,6 +176,12 @@ interface Columna {
   standalone: true,
   imports: [FotoPersonaComponent],
   template: `
+    @if (vista() === 'dia') {
+      <div class="modo-dia" role="group" aria-label="Organizar columnas del día">
+        <button type="button" [attr.aria-pressed]="vistaDia() === 'profesional'" (click)="vistaDiaElegida.emit('profesional')">Profesional</button>
+        <button type="button" [attr.aria-pressed]="vistaDia() === 'sillon'" (click)="vistaDiaElegida.emit('sillon')">Sillón</button>
+      </div>
+    }
     @if (leyendaVisible().length > 0 || (vista() === 'dia' && huecos().length)) {
       <div class="leyenda" role="group" aria-label="Leyenda de colores">
         @for (item of leyendaVisible(); track item.estado) {
@@ -238,7 +254,11 @@ interface Columna {
               </button>
             } @else {
               <span class="tiempo__profesional" [attr.title]="col.titulo">
-                <app-foto-persona [profesionalId]="col.clave" [nombre]="col.titulo" [tamano]="30" />
+                @if (vistaDia() === 'profesional') {
+                  <app-foto-persona [profesionalId]="col.clave" [nombre]="col.titulo" [tamano]="30" />
+                } @else {
+                  <span class="tiempo__sillon" aria-hidden="true">▦</span>
+                }
                 <span class="tiempo__nombre">
                   <strong>{{ col.titulo }}</strong>
                   <span>{{ col.subtitulo }}</span>
@@ -318,6 +338,10 @@ interface Columna {
       --c-cancelled: #9aa5ad;
       --c-libre: #3f9a5a;
     }
+    .modo-dia { display: flex; align-self: flex-end; width: fit-content; padding: 3px; border: 1px solid var(--borde); border-radius: 999px; background: var(--superficie-hundida); }
+    .modo-dia button { min-height: 32px; padding: 4px 12px; border: 0; border-radius: 999px; background: transparent; color: var(--texto-suave); font: inherit; font-size: 0.82rem; font-weight: 650; cursor: pointer; }
+    .modo-dia button[aria-pressed="true"] { background: var(--superficie-elevada); color: var(--texto); box-shadow: 0 1px 3px rgb(0 0 0 / 12%); }
+    .modo-dia button:focus-visible { outline: 3px solid var(--acento); outline-offset: 2px; }
 
     .leyenda {
       display: flex;
@@ -378,6 +402,7 @@ interface Columna {
     }
     .tiempo__titulo span { color: var(--texto-suave); font-size: 0.75rem; }
     .tiempo__profesional { display: inline-flex; align-items: center; gap: 8px; justify-content: center; min-width: 0; max-width: 100%; text-align: left; }
+    .tiempo__sillon { display: grid; place-items: center; flex: none; width: 30px; height: 30px; border-radius: 8px; background: var(--acento-suave); color: var(--acento-fuerte); font-size: 1.25rem; }
     .tiempo__nombre { display: grid; min-width: 0; }
     /* Un nombre largo se acorta con puntos suspensivos; completo en el título. */
     .tiempo__nombre > * { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -555,7 +580,9 @@ export class CalendarioAgendaComponent {
   readonly sinTurnos = input(false);
   readonly proximoDiaConTurnos = input<string | null>(null);
   readonly profesionales = input<readonly Profesional[]>([]);
+  readonly consultorios = input<readonly Consultorio[]>([]);
   readonly profesionalId = input('');
+  readonly vistaDia = input<'profesional' | 'sillon'>('profesional');
   readonly citaSeleccionadaId = input<string | null>(null);
   readonly puedeReservar = input(false);
   readonly verCanceladas = input(false);
@@ -565,6 +592,7 @@ export class CalendarioAgendaComponent {
   readonly citaElegida = output<Cita>();
   readonly huecoElegido = output<FilaDia & { tipo: 'hueco' }>();
   readonly diaElegido = output<string>();
+  readonly vistaDiaElegida = output<'profesional' | 'sillon'>();
 
   protected readonly nombresDia = NOMBRES_DIA;
   protected readonly etiquetaProximoDia = computed(() => {
@@ -732,8 +760,31 @@ export class CalendarioAgendaComponent {
         };
       });
     }
-    // Día: una columna por profesional con citas, y siempre la del elegido.
+    // Día por sillón: consultorios activos en el orden de catálogo. «Sin sillón»
+    // solo se incluye si tiene citas para esta fecha.
     const delDia = this.locales().filter((item) => item.fecha === fecha);
+    if (this.vistaDia() === 'sillon') {
+      const citasVisibles = delDia.filter((item) =>
+        !this.profesionalId() || item.cita.profesional_id === this.profesionalId(),
+      );
+      const nombres = new Map(this.profesionales().map((p) => [p.id, `${p.nombre} ${p.apellido}`]));
+      const columnas: Columna[] = this.consultorios().filter((sala) => sala.activo !== false).map((sala) => ({
+        clave: sala.id,
+        consultorioId: sala.id,
+        titulo: sala.nombre,
+        subtitulo: TIPO_CONSULTORIO[sala.tipo] ?? sala.tipo,
+        hoy: fecha === this.hoy(),
+        fecha,
+        bloques: this.colocar(citasVisibles.filter((item) => item.cita.consultorio_id === sala.id), [], false, nombres),
+      }));
+      const sinSillon = citasVisibles.filter((item) => !item.cita.consultorio_id);
+      if (sinSillon.length) columnas.push({
+        clave: 'sin-sillon', consultorioId: null, titulo: 'Sin sillón', subtitulo: `${sinSillon.length} cita(s)`,
+        hoy: fecha === this.hoy(), fecha, bloques: this.colocar(sinSillon, [], false, nombres),
+      });
+      return columnas;
+    }
+    // Día: una columna por profesional con citas, y siempre la del elegido.
     const ids = new Set(delDia.map((item) => item.cita.profesional_id));
     if (this.profesionalId()) ids.add(this.profesionalId());
     const nombres = new Map(this.profesionales().map((p) => [p.id, `${p.nombre} ${p.apellido}`]));
@@ -752,6 +803,7 @@ export class CalendarioAgendaComponent {
         delDia.filter((item) => item.cita.profesional_id === id),
         id === this.profesionalId() ? this.huecos() : [],
         false,
+        nombres,
       ),
     }));
   });
@@ -822,9 +874,9 @@ export class CalendarioAgendaComponent {
     citas: readonly { cita: Cita; desde: number; hasta: number }[],
     huecos: readonly (FilaDia & { tipo: 'hueco' })[],
     conProfesional: boolean,
+    nombres = new Map(this.profesionales().map((p) => [p.id, `${p.nombre} ${p.apellido}`])),
   ): Bloque[] {
     const inicioFranja = this.franja().desde;
-    const nombres = new Map(this.profesionales().map((p) => [p.id, `${p.nombre} ${p.apellido}`]));
     const items = [
       ...citas.map((item) => ({ ...item, hueco: null as (FilaDia & { tipo: 'hueco' }) | null })),
       ...huecos.map((hueco) => ({
@@ -861,7 +913,11 @@ export class CalendarioAgendaComponent {
             ? [
                 ETIQUETA.get(estado as EstadoVisual) ?? '',
                 this.etiquetaServicio()(cita.servicio_id),
-                conProfesional ? (nombres.get(cita.profesional_id) ?? '') : '',
+                conProfesional
+                  ? (nombres.get(cita.profesional_id) ?? '')
+                  : this.vistaDia() === 'sillon'
+                    ? abreviarProfesional(nombres.get(cita.profesional_id) ?? '')
+                    : '',
               ]
                 .filter(Boolean)
                 .join(' · ')

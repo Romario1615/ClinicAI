@@ -121,6 +121,35 @@ describe('CalendarioAgendaComponent', () => {
         expect(el.textContent).toContain('Libre para reservar');
     });
 
+    it('día por sillón: respeta el orden activo, el filtro de profesional y «Sin sillón»', () => {
+        montar({
+            vista: 'dia', vistaDia: 'sillon', profesionalId: 'prof-1',
+            consultorios: [
+                { id: 's2', sede_id: 'sede-1', nombre: 'Sillón B', tipo: 'PROCEDIMIENTOS', capacidad: 1, activo: true },
+                { id: 's1', sede_id: 'sede-1', nombre: 'Sillón A', tipo: 'CONSULTA', capacidad: 1, activo: true },
+                { id: 's3', sede_id: 'sede-1', nombre: 'Inactivo', tipo: 'CONSULTA', capacidad: 1, activo: false },
+            ],
+            profesionales: [{ id: 'prof-1', nombre: 'Ana', apellido: 'Uno' }],
+            citas: [
+                cita('1', '2026-10-05T14:00:00Z', '2026-10-05T14:30:00Z', { consultorio_id: 's2' }),
+                cita('2', '2026-10-05T15:00:00Z', '2026-10-05T15:30:00Z', { id: 'cita-sin-sillon', consultorio_id: null }),
+                cita('3', '2026-10-05T16:00:00Z', '2026-10-05T16:30:00Z', { id: 'ajena', profesional_id: 'prof-2', consultorio_id: 's1' }),
+            ],
+            etiquetaPaciente: (id: string) => `Paciente ${id}`,
+            etiquetaServicio: () => 'Control',
+        });
+
+        const columnas = c.columnas();
+        expect(columnas.map((col: { titulo: string }) => col.titulo)).toEqual(['Sillón B', 'Sillón A', 'Sin sillón']);
+        expect(columnas.map((col: { subtitulo: string }) => col.subtitulo)).toEqual(['Procedimientos', 'Consulta', '1 cita(s)']);
+        expect(columnas[0].bloques[0].detalle).toContain('A. Uno');
+        expect(columnas[0].bloques[0].detalle).toContain('Control');
+        expect(columnas[1].bloques).toHaveLength(0);
+        expect(columnas[2].bloques[0].titulo).toBe('Paciente pac-2');
+        const grupo = (fixture.nativeElement as HTMLElement).querySelector('[aria-label="Organizar columnas del día"]');
+        expect(grupo?.textContent).toContain('Sillón');
+    });
+
     it('semana: siete columnas del profesional elegido y clic en el día', () => {
         montar({
             vista: 'semana',

@@ -249,7 +249,9 @@
           [sinTurnos]="disponibilidad() !== null && huecosDia().length === 0"
           [proximoDiaConTurnos]="proximoDiaConTurnos()"
           [profesionales]="profesionales()"
+          [consultorios]="consultorios()"
           [profesionalId]="profesionalId()"
+          [vistaDia]="vistaDia()"
           [citaSeleccionadaId]="citaSeleccionada()?.id ?? null"
           [puedeReservar]="puedeCrear()"
           [verCanceladas]="verCanceladas()"
@@ -258,6 +260,7 @@
           (citaElegida)="abrirCita($event)"
           (huecoElegido)="abrirHueco($event)"
           (diaElegido)="elegirDia($event)"
+          (vistaDiaElegida)="cambiarVistaDia($event)"
         />
       } @else {
         <!-- ================= El día, en orden ================= -->

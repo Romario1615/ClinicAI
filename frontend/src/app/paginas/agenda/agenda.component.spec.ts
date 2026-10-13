@@ -201,6 +201,15 @@ describe('AgendaComponent · reserva y series', { timeout: 20_000 }, () => {
     expect(fixture.componentInstance['profesionalId']()).toBe(PROFESIONAL.id);
   });
 
+  it('recuerda el modo por sillón en el almacenamiento local', () => {
+    montar({}, ['administrador_clinica'], null, false);
+    const guardar = vi.spyOn(Storage.prototype, 'setItem');
+    fixture.componentInstance['cambiarVistaDia']('sillon');
+    expect(fixture.componentInstance['vistaDia']()).toBe('sillon');
+    expect(guardar).toHaveBeenCalledWith('agenda.vistaDia', 'sillon');
+    guardar.mockRestore();
+  });
+
   it('acota al profesional cuando la identidad llega después que el catálogo', () => {
     montar({}, ['profesional'], PROFESIONAL.id, false, ['agenda.leer'], false);
     expect(fixture.componentInstance['profesionalId']()).toBe('');

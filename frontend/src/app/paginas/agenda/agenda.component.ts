@@ -175,6 +175,7 @@ const MOTIVOS: Record<string, string> = {
 };
 
 const CLAVE_VISTA = 'agenda.vista';
+const CLAVE_VISTA_DIA = 'agenda.vistaDia';
 
 /**
  * Citas como máximo por serie: un año de calendario en cada frecuencia.
@@ -206,6 +207,14 @@ function leerVista(): VistaCalendario | 'lista' {
     return valor === 'semana' || valor === 'mes' || valor === 'lista' ? valor : 'dia';
   } catch {
     return 'dia';
+  }
+}
+
+function leerVistaDia(): 'profesional' | 'sillon' {
+  try {
+    return localStorage.getItem(CLAVE_VISTA_DIA) === 'sillon' ? 'sillon' : 'profesional';
+  } catch {
+    return 'profesional';
   }
 }
 
@@ -281,6 +290,8 @@ export class AgendaComponent {
   protected readonly fecha = signal('');
   /** Cómo se ve la agenda. Se recuerda por navegador: es preferencia de quien la usa. */
   protected readonly vista = signal<VistaCalendario | 'lista'>(leerVista());
+  /** Organización de columnas cuando la vista principal es Día. */
+  protected readonly vistaDia = signal<'profesional' | 'sillon'>(leerVistaDia());
   protected readonly vistas: readonly { valor: VistaCalendario | 'lista'; etiqueta: string }[] = [
     { valor: 'dia', etiqueta: 'Día' },
     { valor: 'semana', etiqueta: 'Semana' },
@@ -1256,6 +1267,15 @@ export class AgendaComponent {
       // Sin almacenamiento (ventana privada) la vista simplemente no se recuerda.
     }
     this.cargarRango();
+  }
+
+  protected cambiarVistaDia(vista: 'profesional' | 'sillon'): void {
+    this.vistaDia.set(vista);
+    try {
+      localStorage.setItem(CLAVE_VISTA_DIA, vista);
+    } catch {
+      // La preferencia solo se conserva si el navegador permite almacenamiento.
+    }
   }
 
   /** Clic en un día de la semana o del mes: se abre ese día. */
