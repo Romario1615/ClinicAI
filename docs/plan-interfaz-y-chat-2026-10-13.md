@@ -84,6 +84,16 @@ Ya implementado (`17874ad`): destino por omisión `/agenda`; sin
 `agenda.leer`, la primera sección permitida. Se mantiene y se cubre en el E2E
 de N3 para los seis roles.
 
+### N5 · Cierre de citas solo desde su hora (ADR‑0031, backend en `2d509ba`)
+
+* En Agenda y en la ficha, «Marcar atendida» e «Inasistencia» de una cita
+  futura se muestran deshabilitadas con el motivo («Disponible desde las
+  10:30») o se ocultan; «Marcar atendida» sí se permite si la atención ya se
+  inició. El 409 del backend se muestra con su texto.
+* E2E que cerraban citas futuras (revisar 04, 25, 42, 43 y los de cargo por
+  tarifa): registrar llegada e iniciar la atención antes de completar, o
+  sembrar la cita en una hora ya iniciada. Sin relajar aserciones.
+
 ---
 
 ## Parte L · Revisión y corrección de la interfaz con el método de las skills
