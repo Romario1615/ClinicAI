@@ -74,7 +74,9 @@ export interface DecisionAfectada {
 }
 
 /** Error del API reducido a lo que se muestra. */
-export class FalloRecorrido extends Error {}
+export class FalloRecorrido extends Error {
+  constructor(mensaje: string, readonly estado: number) { super(mensaje); }
+}
 
 @Injectable({ providedIn: 'root' })
 export class RecorridoService {
@@ -124,7 +126,10 @@ export class RecorridoService {
     return peticion.pipe(
       catchError((fallo: HttpErrorResponse) =>
         throwError(
-          () => new FalloRecorrido((fallo.error as { mensaje?: string } | null)?.mensaje ?? 'No se pudo completar la acción.'),
+          () => new FalloRecorrido(
+            (fallo.error as { mensaje?: string } | null)?.mensaje ?? 'No se pudo completar la acción.',
+            fallo.status,
+          ),
         ),
       ),
     );

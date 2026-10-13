@@ -13,6 +13,7 @@ import { RouterLink } from '@angular/router';
 import type { Cita, Consultorio } from '../../nucleo/modelos/dominio';
 import { SesionService } from '../../nucleo/servicios/sesion.service';
 import {
+  FalloRecorrido,
   RecorridoService,
   type CitaAfectada,
   type OpcionDerivacion,
@@ -181,7 +182,7 @@ export class AccionesRecorridoComponent {
     this.correr(this.servicio.ingresoConsultorio(this.cita().id, this.consultorioId), () => {
       const nombre = this.consultorios().find((c) => c.id === this.consultorioId)?.nombre ?? 'el consultorio';
       return `Paciente en ${nombre}.`;
-    });
+    }, 'Ese sillón ya está ocupado a esa hora.');
   }
 
   protected registrarSalida(): void {
@@ -239,7 +240,7 @@ export class AccionesRecorridoComponent {
     );
   }
 
-  private correr(peticion: ReturnType<RecorridoService['salida']>, mensaje: () => string): void {
+  private correr(peticion: ReturnType<RecorridoService['salida']>, mensaje: () => string, conflicto?: string): void {
     this.ocupado.set(true);
     this.error.set('');
     peticion.subscribe({
@@ -249,7 +250,14 @@ export class AccionesRecorridoComponent {
         this.aviso.set(texto);
         this.cambio.emit(texto);
       },
-      error: (fallo: Error) => this.fallar(fallo),
+      error: (fallo: Error) => {
+        if (conflicto && fallo instanceof FalloRecorrido && fallo.estado === 409) {
+          this.ocupado.set(false);
+          this.error.set(conflicto);
+        } else {
+          this.fallar(fallo);
+        }
+      },
     });
   }
 

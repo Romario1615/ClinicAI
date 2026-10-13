@@ -87,6 +87,19 @@ describe('AccionesRecorridoComponent', () => {
         expect(cambios).toEqual(['Paciente en Sala 1.']);
     });
 
+    it('explica en claro si el consultorio se ocupó antes de asignarlo', () => {
+        montar(['cita.registrar_llegada']);
+        c.consultorioId = 'k1';
+        c.pasarAConsultorio();
+        http.expectOne(`${BASE}/agenda/citas/c1/consultorio`).flush(
+            { codigo: 'CONFLICTO', mensaje: 'La sala tiene una ocupación incompatible.' },
+            { status: 409, statusText: 'Conflict' },
+        );
+        expect(c.error()).toBe('Ese sillón ya está ocupado a esa hora.');
+        expect(c.ocupado()).toBe(false);
+        expect(cambios).toEqual([]);
+    });
+
     it('pedir más tiempo: aplicada o pendiente para recepción', () => {
         montar(['cita.iniciar_atencion']);
         c.minutos = 20;
