@@ -117,10 +117,8 @@ async function limpiarCitaDePrueba(
 
 async function seleccionarPaciente(contenedor: Page | Locator, paciente: { id: string; apellido: string }) {
   const selector = contenedor.locator('app-selector-paciente');
-  await selector.getByLabel('Buscar paciente', { exact: true }).fill(paciente.apellido);
-  await selector.getByRole('button', { name: 'Buscar', exact: true }).click();
-  const pacientes = selector.getByRole('combobox', { name: 'Paciente', exact: true });
-  await pacientes.selectOption(paciente.id);
+  await selector.getByRole('combobox', { name: 'Paciente', exact: true }).fill(paciente.apellido);
+  await selector.getByRole('option').filter({ hasText: paciente.apellido }).click();
 }
 
 test('recepción exporta el resumen de agenda sin datos de pacientes', async ({ page }) => {

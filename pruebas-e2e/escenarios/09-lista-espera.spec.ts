@@ -95,9 +95,8 @@ test('recepción anota, ofrece y resuelve un turno de la lista de espera', async
     await irA(page, 'Lista de espera');
     await page.getByRole('button', { name: 'Anotar a un paciente' }).click();
     const selector = page.locator('app-selector-paciente');
-    await selector.getByLabel('Buscar paciente').fill(`Espera ${sufijo}`);
-    await selector.getByRole('button', { name: 'Buscar', exact: true }).click();
-    await selector.getByRole('combobox', { name: 'Paciente', exact: true }).selectOption(paciente.id);
+    await selector.getByRole('combobox', { name: 'Paciente', exact: true }).fill(`Espera ${sufijo}`);
+    await selector.getByRole('option').filter({ hasText: `Espera ${sufijo}` }).click();
     await expect(page.getByRole('dialog', { name: 'Anotar a un paciente' })).toBeVisible({ timeout: 4_000 });
     await expect(page.getByRole('combobox', { name: /^Sede/ })).toBeVisible({ timeout: 4_000 });
     await page.getByRole('combobox', { name: /^Sede/ }).selectOption(agenda.sede.id);

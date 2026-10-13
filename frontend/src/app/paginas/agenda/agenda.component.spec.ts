@@ -539,16 +539,31 @@ describe('AgendaComponent · reserva y series', { timeout: 20_000 }, () => {
     fixture.detectChanges();
   }
 
-  it('abre Nueva cita desde Todos y pide servicio y profesional dentro de la ventana', async () => {
+  it('abre Nueva cita sin cargar una lista masiva y permite elegir paciente desde el combobox', async () => {
     montar({}, ['administrador_clinica'], null, false);
     await abrirNuevaCita();
-    http.expectOne((p) => p.url === `${BASE}/pacientes/` && p.params.get('limite') === '25')
-      .flush({ elementos: [PACIENTE], total: 1, limite: 25, desplazamiento: 0 });
     fixture.detectChanges();
 
     expect(dialogo()).not.toBeNull();
     expect(dialogo()!.querySelector('select[name="servicio-reserva"]')).not.toBeNull();
     expect(dialogo()!.querySelector('select[name="profesional-reserva"]')).not.toBeNull();
+    const paciente = dialogo()!.querySelector<HTMLInputElement>('[role="combobox"]')!;
+    expect(paciente.getAttribute('aria-label')).toBeNull();
+    expect(paciente.id).toBeTruthy();
+    http.expectNone((p) => p.url === `${BASE}/pacientes/`);
+
+    paciente.value = 'Jul';
+    paciente.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+    await new Promise((resolver) => setTimeout(resolver, 250));
+    const busqueda = http.expectOne((p) => p.url === `${BASE}/pacientes/` && p.params.get('termino') === 'Jul');
+    busqueda.flush({ elementos: [PACIENTE], total: 1, limite: 25, desplazamiento: 0 });
+    fixture.detectChanges();
+    const opcion = dialogo()!.querySelector<HTMLButtonElement>('[role="option"]')!;
+    expect(opcion.textContent).toContain(PACIENTE.apellido);
+    opcion.click();
+    fixture.detectChanges();
+    expect(dialogo()!.textContent).toContain(`${PACIENTE.nombre} ${PACIENTE.apellido}`);
   });
 
   /** Marca «Repetir esta cita» y elige frecuencia y cantidad desde el DOM. */

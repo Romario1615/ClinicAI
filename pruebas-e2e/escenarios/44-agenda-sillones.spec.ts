@@ -119,8 +119,8 @@ test('agenda por sillón: muestra consultorios y reserva en la columna elegida',
   const horaObjetivo = horaLocal(seleccion.turno.inicio);
   const indiceHueco = await huecosSala.evaluateAll((bloques, objetivo) => bloques.findIndex((bloque) => {
     const rango = bloque.querySelector('.bloque__hora')?.textContent?.trim() ?? '';
-    const [inicio, fin] = rango.split('–');
-    return Boolean(inicio && fin && inicio <= objetivo && objetivo < fin);
+    const [inicio, fin] = rango.split('–').map((parte) => parte.trim());
+    return Boolean(inicio && (fin ? inicio <= objetivo && objetivo < fin : inicio === objetivo));
   }), horaObjetivo);
   expect(indiceHueco, `debe haber un hueco de horario que contenga las ${horaObjetivo}`).toBeGreaterThanOrEqual(0);
   await comprobarSinScroll(page);
@@ -148,9 +148,9 @@ test('agenda por sillón: muestra consultorios y reserva en la columna elegida',
   await expect(selectorSala.getByRole('button', { name: new RegExp(seleccion.sala.nombre) })).toHaveAttribute('aria-pressed', 'true');
 
   const selectorPaciente = reserva.locator('app-selector-paciente');
-  await selectorPaciente.locator('input[name="termino"]').fill(paciente.apellido);
-  await selectorPaciente.getByRole('button', { name: 'Buscar', exact: true }).click();
-  await selectorPaciente.locator('select[name="paciente"]').selectOption(paciente.id);
+  const buscadorPaciente = selectorPaciente.getByRole('combobox', { name: 'Paciente', exact: true });
+  await buscadorPaciente.fill(paciente.apellido);
+  await selectorPaciente.getByRole('option', { name: new RegExp(paciente.apellido) }).click();
   const guardado = page.waitForResponse((respuesta) =>
     respuesta.request().method() === 'POST' && /\/agenda\/citas\/?$/.test(new URL(respuesta.url()).pathname),
   );

@@ -129,10 +129,11 @@ async function paso(page: Page, nn: string, nombre: string, accion: () => Promis
 }
 
 /** Busca un paciente con el selector reutilizable y lo elige por id. */
-async function elegirPacienteEnSelector(contenedor: Locator, cedula: string, id: string): Promise<void> {
-  await contenedor.locator('input[name="termino"]').fill(cedula);
-  await contenedor.getByRole('button', { name: 'Buscar', exact: true }).click();
-  await contenedor.locator('select[name="paciente"]').selectOption(id);
+async function elegirPacienteEnSelector(contenedor: Locator, cedula: string): Promise<void> {
+  const buscador = contenedor.getByRole('combobox', { name: /^Paciente/ });
+  await buscador.fill(cedula);
+  await contenedor.getByRole('option', { name: new RegExp(cedula) }).click();
+  await expect(buscador).toHaveValue(/.+/);
 }
 
 test('recepción: un día completo de trabajo con pacientes sintéticos', async ({ page, request }) => {
@@ -224,7 +225,7 @@ test('recepción: un día completo de trabajo con pacientes sintéticos', async 
     const primera = (await horas.first().textContent())?.trim() ?? '';
     dato(`Primera hora libre ofrecida en Reservar cita: ${primera}`);
     await horas.first().click();
-    await elegirPacienteEnSelector(ventana.locator('app-selector-paciente'), CEDULA_1, paciente1);
+    await elegirPacienteEnSelector(ventana.locator('app-selector-paciente'), CEDULA_1);
     const guardado = page.waitForResponse((r) => r.request().method() === 'POST' && /\/agenda\/citas\/?$/.test(new URL(r.url()).pathname), { timeout: 30_000 });
     await ventana.getByRole('button', { name: 'Confirmar cita', exact: true }).click();
     const respuesta = await guardado;
@@ -296,7 +297,7 @@ test('recepción: un día completo de trabajo con pacientes sintéticos', async 
     await page.getByRole('button', { name: 'Registrar un abono', exact: true }).click();
     const ventana = page.locator('app-ventana-flotante').filter({ hasText: 'Registrar un abono' });
     await expect(ventana).toBeVisible();
-    await elegirPacienteEnSelector(ventana.locator('app-selector-paciente'), CEDULA_1, paciente1);
+    await elegirPacienteEnSelector(ventana.locator('app-selector-paciente'), CEDULA_1);
     await expect.poll(async () => ventana.locator('select[name="cita"] option').count()).toBeGreaterThan(1);
     const cargoCita = page.waitForResponse((r) => r.request().method() === 'GET' && new URL(r.url()).pathname.endsWith('/pagos/cargos/') && new URL(r.url()).searchParams.get('cita_id') === citaUI, { timeout: 30_000 });
     await ventana.locator('select[name="cita"]').selectOption(citaUI);
@@ -327,16 +328,13 @@ test('recepción: un día completo de trabajo con pacientes sintéticos', async 
     await page.getByRole('button', { name: 'Anotar a un paciente', exact: true }).click();
     const ventana = page.locator('app-ventana-flotante').filter({ hasText: 'Anotar a un paciente' });
     await expect(ventana).toBeVisible();
-    await expect.poll(() => ventana.locator('select').count(), { timeout: 60_000 }).toBeGreaterThan(3);
+    await expect(ventana.locator('app-selector-paciente [role="combobox"]')).toBeVisible();
     const selector = ventana.locator('app-selector-paciente');
-    await selector.locator('input[name="termino"]').fill(CEDULA_2);
-    await selector.getByRole('button', { name: 'Buscar', exact: true }).click();
-    await expect(selector.locator(`select[name="paciente"] option[value="${paciente2}"]`)).toHaveCount(1);
-    const pacienteSelect = selector.locator('select[name="paciente"]');
-    if (await pacienteSelect.inputValue() !== paciente2) await pacienteSelect.selectOption(paciente2);
-    const selectsEspera = ventana.locator('select');
-    await selectsEspera.nth(1).selectOption(disponibilidad!.sede_id);
-    const servicioEspera = selectsEspera.nth(2);
+    const buscador = selector.getByRole('combobox', { name: /^Paciente/ });
+    await buscador.fill(CEDULA_2);
+    await selector.getByRole('option', { name: new RegExp(CEDULA_2) }).click();
+    await ventana.locator('select[name="sede"]').selectOption(disponibilidad!.sede_id);
+    const servicioEspera = ventana.locator('select[name="servicio"]');
     await expect.poll(async () => servicioEspera.locator('option').count()).toBeGreaterThan(1);
     await servicioEspera.selectOption({ index: 1 });
     const guardado = page.waitForResponse((r) => r.request().method() === 'POST' && r.url().includes('/lista-espera'), { timeout: 30_000 });

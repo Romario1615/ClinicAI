@@ -21,149 +21,148 @@
  * a su paciente concluye que no existe, cuando en realidad está en el puesto
  * 40 de la lista.
  */
-import { Component, computed, inject, output, signal, ChangeDetectionStrategy } from '@angular/core';
-import { FormsModule } from '@angular/forms';
-import type { Subscription } from 'rxjs';
+import { Component, computed, inject, input, output, signal, ChangeDetectionStrategy } from '@angular/core';
+import { Subject, catchError, debounceTime, distinctUntilChanged, of, switchMap } from 'rxjs';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 
-import { IconoComponent } from './icono.component';
 import { ApiService, FalloApi, filtroBusquedaPaciente } from '../nucleo/servicios/api.service';
 import type { Paciente } from '../nucleo/modelos/dominio';
 
 @Component({
   selector: 'app-selector-paciente',
   standalone: true,
-  imports: [FormsModule, IconoComponent],
+  imports: [],
   template: `
     <div class="selector">
-      <div class="campo">
-        <label class="campo__etiqueta" [attr.for]="'busqueda-' + identificador">
-          Buscar paciente
-        </label>
-        <div class="acciones selector__busqueda">
-          <input
-            class="campo__control"
-            [id]="'busqueda-' + identificador"
-            name="termino"
-            autocomplete="off"
-            [(ngModel)]="termino"
-            [ngModelOptions]="{ standalone: true }"
-            placeholder="Nombre, apellido o documento"
-            (keydown.enter)="buscar(); $event.preventDefault()"
-          />
-          <button type="button" class="boton" (click)="buscar()" [disabled]="cargando()">
-            <app-icono nombre="buscar" [tamano]="16" />
-            {{ cargando() ? 'Buscando…' : 'Buscar' }}
-          </button>
-        </div>
-        <span class="campo__ayuda">
-          @if (soloDigitos()) {
-            Se buscará por número de documento.
-          } @else {
-            Nombre o apellido, al menos tres letras. Solo dígitos busca por documento.
-          }
-        </span>
-      </div>
+      <label class="campo__etiqueta" [attr.for]="identificador">
+        {{ etiqueta() }}@if (obligatorio()) { <span class="obligatorio" aria-hidden="true">*</span> }
+      </label>
+      <input
+        class="campo__control"
+        [id]="identificador"
+        type="search"
+        autocomplete="off"
+        role="combobox"
+        aria-autocomplete="list"
+        [attr.aria-expanded]="listaAbierta()"
+        [attr.aria-controls]="listaAbierta() ? listaId : null"
+        [attr.aria-activedescendant]="opcionActiva() >= 0 ? opcionId(opcionActiva()) : null"
+        [attr.aria-describedby]="ayudaId"
+        [value]="termino()"
+        placeholder="Nombre, apellido o documento"
+        (input)="cambiarTermino($any($event.target).value)"
+        (keydown)="tecla($event)"
+      />
+      <span class="campo__ayuda" [id]="ayudaId">
+        Escriba al menos tres letras o dígitos para ver coincidencias.
+      </span>
 
       @if (error()) {
         <p class="aviso-error" role="alert">{{ error() }}</p>
       }
-
-      <label class="campo">
-        <span class="campo__etiqueta">Paciente</span>
-        <select
-          class="campo__control"
-          name="paciente"
-          [(ngModel)]="id"
-          [ngModelOptions]="{ standalone: true }"
-          (ngModelChange)="elegir()"
-        >
-          <option value="">Seleccione un paciente</option>
-          @for (p of pacientes(); track p.id) {
-            <option [value]="p.id">
+      @if (cargando()) { <span class="campo__ayuda" role="status">Buscando pacientes…</span> }
+      @if (listaAbierta()) {
+        <div class="selector__opciones" [id]="listaId" role="listbox" [attr.aria-label]="'Coincidencias: ' + etiqueta()">
+          @for (p of pacientes(); track p.id; let i = $index) {
+              <button
+              type="button"
+              [id]="opcionId(i)"
+              role="option"
+              [attr.aria-selected]="i === opcionActiva()"
+              (click)="elegir(p)"
+            >
               {{ p.apellido }}, {{ p.nombre }} · {{ p.numero_documento || 'Sin documento' }}
-            </option>
+              </button>
           }
-        </select>
-        @if (recortado()) {
-          <span class="campo__ayuda">
-            Se muestran {{ pacientes().length }} de {{ total() }}. Acote la búsqueda para ver el
-            resto.
-          </span>
-        }
-      </label>
+        </div>
+      } @else if (!cargando() && termino().trim().length >= 3 && !error()) {
+        <span class="campo__ayuda" role="status">No hay coincidencias.</span>
+      }
     </div>
   `,
   changeDetection: ChangeDetectionStrategy.Eager,
   styles: `
-    .selector {
-      display: flex;
-      flex-direction: column;
-      gap: var(--espacio-3);
-    }
-
-    /* El campo crece y el botón se queda del tamaño de su texto. Antes, como
-       hijo de una rejilla, el botón se estiraba a toda la columna. */
-    .selector__busqueda .campo__control {
-      flex: 1 1 200px;
-      min-width: 0;
-    }
-
-    .campo:last-child {
-      margin-bottom: 0;
-    }
+    :host { display: block; min-width: 0; }
+    .selector { position: relative; display: grid; gap: var(--espacio-2); min-width: 0; }
+    .campo__etiqueta { margin: 0; }
+    .selector__opciones { position: absolute; z-index: 20; top: calc(100% - 2rem); left: 0; right: 0; max-height: 16rem; overflow: auto; padding: var(--espacio-1); border: 1px solid var(--borde-fuerte); border-radius: var(--radio); background: var(--superficie-elevada); box-shadow: var(--sombra-2); }
+    .selector__opciones button { width: 100%; min-height: var(--toque-minimo); display: flex; align-items: center; padding: var(--espacio-2) var(--espacio-3); border: 0; border-radius: var(--radio-pequeno); background: transparent; color: inherit; text-align: left; font: inherit; cursor: pointer; }
+    .selector__opciones button:hover, .selector__opciones button[aria-selected='true'] { background: var(--acento-suave); }
   `,
 })
 export class SelectorPacienteComponent {
   private readonly api = inject(ApiService);
+  private readonly buscar$ = new Subject<string>();
 
   readonly seleccion = output<Paciente | null>();
+  readonly etiqueta = input('Paciente');
+  readonly obligatorio = input(false);
 
-  /** Sufijo único: puede haber dos selectores en la misma pantalla. */
-  protected readonly identificador = Math.random().toString(36).slice(2, 8);
-
-  protected termino = '';
-  protected id = '';
+  /** Identificadores únicos aunque se monten varios selectores en la misma pantalla. */
+  protected readonly identificador = `busqueda-paciente-${Math.random().toString(36).slice(2, 9)}`;
+  protected readonly listaId = `${this.identificador}-opciones`;
+  protected readonly ayudaId = `${this.identificador}-ayuda`;
+  protected readonly termino = signal('');
   protected readonly pacientes = signal<readonly Paciente[]>([]);
-  protected readonly total = signal(0);
   protected readonly cargando = signal(false);
   protected readonly error = signal('');
-  /** Búsqueda en curso: una nueva la cancela para que su respuesta no pise a la nueva. */
-  private consulta: Subscription | null = null;
-
-  protected readonly soloDigitos = computed(() => /^\d+$/.test(this.termino.trim()));
-  protected readonly recortado = computed(() => this.total() > this.pacientes().length);
+  protected readonly opcionActiva = signal(-1);
+  protected readonly listaAbierta = computed(() => this.termino().trim().length >= 3 && this.pacientes().length > 0 && !this.cargando());
 
   constructor() {
-    this.buscar();
-  }
-
-  protected buscar(): void {
-    this.cargando.set(true);
-    this.error.set('');
-    this.id = '';
-    this.seleccion.emit(null);
-
-    const limpio = this.termino.trim();
-    this.consulta?.unsubscribe();
-    this.consulta = this.api.pacientes({ ...filtroBusquedaPaciente(limpio), limite: 25 }).subscribe({
-      next: (pagina) => {
-        this.pacientes.set(pagina.elementos);
-        this.total.set(pagina.total);
-        this.cargando.set(false);
-        if (pagina.termino_ignorado) {
-          // El backend devuelve CERO elementos cuando ignora el término. Sin
-          // este aviso, la lista vacía se lee como «no existe ese paciente».
-          this.error.set('Escriba al menos tres letras, o el número de documento completo.');
-        }
-      },
-      error: (fallo: FalloApi) => {
-        this.error.set(fallo.message);
-        this.cargando.set(false);
-      },
+    this.buscar$.pipe(
+      debounceTime(200),
+      distinctUntilChanged(),
+      switchMap((termino) => {
+        if (termino.length < 3) return of(null);
+        this.cargando.set(true);
+        this.error.set('');
+        return this.api.pacientes({ ...filtroBusquedaPaciente(termino), limite: 25 }).pipe(
+          catchError((fallo: FalloApi) => {
+            this.error.set(fallo.message);
+            return of(null);
+          }),
+        );
+      }),
+      takeUntilDestroyed(),
+    ).subscribe((pagina) => {
+      this.pacientes.set(pagina?.elementos ?? []);
+      this.cargando.set(false);
+      this.opcionActiva.set(-1);
     });
   }
 
-  protected elegir(): void {
-    this.seleccion.emit(this.pacientes().find((p) => p.id === this.id) ?? null);
+  protected cambiarTermino(valor: string): void {
+    this.termino.set(valor);
+    this.pacientes.set([]);
+    this.opcionActiva.set(-1);
+    this.error.set('');
+    this.seleccion.emit(null);
+    this.buscar$.next(valor.trim());
+  }
+
+  protected tecla(evento: KeyboardEvent): void {
+    if (evento.key === 'ArrowDown' && this.pacientes().length) {
+      evento.preventDefault();
+      this.opcionActiva.set(Math.min(this.opcionActiva() + 1, this.pacientes().length - 1));
+    } else if (evento.key === 'ArrowUp' && this.pacientes().length) {
+      evento.preventDefault();
+      this.opcionActiva.set(Math.max(this.opcionActiva() - 1, 0));
+    } else if (evento.key === 'Enter' && this.opcionActiva() >= 0) {
+      evento.preventDefault();
+      this.elegir(this.pacientes()[this.opcionActiva()]);
+    } else if (evento.key === 'Escape') {
+      this.pacientes.set([]);
+      this.opcionActiva.set(-1);
+    }
+  }
+
+  protected opcionId(indice: number): string { return `${this.listaId}-${indice}`; }
+
+  protected elegir(paciente: Paciente): void {
+    this.termino.set(`${paciente.apellido}, ${paciente.nombre}`);
+    this.pacientes.set([]);
+    this.opcionActiva.set(-1);
+    this.seleccion.emit(paciente);
   }
 }
