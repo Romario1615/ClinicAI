@@ -41,6 +41,7 @@ describe('AccionesRecorridoComponent', () => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     let c: any;
     let cambios: string[];
+    let recargasSolicitadas = 0;
 
     function montar(permisos: readonly string[], datos: Partial<Cita> = {}): void {
         iniciarSesionCon(permisos);
@@ -49,7 +50,9 @@ describe('AccionesRecorridoComponent', () => {
         fixture.componentRef.setInput('consultorios', [{ id: 'k1', nombre: 'Sala 1', sede_id: 'se1' }]);
         c = fixture.componentInstance;
         cambios = [];
+        recargasSolicitadas = 0;
         c.cambio.subscribe((motivo: string) => cambios.push(motivo));
+        c.recargaSolicitada.subscribe(() => recargasSolicitadas++);
         fixture.detectChanges();
     }
 
@@ -98,6 +101,7 @@ describe('AccionesRecorridoComponent', () => {
         expect(c.error()).toBe('Ese sillón ya está ocupado a esa hora.');
         expect(c.ocupado()).toBe(false);
         expect(cambios).toEqual([]);
+        expect(recargasSolicitadas).toBe(1);
     });
 
     it('pedir más tiempo: aplicada o pendiente para recepción', () => {

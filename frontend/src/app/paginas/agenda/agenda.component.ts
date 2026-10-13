@@ -905,6 +905,10 @@ export class AgendaComponent {
     this.recargarDatos();
   }
 
+  protected refrescarAgendaTrasConflicto(): void {
+    this.recargarDatos();
+  }
+
   /**
    * Vuelve a pedir los datos del día SIN cerrar lo que esté abierto.
    *

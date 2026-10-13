@@ -656,6 +656,7 @@
             [consultorios]="consultorios()"
             [zona]="zona()"
             (cambio)="mensajeExito.set($event); cargarAgenda(); masTiempo.cargar()"
+            (recargaSolicitada)="refrescarAgendaTrasConflicto()"
           />
           @if (accionesDe(cita).reprogramar || accionesDe(cita).inasistencia) {
             <div class="fila">

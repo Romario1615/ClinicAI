@@ -141,6 +141,8 @@ export class AccionesRecorridoComponent {
   readonly zona = input('America/Guayaquil');
   /** La cita cambió: lleva el mensaje para la persona; la agenda lo muestra y recarga. */
   readonly cambio = output<string>();
+  /** Un conflicto de sillón refresca las columnas sin notificar un cambio exitoso. */
+  readonly recargaSolicitada = output<void>();
 
   protected readonly opcionesMinutos = MINUTOS;
   protected consultorioId = '';
@@ -254,6 +256,7 @@ export class AccionesRecorridoComponent {
         if (conflicto && fallo instanceof FalloRecorrido && fallo.estado === 409) {
           this.ocupado.set(false);
           this.error.set(conflicto);
+          this.recargaSolicitada.emit();
         } else {
           this.fallar(fallo);
         }
