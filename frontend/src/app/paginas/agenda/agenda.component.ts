@@ -1326,19 +1326,33 @@ export class AgendaComponent {
   }
 
   protected cambiarVistaDia(vista: 'profesional' | 'sillon'): void {
+    if (vista === 'sillon' && this.consultoriosCargados && !this.consultorios().some((item) => item.activo !== false)) {
+      this.vistaDia.set('profesional');
+      this.guardarVistaDia('profesional');
+      this.avisoAgenda.set('Esta sede no tiene sillones activos. Se cambió a la vista por profesional.');
+      return;
+    }
     this.vistaDia.set(vista);
+    this.guardarVistaDia(vista);
+    this.cargarDisponibilidadSillones();
+  }
+
+  private guardarVistaDia(vista: 'profesional' | 'sillon'): void {
     try {
       localStorage.setItem(CLAVE_VISTA_DIA, vista);
     } catch {
       // La preferencia solo se conserva si el navegador permite almacenamiento.
     }
-    this.cargarDisponibilidadSillones();
   }
 
   /** Encola una única consulta; cambiar el día o el modo cancela la anterior. */
   private cargarDisponibilidadSillones(): void {
     this.turnosSillones.set(new Map());
     if (!this.consultoriosCargados) return;
+    if (this.vista() === 'dia' && this.vistaDia() === 'sillon' && !this.consultorios().some((item) => item.activo !== false)) {
+      this.cambiarVistaDia('sillon');
+      return;
+    }
     this.recargarSillones.next(true);
   }
 

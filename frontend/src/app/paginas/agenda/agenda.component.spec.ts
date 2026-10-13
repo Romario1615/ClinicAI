@@ -204,11 +204,22 @@ describe('AgendaComponent · reserva y series', { timeout: 20_000 }, () => {
 
   it('recuerda el modo por sillón en el almacenamiento local', () => {
     montar({}, ['administrador_clinica'], null, false);
+    fixture.componentInstance['consultorios'].set([
+      { id: 'sillon-1', sede_id: SEDE.id, nombre: 'Sillón 1', tipo: 'CONSULTA', capacidad: 1, activo: true },
+    ]);
     const guardar = vi.spyOn(Storage.prototype, 'setItem');
     fixture.componentInstance['cambiarVistaDia']('sillon');
     expect(fixture.componentInstance['vistaDia']()).toBe('sillon');
     expect(guardar).toHaveBeenCalledWith('agenda.vistaDia', 'sillon');
     guardar.mockRestore();
+  });
+
+  it('avisa y vuelve a Profesional cuando la sede no tiene sillones activos', () => {
+    montar({}, ['administrador_clinica'], null, false);
+    const agenda = fixture.componentInstance;
+    agenda['cambiarVistaDia']('sillon');
+    expect(agenda['vistaDia']()).toBe('profesional');
+    expect(agenda['avisoAgenda']()).toBe('Esta sede no tiene sillones activos. Se cambió a la vista por profesional.');
   });
 
   it('vacía los consultorios al cambiar de sede y descarta la respuesta anterior', () => {
