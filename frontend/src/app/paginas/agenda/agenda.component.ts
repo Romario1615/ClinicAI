@@ -282,6 +282,7 @@ export class AgendaComponent {
   protected readonly nombresCargados = signal<ReadonlyMap<string, NombrePaciente>>(new Map());
   protected readonly consultorios = signal<readonly Consultorio[]>([]);
   private solicitudConsultorios = 0;
+  private consultoriosCargados = false;
 
   // --- Selección ---
   protected readonly sedeId = signal('');
@@ -328,7 +329,7 @@ export class AgendaComponent {
   protected readonly disponibilidad = signal<Disponibilidad | null>(null);
   /** Turnos calculados con el filtro de sillón explícito de la API. */
   protected readonly turnosSillones = signal<ReadonlyMap<string, readonly TurnoDisponible[]>>(new Map());
-  private solicitudSillones = 0;
+  private readonly recargarSillones = new Subject<boolean>();
 
   // --- Reserva ---
   protected readonly turnoElegido = signal<TurnoDisponible | null>(null);
@@ -698,6 +699,12 @@ export class AgendaComponent {
         }
         this.ajustarReservaAbierta();
       });
+    this.recargarSillones
+      .pipe(
+        switchMap((consultar) => consultar ? this.peticionDisponibilidadSillones() : of(new Map<string, readonly TurnoDisponible[]>())),
+        takeUntilDestroyed(),
+      )
+      .subscribe((turnos) => this.turnosSillones.set(turnos));
     this.cargarCatalogo();
   }
 
@@ -909,8 +916,9 @@ export class AgendaComponent {
       return;
     }
     this.cargandoAgenda.set(true);
-    this.solicitudSillones++;
+    this.recargarSillones.next(false);
     this.turnosSillones.set(new Map());
+    this.consultoriosCargados = false;
     this.errorAgenda.set(null);
     this.avisoAgenda.set('');
     this.cargarOfertasSinAvisar();
@@ -949,15 +957,21 @@ export class AgendaComponent {
   private cargarConsultorios(): void {
     const sede = this.sedeId();
     const solicitud = ++this.solicitudConsultorios;
+    this.consultoriosCargados = false;
     this.catalogo.consultorios(sede).subscribe({
       next: (lista) =>
         {
           if (solicitud !== this.solicitudConsultorios || sede !== this.sedeId()) return;
           this.consultorios.set(lista.filter((consultorio) => consultorio.sede_id === sede));
-          this.cargarDisponibilidadSillones();
+          this.consultoriosCargados = true;
+          if (!this.cargandoAgenda()) this.cargarDisponibilidadSillones();
         },
       error: () => {
-        if (solicitud === this.solicitudConsultorios && sede === this.sedeId()) this.consultorios.set([]);
+        if (solicitud === this.solicitudConsultorios && sede === this.sedeId()) {
+          this.consultorios.set([]);
+          this.consultoriosCargados = true;
+          if (!this.cargandoAgenda()) this.cargarDisponibilidadSillones();
+        }
       },
     });
   }
@@ -1321,19 +1335,23 @@ export class AgendaComponent {
     this.cargarDisponibilidadSillones();
   }
 
-  /** Calcula huecos contra una sala concreta; sin servicio o profesional no
-   * existe una duración ni un horario que se pueda ofrecer con seguridad. */
+  /** Encola una única consulta; cambiar el día o el modo cancela la anterior. */
   private cargarDisponibilidadSillones(): void {
-    const solicitud = ++this.solicitudSillones;
     this.turnosSillones.set(new Map());
-    if (this.vista() !== 'dia' || this.vistaDia() !== 'sillon' || !this.servicioId() || !this.profesionalId()) return;
+    if (!this.consultoriosCargados) return;
+    this.recargarSillones.next(true);
+  }
+
+  /** Calcula huecos contra cada sillón para la selección actual. */
+  private peticionDisponibilidadSillones(): Observable<ReadonlyMap<string, readonly TurnoDisponible[]>> {
+    if (this.vista() !== 'dia' || this.vistaDia() !== 'sillon' || !this.servicioId() || !this.profesionalId()) return of(new Map());
     const salas = this.consultorios().filter((consultorio) => consultorio.activo !== false);
-    if (salas.length === 0) return;
+    if (salas.length === 0) return of(new Map());
     const profesional = this.profesionales().find((item) => item.id === this.profesionalId());
     const servicio = this.servicios().find((item) => item.id === this.servicioId());
-    if (!profesional || !servicio || profesional.especialidad_id !== servicio.especialidad_id) return;
+    if (!profesional || !servicio || profesional.especialidad_id !== servicio.especialidad_id) return of(new Map());
     const { desde, hasta } = rangoDelDia(this.fecha(), this.zona());
-    forkJoin(salas.map((sala) => this.api.disponibilidad({
+    return forkJoin(salas.map((sala) => this.api.disponibilidad({
       profesional_id: profesional.id,
       servicio_id: servicio.id,
       sede_id: this.sedeId(),
@@ -1343,10 +1361,7 @@ export class AgendaComponent {
     }).pipe(
       map((respuesta) => ({ consultorioId: sala.id, turnos: respuesta.turnos })),
       catchError(() => of({ consultorioId: sala.id, turnos: [] as readonly TurnoDisponible[] })),
-    ))).subscribe((resultados) => {
-      if (solicitud !== this.solicitudSillones) return;
-      this.turnosSillones.set(new Map(resultados.map((resultado) => [resultado.consultorioId, resultado.turnos])));
-    });
+    ))).pipe(map((resultados) => new Map(resultados.map((resultado) => [resultado.consultorioId, resultado.turnos]))));
   }
 
   protected abrirHuecoEnConsultorio(evento: {
