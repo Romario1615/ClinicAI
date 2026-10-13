@@ -37,6 +37,7 @@ import type {
 } from '../../nucleo/modelos/dominio';
 import { BASE, PROVEEDORES_PRUEBA, identidadCon, iniciarSesionCon } from '../../nucleo/pruebas/sesion-sintetica';
 import { SesionService } from '../../nucleo/servicios/sesion.service';
+import type { FeriadoAgenda, HorarioSede } from '../configuracion/integraciones.service';
 
 const SEDE: Sede = { id: 'sede-1', nombre: 'Sede Norte [SINTETICO]', direccion: null, zona_horaria: 'America/Guayaquil' };
 const ESPECIALIDAD: Especialidad = { id: 'esp-1', nombre: 'Odontología' };
@@ -212,6 +213,10 @@ describe('AgendaComponent · reserva y series', { timeout: 20_000 }, () => {
     expect(fixture.componentInstance['vistaDia']()).toBe('sillon');
     expect(guardar).toHaveBeenCalledWith('agenda.vistaDia', 'sillon');
     guardar.mockRestore();
+    const horarios = http.expectOne(`${BASE}/configuracion/agenda/sedes/${SEDE.id}/horarios`);
+    const feriados = http.expectOne((peticion) => peticion.url.startsWith(`${BASE}/configuracion/agenda/feriados`));
+    horarios.flush([]);
+    feriados.flush([]);
   });
 
   it('avisa y vuelve a Profesional cuando la sede no tiene sillones activos', () => {
@@ -281,6 +286,48 @@ describe('AgendaComponent · reserva y series', { timeout: 20_000 }, () => {
       zona_horaria: 'America/Guayaquil', desde: '', hasta: '', turnos: [turno], motivos_sin_turno: {}, }));
     agenda['citasSede'].set([cita(turno.inicio, { consultorio_id: 'sillon-1' })]);
     expect(agenda['huecosPorConsultorio']().get('sillon-1')).toHaveLength(0);
+  });
+
+  it('ofrece huecos del horario de sede y valida el sillón al completar servicio y profesional', () => {
+    montar({}, ['administrador_clinica'], null, false, ['cita.crear', 'agenda.leer']);
+    const agenda = fixture.componentInstance;
+    agenda['sedeId'].set(SEDE.id);
+    agenda['fecha'].set('2030-01-21');
+    agenda['vistaDia'].set('sillon');
+    const sala: Consultorio = { id: 'sillon-horario', sede_id: SEDE.id, nombre: 'Sillón horario', tipo: 'CONSULTA', capacidad: 1, activo: true };
+    agenda['consultorios'].set([sala]);
+    agenda['consultoriosCargados'] = true;
+    agenda['cargarDisponibilidadSillones']();
+
+    const horarios = http.expectOne(`${BASE}/configuracion/agenda/sedes/${SEDE.id}/horarios`);
+    const feriados = http.expectOne((peticion) => peticion.url.startsWith(`${BASE}/configuracion/agenda/feriados`));
+    expect(feriados.request.urlWithParams).toContain('desde=2030-01-21');
+    const horario: HorarioSede = {
+      id: 'horario-1', dia_semana: 1, hora_inicio: '09:00:00', hora_fin: '10:00:00',
+      granularidad_minutos: 15, vigente_desde: null, vigente_hasta: null,
+      descansos: [{ hora_inicio: '09:15:00', hora_fin: '09:30:00', motivo: 'Pausa' }],
+    };
+    const cierre: FeriadoAgenda = {
+      id: 'feriado-1', sede_id: SEDE.id, fecha: '2030-01-21', nombre: 'Cierre parcial',
+      recurrente_anual: false, hora_inicio: '09:45:00', hora_fin: '10:00:00',
+    };
+    horarios.flush([horario]);
+    feriados.flush([cierre]);
+
+    const turnos = agenda['turnosSillones']().get(sala.id) ?? [];
+    expect(turnos.map((turno) => turno.inicio)).toEqual([
+      '2030-01-21T14:00:00.000Z', '2030-01-21T14:30:00.000Z',
+    ]);
+    const hueco = { tipo: 'hueco' as const, inicio: turnos[0]!.inicio, fin: turnos.at(-1)!.fin_consulta, turnos };
+    agenda['abrirHuecoEnConsultorio']({ consultorioId: sala.id, hueco });
+    expect(agenda['turnosDeReserva'](hueco)).toEqual(turnos);
+
+    agenda['servicioId'].set(SERVICIO.id);
+    agenda['profesionalId'].set(PROFESIONAL.id);
+    agenda['turnosSillones'].set(new Map([[sala.id, [turnos[1]!]]]));
+    expect(agenda['turnosDeReserva'](hueco)).toEqual([turnos[1]]);
+    agenda['elegirTurno'](turnos[1]!);
+    expect(agenda['disponibilidadConsultorioValidada']()).toBe(true);
   });
 
   it('acota al profesional cuando la identidad llega después que el catálogo', () => {

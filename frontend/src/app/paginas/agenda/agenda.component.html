@@ -711,7 +711,7 @@
           <p class="reserva__fecha">{{ fechaDia() }}</p>
           @if (reservaDelDia() && !seleccionIncompleta()) {
             <p class="panel__titular numerico">
-              {{ hueco.turnos.length }} {{ hueco.turnos.length === 1 ? 'hora libre' : 'horas libres' }} este día
+              {{ turnosDeReserva(hueco).length }} {{ turnosDeReserva(hueco).length === 1 ? 'hora libre' : 'horas libres' }} este día
             </p>
           } @else if (!reservaDelDia()) {
             <p class="panel__titular numerico">
@@ -746,9 +746,13 @@
           </div>
         }
 
+        @if (consultorioId() && !seleccionIncompleta() && !turnosSillones().has(consultorioId())) {
+          <p class="campo__ayuda" role="status">Validando disponibilidad del sillón para ese servicio y profesional…</p>
+        }
+
         <fieldset class="arranques">
           <legend class="campo__etiqueta">Hora de inicio</legend>
-          @if (hueco.turnos.length === 0) {
+          @if (turnosDeReserva(hueco).length === 0) {
             @if (seleccionIncompleta()) {
               <p class="campo__ayuda">Elija servicio y profesional para consultar las horas disponibles.</p>
             } @else {
@@ -757,7 +761,7 @@
             }
           }
           <div class="arranques__lista">
-            @for (turno of hueco.turnos; track turno.inicio) {
+            @for (turno of turnosDeReserva(hueco); track turno.inicio) {
               <button
                 type="button"
                 class="boton boton--pequeno numerico"
@@ -911,7 +915,7 @@
           type="submit"
           form="formulario-reserva-serie"
           class="boton boton--principal"
-          [disabled]="!pacienteId || !turnoElegido() || reservando() || (serieRecurrente && !cantidadSerieValida)"
+          [disabled]="!pacienteId || !turnoElegido() || reservando() || !disponibilidadConsultorioValidada() || (serieRecurrente && !cantidadSerieValida)"
         >
           @if (reservando()) {
             Guardando…

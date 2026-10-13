@@ -71,6 +71,7 @@ import {
   type NombrePaciente,
 } from '../../nucleo/servicios/api.service';
 import { CatalogoService } from '../../nucleo/servicios/catalogo.service';
+import { IntegracionesService, type FeriadoAgenda, type HorarioSede } from '../configuracion/integraciones.service';
 import { PERMISOS } from '../../nucleo/servicios/configuracion';
 import {
   OperacionesService,
@@ -252,6 +253,7 @@ export class AgendaComponent {
   protected fotos:readonly FotoSeleccionada[]=[];
   private readonly api = inject(ApiService);
   private readonly catalogo = inject(CatalogoService);
+  private readonly configuracionAgenda = inject(IntegracionesService);
   private readonly operaciones = inject(OperacionesService);
   protected readonly sesion = inject(SesionService);
   /**
@@ -704,7 +706,10 @@ export class AgendaComponent {
         switchMap((consultar) => consultar ? this.peticionDisponibilidadSillones() : of(new Map<string, readonly TurnoDisponible[]>())),
         takeUntilDestroyed(),
       )
-      .subscribe((turnos) => this.turnosSillones.set(turnos));
+      .subscribe((turnos) => {
+        this.turnosSillones.set(turnos);
+        this.ajustarReservaAbierta();
+      });
     this.cargarCatalogo();
   }
 
@@ -1177,12 +1182,32 @@ export class AgendaComponent {
       if (elegido && !turnos.some((turno) => turno.inicio === elegido.inicio)) this.turnoElegido.set(null);
       return;
     }
-    const libres = new Set(this.turnos().map((turno) => turno.inicio));
-    this.huecoElegido.set({ ...hueco, turnos: hueco.turnos.filter((turno) => libres.has(turno.inicio)) });
+    if (this.consultorioId() && !this.seleccionIncompleta() && !this.turnosSillones().has(this.consultorioId())) return;
+    const libres = new Set(this.turnosDeReserva(hueco).map((turno) => turno.inicio));
     const elegido = this.turnoElegido();
     if (elegido && !libres.has(elegido.inicio)) {
       this.turnoElegido.set(null);
     }
+  }
+
+  protected turnosDeReserva(hueco: FilaDia & { tipo: 'hueco' }): readonly TurnoDisponible[] {
+    if (this.consultorioId()) {
+      if (this.seleccionIncompleta()) return hueco.turnos;
+      const mapa = this.turnosSillones();
+      if (!mapa.has(this.consultorioId())) return [];
+      const disponibles = new Set((mapa.get(this.consultorioId()) ?? []).map((turno) => turno.inicio));
+      return hueco.turnos.filter((turno) => disponibles.has(turno.inicio));
+    }
+    const disponibles = new Set(this.turnos().map((turno) => turno.inicio));
+    return hueco.turnos.filter((turno) => disponibles.has(turno.inicio));
+  }
+
+  protected disponibilidadConsultorioValidada(): boolean {
+    const id = this.consultorioId();
+    if (!id) return true;
+    if (this.seleccionIncompleta() || !this.turnosSillones().has(id)) return false;
+    const inicio = this.turnoElegido()?.inicio;
+    return Boolean(inicio && this.turnosSillones().get(id)?.some((turno) => turno.inicio === inicio));
   }
 
   protected abrirCita(cita: Cita): void {
@@ -1362,9 +1387,20 @@ export class AgendaComponent {
 
   /** Calcula huecos contra cada sillón para la selección actual. */
   private peticionDisponibilidadSillones(): Observable<ReadonlyMap<string, readonly TurnoDisponible[]>> {
-    if (this.vista() !== 'dia' || this.vistaDia() !== 'sillon' || !this.servicioId() || !this.profesionalId()) return of(new Map());
+    if (this.vista() !== 'dia' || this.vistaDia() !== 'sillon') return of(new Map());
     const salas = this.consultorios().filter((consultorio) => consultorio.activo !== false);
     if (salas.length === 0) return of(new Map());
+    if (this.seleccionIncompleta()) {
+      const fecha = this.fecha();
+      const feriadoHasta = sumarDias(fecha, 1);
+      return forkJoin({
+        horarios: this.configuracionAgenda.horarios(this.sedeId()),
+        feriados: this.configuracionAgenda.feriados(this.sedeId(), fecha, feriadoHasta),
+      }).pipe(
+        map(({ horarios, feriados }) => this.turnosDelHorarioSede(horarios, feriados, salas)),
+        catchError(() => of(new Map<string, readonly TurnoDisponible[]>())),
+      );
+    }
     const profesional = this.profesionales().find((item) => item.id === this.profesionalId());
     const servicio = this.servicios().find((item) => item.id === this.servicioId());
     if (!profesional || !servicio || profesional.especialidad_id !== servicio.especialidad_id) return of(new Map());
@@ -1380,6 +1416,60 @@ export class AgendaComponent {
       map((respuesta) => ({ consultorioId: sala.id, turnos: respuesta.turnos })),
       catchError(() => of({ consultorioId: sala.id, turnos: [] as readonly TurnoDisponible[] })),
     ))).pipe(map((resultados) => new Map(resultados.map((resultado) => [resultado.consultorioId, resultado.turnos]))));
+  }
+
+  private turnosDelHorarioSede(
+    horarios: readonly HorarioSede[],
+    feriados: readonly FeriadoAgenda[],
+    salas: readonly Consultorio[],
+  ): ReadonlyMap<string, readonly TurnoDisponible[]> {
+    const fecha = this.fecha();
+    const fechaUtc = new Date(`${fecha}T00:00:00Z`);
+    const diaSemana = ((fechaUtc.getUTCDay() + 6) % 7) + 1;
+    const horariosDelDia = horarios.filter((horario) =>
+      horario.dia_semana === diaSemana
+      && (!horario.vigente_desde || horario.vigente_desde <= fecha)
+      && (!horario.vigente_hasta || horario.vigente_hasta >= fecha),
+    );
+    const feriadosDeLaSede = feriados.filter((feriado) => !feriado.sede_id || feriado.sede_id === this.sedeId());
+    const minutos = (hora: string): number => {
+      const [horas, minutos] = hora.split(':').map(Number);
+      return horas! * 60 + minutos!;
+    };
+    const mapa = new Map<string, readonly TurnoDisponible[]>();
+    for (const sala of salas) {
+      const turnos: TurnoDisponible[] = [];
+      for (const horario of horariosDelDia) {
+        const inicio = minutos(horario.hora_inicio);
+        const fin = minutos(horario.hora_fin);
+        const granularidad = horario.granularidad_minutos;
+        for (let minuto = inicio; minuto + granularidad <= fin; minuto += granularidad) {
+          if (horario.descansos.some((pausa) => minuto < minutos(pausa.hora_fin) && minutos(pausa.hora_inicio) < minuto + granularidad)) continue;
+          const feriado = feriadosDeLaSede.find((cierre) => {
+            if (cierre.fecha !== fecha) return false;
+            if (!cierre.hora_inicio || !cierre.hora_fin) return true;
+            return minuto < minutos(cierre.hora_fin) && minutos(cierre.hora_inicio) < minuto + granularidad;
+          });
+          if (feriado) continue;
+          const hora = `${String(Math.floor(minuto / 60)).padStart(2, '0')}:${String(minuto % 60).padStart(2, '0')}`;
+          const inicioIso = instanteLocal(fecha, hora, this.zona());
+          if (Date.parse(inicioIso) <= Date.now()) continue;
+          const finMinuto = minuto + granularidad;
+          const fechaFin = finMinuto >= 24 * 60 ? sumarDias(fecha, 1) : fecha;
+          const horaFin = finMinuto % (24 * 60);
+          const finIso = instanteLocal(fechaFin, `${String(Math.floor(horaFin / 60)).padStart(2, '0')}:${String(horaFin % 60).padStart(2, '0')}`, this.zona());
+          turnos.push({
+            inicio: inicioIso,
+            fin_consulta: finIso,
+            fin_bloque: finIso,
+            duracion_minutos: granularidad,
+            minutos_preparacion: 0,
+          });
+        }
+      }
+      mapa.set(sala.id, turnos);
+    }
+    return mapa;
   }
 
   protected abrirHuecoEnConsultorio(evento: {
@@ -1529,7 +1619,7 @@ export class AgendaComponent {
 
   protected confirmarReserva(): void {
     const turno = this.turnoElegido();
-    if (!turno || !this.pacienteId || this.reservando()) {
+    if (!turno || !this.pacienteId || this.reservando() || !this.disponibilidadConsultorioValidada()) {
       return;
     }
 
