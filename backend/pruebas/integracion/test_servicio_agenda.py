@@ -37,6 +37,7 @@ from app.nucleo.auditoria import AccionAuditada
 from app.nucleo.autorizacion import Ambito, Principal, TipoActor, principal_sistema
 from app.nucleo.errores import (
     BloqueoExpirado,
+    ConflictoEstado,
     PermisoDenegado,
     PoliticaCancelacionViolada,
     RecursoNoEncontrado,
@@ -628,12 +629,14 @@ class TestMaquinaDeEstados:
             )
 
     async def test_el_mensaje_de_error_dice_que_se_puede_hacer(
-        self, servicio_agenda, solicitud, principal_recepcion
+        self, servicio_agenda, solicitud, principal_recepcion, reloj_fijo
     ) -> None:
         """Un error que solo dice «no puedes» deja al usuario atascado."""
         creada = await servicio_agenda.crear_cita_confirmada(
             solicitud, principal=principal_recepcion
         )
+        # La cita ya empezó: no se cierra una cita futura.
+        reloj_fijo.fijar(creada.cita.inicio)
         await servicio_agenda.completar_cita(creada.cita.id, principal=principal_recepcion)
         with pytest.raises(TransicionEstadoInvalida) as excinfo:
             await servicio_agenda.reprogramar_cita(
@@ -645,11 +648,13 @@ class TestMaquinaDeEstados:
         assert "cree una cita nueva" in excinfo.value.mensaje.lower()
 
     async def test_una_cita_completada_no_admite_cambios(
-        self, servicio_agenda, solicitud, principal_recepcion
+        self, servicio_agenda, solicitud, principal_recepcion, reloj_fijo
     ) -> None:
         creada = await servicio_agenda.crear_cita_confirmada(
             solicitud, principal=principal_recepcion
         )
+        # La cita ya empezó: no se cierra una cita futura.
+        reloj_fijo.fijar(creada.cita.inicio)
         await servicio_agenda.completar_cita(creada.cita.id, principal=principal_recepcion)
         with pytest.raises(TransicionEstadoInvalida):
             await servicio_agenda.cancelar_cita(
@@ -657,7 +662,7 @@ class TestMaquinaDeEstados:
             )
 
     async def test_la_inasistencia_es_un_estado_propio(
-        self, servicio_agenda, solicitud, principal_recepcion
+        self, servicio_agenda, solicitud, principal_recepcion, reloj_fijo
     ) -> None:
         """No es una cancelacion.
 
@@ -668,6 +673,8 @@ class TestMaquinaDeEstados:
         creada = await servicio_agenda.crear_cita_confirmada(
             solicitud, principal=principal_recepcion
         )
+        # La cita ya empezó: no se cierra una cita futura.
+        reloj_fijo.fijar(creada.cita.inicio)
         resultado = await servicio_agenda.marcar_inasistencia(
             creada.cita.id, principal=principal_recepcion
         )
@@ -1581,7 +1588,7 @@ class TestCargoAlCompletar:
         return list(filas.scalars())
 
     async def test_crea_el_cargo_con_el_precio_del_servicio(
-        self, sesion, servicio_agenda, solicitud, principal_recepcion
+        self, sesion, servicio_agenda, solicitud, principal_recepcion, reloj_fijo
     ) -> None:
         await sesion.execute(
             sa.update(Servicio).where(Servicio.id == solicitud.servicio_id).values(precio=45)
@@ -1589,6 +1596,8 @@ class TestCargoAlCompletar:
         creada = await servicio_agenda.crear_cita_confirmada(
             solicitud, principal=principal_recepcion
         )
+        # La cita ya empezó: no se cierra una cita futura.
+        reloj_fijo.fijar(creada.cita.inicio)
         resultado = await servicio_agenda.completar_cita(
             creada.cita.id, principal=principal_recepcion
         )
@@ -1599,7 +1608,7 @@ class TestCargoAlCompletar:
         assert AccionAuditada.CARGO_PAGO_CREADO in {e.accion for e in resultado.auditoria}
 
     async def test_no_toca_un_cargo_ya_pactado(
-        self, sesion, servicio_agenda, solicitud, principal_recepcion
+        self, sesion, servicio_agenda, solicitud, principal_recepcion, reloj_fijo
     ) -> None:
         await sesion.execute(
             sa.update(Servicio).where(Servicio.id == solicitud.servicio_id).values(precio=45)
@@ -1617,12 +1626,14 @@ class TestCargoAlCompletar:
             )
         )
         await sesion.flush()
+        # La cita ya empezó: no se cierra una cita futura.
+        reloj_fijo.fijar(creada.cita.inicio)
         await servicio_agenda.completar_cita(creada.cita.id, principal=principal_recepcion)
         cargos = await self._cargos(sesion, creada.cita.id)
         assert [c.total_acordado for c in cargos] == [30]
 
     async def test_sin_precio_no_inventa_un_cargo(
-        self, sesion, servicio_agenda, solicitud, principal_recepcion
+        self, sesion, servicio_agenda, solicitud, principal_recepcion, reloj_fijo
     ) -> None:
         await sesion.execute(
             sa.update(Servicio).where(Servicio.id == solicitud.servicio_id).values(precio=None)
@@ -1630,5 +1641,51 @@ class TestCargoAlCompletar:
         creada = await servicio_agenda.crear_cita_confirmada(
             solicitud, principal=principal_recepcion
         )
+        # La cita ya empezó: no se cierra una cita futura.
+        reloj_fijo.fijar(creada.cita.inicio)
         await servicio_agenda.completar_cita(creada.cita.id, principal=principal_recepcion)
         assert await self._cargos(sesion, creada.cita.id) == []
+
+
+class TestCierreAntesDeLaHora:
+    """No se cierra una cita que aún no empezó (como en el software dental).
+
+    COMPLETED no ocupa el horario: marcar «atendida» una cita futura liberaría
+    su turno y permitiría reservarlo dos veces. Una inasistencia futura no
+    tiene sentido.
+    """
+
+    async def test_no_marca_inasistencia_antes_de_la_hora(
+        self, servicio_agenda, solicitud, principal_recepcion
+    ) -> None:
+        creada = await servicio_agenda.crear_cita_confirmada(
+            solicitud, principal=principal_recepcion
+        )
+        with pytest.raises(ConflictoEstado, match="antes de la hora"):
+            await servicio_agenda.marcar_inasistencia(creada.cita.id, principal=principal_recepcion)
+        assert creada.cita.estado == EstadoCita.CONFIRMED.value
+
+    async def test_no_completa_una_cita_futura_sin_atencion_iniciada(
+        self, servicio_agenda, solicitud, principal_recepcion
+    ) -> None:
+        creada = await servicio_agenda.crear_cita_confirmada(
+            solicitud, principal=principal_recepcion
+        )
+        with pytest.raises(ConflictoEstado, match="inicie la atención"):
+            await servicio_agenda.completar_cita(creada.cita.id, principal=principal_recepcion)
+        assert creada.cita.estado == EstadoCita.CONFIRMED.value
+
+    async def test_completa_antes_de_la_hora_si_la_atencion_ya_empezo(
+        self, sesion, servicio_agenda, solicitud, principal_recepcion, reloj_fijo
+    ) -> None:
+        """El paciente llegó antes y lo atendieron: se puede cerrar."""
+        creada = await servicio_agenda.crear_cita_confirmada(
+            solicitud, principal=principal_recepcion
+        )
+        creada.cita.llegada_en = reloj_fijo.ahora()
+        creada.cita.atencion_iniciada_en = reloj_fijo.ahora()
+        await sesion.flush()
+        resultado = await servicio_agenda.completar_cita(
+            creada.cita.id, principal=principal_recepcion
+        )
+        assert resultado.cita.estado == EstadoCita.COMPLETED.value

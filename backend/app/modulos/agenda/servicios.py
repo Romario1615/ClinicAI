@@ -1410,6 +1410,20 @@ class ServicioAgenda:
         self._validar_transicion(cita, nuevo_estado)
 
         ahora = self._reloj.ahora()
+        # Como en el software odontológico: no se cierra una cita que aún no
+        # empezó. Una inasistencia futura no tiene sentido, y una «atendida»
+        # futura liberaría su horario (COMPLETED no ocupa) y permitiría
+        # reservarlo dos veces. Si el paciente llegó antes y la atención ya se
+        # inició, sí puede completarse.
+        if ahora < cita.inicio:
+            if nuevo_estado is EstadoCita.NO_SHOW:
+                raise ConflictoEstado(
+                    "No se puede marcar inasistencia antes de la hora de la cita."
+                )
+            if nuevo_estado is EstadoCita.COMPLETED and cita.atencion_iniciada_en is None:
+                raise ConflictoEstado(
+                    "La cita aún no empieza: inicie la atención antes de marcarla como atendida."
+                )
         estado_anterior = cita.estado
         cita.estado = nuevo_estado.value
         cita.actualizado_por = principal.actor_id
