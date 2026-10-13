@@ -86,11 +86,11 @@ import { AnamnesisConfiguracionComponent } from './anamnesis-configuracion.compo
             <div><dt>Identificación fiscal</dt><dd>{{ datos.identificacion_fiscal || 'Sin registrar' }}</dd></div>
             <div><dt>Teléfono</dt><dd>{{ datos.telefono || 'Sin registrar' }}</dd></div>
             <div><dt>Correo institucional</dt><dd>{{ datos.correo || 'Sin registrar' }}</dd></div>
-            <div><dt>Zona horaria</dt><dd>{{ datos.zona_horaria }}</dd></div>
-            <div><dt>Idioma</dt><dd>{{ datos.idioma }}</dd></div>
+            <div><dt>Zona horaria</dt><dd>{{ datos.zona_horaria === 'America/Guayaquil' ? 'Ecuador (Guayaquil, GMT−5)' : datos.zona_horaria }}</dd></div>
+            <div><dt>Idioma</dt><dd>{{ datos.idioma === 'es' ? 'Español' : datos.idioma }}</dd></div>
             <div><dt>Moneda</dt><dd>{{ datos.moneda }}</dd></div>
           </dl>
-          @if (!sesion.tienePermiso(PERMISOS.clinicaEscribir)) { <p class="campo__ayuda">Tienes acceso de lectura. Solicita el permiso «clinica.escribir» para modificar estos datos.</p> }
+          @if (!sesion.tienePermiso(PERMISOS.clinicaEscribir)) { <p class="campo__ayuda">Tienes acceso de lectura. Solicita a quien administra la clínica que revise tus permisos para modificar estos datos.</p> }
         }
       </section>
 

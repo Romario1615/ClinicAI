@@ -64,11 +64,11 @@ import { ResumenModuloComponent } from '../../compartido/resumen-modulo.componen
         }
       <section class="bandeja__lista tarjeta" aria-label="Conversaciones pendientes">
         <nav class="filtros" aria-label="Estado de conversaciones">
-          <button type="button" [class.filtro--activo]="estado() === 'EN_HANDOFF'" (click)="cambiarEstado('EN_HANDOFF')">Esperan a una persona</button>
-          <button type="button" [class.filtro--activo]="estado() === 'ABIERTA'" (click)="cambiarEstado('ABIERTA')">Las atiende el agente</button>
-          <button type="button" [class.filtro--activo]="estado() === 'CERRADA'" (click)="cambiarEstado('CERRADA')">Cerradas</button>
+          <button type="button" [attr.aria-pressed]="estado() === 'EN_HANDOFF'" [class.filtro--activo]="estado() === 'EN_HANDOFF'" (click)="cambiarEstado('EN_HANDOFF')">Esperan a una persona</button>
+          <button type="button" [attr.aria-pressed]="estado() === 'ABIERTA'" [class.filtro--activo]="estado() === 'ABIERTA'" (click)="cambiarEstado('ABIERTA')">Las atiende el agente</button>
+          <button type="button" [attr.aria-pressed]="estado() === 'CERRADA'" [class.filtro--activo]="estado() === 'CERRADA'" (click)="cambiarEstado('CERRADA')">Cerradas</button>
         </nav>
-        <div class="lista__cabecera"><h2>{{ etiquetaEstado() }}</h2><span>{{ conversaciones().length }}</span></div>
+        <p class="lista__contador" role="status">{{ conversaciones().length }} de {{ total() }} conversaciones</p>
         <div class="lista__cuerpo desplazable" tabindex="0" role="region" aria-label="Lista de conversaciones">
         @if (cargando() && !conversaciones().length) { <p class="vacio">Cargando conversaciones…</p> }
         @else if (!conversaciones().length) {
@@ -135,8 +135,9 @@ import { ResumenModuloComponent } from '../../compartido/resumen-modulo.componen
     .sobrelinea{display:flex;align-items:center;gap:6px;font-size:.72rem;font-weight:750;letter-spacing:.1em;color:var(--acento-fuerte)}
     .bandeja__cuerpo{display:grid;grid-template-columns:minmax(280px,.8fr) minmax(0,1.5fr);gap:20px;min-height:540px}
     .tarjeta{border:1px solid var(--borde);border-radius:var(--radio);background:var(--superficie-elevada);overflow:hidden}
-    .lista__cabecera,.detalle__cabecera{display:flex;justify-content:space-between;align-items:center;padding:18px 20px;border-bottom:1px solid var(--borde)}
-    .lista__cabecera h2,.detalle__cabecera h2{font-size:1rem;margin:0}.lista__cabecera span{background:var(--superficie-hundida);padding:3px 9px;border-radius:20px;font-weight:700}
+    .detalle__cabecera{display:flex;justify-content:space-between;align-items:center;padding:18px 20px;border-bottom:1px solid var(--borde)}
+    .detalle__cabecera h2{font-size:1rem;margin:0}
+    .lista__contador{margin:var(--espacio-2) var(--espacio-3) 0;padding:var(--espacio-2) var(--espacio-1);border-bottom:1px solid var(--borde);color:var(--texto-suave);font-size:.82rem}
     .conversacion{display:grid;width:100%;gap:6px;text-align:left;padding:16px 20px;background:transparent;border:0;border-bottom:1px solid var(--borde);color:inherit;cursor:pointer}
     .conversacion:hover,.conversacion--activa{background:var(--superficie-hundida)}
     .cargar-mas{width:100%;padding:14px;border:0;background:transparent;color:var(--acento-fuerte);font:inherit;font-weight:700;cursor:pointer}.cargar-mas:disabled{opacity:.55;cursor:wait}
@@ -144,7 +145,7 @@ import { ResumenModuloComponent } from '../../compartido/resumen-modulo.componen
     .conversacion time,.mensaje time{font-size:.76rem;color:var(--texto-tenue)}
     .detalle__cabecera{align-items:center}.detalle__cabecera h2{font-size:1.3rem;margin-top:5px}.estado{padding:6px 10px;border-radius:20px;background:var(--superficie-hundida);font-size:.8rem;font-weight:700}.acciones-hilo{display:flex;align-items:center;gap:6px;flex-wrap:wrap;justify-content:flex-end}
     .detalle__motivo,.detalle__paciente{margin:12px 22px 0;color:var(--texto-suave)}
-    .mensaje{justify-self:start;max-width:90%;padding:12px 15px;border-radius:14px 14px 14px 4px;background:var(--superficie-hundida)}.mensaje--saliente{justify-self:end;background:color-mix(in srgb,var(--acento) 13%,var(--superficie-elevada));border-radius:14px 14px 4px 14px}.mensaje--agente{border:1px solid color-mix(in srgb,var(--acento) 30%,var(--borde))}.mensaje strong{font-size:.78rem;color:var(--acento-fuerte)}.mensaje p{margin:6px 0;white-space:pre-wrap;overflow-wrap:anywhere}.mensaje footer{display:flex;justify-content:space-between;gap:14px;flex-wrap:wrap}.mensaje footer span,.mensaje time{font-size:.75rem;color:var(--texto-suave)}.error-entrega{color:var(--peligro);font-size:.82rem}.ventana{margin:10px 18px;padding:8px 12px;background:var(--superficie-hundida);font-size:.85rem}.ventana--vencida{color:var(--peligro)}.chat-bandeja{padding:10px 16px 14px}.filtros{display:grid;gap:2px;padding:8px}.filtros button{text-align:left;border:0;border-radius:8px;background:transparent;color:inherit;padding:9px 10px;font:inherit;cursor:pointer}.filtros button:hover,.filtros .filtro--activo{background:var(--superficie-hundida);font-weight:700}
+    .mensaje{justify-self:start;max-width:90%;padding:12px 15px;border-radius:14px 14px 14px 4px;background:var(--superficie-hundida)}.mensaje--saliente{justify-self:end;background:color-mix(in srgb,var(--acento) 13%,var(--superficie-elevada));border-radius:14px 14px 4px 14px}.mensaje--agente{border:1px solid color-mix(in srgb,var(--acento) 30%,var(--borde))}.mensaje strong{font-size:.78rem;color:var(--acento-fuerte)}.mensaje p{margin:6px 0;white-space:pre-wrap;overflow-wrap:anywhere}.mensaje footer{display:flex;justify-content:space-between;gap:14px;flex-wrap:wrap}.mensaje footer span,.mensaje time{font-size:.75rem;color:var(--texto-suave)}.error-entrega{color:var(--peligro);font-size:.82rem}.ventana{margin:10px 18px;padding:8px 12px;background:var(--superficie-hundida);font-size:.85rem}.ventana--vencida{color:var(--peligro)}.chat-bandeja{padding:10px 16px 14px}.filtros{display:flex;flex-wrap:wrap;gap:var(--espacio-2);padding:var(--espacio-3);border-bottom:1px solid var(--borde)}.filtros button{text-align:left;border:0;border-radius:999px;background:transparent;color:inherit;padding:9px 14px;font:inherit;cursor:pointer}.filtros button:hover,.filtros .filtro--activo{background:var(--superficie-hundida);font-weight:700}
     .vacio{display:flex;min-height:180px;flex-direction:column;align-items:center;justify-content:center;gap:10px;padding:24px;text-align:center;color:var(--texto-suave)}.vacio strong{color:var(--texto)}
     .vacio--sin-mensajes{min-height:340px;gap:8px}.vacio__ilustracion{display:block;width:144px;height:144px;object-fit:contain;animation:ilustracion-bandeja-flotar 8s ease-in-out infinite;filter:drop-shadow(0 12px 20px rgb(16 42 46 / 9%))}.vacio--sin-mensajes strong{font-size:1.05rem}.vacio--sin-mensajes span{max-width:220px}
     @keyframes ilustracion-bandeja-flotar{0%,100%{transform:translateY(0)}50%{transform:translateY(-5px)}}
@@ -163,7 +164,7 @@ import { ResumenModuloComponent } from '../../compartido/resumen-modulo.componen
       /* La tarjeta recorta su contenido; esta tiene que desplazarlo. */
       .avisos-tratamiento{flex:0 1 auto;max-height:42%;overflow:auto}
       .bandeja__lista{flex:1 1 0}
-      .bandeja__lista .lista__cabecera,.detalle__cabecera,.detalle__motivo,.detalle__paciente,.solo-lectura{flex:none}
+      .bandeja__lista .lista__contador,.detalle__cabecera,.detalle__motivo,.detalle__paciente,.solo-lectura{flex:none}
       .mensajes{min-height:0}
       .vacio--sin-mensajes{min-height:0}
     }

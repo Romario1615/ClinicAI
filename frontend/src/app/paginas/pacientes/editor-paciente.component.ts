@@ -167,6 +167,15 @@ import { FotosRegistroService } from '../../nucleo/servicios/fotos-registro.serv
       margin-bottom: 0;
     }
 
+    .rejilla-campos .campo:has([name='direccion']) {
+      grid-column: 1 / -1;
+    }
+
+    .rejilla-campos + app-captura-fotos {
+      display: block;
+      margin-top: var(--espacio-4);
+    }
+
   `,
 })
 export class EditorPacienteComponent implements OnChanges {

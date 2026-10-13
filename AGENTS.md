@@ -615,3 +615,36 @@ Codex → Claude: canal queue OK
   No se cambió una regla de negocio fuera del anexo. La suite E2E completa no se
   ejecutó; no era parte de la verificación solicitada. Pendientes del Anexo J:
   ninguno. `.impeccable/` ajena permanece intacta.
+
+* 2026-10-13, Codex → Claude: ejecutado el Anexo K, puntos 59–67, en cambios
+  locales sin commit ni push:
+  - **59:** `frontend/src/styles.scss` y `frontend/src/app/paginas/agenda/agenda.component.{html,scss}` — reset de fieldsets de formularios y separación de bloques/título de repetición.
+  - **60:** `frontend/src/app/compartido/selector-paciente.component.ts`, `frontend/src/app/paginas/agenda/agenda.component.{html,spec.ts}`, `pruebas-e2e/escenarios/{05-demo-operativa,09-lista-espera,42-dia-recepcion,44-agenda-sillones}.spec.ts` — selector combobox compartido, etiqueta única, consulta desde 3 caracteres y E2E adaptados.
+  - **61:** `frontend/src/app/paginas/agenda/calendario-agenda.component.ts` — ancho mínimo de las columnas/bloques del día para citas simultáneas.
+  - **62:** `frontend/src/styles.scss` y `frontend/src/app/compartido/ficha-paciente.component.ts` — relleno de fin de listas y señal de pestañas desplazables.
+  - **63:** `frontend/src/app/compartido/ficha-paciente.component.ts`, `frontend/src/app/paginas/historia-clinica/{historia-clinica.component.html,odontograma.component.html,odontograma.component.scss,odontograma.component.ts}` — cabecera de ficha más compacta; modo embebido de odontograma usa el desplazamiento de la ficha y conserva las piezas accesibles.
+  - **64:** `frontend/src/app/paginas/conocimiento/conocimiento.component.{html,scss}` — se retiró la tarjeta vacía que comprimía la lista y el panel.
+  - **65:** `frontend/src/styles.scss`, `frontend/src/app/compartido/tarjetas-indicadores.component.ts`, `frontend/src/app/paginas/historia-clinica/odontograma.component.scss` — objetivos táctiles de checkbox, interruptores y piezas; etiquetas KPI hasta dos líneas.
+  - **66:** sin unificación global de cabeceras/estados vacíos; queda anotada como trabajo posterior.
+  - **67:** `frontend/src/app/paginas/{conversaciones/conversaciones.component.ts,gastos/gastos.component.ts,pacientes/editor-paciente.component.ts,pacientes/pacientes.component.ts,catalogo/catalogo.component.ts,configuracion/configuracion.component.ts,delegaciones/delegaciones.component.ts,promociones/promociones.component.{html,scss}}` — ajustes de jerarquía, explicación, espaciado y presentación de estados. Las ambigüedades de negocio de métricas de espera/permisos quedan pendientes de definición; no se cambiaron conteos, permisos, validaciones de reserva ni datos.
+
+  Verificación Angular final agrupada sobre el bloque: `npx.cmd ng lint` aprobado,
+  113 suites/1007 pruebas aprobadas y `npx.cmd ng build` aprobado. E2E con
+  `URL_API=http://127.0.0.1:8031/api/v1`: escenario 15 dirigido 1/1; 25 2/2;
+  26 5/5; 30 4/4; 37 5/5; 41 2/2; 42 1/1; 44 1/1. Suite completa, dos
+  corridas: ambas 172/179 aprobadas, 5 omitidas y 2 fallidas; una omisión es
+  WhatsApp sin fixtures QA y cuatro son auditorías Nielsen desactivadas. En
+  ambas corridas el 15 falló al abrir Agenda desde el menú móvil dentro de la
+  suite, aunque pasó dirigido 1/1. En la primera, 42 usaba selectores antiguos;
+  se adaptó y pasó 1/1. En la segunda, 44 no reconoció un hueco puntual de
+  `08:45`; se adaptó el parser y pasó dirigido 1/1. No se volvió a ejecutar la
+  suite completa después de ese último ajuste E2E.
+
+  Nielsen bajo `AUDITORIA_NIELSEN=1`: 4/4, 38 mediciones; pegados 20→11,
+  irregulares 3→2, objetivos pequeños 285→202, recortados 77→5, solapes 2→2,
+  scroll de página 0→0. Quedan 5 recortes, dos solapes, dos espaciamientos
+  irregulares y dos estados sin captura por falta de fixture en Lista de espera
+  y reserva de hueco libre. Pendiente también: aclarar el significado de
+  «pendientes/ofertas/insignia» y la visibilidad del panel sin permiso, y abordar
+  la unificación del punto 66. Solo frontend, pruebas y esta documentación; sin
+  backend ni migraciones. `.impeccable/` ajena intacta.

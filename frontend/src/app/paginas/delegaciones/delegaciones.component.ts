@@ -116,13 +116,13 @@ import { VentanaFlotanteComponent } from '../../compartido/ventana-flotante.comp
           }
         </article>
       } @empty {
-        <p class="cabecera__sub">No hay delegaciones registradas.</p>
+        <div class="tarjeta delegaciones__vacio" role="status"><strong>No hay delegaciones registradas</strong><span>Las delegaciones vigentes aparecerán aquí con su periodo y motivo.</span></div>
       }
     </section>
   `,
   changeDetection: ChangeDetectionStrategy.Eager,
   styles: `
-    .cabecera { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--espacio-4); margin-bottom: var(--espacio-5); }
+    .cabecera { display: flex; align-items: center; justify-content: space-between; gap: var(--espacio-4); margin-bottom: var(--espacio-5); }
     .cabecera__sub { color: var(--texto-suave); max-width: 44rem; }
     .editor__ayuda { max-width: 58ch; color: var(--texto-suave); }
     .formulario { display: grid; gap: var(--espacio-4); }
@@ -132,6 +132,7 @@ import { VentanaFlotanteComponent } from '../../compartido/ventana-flotante.comp
     .delegacion--vigente { box-shadow: inset 3px 0 0 var(--exito), var(--sombra-1); }
     .delegacion__detalle { margin: 4px 0 0; font-size: .85rem; color: var(--texto-suave); }
     .delegacion__estado { font-size: .8rem; font-weight: 700; color: var(--texto-suave); }
+    .delegaciones__vacio { display: grid; gap: var(--espacio-2); width: 100%; min-height: 10rem; place-content: center; text-align: center; }
     .delegacion--vigente .delegacion__estado { color: var(--exito); }
     .aviso-profesionales { margin: calc(-1 * var(--espacio-3)) 0 var(--espacio-4); }
     @media (max-width: 640px) {

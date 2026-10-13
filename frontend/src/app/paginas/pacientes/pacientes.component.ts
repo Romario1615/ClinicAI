@@ -64,7 +64,7 @@ const VERIFICACION: Record<string, { texto: string; detalle: string; tono: strin
   NO_VERIFICADO: {
     texto: 'Sin verificar',
     detalle: 'No se le puede dar informacion por WhatsApp.',
-    tono: 'peligro',
+    tono: 'aviso',
   },
   TELEFONO: {
     texto: 'Telefono',

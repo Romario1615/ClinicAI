@@ -146,7 +146,7 @@ function aFallo(error: unknown, mensaje: string): FalloApi {
         <app-error titulo="No se pudo calcular el flujo" [mensaje]="fallo.message" [codigo]="fallo.codigo" (reintentar)="cargarFlujo()" />
       } @else if (flujo(); as f) {
           <div class="rejilla gastos__graficos">
-            <section class="tarjeta" aria-labelledby="titulo-categorias">
+            <section aria-labelledby="titulo-categorias">
               <h3 id="titulo-categorias">Gastos por categoría</h3>
               @if (f.por_categoria.length === 0) {
                 <p class="campo__ayuda">Sin gastos vigentes en el periodo.</p>
@@ -164,7 +164,7 @@ function aFallo(error: unknown, mensaje: string): FalloApi {
                 </ul>
               }
             </section>
-            <section class="tarjeta" aria-labelledby="titulo-dias">
+            <section aria-labelledby="titulo-dias">
               <h3 id="titulo-dias">Entradas y salidas por día</h3>
               @if (f.por_dia.length === 0) {
                 <p class="campo__ayuda">Sin movimientos en el periodo.</p>
@@ -413,8 +413,11 @@ function aFallo(error: unknown, mensaje: string): FalloApi {
     .gastos__graficos h3 {
       font-size: 0.95rem;
     }
+    .gastos__graficos > section { min-width: 0; padding-bottom: var(--espacio-3); border-bottom: 1px solid var(--borde); }
     .gastos__base {
       margin: 0;
+      padding-bottom: var(--espacio-4);
+      overflow-wrap: anywhere;
     }
     .barras,
     .dias {
