@@ -3,8 +3,86 @@
 > Encargados: **Codex** (frontend, en sandbox `workspace-write`, sin commits) y
 > **Claude** (backend, revisión de diffs y commits). Haiku genera lo largo y
 > repetitivo; Sonnet revisa; Claude verifica cada hallazgo contra el código.
-> Reglas: CLAUDE.md y AGENTS.md. Se ejecuta **después** del anexo K
-> (auditoría Nielsen), que sigue en curso.
+> Reglas: CLAUDE.md y AGENTS.md. Orden: anexo K (en curso) → **Parte N** →
+> Parte L; la Parte M (chat) avanza en paralelo en el backend.
+
+---
+
+## Parte N · Ficha como módulo, sin ventanas flotantes, inicio en Agenda (PRIORIDAD)
+
+Pedido del usuario (2026‑10‑13). Va **antes** de la Parte L: no se pule lo
+que se va a rehacer. Lo del anexo K que toque ventanas que desaparecen se
+reaprovecha en la nueva ubicación.
+
+### N1 · La ficha del paciente es un módulo, no una ventana
+
+* Ruta propia `/pacientes/:id` (y `/pacientes/:id/:pestana`), pantalla de
+  trabajo igual que el resto de módulos y que Historia clínica: menú lateral
+  visible, cabecera del paciente compacta (nombre, edad, documento,
+  verificación, alertas, próxima cita) y miga «Pacientes › Nombre».
+* Contiene el **historial completo del paciente**: pestaña «Historial» con
+  la cronología unificada (citas, atenciones, notas, recetas, versiones de
+  odontograma/faciograma/periodontograma, planes y presupuestos, pagos,
+  documentos e imágenes), filtrable por tipo y por especialidad, con los
+  mismos permisos y auditoría de lectura que hoy.
+* Todos los accesos llevan a esa ruta: «Ver ficha» en Pacientes, bloque de
+  cita en Agenda (`?cita=<id>` conserva el contexto de la atención), buscador
+  superior, Lista de espera, Pagos, Conversaciones. Historia clínica deja de
+  duplicar la ficha: queda como entrada de búsqueda/listado que abre la misma
+  ruta (ajustar según la auditoría de redundancia de Haiku,
+  `tmp/auditoria-redundancia.md`).
+* Botón «Volver» y navegación del navegador (atrás/adelante) funcionan; la URL
+  se puede compartir dentro de la clínica (la autorización sigue en el
+  backend).
+
+### N2 · Lo primero que se ve en la ficha: su carta clínica actual
+
+* Profesional con especialidad dental y acceso clínico → **Odontograma**.
+* Profesional de estética / cuidado facial (módulo `faciograma` activo en su
+  especialidad) → **Faciograma**.
+* Sin acceso clínico o sin esos módulos (recepción, administración) →
+  Resumen.
+* Siempre la **información actual**: la versión vigente, con fecha, autor y
+  número de versión visibles; las anteriores en el Historial. Sin versión: el
+  estado vacío ofrece crear la primera (dentición propuesta por edad).
+* Una pestaña pedida en la URL o desde la cita se respeta.
+
+### N3 · Sin ventanas flotantes, salvo las permitidas
+
+Hoy hay 92 usos de `app-ventana-flotante` en 50 archivos. Quedan **solo**:
+
+* Panel de **notificaciones** (campana).
+* **Mensajes rápidos** (respuesta rápida a una conversación / chat).
+* **Vistas rápidas de menú**: buscador de secciones y resultados del buscador
+  superior (sin formularios dentro).
+
+Todo lo demás pasa al área de trabajo, sin superponerse:
+
+* **Crear/editar** (cita, paciente, pago, gasto, usuario, catálogo,
+  configuración, documentos, promociones): panel de detalle fijo dentro de la
+  pantalla (columna derecha de la rejilla de trabajo) o ruta propia
+  (`/agenda/nueva`, `/pacientes/nuevo`…) cuando el formulario es largo. En
+  móvil, a pantalla completa como ruta.
+* **Editores clínicos** (nota SOAP, receta, piezas del odontograma,
+  periodontograma, plan, anamnesis, formulario 033, faciograma): dentro de su
+  pestaña de la ficha, en línea.
+* **Confirmaciones destructivas** (cancelar, anular, retirar, desactivar): en
+  línea en el propio botón o fila («¿Cancelar la cita? Motivo… [Confirmar]
+  [Volver]»), sin modal.
+* Guardas: cambios sin guardar avisan al salir de la ruta (`canDeactivate`),
+  como ya hace Conocimiento.
+* **Haiku** genera el inventario `tmp/inventario-ventanas.md` (archivo,
+  propósito, destino propuesto según estas reglas); **Codex** migra módulo por
+  módulo (Agenda → Ficha → Pacientes → Pagos → resto) dejando la app
+  funcionando en cada paso; **Sonnet** revisa; **Claude** verifica y confirma.
+* Prueba E2E nueva: falla si aparece un `dialog[open]` fuera de la lista
+  permitida en cualquier ruta recorrida por los seis roles.
+
+### N4 · Al iniciar sesión, la Agenda
+
+Ya implementado (`17874ad`): destino por omisión `/agenda`; sin
+`agenda.leer`, la primera sección permitida. Se mantiene y se cubre en el E2E
+de N3 para los seis roles.
 
 ---
 
