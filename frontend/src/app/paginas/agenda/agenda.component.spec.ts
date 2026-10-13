@@ -210,6 +210,30 @@ describe('AgendaComponent · reserva y series', { timeout: 20_000 }, () => {
     guardar.mockRestore();
   });
 
+  it('consulta disponibilidad con el sillón elegido y no ofrece un turno que lo solapa', () => {
+    montar({}, ['profesional'], PROFESIONAL.id, true);
+    const agenda = fixture.componentInstance;
+    agenda['vistaDia'].set('sillon');
+    agenda['consultorios'].set([
+      { id: 'sillon-1', sede_id: SEDE.id, nombre: 'Sillón 1', tipo: 'CONSULTA', capacidad: 1, activo: true },
+    ]);
+    agenda['cargarDisponibilidadSillones']();
+    const disponibilidad = http.expectOne((peticion) =>
+      peticion.url === `${BASE}/agenda/disponibilidad`
+      && peticion.params.get('consultorio_id') === 'sillon-1',
+    );
+    expect(disponibilidad.request.params.get('profesional_id')).toBe(PROFESIONAL.id);
+    expect(disponibilidad.request.params.get('servicio_id')).toBe(SERVICIO.id);
+    const turno = {
+      inicio: '2030-01-21T14:00:00Z', fin_consulta: '2030-01-21T14:30:00Z',
+      fin_bloque: '2030-01-21T14:30:00Z', duracion_minutos: 30, minutos_preparacion: 0,
+    };
+    disponibilidad.flush({ profesional_id: PROFESIONAL.id, servicio_id: SERVICIO.id, sede_id: SEDE.id,
+      zona_horaria: 'America/Guayaquil', desde: '', hasta: '', turnos: [turno], motivos_sin_turno: {}, });
+    agenda['citasSede'].set([cita(turno.inicio, { consultorio_id: 'sillon-1' })]);
+    expect(agenda['huecosPorConsultorio']().get('sillon-1')).toHaveLength(0);
+  });
+
   it('acota al profesional cuando la identidad llega después que el catálogo', () => {
     montar({}, ['profesional'], PROFESIONAL.id, false, ['agenda.leer'], false);
     expect(fixture.componentInstance['profesionalId']()).toBe('');

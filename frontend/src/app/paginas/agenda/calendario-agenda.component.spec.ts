@@ -150,6 +150,21 @@ describe('CalendarioAgendaComponent', () => {
         expect(grupo?.textContent).toContain('Sillón');
     });
 
+    it('al elegir un hueco transmite el consultorio junto al turno', () => {
+        const turno = { inicio: '2026-10-05T14:00:00Z', fin_consulta: '2026-10-05T14:30:00Z', fin_bloque: '2026-10-05T14:30:00Z', duracion_minutos: 30, minutos_preparacion: 0 };
+        montar({
+            vista: 'dia', vistaDia: 'sillon',
+            consultorios: [{ id: 'sillon-1', sede_id: 'sede-1', nombre: 'Sillón 1', tipo: 'CONSULTA', capacidad: 1, activo: true }],
+            huecosPorConsultorio: new Map([['sillon-1', [{ tipo: 'hueco', inicio: turno.inicio, fin: turno.fin_consulta, turnos: [turno] }]]]),
+            puedeReservar: true,
+        });
+        const resultado: { elegida: { consultorioId: string; hueco: { turnos: readonly unknown[] } } | null } = { elegida: null };
+        c.huecoSillonElegido.subscribe((evento: typeof resultado.elegida) => resultado.elegida = evento);
+        c.elegirBloque(c.columnas()[0].bloques[0]);
+        expect(resultado.elegida?.consultorioId).toBe('sillon-1');
+        expect(resultado.elegida?.hueco.turnos).toEqual([turno]);
+    });
+
     it('semana: siete columnas del profesional elegido y clic en el día', () => {
         montar({
             vista: 'semana',

@@ -325,6 +325,9 @@ export class AgendaComponent {
    */
   protected readonly citasSede = signal<readonly Cita[]>([]);
   protected readonly disponibilidad = signal<Disponibilidad | null>(null);
+  /** Turnos calculados con el filtro de sillón explícito de la API. */
+  protected readonly turnosSillones = signal<ReadonlyMap<string, readonly TurnoDisponible[]>>(new Map());
+  private solicitudSillones = 0;
 
   // --- Reserva ---
   protected readonly turnoElegido = signal<TurnoDisponible | null>(null);
@@ -531,6 +534,26 @@ export class AgendaComponent {
     this.secuencia().filter((fila): fila is FilaDia & { tipo: 'hueco' } => fila.tipo === 'hueco'),
   );
 
+  /** Huecos del profesional elegido por consultorio; citas ajenas también ocupan el sillón. */
+  protected readonly huecosPorConsultorio = computed<ReadonlyMap<string, readonly (FilaDia & { tipo: 'hueco' })[]>>(() => {
+    const mapa = new Map<string, readonly (FilaDia & { tipo: 'hueco' })[]>();
+    for (const sala of this.consultorios().filter((consultorio) => consultorio.activo !== false)) {
+      const citas = this.citasSede().filter((cita) => cita.consultorio_id === sala.id);
+      const turnos = (this.turnosSillones().get(sala.id) ?? []).filter((turno) => {
+        const inicio = Date.parse(turno.inicio);
+        const fin = Date.parse(turno.fin_bloque);
+        return !citas.some((cita) =>
+          ESTADOS_QUE_OCUPAN_SALA.has(cita.estado)
+          && Date.parse(cita.inicio) < fin
+          && inicio < Date.parse(cita.fin),
+        );
+      });
+      mapa.set(sala.id, construirSecuencia(citas, turnos)
+        .filter((fila): fila is FilaDia & { tipo: 'hueco' } => fila.tipo === 'hueco'));
+    }
+    return mapa;
+  });
+
   protected readonly citasCalendario = computed(() =>
     this.vista() === 'dia' ? this.citas() : this.citasRango(),
   );
@@ -665,6 +688,7 @@ export class AgendaComponent {
             : resultado.citas,
         );
         this.disponibilidad.set(resultado.disponibilidad);
+        this.cargarDisponibilidadSillones();
         if (this.vista() === 'dia' && !this.citas().some((cita) => cita.estado !== 'CANCELLED')) {
           this.buscarProximoDiaConTurnos();
         } else {
@@ -884,6 +908,8 @@ export class AgendaComponent {
       return;
     }
     this.cargandoAgenda.set(true);
+    this.solicitudSillones++;
+    this.turnosSillones.set(new Map());
     this.errorAgenda.set(null);
     this.avisoAgenda.set('');
     this.cargarOfertasSinAvisar();
@@ -923,7 +949,10 @@ export class AgendaComponent {
     const sede = this.sedeId();
     this.catalogo.consultorios(sede).subscribe({
       next: (lista) =>
-        this.consultorios.set(lista.filter((consultorio) => consultorio.sede_id === sede)),
+        {
+          this.consultorios.set(lista.filter((consultorio) => consultorio.sede_id === sede));
+          this.cargarDisponibilidadSillones();
+        },
       error: () => this.consultorios.set([]),
     });
   }
@@ -1276,6 +1305,43 @@ export class AgendaComponent {
     } catch {
       // La preferencia solo se conserva si el navegador permite almacenamiento.
     }
+    this.cargarDisponibilidadSillones();
+  }
+
+  /** Calcula huecos contra una sala concreta; sin servicio o profesional no
+   * existe una duración ni un horario que se pueda ofrecer con seguridad. */
+  private cargarDisponibilidadSillones(): void {
+    const solicitud = ++this.solicitudSillones;
+    this.turnosSillones.set(new Map());
+    if (this.vista() !== 'dia' || this.vistaDia() !== 'sillon' || !this.servicioId() || !this.profesionalId()) return;
+    const salas = this.consultorios().filter((consultorio) => consultorio.activo !== false);
+    if (salas.length === 0) return;
+    const profesional = this.profesionales().find((item) => item.id === this.profesionalId());
+    const servicio = this.servicios().find((item) => item.id === this.servicioId());
+    if (!profesional || !servicio || profesional.especialidad_id !== servicio.especialidad_id) return;
+    const { desde, hasta } = rangoDelDia(this.fecha(), this.zona());
+    forkJoin(salas.map((sala) => this.api.disponibilidad({
+      profesional_id: profesional.id,
+      servicio_id: servicio.id,
+      sede_id: this.sedeId(),
+      desde,
+      hasta,
+      consultorio_id: sala.id,
+    }).pipe(
+      map((respuesta) => ({ consultorioId: sala.id, turnos: respuesta.turnos })),
+      catchError(() => of({ consultorioId: sala.id, turnos: [] as readonly TurnoDisponible[] })),
+    ))).subscribe((resultados) => {
+      if (solicitud !== this.solicitudSillones) return;
+      this.turnosSillones.set(new Map(resultados.map((resultado) => [resultado.consultorioId, resultado.turnos])));
+    });
+  }
+
+  protected abrirHuecoEnConsultorio(evento: {
+    consultorioId: string;
+    hueco: FilaDia & { tipo: 'hueco' };
+  }): void {
+    this.consultorioId.set(evento.consultorioId);
+    this.abrirHueco(evento.hueco);
   }
 
   /** Clic en un día de la semana o del mes: se abre ese día. */

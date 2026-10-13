@@ -250,6 +250,7 @@
           [proximoDiaConTurnos]="proximoDiaConTurnos()"
           [profesionales]="profesionales()"
           [consultorios]="consultorios()"
+          [huecosPorConsultorio]="huecosPorConsultorio()"
           [profesionalId]="profesionalId()"
           [vistaDia]="vistaDia()"
           [citaSeleccionadaId]="citaSeleccionada()?.id ?? null"
@@ -259,9 +260,13 @@
           [etiquetaServicio]="etiquetaServicio"
           (citaElegida)="abrirCita($event)"
           (huecoElegido)="abrirHueco($event)"
+          (huecoSillonElegido)="abrirHuecoEnConsultorio($event)"
           (diaElegido)="elegirDia($event)"
           (vistaDiaElegida)="cambiarVistaDia($event)"
         />
+        @if (vista() === 'dia' && vistaDia() === 'sillon' && seleccionIncompleta()) {
+          <p class="campo__ayuda" role="status">Elija un servicio y un profesional para consultar horas libres por sillón.</p>
+        }
       } @else {
         <!-- ================= El día, en orden ================= -->
         <div class="dia__cabecera">

@@ -141,6 +141,7 @@ interface Bloque {
   readonly clave: string;
   readonly cita: Cita | null;
   readonly hueco: (FilaDia & { tipo: 'hueco' }) | null;
+  readonly consultorioId: string | null;
   readonly estado: EstadoVisual | 'LIBRE';
   readonly arriba: number;
   readonly alto: number;
@@ -581,6 +582,7 @@ export class CalendarioAgendaComponent {
   readonly proximoDiaConTurnos = input<string | null>(null);
   readonly profesionales = input<readonly Profesional[]>([]);
   readonly consultorios = input<readonly Consultorio[]>([]);
+  readonly huecosPorConsultorio = input<ReadonlyMap<string, readonly (FilaDia & { tipo: 'hueco' })[]>>(new Map());
   readonly profesionalId = input('');
   readonly vistaDia = input<'profesional' | 'sillon'>('profesional');
   readonly citaSeleccionadaId = input<string | null>(null);
@@ -591,6 +593,7 @@ export class CalendarioAgendaComponent {
 
   readonly citaElegida = output<Cita>();
   readonly huecoElegido = output<FilaDia & { tipo: 'hueco' }>();
+  readonly huecoSillonElegido = output<{ consultorioId: string; hueco: FilaDia & { tipo: 'hueco' } }>();
   readonly diaElegido = output<string>();
   readonly vistaDiaElegida = output<'profesional' | 'sillon'>();
 
@@ -775,7 +778,13 @@ export class CalendarioAgendaComponent {
         subtitulo: TIPO_CONSULTORIO[sala.tipo] ?? sala.tipo,
         hoy: fecha === this.hoy(),
         fecha,
-        bloques: this.colocar(citasVisibles.filter((item) => item.cita.consultorio_id === sala.id), [], false, nombres),
+        bloques: this.colocar(
+          citasVisibles.filter((item) => item.cita.consultorio_id === sala.id),
+          this.huecosPorConsultorio().get(sala.id) ?? [],
+          false,
+          nombres,
+          sala.id,
+        ),
       }));
       const sinSillon = citasVisibles.filter((item) => !item.cita.consultorio_id);
       if (sinSillon.length) columnas.push({
@@ -862,7 +871,9 @@ export class CalendarioAgendaComponent {
 
   protected elegirBloque(bloque: Bloque): void {
     if (bloque.cita) this.citaElegida.emit(bloque.cita);
-    else if (bloque.hueco) this.huecoElegido.emit(bloque.hueco);
+    else if (bloque.hueco && bloque.consultorioId) {
+      this.huecoSillonElegido.emit({ consultorioId: bloque.consultorioId, hueco: bloque.hueco });
+    } else if (bloque.hueco) this.huecoElegido.emit(bloque.hueco);
   }
 
   /**
@@ -875,6 +886,7 @@ export class CalendarioAgendaComponent {
     huecos: readonly (FilaDia & { tipo: 'hueco' })[],
     conProfesional: boolean,
     nombres = new Map(this.profesionales().map((p) => [p.id, `${p.nombre} ${p.apellido}`])),
+    consultorioId: string | null = null,
   ): Bloque[] {
     const inicioFranja = this.franja().desde;
     const items = [
@@ -901,6 +913,7 @@ export class CalendarioAgendaComponent {
           clave: cita ? cita.id : `hueco-${item.hueco!.inicio}`,
           cita,
           hueco: item.hueco,
+          consultorioId: item.hueco ? consultorioId : null,
           estado,
           arriba: (item.desde - inicioFranja) * MINUTO + 1,
           alto,

@@ -86,6 +86,7 @@ export interface ConsultaDisponibilidad {
   readonly sede_id: string;
   readonly desde: string;
   readonly hasta: string;
+  readonly consultorio_id?: string;
   readonly explicar?: boolean;
 }
 
