@@ -1382,6 +1382,7 @@ export class AgendaComponent {
     consultorioId: string;
     hueco: FilaDia & { tipo: 'hueco' };
   }): void {
+    if (!this.puedeCrear()) return;
     this.consultorioId.set(evento.consultorioId);
     this.abrirHueco(evento.hueco);
   }

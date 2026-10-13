@@ -222,6 +222,18 @@ describe('AgendaComponent · reserva y series', { timeout: 20_000 }, () => {
     expect(agenda['avisoAgenda']()).toBe('Esta sede no tiene sillones activos. Se cambió a la vista por profesional.');
   });
 
+  it('no deja un sillón seleccionado si el rol no puede crear citas', () => {
+    montar({}, ['auditor'], null, false, ['agenda.leer']);
+    const agenda = fixture.componentInstance;
+    agenda['consultorioId'].set('sillon-previo');
+    agenda['abrirHuecoEnConsultorio']({
+      consultorioId: 'sillon-sin-permiso',
+      hueco: { tipo: 'hueco', inicio: '2030-01-21T14:00:00Z', fin: '2030-01-21T14:30:00Z', turnos: turnosDe('2030-01-21T05:00:00Z') },
+    });
+    expect(agenda['consultorioId']()).toBe('sillon-previo');
+    expect(agenda['huecoElegido']()).toBeNull();
+  });
+
   it('vacía los consultorios al cambiar de sede y descarta la respuesta anterior', () => {
     montar({}, ['administrador_clinica'], null, false);
     const agenda = fixture.componentInstance;
