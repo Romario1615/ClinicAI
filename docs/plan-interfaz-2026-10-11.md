@@ -398,3 +398,58 @@ solo puede venir del solape (`recorrido_servicios.ingreso_consultorio`); los
     y un profesional para consultar horas libres por sillón» bloquea el flujo.
 58. **Pruebas**: N sillones, respuestas viejas descartadas, sede sin sillones
     y el flujo del punto 57 (unitarias + ampliar E2E 44).
+
+## Anexo K · Auditoría con las heurísticas de Nielsen (2026‑10‑13)
+
+Petición del usuario: la interfaz debe respetar distancias, estar ordenada en
+pantalla y seguir las heurísticas de Nielsen. Evidencia: 36 capturas y
+mediciones en `tmp/auditoria-nielsen/` (escenario bajo demanda
+`99-auditoria-nielsen.spec.ts`, `AUDITORIA_NIELSEN=1`) e informe
+`tmp/auditoria-nielsen/informe-nielsen.md` (31 hallazgos; léelo entero).
+Verificado por Claude en capturas: los puntos 59, 60 y 61.
+
+**Patrones transversales primero** (arreglan varias pantallas a la vez):
+
+59. **Formularios de ventana**: el `<fieldset [disabled]>` envoltorio pinta el
+    borde del navegador (marco gris doble) y no es rejilla, así que el `gap`
+    no llega y hay bloques pegados a 0 px (Reservar cita: «Repetir esta cita»
+    pegado a «Notas de recepción»; Registrar paciente). Reset global de
+    `fieldset` de formulario (`border:0; padding:0; margin:0; min-width:0;
+    display:grid; gap:var(--espacio-4)`) y quitar los `margin-bottom` que
+    dupliquen. En «Repetir esta cita» el título y su descripción salen
+    pegados («Repetir esta citaSe conserva…»): separarlos.
+60. **Reservar cita – paciente**: hoy hay «Paciente *» + «Buscar paciente» +
+    otro «Paciente» con un `<select>` de «25 de 390». Un único buscador con
+    autocompletado (combobox accesible) y una sola etiqueta. Aplicar el mismo
+    componente donde se repite el patrón (Asistente, etc.). «Hora de inicio»
+    desalineada respecto a las demás etiquetas.
+61. **Agenda vista Día con citas simultáneas**: con muchas citas a la misma
+    hora los bloques quedan de 22–43 px e ilegibles («08», «Co…»). Ancho
+    mínimo legible por bloque y, si no caben, desplazamiento horizontal
+    dentro de la columna o agrupación «+N» que abre la lista de esa franja.
+62. **Pestañas y listas con desplazamiento interno**: la tira de pestañas de
+    la ficha se corta por ambos lados sin indicarlo; tablas con la última
+    fila cortada. Degradado de borde/indicador y `padding-bottom` en
+    `.desplazable`/`.ficha__pestanas`.
+63. **Cabecera de la ficha** (~240 px antes del contenido; «Guardar
+    odontograma» cortado): compactar sin perder funciones.
+64. **Conocimiento**: tarjeta vacía de ~170 px por `tarjeta--llena`
+    (`conocimiento.component.html:37`) que comprime tabla y panel.
+65. **Tamaño de objetivo** (WCAG 2.2): aplicar `--toque-minimo` a checkbox
+    nativos, `.interruptor` y `.diente__numero`; etiquetas de KPI en 2 líneas
+    en vez de «…».
+66. **Consistencia**: una sola cabecera de página (hoy `.modulo-cabecera`,
+    `.portada`, `.encabezado`, `.analitica__hero`) y un único estado vacío.
+    Si es demasiado para esta tanda, deja la unificación de cabeceras
+    anotada y prioriza 59–65.
+67. **Resto del informe (severidad 2)**: resolver los que sean de
+    presentación. Los de datos o reglas («10 esperan llamada / 11 ofertas /
+    insignia 1»; panel «Pendientes» visible sin permiso; «Confirmar cita»
+    deshabilitado sin decir qué falta) verifícalos primero en el código: si
+    es un fallo de presentación, corrígelo; si toca una regla de negocio,
+    anótalo en AGENTS.md para Claude.
+
+Verificación: la del plan; repetir `AUDITORIA_NIELSEN=1 … 99-auditoria-
+nielsen.spec.ts` y comparar `mediciones.json` antes/después (pegados,
+irregulares, objetivos pequeños, recortados deben bajar; solapes y scroll
+de página en 0); E2E 15, 37, 41 y la suite completa con API 8031.
