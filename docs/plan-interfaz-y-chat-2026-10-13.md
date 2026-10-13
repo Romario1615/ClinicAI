@@ -96,6 +96,54 @@ de N3 para los seis roles.
 
 ---
 
+## Parte O · Sin redundancia entre módulos (decisiones del usuario, 2026‑10‑13)
+
+Auditoría de Haiku (esfuerzo máximo, verificada por muestreo por Claude):
+[`docs/auditoria-redundancia-2026-10-13.md`](auditoria-redundancia-2026-10-13.md)
+— 30 redundancias, 8 de impacto alto. Se ejecuta junto con la Parte N, ya
+que la ficha como módulo absorbe Historia clínica.
+
+**Decisiones del usuario:**
+
+1. **Menú sin duplicados: aplicar el mapa propuesto (23 → 12 secciones)**:
+   Panel (con Analítica como pestaña) · Agenda (con Lista de espera, bloqueos
+   y sincronización con Google) · Pacientes (la ficha absorbe Historia
+   clínica, Odontograma, Periodoncia, Planes, Imágenes, Documentos, Recetas,
+   Medicación y adherencia, Consentimientos, Recorrido) · Pagos y caja ·
+   Mensajes · Asistente («Agente demo» pasa a Configuración como «Probar el
+   agente», solo local) · Campañas y protocolos (Promociones,
+   Automatizaciones, Conocimiento) · Equipo y horarios · Configuración (con
+   Catálogo) · Usuarios y seguridad · Ayuda · Clínicas (plataforma). Las rutas
+   antiguas redirigen; los permisos siguen en el backend y cada pestaña
+   conserva el suyo. Un nombre por sección, igual en menú, encabezado y título.
+2. **Anamnesis es la fuente** de motivo y antecedentes; el Formulario 033 los
+   importa y muestra en solo lectura (con enlace a editar en la anamnesis).
+   No se borran datos ya registrados en el 033: se muestran como versión
+   anterior. Requiere backend (Claude) + ADR.
+3. **Índice de placa: escala 0–3 por sitio del Formulario 033** como único
+   registro; el O'Leary por superficie deja de capturarse (sus registros
+   existentes se conservan en solo lectura en el historial). Requiere backend
+   (Claude) + ADR.
+4. **Comprobantes de pago: tabla propia** (`PagoComprobante`) con un solo
+   control «Adjuntar comprobante»; los adjuntos genéricos `tipo='pago'`
+   existentes se muestran también ahí, sin borrar nada.
+
+**Resto sin decisión pendiente (aplicar):** un único buscador de pacientes
+(`app-selector-paciente`) en todas partes; tareas pendientes derivadas una
+sola vez en `PendientesService` con nombres resueltos; un listado de
+profesionales para todos los selectores; un solo `app-pestanas`, un
+`app-vacio` con variantes y una cabecera de página; imágenes en un solo
+componente con filtros; agregación de cobros única (Panel y Caja); borrar
+los componentes de demostración sin uso; nombres unívocos («Tareas de hoy»,
+«Alertas de medicación», «Reportes de tratamiento», «Citas anteriores»…);
+helper CSV compartido; Asistente con `Idempotency-Key` en escrituras.
+
+**Reparto:** Claude hace backend (agregaciones, anamnesis→033, placa,
+comprobantes, endpoint de avisos y profesionales); Codex el frontend en el
+orden N → O; Haiku inventarios; Sonnet revisa; Claude verifica y confirma.
+
+---
+
 ## Parte L · Revisión y corrección de la interfaz con el método de las skills
 
 Las skills están instaladas en la máquina; Codex debe **leer los archivos** y
