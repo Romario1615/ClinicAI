@@ -370,3 +370,31 @@ La semilla reparte ahora las citas entre los sillones de cada sede.
 
 Verificación: la del plan; E2E 25, 30, 44 y suite completa con API 8031
 (reiniciada con `cd0f6fc`).
+
+## Anexo J · Revisión del anexo I (Sonnet, verificada por Claude)
+
+Descartado tras verificar: el 409 de `POST /agenda/citas/{id}/consultorio`
+solo puede venir del solape (`recorrido_servicios.ingreso_consultorio`); los
+409 de llegada/salida son de `salida()`. El mensaje actual es correcto.
+
+52. **Carrera al cambiar de sede** (`agenda.component.ts` ~948‑956,
+    `cargarConsultorios`): vaciar `consultorios` al cambiar de sede y
+    descartar respuestas de una sede que ya no es `sedeId()`.
+53. **Peticiones duplicadas** (~1317‑1336, 691, 951, 1308): una carga de día
+    hace 2N peticiones de disponibilidad (N sillones) y no se cancelan al
+    cambiar de día o modo. Una sola vía de carga (`Subject` + `switchMap`),
+    quitar la llamada duplicada desde `cargarConsultorios`.
+54. **Sede sin sillones**: mensaje «Esta sede no tiene sillones activos» y
+    volver al modo Profesional, en vez de una rejilla sin columnas.
+55. **`consultorioId` residual** (`abrirHuecoEnConsultorio` ~1339): comprobar
+    `puedeCrear()` antes de fijarlo.
+56. **Refrescar tras 409** al mover de sillón: recargar la columna sin
+    mensaje de éxito.
+57. **Reservar en un sillón sin elegir antes servicio y profesional** (como en
+    Open Dental): en modo Sillón, los huecos sin cita de cada columna dentro
+    del horario de la sede son pulsables; al pulsar se abre la reserva con
+    sillón, fecha y hora fijados y se piden servicio y profesional allí;
+    la disponibilidad se valida al elegirlos. Hoy el aviso «Elija un servicio
+    y un profesional para consultar horas libres por sillón» bloquea el flujo.
+58. **Pruebas**: N sillones, respuestas viejas descartadas, sede sin sillones
+    y el flujo del punto 57 (unitarias + ampliar E2E 44).
