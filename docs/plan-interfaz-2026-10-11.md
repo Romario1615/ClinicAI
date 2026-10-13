@@ -338,3 +338,35 @@ odontograma y manuales (422) y total en coma flotante.
 46. **Fase editable por fila** del odontograma (1–20), como pide el punto 38.
 47. **E2E 43**: reponer el caso de plan manual con dos fases además del
     flujo desde el odontograma (se perdió cobertura en `417dc69`).
+
+## Anexo I · Agenda por sillón (2026‑10‑12)
+
+Como las «operatorias» de Open Dental: la vista del día por sillón o
+consultorio, con una columna por sillón. El backend ya lo soporta:
+`cita.consultorio_id` con exclusión `cita_sin_solape_consultorio`,
+disponibilidad con `consultorio_id`, reserva y reprogramación con sillón,
+asignación de sillón y, desde `cd0f6fc`, `GET /agenda/citas?consultorio_id=`.
+La semilla reparte ahora las citas entre los sillones de cada sede.
+
+48. **Modo «Por sillón» en la vista Día**, junto a la vista por profesional
+    (control segmentado «Profesional | Sillón»). Una columna por consultorio
+    activo de la sede elegida, en el orden del catálogo, con su nombre y tipo;
+    una columna «Sin sillón» solo si ese día hay citas sin consultorio. Cada
+    bloque: hora, paciente (con el permiso de nombres), profesional abreviado
+    y servicio. El filtro Profesional sigue acotando los bloques. Recordar el
+    modo elegido por usuario en `localStorage` (con try/catch).
+49. **Reservar en un sillón**: pulsar un hueco de la columna de un sillón abre
+    la reserva con ese consultorio ya elegido (la disponibilidad se pide con
+    `consultorio_id`). Si el sillón está ocupado a esa hora, no ofrecerlo.
+50. **Mover de sillón**: la acción existente de asignar consultorio debe
+    verse en el panel de la cita en este modo y refrescar la columna. Un 409
+    por solape se explica en lenguaje claro («Ese sillón ya está ocupado a esa
+    hora»).
+51. **Pruebas**: unitarias del modo (columnas, «Sin sillón», persistencia del
+    modo, reserva con consultorio) y E2E nuevo `44-agenda-sillones.spec.ts`:
+    cambiar a «Sillón», ver una columna por consultorio, reservar en un sillón
+    concreto y ver la cita en esa columna, sin desplazamiento de página a
+    1440 × 900.
+
+Verificación: la del plan; E2E 25, 30, 44 y suite completa con API 8031
+(reiniciada con `cd0f6fc`).
