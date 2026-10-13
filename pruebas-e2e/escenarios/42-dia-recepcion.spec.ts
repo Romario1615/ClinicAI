@@ -376,6 +376,13 @@ test('recepción: un día completo de trabajo con pacientes sintéticos', async 
     await expect(reprogramacion).toBeVisible();
     await reprogramacion.locator('textarea[name="motivoCambio"]').fill('Cambio sintetico de prueba de recepcion');
     const nuevoHorario = reprogramacion.locator('select[name="turnoNuevo"] option');
+    // En la suite completa otros escenarios llenan ese día: como haría
+    // recepción, si no quedan horarios se prueba otra fecha con turnos.
+    for (const otroDia of [diaA, ...dias.filter((dia) => dia !== diaA)]) {
+      if (otroDia !== diaA) await reprogramacion.locator('input[name="fechaNueva"]').fill(otroDia);
+      await expect(reprogramacion.getByText('Buscando horarios…')).toHaveCount(0);
+      if (await nuevoHorario.count() > 1) break;
+    }
     await expect.poll(async () => nuevoHorario.count()).toBeGreaterThan(1);
     await reprogramacion.locator('select[name="turnoNuevo"]').selectOption({ index: 1 });
     const reprogramada = page.waitForResponse((r) => r.request().method() !== 'GET' && r.url().includes('/agenda/citas/'), { timeout: 30_000 });
