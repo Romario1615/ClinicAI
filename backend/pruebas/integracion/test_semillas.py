@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import base64
 import secrets
+from itertools import pairwise
 
 import pytest
 import sqlalchemy as sa
@@ -294,6 +295,24 @@ class TestDatosSinteticos:
         assert cargado.servicios == 14
         assert cargado.profesionales == 16
         assert cargado.pacientes == 12
+
+    async def test_las_citas_ocupan_sillones_sin_solaparse(
+        self, cargado, sesion: AsyncSession
+    ) -> None:
+        """La vista por sillón necesita citas con consultorio, y ninguno doble."""
+        from app.modulos.agenda.modelos import Cita  # noqa: PLC0415
+
+        filas = (
+            await sesion.execute(
+                sa.select(Cita.consultorio_id, Cita.inicio, Cita.fin)
+                .where(Cita.clinica_id == cargado.clinica_id, Cita.consultorio_id.is_not(None))
+                .order_by(Cita.consultorio_id, Cita.inicio)
+            )
+        ).all()
+        assert filas, "ninguna cita sintética quedó en un sillón"
+        for anterior, siguiente in pairwise(filas):
+            if anterior.consultorio_id == siguiente.consultorio_id:
+                assert anterior.fin <= siguiente.inicio
 
     async def test_las_especialidades_son_odontologicas_mas_estetica_facial(
         self, cargado, sesion: AsyncSession

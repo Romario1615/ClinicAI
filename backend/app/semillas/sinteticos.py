@@ -846,7 +846,61 @@ async def cargar_datos_sinteticos(  # noqa: PLR0912, PLR0915
             )
 
     await sesion.flush()
+    await _asignar_consultorios(sesion, [sede.id for sede in sedes])
     resumen.citas = creadas
     resumen.colisiones_descartadas = colisiones
 
     return resumen
+
+
+async def _asignar_consultorios(sesion: AsyncSession, sedes: list[uuid.UUID]) -> None:
+    """Reparte las citas de cada sede entre sus sillones, sin solapes.
+
+    Como en el software odontológico, cada cita ocupa un sillón: así la vista
+    de agenda por consultorio no aparece vacía con los datos de demostración.
+    Reparto voraz por hora de inicio: el primer sillón libre en el rango
+    `[inicio, fin)` de la cita (el `fin` ya incluye la preparación). Si todos
+    están ocupados, la cita queda sin sillón, que también es un caso real.
+    El punto de guardado protege ante la restricción de exclusión por si el
+    cálculo en Python y el de la base difirieran.
+    """
+    for sede_id in sedes:
+        salas = list(
+            (
+                await sesion.execute(
+                    select(Consultorio.id)
+                    .where(Consultorio.sede_id == sede_id, Consultorio.activo.is_(True))
+                    .order_by(Consultorio.nombre)
+                )
+            ).scalars()
+        )
+        if not salas:
+            continue
+        ocupados: dict[uuid.UUID, list[tuple[datetime, datetime]]] = {s: [] for s in salas}
+        citas = (
+            await sesion.execute(
+                select(Cita)
+                .where(Cita.sede_id == sede_id, Cita.consultorio_id.is_(None))
+                .order_by(Cita.inicio)
+            )
+        ).scalars()
+        for cita in citas:
+            libre = next(
+                (
+                    sala
+                    for sala in salas
+                    if all(cita.fin <= ini or cita.inicio >= fin for ini, fin in ocupados[sala])
+                ),
+                None,
+            )
+            if libre is None:
+                continue
+            punto = await sesion.begin_nested()
+            try:
+                cita.consultorio_id = libre
+                await sesion.flush()
+            except IntegrityError:
+                await punto.rollback()
+                continue
+            await punto.commit()
+            ocupados[libre].append((cita.inicio, cita.fin))

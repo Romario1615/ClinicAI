@@ -231,6 +231,7 @@ class RepositorioAgenda:
         profesional_id: uuid.UUID | None = None,
         paciente_id: uuid.UUID | None = None,
         sede_id: uuid.UUID | None = None,
+        consultorio_id: uuid.UUID | None = None,
         estados: Sequence[str] | None = None,
         limite: int = 100,
         desplazamiento: int = 0,
@@ -254,6 +255,8 @@ class RepositorioAgenda:
             consulta = consulta.where(Cita.paciente_id == paciente_id)
         if sede_id is not None:
             consulta = consulta.where(Cita.sede_id == sede_id)
+        if consultorio_id is not None:
+            consulta = consulta.where(Cita.consultorio_id == consultorio_id)
         if estados:
             consulta = consulta.where(Cita.estado.in_(estados))
 
@@ -271,6 +274,7 @@ class RepositorioAgenda:
         profesional_id: uuid.UUID | None = None,
         paciente_id: uuid.UUID | None = None,
         sede_id: uuid.UUID | None = None,
+        consultorio_id: uuid.UUID | None = None,
         estados: Sequence[str] | None = None,
     ) -> int:
         """Cuenta las citas que `listar_citas` devolveria con esos mismos filtros.
@@ -292,6 +296,8 @@ class RepositorioAgenda:
             consulta = consulta.where(Cita.paciente_id == paciente_id)
         if sede_id is not None:
             consulta = consulta.where(Cita.sede_id == sede_id)
+        if consultorio_id is not None:
+            consulta = consulta.where(Cita.consultorio_id == consultorio_id)
         if estados:
             consulta = consulta.where(Cita.estado.in_(estados))
         consulta = self._filtrar_por_ambito(consulta, principal)

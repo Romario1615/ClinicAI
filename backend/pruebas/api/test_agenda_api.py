@@ -1931,3 +1931,40 @@ class TestConsultorio:
         )
 
         assert respuesta.status_code == 422
+
+    async def test_el_listado_filtra_por_consultorio_y_cuenta_igual(
+        self,
+        cliente: AsyncClient,
+        api: str,
+        sesion: AsyncSession,
+        usuario: Usuario,
+        clinica: Clinica,
+        sede: Sede,
+        cuerpo_reserva: dict[str, str],
+    ) -> None:
+        """La vista por sillón pide las citas de cada consultorio."""
+        sala = await self._consultorio(sesion, sede)
+        otra_sala = await self._consultorio(sesion, sede)
+        cabeceras = await _recepcion(cliente, sesion, usuario, clinica, sede)
+        creada = await cliente.post(
+            _ruta(api, "/citas"),
+            headers=cabeceras,
+            json={**cuerpo_reserva, "consultorio_id": str(sala.id)},
+        )
+        assert creada.status_code == 201, creada.text
+
+        propia = await cliente.get(
+            _ruta(api, "/citas"), headers=cabeceras, params={"consultorio_id": str(sala.id)}
+        )
+        vacia = await cliente.get(
+            _ruta(api, "/citas"), headers=cabeceras, params={"consultorio_id": str(otra_sala.id)}
+        )
+        invalida = await cliente.get(
+            _ruta(api, "/citas"), headers=cabeceras, params={"consultorio_id": "no-es-uuid"}
+        )
+
+        assert propia.status_code == 200
+        assert [c["id"] for c in propia.json()["elementos"]] == [creada.json()["id"]]
+        assert propia.json()["total"] == 1
+        assert vacia.json() == {**vacia.json(), "elementos": [], "total": 0}
+        assert invalida.status_code == 422

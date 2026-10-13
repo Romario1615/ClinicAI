@@ -291,6 +291,9 @@ async def listar_citas(
     profesional_id: Annotated[uuid.UUID | None, Query()] = None,
     paciente_id: Annotated[uuid.UUID | None, Query()] = None,
     sede_id: Annotated[uuid.UUID | None, Query()] = None,
+    consultorio_id: Annotated[
+        uuid.UUID | None, Query(description="Citas de un sillón o consultorio.")
+    ] = None,
     estado: Annotated[list[EstadoFiltro] | None, Query()] = None,
     limite: Annotated[int, Query(ge=1, le=LIMITE_MAXIMO_PAGINA)] = 50,
     desplazamiento: Annotated[int, Query(ge=0)] = 0,
@@ -314,6 +317,7 @@ async def listar_citas(
         profesional_id=profesional_id,
         paciente_id=paciente_id,
         sede_id=sede_id,
+        consultorio_id=consultorio_id,
         estados=estados,
         limite=limite,
         desplazamiento=desplazamiento,
@@ -325,6 +329,7 @@ async def listar_citas(
         profesional_id=profesional_id,
         paciente_id=paciente_id,
         sede_id=sede_id,
+        consultorio_id=consultorio_id,
         estados=estados,
     )
 
