@@ -809,7 +809,9 @@
 
 /* ----- Selector de consultorio en la reserva ----- */
 .selector-sala {
-  margin: 0;
+  // Misma separación que un `.campo`: el fieldset contenedor no es rejilla,
+  // así que el `gap` del formulario no llega aquí.
+  margin: 0 0 var(--espacio-4);
   padding: 0;
   border: 0;
 }
