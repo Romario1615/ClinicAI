@@ -76,6 +76,24 @@
   color: var(--texto-suave);
 }
 
+.flujo-fijo {
+  min-height: 0;
+  margin: 0;
+  padding: var(--espacio-2) var(--espacio-3);
+  border-bottom: 1px solid var(--borde);
+}
+
+.flujo {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--espacio-2) var(--espacio-4);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
 .portada .ceja { display:flex; align-items:center; gap:var(--espacio-2); color:#a8e5d9; }
 
 @media (prefers-reduced-motion: reduce) {
@@ -247,7 +265,7 @@
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: var(--espacio-2);
-  margin: 0 0 var(--espacio-5);
+  margin: 0;
   padding: 0;
   counter-reset: none;
 }
@@ -257,7 +275,7 @@
   align-items: center;
   flex-wrap: wrap;
   gap: 4px var(--espacio-2);
-  padding: var(--espacio-3) var(--espacio-4);
+  padding: var(--espacio-2) var(--espacio-3);
   border: 1px solid var(--borde);
   border-radius: var(--radio);
   background: var(--superficie-elevada);
@@ -276,7 +294,7 @@
 .flujo__paso small {
   flex-basis: 100%;
   padding-left: 52px;
-  margin-top: -4px;
+  margin-top: 0;
   font-weight: 500;
   font-size: 0.78rem;
   color: var(--texto-tenue);
@@ -574,6 +592,10 @@
   font-size: 0.88rem;
   color: var(--texto-suave);
   min-width: 9rem;
+}
+
+@media (max-width: 1499px) {
+  .vigencia { min-width: 7rem; }
 }
 
 /* El título es lo que se busca con la vista: no puede quedar en cinco líneas

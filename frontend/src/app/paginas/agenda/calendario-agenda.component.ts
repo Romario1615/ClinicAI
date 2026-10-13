@@ -241,7 +241,7 @@ function abreviarProfesional(nombre: string): string {
         class="tiempo"
         (scroll)="recordarPosicion()"
         [style.--columnas]="columnas().length"
-        [style.--ancho-min]="vista() === 'semana' ? '84px' : '160px'"
+        [style.--ancho-min]="vista() === 'semana' ? '84px' : anchoMinimoDia() + 'px'"
         [attr.tabindex]="vacio() && vista() === 'dia' ? 0 : null"
         [attr.role]="vacio() && vista() === 'dia' ? 'region' : null"
         [attr.aria-label]="vacio() && vista() === 'dia' ? 'Horas del día' : null"
@@ -286,6 +286,7 @@ function abreviarProfesional(nombre: string): string {
               <button
                 type="button"
                 [class]="'bloque estado--' + b.estado"
+                [style.--bloque-ancho-min]="vista() === 'dia' ? '72px' : '0px'"
                 [class.bloque--elegido]="b.cita && b.cita.id === citaSeleccionadaId()"
                 [class.bloque--corto]="b.alto < 48"
                 [style.top.px]="b.arriba"
@@ -456,6 +457,7 @@ function abreviarProfesional(nombre: string): string {
       line-height: 1.2;
       cursor: pointer;
       box-sizing: border-box;
+      min-width: var(--bloque-ancho-min, 0);
     }
     .bloque:hover { filter: brightness(0.97); box-shadow: var(--sombra-1); z-index: 3; }
     .bloque:focus-visible { outline: 3px solid var(--acento); outline-offset: 1px; z-index: 3; }
@@ -818,6 +820,23 @@ export class CalendarioAgendaComponent {
   });
 
   protected readonly vacio = computed(() => this.columnas().every((col) => col.bloques.length === 0));
+  /** Aumenta el ancho de la rejilla si hay citas simultáneas, para que cada
+   * bloque conserve 72 px y la vista desplace dentro de su propio marco. */
+  protected readonly anchoMinimoDia = computed(() => {
+    const columnas = this.columnas();
+    const simultaneas = Math.max(1, ...columnas.map((col) => {
+      let maximo = 1;
+      for (const bloque of col.bloques) {
+        const fin = bloque.arriba + bloque.alto;
+        const cuenta = col.bloques.filter((otro) =>
+          otro.arriba < fin && otro.arriba + otro.alto > bloque.arriba,
+        ).length;
+        maximo = Math.max(maximo, cuenta);
+      }
+      return maximo;
+    }));
+    return Math.max(160, simultaneas * 72);
+  });
   protected readonly sinCitasDia = computed(() =>
     this.vista() === 'dia' && !this.locales().some((item) => item.fecha === this.fecha()),
   );

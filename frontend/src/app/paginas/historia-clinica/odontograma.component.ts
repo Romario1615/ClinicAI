@@ -165,6 +165,7 @@ export class OdontogramaComponent {
   protected readonly caras = CARAS;
   protected readonly hallazgosPieza = HALLAZGOS_PIEZA;
   protected readonly hallazgosCara = HALLAZGOS_CARA;
+
   protected readonly regiones = REGIONES;
   protected readonly puedeGuardar = computed(
     () => this.puedeEditar() && !this.guardando() && (this.actual()?.vigente ?? true),

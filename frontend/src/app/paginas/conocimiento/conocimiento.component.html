@@ -34,7 +34,7 @@
     </li>
   </ol>
 </ng-template>
-<div class="flujo-fijo tarjeta tarjeta--llena pantalla__fijo"><ng-container [ngTemplateOutlet]="pasosFlujo" /></div>
+<div class="flujo-fijo pantalla__fijo"><ng-container [ngTemplateOutlet]="pasosFlujo" /></div>
 
 @if (flujoAbierto()) {
   <app-ventana-flotante ceja="Conocimiento clínico" titulo="Cómo llega un documento al agente" forma="centrada" [anchoMaximo]="760" (cerrar)="flujoAbierto.set(false)">

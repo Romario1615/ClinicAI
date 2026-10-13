@@ -30,6 +30,10 @@
   gap: var(--espacio-4);
 }
 
+.odontograma__guardar {
+  border-top: 1px solid var(--borde);
+}
+
 .odontograma__cabecera { flex-wrap: wrap; align-items: end; gap: var(--espacio-3) var(--espacio-4); }
 .odontograma__titulo { flex: 1 1 14rem; min-width: 0; }
 .odontograma__cabecera h2 { display: flex; align-items: center; gap: var(--espacio-2); margin: 0; }
@@ -96,7 +100,7 @@
 .diente--superior { flex-direction: column; }
 .diente--seleccionado { background: color-mix(in srgb, var(--acento) 14%, transparent); box-shadow: 0 0 0 2px var(--acento); }
 .diente__numero {
-  min-width: 2.2rem; padding: 1px 2px; border: 0; border-radius: 4px; background: transparent; color: var(--texto);
+  min-width: 44px; min-height: 24px; padding: 1px 2px; border: 0; border-radius: 4px; background: transparent; color: var(--texto);
   font: 700 .72rem var(--fuente-mono, monospace); cursor: pointer;
 }
 .diente__numero:hover { background: var(--acento-suave); }
@@ -104,7 +108,7 @@
 .diente--cambiado .diente__numero { color: var(--acento-fuerte); text-decoration: underline wavy var(--odo-fractura); }
 .diente__nota { color: var(--odo-fractura); margin-left: 1px; }
 .diente__planificado { display: inline-block; margin-left: 2px; padding: 0 2px; border: 1px dashed var(--acento-fuerte); border-radius: 3px; color: var(--acento-fuerte); font: 800 .55rem var(--fuente-mono, monospace); vertical-align: 1px; }
-.diente__svg { width: 3.2rem; height: 3.2rem; display: block; overflow: visible; }
+.diente__svg { width: 3.2rem; height: 3.2rem; min-width: 44px; min-height: 44px; display: block; overflow: visible; }
 .diente__svg .cara { fill: var(--odo-sana); stroke: var(--odo-trazo); stroke-width: 1.4; cursor: pointer; transition: fill .12s, filter .12s; }
 .diente__svg .cara:hover { filter: brightness(.9); stroke: var(--acento); stroke-width: 2; }
 .diente__svg .cara:focus-visible { filter: drop-shadow(0 0 2px var(--acento)); stroke: var(--acento-fuerte); stroke-width: 2.8; }
@@ -211,7 +215,6 @@
   :host(.llena) .diente__numero { line-height: 1rem; }
   :host(.llena) .leyenda { gap: var(--espacio-1) var(--espacio-3); }
   :host(.llena) .odontograma__guardar {
-    position: sticky; bottom: -.75rem; z-index: 1;
     gap: var(--espacio-3); padding: var(--espacio-2) 0;
     background: var(--superficie); border-top: 1px solid var(--borde);
   }

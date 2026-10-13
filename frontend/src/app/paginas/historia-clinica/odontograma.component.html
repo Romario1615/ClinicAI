@@ -82,7 +82,8 @@
     @if (puedeGuardar()) {
       <!-- Paleta: el hallazgo elegido se pinta con cada clic sobre una cara
            o sobre el número de la pieza. Repetir el clic lo quita. -->
-      <div class="paleta" role="toolbar" aria-label="Herramientas del odontograma">
+      <div class="paleta" role="toolbar" aria-label="Herramientas del odontograma" aria-describedby="ayuda-herramientas-odontograma">
+        <span class="solo-lectores" id="ayuda-herramientas-odontograma">Elija una herramienta; luego pulse una cara o el número para la pieza completa.</span>
         <button type="button" class="paleta__boton" [class.paleta__boton--activo]="herramienta() === 'SELECCIONAR'"
                 [attr.aria-pressed]="herramienta() === 'SELECCIONAR'" (click)="elegirHerramienta('SELECCIONAR')">
           <span class="paleta__muestra paleta__muestra--seleccionar" aria-hidden="true"></span>Seleccionar

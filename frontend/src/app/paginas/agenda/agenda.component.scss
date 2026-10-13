@@ -521,6 +521,34 @@
   gap: var(--espacio-4);
 }
 
+.reserva__formulario > .campo,
+.reserva__formulario > .reserva__recurrencia {
+  margin-bottom: 0;
+}
+
+.reserva__formulario > fieldset:first-child {
+  display: grid;
+  gap: var(--espacio-4);
+  min-width: 0;
+  margin: 0;
+  padding: 0 0 var(--espacio-3);
+  border: 0;
+}
+
+.reserva__formulario > fieldset:first-child > * {
+  margin-block: 0;
+}
+
+.reserva__formulario .arranques {
+  display: grid;
+  gap: var(--espacio-2);
+}
+
+.reserva__recurrencia .interruptor > span {
+  display: grid;
+  gap: var(--espacio-1);
+}
+
 .reserva__contexto {
   padding: var(--espacio-4);
   border: 1px solid color-mix(in srgb, var(--cristal-borde) 76%, var(--acento));
@@ -575,6 +603,14 @@
   justify-content: flex-end;
   flex-wrap: wrap;
   gap: var(--espacio-2);
+}
+
+.reserva__falta {
+  flex: 1 1 18rem;
+  align-self: center;
+  margin: 0;
+  color: var(--texto-suave);
+  font-size: 0.82rem;
 }
 
 @media (max-width: 560px) {

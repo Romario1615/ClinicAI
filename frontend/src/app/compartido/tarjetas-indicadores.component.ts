@@ -81,7 +81,7 @@ export interface Indicador {
     .indicador--enlace:hover { border-color: rgb(11 110 106 / 40%); box-shadow: var(--vidrio-canto, 0 0 0 transparent), 0 16px 32px -16px rgb(16 42 46 / 35%); }
     .indicador--enlace:focus-visible { outline: 3px solid var(--acento); outline-offset: 2px; }
     .indicador__valor { font-size: 1.75rem; font-weight: 750; line-height: 1.1; }
-    .indicador__etiqueta { font-weight: 650; font-size: 0.88rem; }
+    .indicador__etiqueta { display: -webkit-box; overflow: hidden; -webkit-box-orient: vertical; -webkit-line-clamp: 2; font-weight: 650; font-size: 0.88rem; line-height: 1.25; }
     .indicador__detalle { color: var(--texto-suave); font-size: 0.78rem; }
     .indicador--alerta { background: var(--aviso-fondo); border-color: color-mix(in srgb, var(--aviso) 45%, transparent); }
     .indicador--alerta .indicador__valor { color: var(--aviso); }

@@ -217,7 +217,6 @@ const DETALLE_CLINICO: Partial<Record<Pestana, string>> = {
       <!-- ===================== Contenido por pestañas ===================== -->
       <section class="ficha__principal">
         @if (paciente() && puedeUsarAgente()) {
-          <div class="ficha__agente-acceso"><span>Apoyo para {{ nombre() }}</span><button #botonAgente class="boton boton--principal" type="button" [attr.aria-expanded]="agenteAbierto()" (click)="agenteAbierto.set(!agenteAbierto())">{{ agenteAbierto() ? 'Ocultar agente' : 'Agente del paciente' }}</button></div>
         }
         @if (cargando()) {
           <p class="ficha__aviso" role="status">Cargando la ficha…</p>
@@ -228,6 +227,9 @@ const DETALLE_CLINICO: Partial<Record<Pestana, string>> = {
             <app-selector-especialidad class="ficha__especialidad" [compacto]="true" (cambio)="cambiarEspecialidad()" />
             @if (accesosClinicos().length && !sinAccesoClinico()) {
               <app-herramientas-paciente class="ficha__herramientas" [pacienteId]="pacienteId()" [citaId]="citaParaAtencion()" [abrirInicialmente]="elegirRegistroInicial()" (elegida)="abrirHerramienta($event)" />
+            }
+            @if (paciente() && puedeUsarAgente()) {
+              <button #botonAgente class="boton boton--principal ficha__boton-agente" type="button" [attr.aria-expanded]="agenteAbierto()" (click)="agenteAbierto.set(!agenteAbierto())">{{ agenteAbierto() ? 'Ocultar agente' : 'Agente del paciente' }}</button>
             }
           </div>
           <div class="ficha__pestanas" role="tablist" aria-label="Secciones de la ficha">
@@ -454,7 +456,7 @@ const DETALLE_CLINICO: Partial<Record<Pestana, string>> = {
   `,
   changeDetection: ChangeDetectionStrategy.Eager,
   styles: `
-    .ficha__agente-acceso { display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; padding:12px 20px; border-bottom:1px solid var(--borde); }
+    .ficha__boton-agente { flex: 0 0 auto; min-height: 38px; }
     .ficha.ficha--con-agente { grid-template-columns:220px minmax(0,1fr) minmax(310px,36%); }
     .ficha__agente { min-height:0; min-width:0; overflow-y:auto; border-left:1px solid var(--borde); }
     @media (max-width:1100px) {
@@ -465,7 +467,7 @@ const DETALLE_CLINICO: Partial<Record<Pestana, string>> = {
       .ficha.ficha--con-agente { grid-template-columns:minmax(0,1fr); height:auto; overflow:visible; }
       .ficha__agente { min-height:580px; border-left:0; border-top:1px solid var(--borde); }
     }
-    .ficha__controles { display:flex; align-items:center; justify-content:space-between; gap:8px; min-width:0; padding:6px 12px; border-bottom:1px solid var(--borde); }
+    .ficha__controles { display:flex; align-items:center; justify-content:space-between; gap:8px; min-width:0; padding:4px 12px; border-bottom:1px solid var(--borde); }
     .ficha__especialidad { display:block; flex:1 1 auto; min-width:0; margin:0; }
     .ficha__herramientas { display:block; flex:0 1 auto; min-width:0; margin:0; }
     .ficha__registrar { display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 20px;flex-wrap:wrap; }
@@ -581,8 +583,10 @@ const DETALLE_CLINICO: Partial<Record<Pestana, string>> = {
       flex: 0 0 auto;
       flex-wrap: nowrap;
       overflow-x: auto;
+      scroll-padding-inline: var(--espacio-4);
       overscroll-behavior-inline: contain;
       scrollbar-width: thin;
+      mask-image: linear-gradient(90deg, transparent, #000 18px, #000 calc(100% - 18px), transparent);
       gap: 2px;
       padding: 0 var(--espacio-3);
       border-bottom: 1px solid var(--borde);
@@ -598,6 +602,8 @@ const DETALLE_CLINICO: Partial<Record<Pestana, string>> = {
       font-weight: 600;
       cursor: pointer;
     }
+
+    .ficha__cuerpo { padding-bottom: var(--espacio-3); }
 
     .ficha__pestana:hover {
       color: var(--texto);
