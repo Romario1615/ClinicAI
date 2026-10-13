@@ -1195,8 +1195,8 @@ export class AgendaComponent {
       if (this.seleccionIncompleta()) return hueco.turnos;
       const mapa = this.turnosSillones();
       if (!mapa.has(this.consultorioId())) return [];
-      const disponibles = new Set((mapa.get(this.consultorioId()) ?? []).map((turno) => turno.inicio));
-      return hueco.turnos.filter((turno) => disponibles.has(turno.inicio));
+      const disponibles = new Set((mapa.get(this.consultorioId()) ?? []).map((turno) => Date.parse(turno.inicio)));
+      return hueco.turnos.filter((turno) => disponibles.has(Date.parse(turno.inicio)));
     }
     const disponibles = new Set(this.turnos().map((turno) => turno.inicio));
     return hueco.turnos.filter((turno) => disponibles.has(turno.inicio));
@@ -1207,7 +1207,7 @@ export class AgendaComponent {
     if (!id) return true;
     if (this.seleccionIncompleta() || !this.turnosSillones().has(id)) return false;
     const inicio = this.turnoElegido()?.inicio;
-    return Boolean(inicio && this.turnosSillones().get(id)?.some((turno) => turno.inicio === inicio));
+    return Boolean(inicio && this.turnosSillones().get(id)?.some((turno) => Date.parse(turno.inicio) === Date.parse(inicio)));
   }
 
   protected abrirCita(cita: Cita): void {

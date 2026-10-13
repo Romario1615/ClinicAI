@@ -288,6 +288,23 @@ describe('AgendaComponent · reserva y series', { timeout: 20_000 }, () => {
     expect(agenda['huecosPorConsultorio']().get('sillon-1')).toHaveLength(0);
   });
 
+  it('cancela las disponibilidades antiguas al cambiar el modo de columnas', () => {
+    montar({}, ['profesional'], PROFESIONAL.id, true);
+    const agenda = fixture.componentInstance;
+    agenda['vistaDia'].set('sillon');
+    agenda['consultorios'].set([
+      { id: 'sillon-1', sede_id: SEDE.id, nombre: 'Sillón 1', tipo: 'CONSULTA', capacidad: 1, activo: true },
+      { id: 'sillon-2', sede_id: SEDE.id, nombre: 'Sillón 2', tipo: 'CONSULTA', capacidad: 1, activo: true },
+    ]);
+    agenda['cargarDisponibilidadSillones']();
+    const peticiones = http.match((peticion) => peticion.url === `${BASE}/agenda/disponibilidad`);
+    expect(peticiones).toHaveLength(2);
+
+    agenda['cambiarVistaDia']('profesional');
+    expect(peticiones.every((peticion) => peticion.cancelled)).toBe(true);
+    expect(agenda['turnosSillones']().size).toBe(0);
+  });
+
   it('ofrece huecos del horario de sede y valida el sillón al completar servicio y profesional', () => {
     montar({}, ['administrador_clinica'], null, false, ['cita.crear', 'agenda.leer']);
     const agenda = fixture.componentInstance;
@@ -324,7 +341,8 @@ describe('AgendaComponent · reserva y series', { timeout: 20_000 }, () => {
 
     agenda['servicioId'].set(SERVICIO.id);
     agenda['profesionalId'].set(PROFESIONAL.id);
-    agenda['turnosSillones'].set(new Map([[sala.id, [turnos[1]!]]]));
+    const turnoApi = { ...turnos[1]!, inicio: '2030-01-21T09:30:00-05:00' };
+    agenda['turnosSillones'].set(new Map([[sala.id, [turnoApi]]]));
     expect(agenda['turnosDeReserva'](hueco)).toEqual([turnos[1]]);
     agenda['elegirTurno'](turnos[1]!);
     expect(agenda['disponibilidadConsultorioValidada']()).toBe(true);

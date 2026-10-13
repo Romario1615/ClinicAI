@@ -5,6 +5,9 @@ import { apiE2e } from '../apoyo/api-e2e';
 import { acceder, irA } from '../apoyo/sesion';
 
 const API = apiE2e();
+const horaLocal = (instante: string) => new Intl.DateTimeFormat('en-GB', {
+  timeZone: 'America/Guayaquil', hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
+}).format(new Date(instante));
 const fechaLocal = (instante: string) => new Intl.DateTimeFormat('en-CA', {
   timeZone: 'America/Guayaquil', year: 'numeric', month: '2-digit', day: '2-digit',
 }).format(new Date(instante));
@@ -98,11 +101,11 @@ test('agenda por sillón: muestra consultorios y reserva en la columna elegida',
   await acceder(page, 'recepcion');
   await irA(page, 'Agenda');
   await page.getByRole('combobox', { name: 'Sede', exact: true }).selectOption(seleccion.sedeId);
-  await page.getByRole('combobox', { name: 'Especialidad', exact: true }).selectOption(seleccion.servicio.especialidad_id);
-  await page.getByRole('combobox', { name: 'Servicio', exact: true }).selectOption(seleccion.servicio.id);
-  await page.getByRole('combobox', { name: 'Profesional', exact: true }).selectOption(seleccion.profesional.id);
   await page.getByLabel('Fecha', { exact: true }).fill(fechaLocal(seleccion.turno.inicio));
   await page.getByRole('group', { name: 'Organizar columnas del día' }).getByRole('button', { name: 'Sillón', exact: true }).click();
+  const filtros = page.getByRole('region', { name: 'Filtros de la agenda' });
+  await expect(filtros.getByRole('combobox', { name: 'Servicio', exact: true })).toHaveValue('');
+  await expect(filtros.getByRole('combobox', { name: 'Profesional', exact: true })).toHaveValue('');
 
   const cabeceras = page.locator('app-calendario-agenda .tiempo__titulo .tiempo__nombre strong');
   await expect(cabeceras).toHaveCount(seleccion.salas.length + (hayCitaSinSillon ? 1 : 0), { timeout: 15_000 });
@@ -113,14 +116,36 @@ test('agenda por sillón: muestra consultorios y reserva en la columna elegida',
   expect(indiceSala).toBeGreaterThanOrEqual(0);
   const huecosSala = page.locator('app-calendario-agenda .tiempo__columna').nth(indiceSala).locator('.bloque.estado--LIBRE');
   await expect(huecosSala.first()).toBeVisible({ timeout: 15_000 });
+  const horaObjetivo = horaLocal(seleccion.turno.inicio);
+  const indiceHueco = await huecosSala.evaluateAll((bloques, objetivo) => bloques.findIndex((bloque) => {
+    const rango = bloque.querySelector('.bloque__hora')?.textContent?.trim() ?? '';
+    const [inicio, fin] = rango.split('–');
+    return Boolean(inicio && fin && inicio <= objetivo && objetivo < fin);
+  }), horaObjetivo);
+  expect(indiceHueco, `debe haber un hueco de horario que contenga las ${horaObjetivo}`).toBeGreaterThanOrEqual(0);
   await comprobarSinScroll(page);
 
-  await huecosSala.first().click();
+  await huecosSala.nth(indiceHueco).click();
   const reserva = page.getByRole('dialog', { name: 'Reservar cita', exact: true });
   await expect(reserva).toBeVisible();
   const selectorSala = reserva.locator('fieldset.selector-sala').filter({ hasText: seleccion.sala.nombre });
   await expect(selectorSala.getByRole('button', { name: new RegExp(seleccion.sala.nombre) })).toHaveAttribute('aria-pressed', 'true');
-  await expect(reserva.getByRole('button', { name: /^\d{2}:\d{2}$/ }).first()).toBeVisible();
+  const servicioReserva = reserva.getByRole('combobox', { name: 'Servicio *', exact: true });
+  const profesionalReserva = reserva.getByRole('combobox', { name: 'Profesional *', exact: true });
+  await servicioReserva.selectOption(seleccion.servicio.id);
+  const respuestaDisponibilidad = page.waitForResponse((respuesta) => {
+    const url = new URL(respuesta.url());
+    return url.pathname.endsWith('/agenda/disponibilidad')
+      && url.searchParams.get('consultorio_id') === seleccion.sala.id
+      && url.searchParams.get('servicio_id') === seleccion.servicio.id
+      && url.searchParams.get('profesional_id') === seleccion.profesional.id;
+  });
+  await profesionalReserva.selectOption(seleccion.profesional.id);
+  expect((await respuestaDisponibilidad).ok()).toBe(true);
+  const horaElegida = reserva.getByRole('button', { name: horaObjetivo, exact: true });
+  await expect(horaElegida).toBeVisible();
+  await horaElegida.click();
+  await expect(selectorSala.getByRole('button', { name: new RegExp(seleccion.sala.nombre) })).toHaveAttribute('aria-pressed', 'true');
 
   const selectorPaciente = reserva.locator('app-selector-paciente');
   await selectorPaciente.locator('input[name="termino"]').fill(paciente.apellido);
